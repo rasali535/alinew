@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { Youtube, Facebook, Instagram, Linkedin, Github } from 'lucide-react';
 
 const Footer = () => {
   return (
@@ -51,16 +52,29 @@ const Footer = () => {
               >
                 rasali2023@gmail.com
               </a>
+              <a
+                href="mailto:maplininc@gmail.com"
+                className="block text-white/70 hover:text-lime-400 text-sm transition-colors duration-300"
+              >
+                maplininc@gmail.com
+              </a>
               <p className="text-white/50 text-sm">Gaborone, Botswana</p>
             </div>
             <div className="flex gap-4 mt-6">
-              {['YouTube', 'Facebook', 'Instagram', 'LinkedIn'].map((social) => (
+              {[
+                { name: 'YouTube', icon: Youtube, href: 'https://youtube.com/@rasali2023' },
+                { name: 'Facebook', icon: Facebook, href: 'https://facebook.com/rasali2023' },
+                { name: 'Instagram', icon: Instagram, href: 'https://instagram.com/ali_chiwartze' },
+                { name: 'LinkedIn', icon: Linkedin, href: '#' },
+                { name: 'GitHub', icon: Github, href: '#' }
+              ].map((social) => (
                 <a
-                  key={social}
-                  href="#"
-                  className="text-white/40 hover:text-lime-400 text-xs transition-colors duration-300"
+                  key={social.name}
+                  href={social.href}
+                  className="text-white/40 hover:text-lime-400 transition-colors duration-300 transform hover:scale-110"
+                  aria-label={social.name}
                 >
-                  {social}
+                  <social.icon size={20} />
                 </a>
               ))}
             </div>
