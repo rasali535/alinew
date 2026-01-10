@@ -51,6 +51,75 @@ export const featuredProjects = [
     subtitle: 'Videography & Post-Production',
     image: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=800&h=600&fit=crop',
     category: 'Video'
+  },
+  {
+    id: 7,
+    title: 'Eagle Touch Tours',
+    subtitle: 'Tourism Website',
+    image: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=800&h=600&fit=crop',
+    category: 'Web',
+    link: 'https://www.eagletouchtours.com'
+  },
+  {
+    id: 8,
+    title: 'Peregrine Tours',
+    subtitle: 'Safari & Travel Website',
+    image: 'https://images.unsplash.com/photo-1516426122078-c23e76319801?w=800&h=600&fit=crop',
+    category: 'Web',
+    link: 'https://www.peregrinetoursandsafaris.com'
+  },
+  {
+    id: 9,
+    title: 'The Safari Butler',
+    subtitle: 'Luxury Travel Website',
+    image: 'https://images.unsplash.com/photo-1547471080-7541e8856976?w=800&h=600&fit=crop',
+    category: 'Web',
+    link: 'https://www.thesafaributler.com'
+  },
+  {
+    id: 10,
+    title: 'Pameltex',
+    subtitle: 'Corporate Website',
+    image: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=800&h=600&fit=crop',
+    category: 'Web',
+    link: 'https://www.pameltex.com'
+  },
+  {
+    id: 11,
+    title: 'Lebville Boutique',
+    subtitle: 'E-commerce Website',
+    image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&h=600&fit=crop',
+    category: 'Web',
+    link: 'https://www.lebvilleboutique.com'
+  },
+  {
+    id: 12,
+    title: 'BB Travel Tours',
+    subtitle: 'Travel Agency Website',
+    image: 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800&h=600&fit=crop',
+    category: 'Web',
+    link: 'https://www.bbtraveltours.com'
+  },
+  {
+    id: 13,
+    title: 'The Melody Gospel',
+    subtitle: 'TV Show Production',
+    image: 'https://images.unsplash.com/photo-1516280440614-6697288d5d38?w=800&h=600&fit=crop',
+    category: 'TV Production'
+  },
+  {
+    id: 14,
+    title: 'Pula Pitch',
+    subtitle: 'Business Reality TV Show',
+    image: 'https://images.unsplash.com/photo-1559136555-9303baea8ebd?w=800&h=600&fit=crop',
+    category: 'TV Production'
+  },
+  {
+    id: 15,
+    title: 'Dedications',
+    subtitle: 'Music Request Show',
+    image: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=800&h=600&fit=crop',
+    category: 'TV Production'
   }
 ];
 
