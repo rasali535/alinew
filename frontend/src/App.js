@@ -3,27 +3,11 @@ import './App.css';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Header from './components/layout/Header';
 import Footer from './components/layout/Footer';
-import HeroSection from './components/sections/HeroSection';
-import FeaturedProjects from './components/sections/FeaturedProjects';
-import ServicesSection from './components/sections/ServicesSection';
-import AILabsSection from './components/sections/AILabsSection';
-import ClientsSection from './components/sections/ClientsSection';
-import AwardsSection from './components/sections/AwardsSection';
-import FAQSection from './components/sections/FAQSection';
-
-const HomePage = () => {
-  return (
-    <>
-      <HeroSection />
-      <FeaturedProjects />
-      <ServicesSection />
-      <AILabsSection />
-      <ClientsSection />
-      <AwardsSection />
-      <FAQSection />
-    </>
-  );
-};
+import Home from './pages/Home';
+import About from './pages/About';
+import Services from './pages/Services';
+import Work from './pages/Work';
+import Booking from './pages/Booking';
 
 function App() {
   return (
@@ -32,13 +16,13 @@ function App() {
         <Header />
         <main>
           <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/about" element={<HomePage />} />
-            <Route path="/work" element={<HomePage />} />
-            <Route path="/work/:id" element={<HomePage />} />
-            <Route path="/services" element={<HomePage />} />
-            <Route path="/ai-labs" element={<HomePage />} />
-            <Route path="/contact" element={<HomePage />} />
+            <Route path="/" element={<Home />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/services" element={<Services />} />
+            <Route path="/work" element={<Work />} />
+            <Route path="/work/:id" element={<Work />} />
+            <Route path="/booking" element={<Booking />} />
+            <Route path="/contact" element={<Booking />} />
           </Routes>
         </main>
         <Footer />

@@ -114,7 +114,7 @@ export const faqs = [
 export const companyInfo = {
   name: 'Ras Ali',
   tagline: 'Multi-Disciplinary Creative & Technologist',
-  location: 'Global',
+  location: 'Gaborone, Botswana',
   description: "I am a multi-talented creative professional specializing in music, sound engineering, videography, and web development. I bring a unique blend of artistic and technical skills to every project.",
   aiLabsDescription: 'Exploring the intersection of creativity and technology. Constantly learning and experimenting with new tools to enhance artistic expression.'
 };

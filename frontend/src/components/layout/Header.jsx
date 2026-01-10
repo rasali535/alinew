@@ -9,7 +9,7 @@ const Header = () => {
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
-      const options = { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Africa/Lusaka' };
+      const options = { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Africa/Gaborone' };
       setCurrentTime(now.toLocaleTimeString('en-US', options));
     };
     updateTime();
@@ -50,7 +50,7 @@ const Header = () => {
         <div className="hidden lg:flex items-center gap-6">
           <div className="flex flex-col items-end text-right">
             <div className="flex items-center gap-2">
-              <span className="text-white/70 text-xs">Based in Lusaka</span>
+              <span className="text-white/70 text-xs">Based in Gaborone</span>
               <span className="text-lime-400 text-xs font-medium">{currentTime}</span>
             </div>
             <span className="text-white/50 text-xs">Creative & Technologist</span>

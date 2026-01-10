@@ -51,7 +51,7 @@ const Footer = () => {
               >
                 rasali2023@gmail.com
               </a>
-              <p className="text-white/50 text-sm">Lusaka, Zambia</p>
+              <p className="text-white/50 text-sm">Gaborone, Botswana</p>
             </div>
             <div className="flex gap-4 mt-6">
               {['YouTube', 'Facebook', 'Instagram', 'LinkedIn'].map((social) => (
