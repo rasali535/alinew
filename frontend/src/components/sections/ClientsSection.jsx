@@ -20,7 +20,7 @@ const ClientsSection = () => {
       <div className="px-6 lg:px-12 mb-8">
         <div className="flex items-center justify-between text-white/50 text-xs">
           <span>© Clients</span>
-          <span>(CAD® — 06)</span>
+          <span>(RAS — 06)</span>
           <span>Brand Partners</span>
         </div>
       </div>

@@ -9,7 +9,7 @@ const Header = () => {
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
-      const options = { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' };
+      const options = { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Africa/Lusaka' };
       setCurrentTime(now.toLocaleTimeString('en-US', options));
     };
     updateTime();
@@ -28,8 +28,8 @@ const Header = () => {
             <div className="w-3 h-3 rounded-full bg-white/30"></div>
           </div>
           <div className="flex flex-col leading-none">
-            <span className="text-white text-sm font-medium tracking-tight">creative</span>
-            <span className="text-white text-sm font-medium tracking-tight">apes</span>
+            <span className="text-white text-sm font-medium tracking-tight">RAS</span>
+            <span className="text-white text-sm font-medium tracking-tight">ALI</span>
           </div>
         </Link>
 
@@ -50,10 +50,10 @@ const Header = () => {
         <div className="hidden lg:flex items-center gap-6">
           <div className="flex flex-col items-end text-right">
             <div className="flex items-center gap-2">
-              <span className="text-white/70 text-xs">Based in India</span>
+              <span className="text-white/70 text-xs">Based in Lusaka</span>
               <span className="text-lime-400 text-xs font-medium">{currentTime}</span>
             </div>
-            <span className="text-white/50 text-xs">AI-First Creative Solutions</span>
+            <span className="text-white/50 text-xs">Creative & Technologist</span>
           </div>
           <button className="w-10 h-10 rounded-full bg-lime-400 flex items-center justify-center hover:scale-110 transition-transform duration-300">
             <div className="w-2 h-2 rounded-full bg-black"></div>

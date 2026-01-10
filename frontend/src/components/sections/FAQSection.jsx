@@ -20,9 +20,8 @@ const FAQItem = ({ faq, isOpen, onToggle }) => (
       </div>
     </div>
     <div
-      className={`overflow-hidden transition-all duration-500 ${
-        isOpen ? 'max-h-96 opacity-100 mt-4' : 'max-h-0 opacity-0'
-      }`}
+      className={`overflow-hidden transition-all duration-500 ${isOpen ? 'max-h-96 opacity-100 mt-4' : 'max-h-0 opacity-0'
+        }`}
     >
       <p className="text-white/60 text-sm leading-relaxed">{faq.answer}</p>
     </div>
@@ -38,7 +37,7 @@ const FAQSection = () => {
       <div className="px-6 lg:px-12 mb-8">
         <div className="flex items-center justify-between text-white/50 text-xs">
           <span>© Everything You Want to Know</span>
-          <span>(CAD® — 08)</span>
+          <span>(RAS — 08)</span>
           <span>Clarifications</span>
         </div>
       </div>

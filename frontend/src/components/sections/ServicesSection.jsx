@@ -17,9 +17,8 @@ const Marquee = ({ text }) => (
 
 const ServiceCard = ({ service, isExpanded, onToggle }) => (
   <div
-    className={`border-b border-white/10 py-8 cursor-pointer group transition-all duration-500 ${
-      isExpanded ? 'bg-white/5' : ''
-    }`}
+    className={`border-b border-white/10 py-8 cursor-pointer group transition-all duration-500 ${isExpanded ? 'bg-white/5' : ''
+      }`}
     onClick={onToggle}
   >
     <div className="px-6 lg:px-12 flex items-center justify-between">
@@ -27,15 +26,13 @@ const ServiceCard = ({ service, isExpanded, onToggle }) => (
         {service.title}
       </h3>
       <ChevronRight
-        className={`w-6 h-6 text-white/50 transform transition-transform duration-300 ${
-          isExpanded ? 'rotate-90' : 'group-hover:translate-x-1'
-        }`}
+        className={`w-6 h-6 text-white/50 transform transition-transform duration-300 ${isExpanded ? 'rotate-90' : 'group-hover:translate-x-1'
+          }`}
       />
     </div>
     <div
-      className={`overflow-hidden transition-all duration-500 ${
-        isExpanded ? 'max-h-96 opacity-100 mt-6' : 'max-h-0 opacity-0'
-      }`}
+      className={`overflow-hidden transition-all duration-500 ${isExpanded ? 'max-h-96 opacity-100 mt-6' : 'max-h-0 opacity-0'
+        }`}
     >
       <div className="px-6 lg:px-12 grid grid-cols-2 md:grid-cols-4 gap-4">
         {service.items.map((item, index) => (
@@ -60,8 +57,8 @@ const ServicesSection = () => {
       <div className="px-6 lg:px-12 mb-8">
         <div className="flex items-center justify-between text-white/50 text-xs">
           <span>© Services</span>
-          <span>(CAD® — 04)</span>
-          <span>Digital Execution</span>
+          <span>(RAS — 04)</span>
+          <span>Creative Execution</span>
         </div>
       </div>
 

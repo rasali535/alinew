@@ -16,12 +16,12 @@ const Footer = () => {
                 <div className="w-3 h-3 rounded-full bg-white/30"></div>
               </div>
               <div className="flex flex-col leading-none">
-                <span className="text-white text-sm font-medium tracking-tight">creative</span>
-                <span className="text-white text-sm font-medium tracking-tight">apes</span>
+                <span className="text-white text-sm font-medium tracking-tight">RAS</span>
+                <span className="text-white text-sm font-medium tracking-tight">ALI</span>
               </div>
             </Link>
             <p className="text-white/50 text-sm max-w-md leading-relaxed">
-              We're a creative design and development studio based in India, working with brands across branding, UI/UX, motion, and interactive web experiences.
+              Multi-disciplinary creative studio blending sound, visual storytelling, and technology to craft immersive experiences.
             </p>
           </div>
 
@@ -29,10 +29,10 @@ const Footer = () => {
           <div>
             <h4 className="text-white/40 text-xs uppercase tracking-wider mb-4">Navigation</h4>
             <div className="space-y-3">
-              {['Home', 'About', 'Work', 'Services', 'AI Labs', 'Contact'].map((link) => (
+              {['Home', 'About', 'Services', 'Work', 'Booking'].map((link) => (
                 <Link
                   key={link}
-                  to={`/${link.toLowerCase().replace(' ', '-')}`}
+                  to={link === 'Home' ? '/' : `/${link.toLowerCase().replace(' ', '-')}`}
                   className="block text-white/70 hover:text-white text-sm transition-colors duration-300"
                 >
                   {link}
@@ -46,15 +46,15 @@ const Footer = () => {
             <h4 className="text-white/40 text-xs uppercase tracking-wider mb-4">Contact</h4>
             <div className="space-y-3">
               <a
-                href="mailto:hello@creativeapes.design"
+                href="mailto:rasali2023@gmail.com"
                 className="block text-white/70 hover:text-lime-400 text-sm transition-colors duration-300"
               >
-                hello@creativeapes.design
+                rasali2023@gmail.com
               </a>
-              <p className="text-white/50 text-sm">Pune, Bangalore - India</p>
+              <p className="text-white/50 text-sm">Lusaka, Zambia</p>
             </div>
             <div className="flex gap-4 mt-6">
-              {['Twitter', 'LinkedIn', 'Instagram', 'Dribbble'].map((social) => (
+              {['YouTube', 'Facebook', 'Instagram', 'LinkedIn'].map((social) => (
                 <a
                   key={social}
                   href="#"
@@ -70,7 +70,7 @@ const Footer = () => {
         {/* Bottom Section */}
         <div className="flex flex-col lg:flex-row items-center justify-between pt-8 border-t border-white/10">
           <p className="text-white/40 text-xs mb-4 lg:mb-0">
-            © 2025 Creative Apes. All rights reserved.
+            © 2025 Ras Ali. All rights reserved.
           </p>
           <div className="flex gap-6">
             <a href="#" className="text-white/40 hover:text-white text-xs transition-colors duration-300">

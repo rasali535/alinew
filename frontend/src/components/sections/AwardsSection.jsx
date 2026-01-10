@@ -44,7 +44,7 @@ const AwardsSection = () => {
       <div className="px-6 lg:px-12 mb-8">
         <div className="flex items-center justify-between text-white/50 text-xs">
           <span>© Awards</span>
-          <span>(CAD® — 07)</span>
+          <span>(RAS — 07)</span>
           <span>Featured Honors</span>
         </div>
       </div>

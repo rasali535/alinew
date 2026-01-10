@@ -43,8 +43,8 @@ const FeaturedProjects = () => {
       <div className="px-6 lg:px-12 mb-8">
         <div className="flex items-center justify-between text-white/50 text-xs">
           <span>© Featured Projects</span>
-          <span>(CAD® — 03)</span>
-          <span>Digital Showcase</span>
+          <span>(RAS — 03)</span>
+          <span>Selected Works</span>
         </div>
       </div>
 

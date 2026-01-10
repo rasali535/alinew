@@ -21,13 +21,13 @@ const AILabsSection = () => {
       <div className="px-6 lg:px-12 mb-8">
         <div className="flex items-center justify-between text-white/50 text-xs">
           <span>© AI Labs</span>
-          <span>(CAD® — 05)</span>
+          <span>(RAS — 05)</span>
           <span>Modern Intelligence</span>
         </div>
       </div>
 
       {/* Marquee */}
-      <Marquee text="creative AI labs©" />
+      <Marquee text="creative tech labs©" />
 
       {/* Content */}
       <div className="px-6 lg:px-12 mt-16">

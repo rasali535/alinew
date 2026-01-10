@@ -18,13 +18,13 @@ const HeroSection = () => {
       <div className="max-w-7xl mx-auto w-full">
         <div className="mb-20">
           <h1 className="text-white text-4xl md:text-5xl lg:text-6xl font-light italic tracking-tight leading-tight">
-            DESIGN STUDIO
+            MULTI-DISCIPLINARY
           </h1>
           <h1 className="text-white text-4xl md:text-5xl lg:text-6xl font-light italic tracking-tight leading-tight">
-            FOR TIMELESS
+            CREATIVE &
           </h1>
           <h1 className="text-white text-4xl md:text-5xl lg:text-6xl font-light italic tracking-tight leading-tight">
-            BRANDING.
+            TECHNOLOGIST.
           </h1>
         </div>
       </div>
@@ -46,7 +46,7 @@ const HeroSection = () => {
       {/* Large Brand Name */}
       <div className="relative overflow-hidden">
         <h2 className="text-white text-[12vw] md:text-[14vw] lg:text-[16vw] font-light tracking-tighter leading-none">
-          creative apes
+          ras ali
         </h2>
       </div>
 
@@ -67,7 +67,7 @@ const HeroSection = () => {
               to="/about"
               className="inline-flex items-center gap-2 text-white mt-4 text-sm hover:text-lime-400 transition-colors duration-300 group"
             >
-              About US
+              About ME
               <span className="transform group-hover:translate-x-1 transition-transform duration-300">→</span>
             </Link>
           </div>
