@@ -8,10 +8,12 @@ import About from './pages/About';
 import Services from './pages/Services';
 import Work from './pages/Work';
 import Booking from './pages/Booking';
+import Cursor from './components/ui/Cursor';
 
 function App() {
   return (
     <div className="App bg-[#0a0a0a] min-h-screen">
+      <Cursor />
       <BrowserRouter>
         <Header />
         <main>

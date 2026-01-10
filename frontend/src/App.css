@@ -1,9 +1,19 @@
+/* ... existing imports ... */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600&display=swap');
 
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  /* Hide default cursor on desktop to default to custom cursor */
+  cursor: none; 
+}
+
+/* Re-enable default cursor for touch devices where custom cursor is hidden */
+@media (hover: none) and (pointer: coarse) {
+    * {
+        cursor: auto !important;
+    }
 }
 
 body {
@@ -14,6 +24,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* ... rest of existing CSS ... */
 /* Smooth scrolling */
 html {
   scroll-behavior: smooth;
@@ -101,6 +112,7 @@ img {
 /* Smooth transitions for interactive elements */
 a, button {
   transition: color 0.3s ease, background-color 0.3s ease, border-color 0.3s ease, transform 0.3s ease;
+  cursor: none; /* Ensure interactive elements also use custom cursor */
 }
 
 /* Gradient text effect */
