@@ -49,11 +49,8 @@ const ProjectCard = ({ project, index }) => (
   </ScrollReveal>
 );
 
-const FeaturedProjects = () => {
-  // Separate projects by category if needed, or just list them all
-  // For 'Work' page we likely want to see the new TV shows too. 
-  // The user added a lot of items so simple slicing might hide them.
-  // I will show ALL projects for now in a grid.
+const FeaturedProjects = ({ limit = false, showViewAll = true }) => {
+  const displayProjects = limit ? featuredProjects.slice(0, limit) : featuredProjects;
 
   return (
     <section className="bg-[#0a0a0a] py-20">
@@ -63,7 +60,7 @@ const FeaturedProjects = () => {
           <div className="flex items-center justify-between text-white/50 text-xs">
             <span>© Featured Projects</span>
             <span>(RAS — 03)</span>
-            <span>Selected Works</span>
+            <span>{limit ? 'Selected Works' : 'All Works'}</span>
           </div>
         </ScrollReveal>
       </div>
@@ -74,21 +71,23 @@ const FeaturedProjects = () => {
       {/* Projects Grid */}
       <div className="px-6 lg:px-12 mt-16">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-12">
-          {featuredProjects.map((project, index) => (
+          {displayProjects.map((project, index) => (
             <ProjectCard key={project.id} project={project} index={index % 3} />
           ))}
         </div>
 
         {/* View All Button */}
-        <div className="flex justify-center mt-16">
-          <Link
-            to="/work"
-            className="inline-flex items-center gap-2 text-white border border-white/20 rounded-full px-8 py-4 hover:bg-white hover:text-black transition-all duration-300 group"
-          >
-            <span>View all projects</span>
-            <span className="transform group-hover:translate-x-1 transition-transform duration-300">→</span>
-          </Link>
-        </div>
+        {showViewAll && (
+          <div className="flex justify-center mt-16">
+            <Link
+              to="/work"
+              className="inline-flex items-center gap-2 text-white border border-white/20 rounded-full px-8 py-4 hover:bg-white hover:text-black transition-all duration-300 group"
+            >
+              <span>View all projects</span>
+              <span className="transform group-hover:translate-x-1 transition-transform duration-300">→</span>
+            </Link>
+          </div>
+        )}
       </div>
     </section>
   );

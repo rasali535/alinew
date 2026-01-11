@@ -191,3 +191,12 @@ export const companyInfo = {
   aiLabsDescription: 'Exploring the intersection of creativity and technology. Constantly learning and experimenting with new tools to enhance artistic expression.'
 };
 
+export const socialLinks = [
+  { name: 'Instagram', url: 'https://www.instagram.com/ali_chiwartze/', icon: 'Instagram' },
+  { name: 'Facebook', url: 'https://www.facebook.com/share/18k8V1f6b5/', icon: 'Facebook' },
+  { name: 'YouTube', url: 'https://youtube.com/@rasali2023?si=Q3W58-ZgWvFDrxN_', icon: 'Youtube' },
+  { name: 'GitHub', url: 'https://github.com/maplininc', icon: 'Github' },
+  { name: 'WhatsApp', url: 'https://wa.me/26777150423', icon: 'Phone' },
+  { name: 'Email', url: 'mailto:rasali@themaplin.com', icon: 'Mail' }
+];
+

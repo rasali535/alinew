@@ -7,6 +7,7 @@ import Home from './pages/Home';
 import About from './pages/About';
 import Services from './pages/Services';
 import Work from './pages/Work';
+import ProjectDetails from './pages/ProjectDetails'; // Added this
 import Booking from './pages/Booking';
 import Cursor from './components/ui/Cursor';
 import Preloader from './components/ui/Preloader';
@@ -24,7 +25,7 @@ function App() {
             <Route path="/about" element={<About />} />
             <Route path="/services" element={<Services />} />
             <Route path="/work" element={<Work />} />
-            <Route path="/work/:id" element={<Work />} />
+            <Route path="/work/:id" element={<ProjectDetails />} />
             <Route path="/booking" element={<Booking />} />
             <Route path="/contact" element={<Booking />} />
           </Routes>

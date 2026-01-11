@@ -16,7 +16,7 @@ const Home = () => {
                 description="Ras Ali is a multi-disciplinary creative and technologist based in Gaborone, specializing in premium web design, development, and digital experiences."
             />
             <HeroSection />
-            <FeaturedProjects />
+            <FeaturedProjects limit={6} showViewAll={true} />
             <ServicesSection />
             <AILabsSection />
             <ClientsSection />

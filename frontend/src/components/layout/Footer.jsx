@@ -1,8 +1,19 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Youtube, Facebook, Instagram, Linkedin, Github } from 'lucide-react';
+import { Youtube, Facebook, Instagram, Phone, Mail, Github } from 'lucide-react';
+import { socialLinks } from '../../data/mock';
 
 const Footer = () => {
+  // Map icon names to Lucide components
+  const iconMap = {
+    'Youtube': Youtube,
+    'Facebook': Facebook,
+    'Instagram': Instagram,
+    'Phone': Phone,
+    'Mail': Mail,
+    'Github': Github
+  };
+
   return (
     <footer className="bg-[#0a0a0a] border-t border-white/10 py-16 px-6 lg:px-12">
       <div className="max-w-7xl mx-auto">
@@ -47,10 +58,10 @@ const Footer = () => {
             <h4 className="text-white/40 text-xs uppercase tracking-wider mb-4">Contact</h4>
             <div className="space-y-3">
               <a
-                href="mailto:rasali2023@gmail.com"
+                href="mailto:rasali@themaplin.com"
                 className="block text-white/70 hover:text-lime-400 text-sm transition-colors duration-300"
               >
-                rasali2023@gmail.com
+                rasali@themaplin.com
               </a>
               <a
                 href="mailto:maplininc@gmail.com"
@@ -61,22 +72,21 @@ const Footer = () => {
               <p className="text-white/50 text-sm">Gaborone, Botswana</p>
             </div>
             <div className="flex gap-4 mt-6">
-              {[
-                { name: 'YouTube', icon: Youtube, href: 'https://youtube.com/@rasali2023' },
-                { name: 'Facebook', icon: Facebook, href: 'https://facebook.com/rasali2023' },
-                { name: 'Instagram', icon: Instagram, href: 'https://instagram.com/ali_chiwartze' },
-                { name: 'LinkedIn', icon: Linkedin, href: '#' },
-                { name: 'GitHub', icon: Github, href: '#' }
-              ].map((social) => (
-                <a
-                  key={social.name}
-                  href={social.href}
-                  className="text-white/40 hover:text-lime-400 transition-colors duration-300 transform hover:scale-110"
-                  aria-label={social.name}
-                >
-                  <social.icon size={20} />
-                </a>
-              ))}
+              {socialLinks.map((social) => {
+                const Icon = iconMap[social.icon] || Mail;
+                return (
+                  <a
+                    key={social.name}
+                    href={social.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-white/40 hover:text-lime-400 transition-colors duration-300 transform hover:scale-110"
+                    aria-label={social.name}
+                  >
+                    <Icon size={20} />
+                  </a>
+                );
+              })}
             </div>
           </div>
         </div>
