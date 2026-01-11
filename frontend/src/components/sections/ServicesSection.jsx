@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { services } from '../../data/mock';
 import { ChevronRight } from 'lucide-react';
 
@@ -58,6 +58,8 @@ const ServiceCard = ({ service, isExpanded, onToggle }) => (
 
 const ServicesSection = () => {
   const [expandedIndex, setExpandedIndex] = useState(null);
+  const location = useLocation();
+  const isServicesPage = location.pathname === '/services';
 
   return (
     <section className="bg-brand-dark py-20">
@@ -85,16 +87,18 @@ const ServicesSection = () => {
         ))}
       </div>
 
-      {/* Explore Services Button */}
-      <div className="flex justify-center mt-16 px-6">
-        <Link
-          to="/services"
-          className="inline-flex items-center gap-2 text-white border border-white/20 rounded-full px-6 py-3 md:px-8 md:py-4 text-sm md:text-base hover:bg-white hover:text-black transition-all duration-300 group whitespace-nowrap"
-        >
-          <span>Explore Services</span>
-          <span className="transform group-hover:translate-x-1 transition-transform duration-300">→</span>
-        </Link>
-      </div>
+      {/* Explore Services Button - Only show on non-services pages */}
+      {!isServicesPage && (
+        <div className="flex justify-center mt-16 px-6">
+          <Link
+            to="/services"
+            className="inline-flex items-center gap-2 text-white border border-white/20 rounded-full px-6 py-3 md:px-8 md:py-4 text-sm md:text-base hover:bg-white hover:text-black transition-all duration-300 group whitespace-nowrap"
+          >
+            <span>Explore Services</span>
+            <span className="transform group-hover:translate-x-1 transition-transform duration-300">→</span>
+          </Link>
+        </div>
+      )}
     </section>
   );
 };

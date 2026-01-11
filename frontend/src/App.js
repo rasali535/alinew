@@ -15,7 +15,7 @@ import Preloader from './components/ui/Preloader';
 
 function App() {
   return (
-    <div className="App bg-[#0a0a0a] min-h-screen">
+    <div className="App bg-brand-dark min-h-screen">
       <Preloader />
       <Cursor />
       <BrowserRouter>
