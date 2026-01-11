@@ -9,54 +9,57 @@ export const navLinks = [
 
 export const heroWords = ['BASSIST.', 'ENGINEER.', 'VISUALS.', 'DEVELOPER.'];
 
+// SVG Logo Data URI for "Artist Portfolio"
+const logoImage = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MDAiIGhlaWdodD0iNjAwIiB2aWV3Qm94PSIwIDAgODAwIDYwMCIgc3R5bGU9ImJhY2tncm91bmQtY29sb3I6IzBhMGEwYSI+CiAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoNDAwIDMwMCkgc2NhbGUoNSkiPgogICAgPCEtLSBEb3RzIC0tPgogICAgPGNpcmNsZSBjeD0iLTI1IiBjeT0iLTMwIiByPSI4IiBmaWxsPSIjYTNlNjM1Ii8+CiAgICA8Y2lyY2xlIGN4PSIwIiBjeT0iLTMwIiByPSI4IiBmaWxsPSIjYTNlNjM1Ii8+CiAgICA8Y2lyY2xlIGN4PSIyNSIgY3k9Ii0zMCIgcj0iOCIgZmlsbD0id2hpdGUiIG9wYWNpdHk9IjAuMyIvPgogICAgPCEtLSBUZXh0IC0tPgogICAgPHRleHQgeD0iMCIgeT0iMjAiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSI0MCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGxldHRlci1zcGFjaW5nPSIycHgiPlJBUyBBTEk8L3RleHQ+CiAgPC9nPgo8L3N2Zz4=`;
+
 export const featuredProjects = [
   {
     id: 1,
     title: 'Live at Jazz Festival',
     subtitle: 'Bass Performance',
-    image: 'https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=800&h=600&fit=crop',
+    image: 'https://picsum.photos/seed/jazz/800/600',
     category: 'Music'
   },
   {
     id: 2,
     title: 'Studio Sessions Vol. 1',
     subtitle: 'Sound Engineering & Mixing',
-    image: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=800&h=600&fit=crop',
+    image: 'https://picsum.photos/seed/studio/800/600',
     category: 'Audio'
   },
   {
     id: 3,
     title: 'Urban Rhythm',
     subtitle: 'Music Video Directed & Edited',
-    image: 'https://images.unsplash.com/photo-1536240478700-b869070f9279?w=800&h=600&fit=crop',
+    image: 'https://picsum.photos/seed/video/800/600',
     category: 'Video'
   },
   {
     id: 4,
     title: 'Artist Portfolio',
     subtitle: 'Web Development',
-    image: 'https://images.unsplash.com/photo-1547658719-da2b51169166?w=800&h=600&fit=crop',
+    image: logoImage, // Using SVG Logo as requested
     category: 'Web'
   },
   {
     id: 5,
     title: 'Podcast Series',
     subtitle: 'Audio Editing & Production',
-    image: 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=800&h=600&fit=crop',
+    image: 'https://picsum.photos/seed/podcast/800/600',
     category: 'Audio'
   },
   {
     id: 6,
     title: 'Event Highlights',
     subtitle: 'Videography & Post-Production',
-    image: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=800&h=600&fit=crop',
+    image: 'https://picsum.photos/seed/event/800/600',
     category: 'Video'
   },
   {
     id: 7,
     title: 'Eagle Touch Tours',
     subtitle: 'Tourism Website',
-    image: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=800&h=600&fit=crop',
+    image: 'https://picsum.photos/seed/eagle/800/600',
     category: 'Web',
     link: 'https://www.eagletouchtours.com'
   },
@@ -64,7 +67,7 @@ export const featuredProjects = [
     id: 8,
     title: 'Peregrine Tours',
     subtitle: 'Safari & Travel Website',
-    image: 'https://images.unsplash.com/photo-1516426122078-c23e76319801?w=800&h=600&fit=crop',
+    image: 'https://picsum.photos/seed/peregrine/800/600',
     category: 'Web',
     link: 'https://www.peregrinetoursandsafaris.com'
   },
@@ -72,7 +75,7 @@ export const featuredProjects = [
     id: 9,
     title: 'The Safari Butler',
     subtitle: 'Luxury Travel Website',
-    image: 'https://images.unsplash.com/photo-1547471080-7541e8856976?w=800&h=600&fit=crop',
+    image: 'https://picsum.photos/seed/safari/800/600',
     category: 'Web',
     link: 'https://www.thesafaributler.com'
   },
@@ -80,7 +83,7 @@ export const featuredProjects = [
     id: 10,
     title: 'Pameltex',
     subtitle: 'Corporate Website',
-    image: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=800&h=600&fit=crop',
+    image: 'https://picsum.photos/seed/pameltex/800/600',
     category: 'Web',
     link: 'https://www.pameltex.com'
   },
@@ -88,7 +91,7 @@ export const featuredProjects = [
     id: 11,
     title: 'Lebville Boutique',
     subtitle: 'E-commerce Website',
-    image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&h=600&fit=crop',
+    image: 'https://picsum.photos/seed/lebville/800/600',
     category: 'Web',
     link: 'https://www.lebvilleboutique.com'
   },
@@ -96,7 +99,7 @@ export const featuredProjects = [
     id: 12,
     title: 'BB Travel Tours',
     subtitle: 'Travel Agency Website',
-    image: 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800&h=600&fit=crop',
+    image: 'https://picsum.photos/seed/bbtravel/800/600',
     category: 'Web',
     link: 'https://www.bbtraveltours.com'
   },
@@ -104,21 +107,21 @@ export const featuredProjects = [
     id: 13,
     title: 'The Melody Gospel',
     subtitle: 'TV Show Production',
-    image: 'https://images.unsplash.com/photo-1516280440614-6697288d5d38?w=800&h=600&fit=crop',
+    image: 'https://picsum.photos/seed/gospel/800/600',
     category: 'TV Production'
   },
   {
     id: 14,
     title: 'Pula Pitch',
     subtitle: 'Business Reality TV Show',
-    image: 'https://images.unsplash.com/photo-1559136555-9303baea8ebd?w=800&h=600&fit=crop',
+    image: 'https://picsum.photos/seed/pula/800/600',
     category: 'TV Production'
   },
   {
     id: 15,
     title: 'Dedications',
     subtitle: 'Music Request Show',
-    image: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=800&h=600&fit=crop',
+    image: 'https://picsum.photos/seed/dedications/800/600',
     category: 'TV Production'
   }
 ];
@@ -147,9 +150,9 @@ export const services = [
 ];
 
 export const aiLabsImages = [
-  'https://images.unsplash.com/photo-1677442136019-21780ecad995?w=400&h=225&fit=crop',
-  'https://images.unsplash.com/photo-1684921456644-f697f2c6c8d0?w=400&h=225&fit=crop',
-  'https://images.unsplash.com/photo-1655720838401-30e3c29a9e88?w=400&h=225&fit=crop'
+  'https://picsum.photos/seed/ai1/400/225',
+  'https://picsum.photos/seed/ai2/400/225',
+  'https://picsum.photos/seed/ai3/400/225'
 ];
 
 export const clients = [
@@ -157,8 +160,8 @@ export const clients = [
 ];
 
 export const awards = [
-  { name: 'Best Bassist', year: '2023', image: 'https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=100&h=100&fit=crop' },
-  { name: 'Sound Mix Award', year: '2024', image: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=100&h=100&fit=crop' }
+  { name: 'Best Bassist', year: '2023', image: 'https://picsum.photos/seed/award1/100/100' },
+  { name: 'Sound Mix Award', year: '2024', image: 'https://picsum.photos/seed/award2/100/100' }
 ];
 
 export const faqs = [
