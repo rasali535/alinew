@@ -47,11 +47,11 @@ const Header = () => {
           <div className="flex flex-col items-end text-right">
             <div className="flex items-center gap-2">
               <span className="text-white/70 text-xs">Based in Gaborone</span>
-              <span className="text-lime-400 text-xs font-medium">{currentTime}</span>
+              <span className="text-brand-green text-xs font-medium">{currentTime}</span>
             </div>
             <span className="text-white/50 text-xs">Creative & Technologist</span>
           </div>
-          <button className="w-10 h-10 rounded-full bg-lime-400 flex items-center justify-center hover:scale-110 transition-transform duration-300">
+          <button className="w-10 h-10 rounded-full bg-brand-green flex items-center justify-center hover:scale-110 transition-transform duration-300">
             <div className="w-2 h-2 rounded-full bg-black"></div>
           </button>
         </div>

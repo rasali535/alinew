@@ -15,7 +15,7 @@ const ProjectDetails = () => {
         return (
             <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center text-white">
                 <h2 className="text-4xl font-light mb-4">Project Not Found</h2>
-                <Link to="/work" className="text-lime-400 border-b border-lime-400 pb-1 hover:text-white transition-colors">
+                <Link to="/work" className="text-brand-green border-b border-brand-green pb-1 hover:text-white transition-colors">
                     Back to Work
                 </Link>
             </div>
@@ -34,7 +34,7 @@ const ProjectDetails = () => {
                 {/* Back Button */}
                 <Link
                     to="/work"
-                    className="inline-flex items-center gap-2 text-white/50 hover:text-lime-400 mb-12 transition-colors duration-300"
+                    className="inline-flex items-center gap-2 text-white/50 hover:text-brand-green mb-12 transition-colors duration-300"
                 >
                     <span>←</span>
                     <span>Back to Projects</span>
@@ -46,7 +46,7 @@ const ProjectDetails = () => {
                         <h1 className="text-white text-5xl md:text-7xl lg:text-8xl font-light tracking-tight leading-none">
                             {project.title}
                         </h1>
-                        <span className="text-lime-400 text-lg md:text-xl font-light tracking-wide uppercase">
+                        <span className="text-brand-green text-lg md:text-xl font-light tracking-wide uppercase">
                             {project.category}
                         </span>
                     </div>
@@ -92,7 +92,7 @@ const ProjectDetails = () => {
                                     href={project.link}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-2 bg-white text-black px-8 py-4 rounded-full font-medium hover:bg-lime-400 transition-colors duration-300"
+                                    className="inline-flex items-center gap-2 bg-white text-black px-8 py-4 rounded-full font-medium hover:bg-brand-green transition-colors duration-300"
                                 >
                                     Visit Live Site
                                     <span>↗</span>

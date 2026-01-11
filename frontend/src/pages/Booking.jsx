@@ -64,7 +64,7 @@ const Booking = () => {
                                     value={formData.name}
                                     onChange={handleChange}
                                     required
-                                    className="w-full bg-[#0a0a0a] border border-white/20 rounded-lg px-4 py-3 text-white focus:border-lime-400 focus:outline-none transition-colors"
+                                    className="w-full bg-[#0a0a0a] border border-white/20 rounded-lg px-4 py-3 text-white focus:border-brand-green focus:outline-none transition-colors"
                                     placeholder="Your Name"
                                 />
                             </div>
@@ -76,7 +76,7 @@ const Booking = () => {
                                     value={formData.email}
                                     onChange={handleChange}
                                     required
-                                    className="w-full bg-[#0a0a0a] border border-white/20 rounded-lg px-4 py-3 text-white focus:border-lime-400 focus:outline-none transition-colors"
+                                    className="w-full bg-[#0a0a0a] border border-white/20 rounded-lg px-4 py-3 text-white focus:border-brand-green focus:outline-none transition-colors"
                                     placeholder="your@email.com"
                                 />
                             </div>
@@ -89,7 +89,7 @@ const Booking = () => {
                                 value={formData.service}
                                 onChange={handleChange}
                                 required
-                                className="w-full bg-[#0a0a0a] border border-white/20 rounded-lg px-4 py-3 text-white focus:border-lime-400 focus:outline-none transition-colors"
+                                className="w-full bg-[#0a0a0a] border border-white/20 rounded-lg px-4 py-3 text-white focus:border-brand-green focus:outline-none transition-colors"
                             >
                                 <option value="" disabled>Select a service</option>
                                 {services.map((s) => (
@@ -107,14 +107,14 @@ const Booking = () => {
                                 onChange={handleChange}
                                 required
                                 rows="5"
-                                className="w-full bg-[#0a0a0a] border border-white/20 rounded-lg px-4 py-3 text-white focus:border-lime-400 focus:outline-none transition-colors"
+                                className="w-full bg-[#0a0a0a] border border-white/20 rounded-lg px-4 py-3 text-white focus:border-brand-green focus:outline-none transition-colors"
                                 placeholder="Tell me about your project..."
                             ></textarea>
                         </div>
 
                         <button
                             type="submit"
-                            className="w-full bg-lime-400 text-black font-medium py-4 rounded-full text-lg hover:bg-white transition-colors duration-300"
+                            className="w-full bg-brand-green text-black font-medium py-4 rounded-full text-lg hover:bg-white transition-colors duration-300"
                         >
                             Send Booking Request
                         </button>

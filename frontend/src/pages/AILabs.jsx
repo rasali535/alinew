@@ -76,7 +76,7 @@ const AILabs = () => {
                                 </div>
                                 <div className="flex justify-between items-baseline">
                                     <span className="text-white text-lg font-light">Prototype 00{i + 1}</span>
-                                    <span className="text-lime-400 text-xs uppercase tracking-widest">R&D</span>
+                                    <span className="text-brand-green text-xs uppercase tracking-widest">R&D</span>
                                 </div>
                             </div>
                         ))}

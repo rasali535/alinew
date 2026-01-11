@@ -22,7 +22,7 @@ const ServiceCard = ({ service, isExpanded, onToggle }) => (
     onClick={onToggle}
   >
     <div className="px-6 lg:px-12 flex items-center justify-between">
-      <h3 className="text-white text-2xl md:text-3xl lg:text-4xl font-light group-hover:text-lime-400 transition-colors duration-300">
+      <h3 className="text-white text-2xl md:text-3xl lg:text-4xl font-light group-hover:text-brand-green transition-colors duration-300">
         {service.title}
       </h3>
       <ChevronRight
@@ -38,7 +38,7 @@ const ServiceCard = ({ service, isExpanded, onToggle }) => (
         {service.items.map((item, index) => (
           <span
             key={index}
-            className="text-white/60 text-sm hover:text-lime-400 transition-colors duration-300 cursor-pointer"
+            className="text-white/60 text-sm hover:text-brand-green transition-colors duration-300 cursor-pointer"
           >
             {item}
           </span>
@@ -47,7 +47,7 @@ const ServiceCard = ({ service, isExpanded, onToggle }) => (
       <div className="px-6 lg:px-12 mt-8 mb-4">
         <Link
           to={`/booking/${service.id}`}
-          className="inline-block bg-lime-400 text-black px-6 py-2 rounded-full text-sm font-medium hover:bg-white transition-colors duration-300"
+          className="inline-block bg-brand-green text-black px-6 py-2 rounded-full text-sm font-medium hover:bg-white transition-colors duration-300"
         >
           Book {service.title}
         </Link>

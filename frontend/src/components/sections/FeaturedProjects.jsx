@@ -33,14 +33,14 @@ const ProjectCard = ({ project, index }) => (
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
       </div>
       <div className="mt-4">
-        <h3 className="text-white text-xl md:text-2xl font-light group-hover:text-lime-400 transition-colors duration-300">
+        <h3 className="text-white text-xl md:text-2xl font-light group-hover:text-brand-green transition-colors duration-300">
           {project.title}
         </h3>
         <p className="text-white/50 text-sm mt-1">{project.subtitle}</p>
 
         {/* Helper link for external sites in portfolio if present */}
         {project.link && (
-          <span className="inline-block mt-2 text-xs text-lime-400 border-b border-lime-400 pb-0.5">
+          <span className="inline-block mt-2 text-xs text-brand-green border-b border-brand-green pb-0.5">
             Visit Website
           </span>
         )}

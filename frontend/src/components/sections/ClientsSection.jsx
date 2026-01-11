@@ -34,7 +34,7 @@ const ClientsSection = () => {
           {clients.map((client, index) => (
             <div
               key={index}
-              className="flex items-center justify-center py-12 border border-white/10 rounded-lg hover:border-lime-400/50 hover:bg-white/5 transition-all duration-300 group cursor-pointer"
+              className="flex items-center justify-center py-12 border border-white/10 rounded-lg hover:border-brand-green/50 hover:bg-white/5 transition-all duration-300 group cursor-pointer"
             >
               <span className="text-white/50 text-xl font-light group-hover:text-white transition-colors duration-300">
                 {client}

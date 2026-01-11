@@ -90,13 +90,13 @@ const Cursor = () => {
             {/* Outer Circle */}
             <div
                 ref={cursorRef}
-                className="fixed top-0 left-0 w-[50px] h-[50px] border border-lime-400 rounded-full pointer-events-none z-[9999] mix-blend-difference hidden md:block transition-transform duration-100 ease-out will-change-transform"
+                className="fixed top-0 left-0 w-[50px] h-[50px] border border-brand-green rounded-full pointer-events-none z-[9999] mix-blend-difference hidden md:block transition-transform duration-100 ease-out will-change-transform"
             />
 
             {/* Inner Dot */}
             <div
                 ref={cursorDotRef}
-                className="fixed top-0 left-0 w-2 h-2 bg-lime-400 rounded-full pointer-events-none z-[9999] -ml-1 -mt-1 hidden md:block"
+                className="fixed top-0 left-0 w-2 h-2 bg-brand-green rounded-full pointer-events-none z-[9999] -ml-1 -mt-1 hidden md:block"
             />
         </>
     );

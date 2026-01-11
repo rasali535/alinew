@@ -55,7 +55,7 @@ const Footer = () => {
             <div className="space-y-3">
               <a
                 href="mailto:rasali@themaplin.com"
-                className="block text-white/70 hover:text-lime-400 text-sm transition-colors duration-300"
+                className="block text-white/70 hover:text-brand-green text-sm transition-colors duration-300"
               >
                 rasali@themaplin.com
               </a>
@@ -70,7 +70,7 @@ const Footer = () => {
                     href={social.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-white/40 hover:text-lime-400 transition-colors duration-300 transform hover:scale-110"
+                    className="text-white/40 hover:text-brand-green transition-colors duration-300 transform hover:scale-110"
                     aria-label={social.name}
                   >
                     <Icon size={20} />
