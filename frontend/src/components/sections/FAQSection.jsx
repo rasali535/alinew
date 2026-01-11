@@ -32,7 +32,7 @@ const FAQSection = () => {
   const [openIndex, setOpenIndex] = useState(null);
 
   return (
-    <section className="bg-[#0a0a0a] py-20">
+    <section className="bg-brand-dark py-20">
       {/* Section Header */}
       <div className="px-6 lg:px-12 mb-8">
         <div className="flex items-center justify-between text-white/50 text-xs">

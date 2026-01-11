@@ -53,7 +53,7 @@ const FeaturedProjects = ({ limit = false, showViewAll = true }) => {
   const displayProjects = limit ? featuredProjects.slice(0, limit) : featuredProjects;
 
   return (
-    <section className="bg-[#0a0a0a] py-20">
+    <section className="bg-brand-dark py-20">
       {/* Section Header */}
       <div className="px-6 lg:px-12 mb-8">
         <ScrollReveal>

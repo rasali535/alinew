@@ -8,7 +8,7 @@ const AILabs = () => {
     }, []);
 
     return (
-        <section className="min-h-screen bg-[#0a0a0a] pt-32 pb-20 px-6 lg:px-12">
+        <section className="min-h-screen bg-brand-dark pt-32 pb-20 px-6 lg:px-12">
             <SEO
                 title="Inside AI Labs | Ras Ali"
                 description={companyInfo.aiLabsDescription}

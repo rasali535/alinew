@@ -18,7 +18,7 @@ const Header = () => {
   }, []);
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 px-6 lg:px-12 py-5">
+    <header className="fixed top-0 left-0 right-0 z-50 px-6 lg:px-12 py-5 bg-brand-dark/90 backdrop-blur-sm">
       <nav className="flex items-center justify-between">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 group">
@@ -69,7 +69,7 @@ const Header = () => {
 
       {/* Mobile Menu */}
       {isMenuOpen && (
-        <div className="lg:hidden absolute top-full left-0 right-0 bg-[#0a0a0a] border-t border-white/10 py-6 px-6">
+        <div className="lg:hidden absolute top-full left-0 right-0 bg-brand-dark border-t border-white/10 py-6 px-6">
           {navLinks.map((link) => (
             <Link
               key={link.name}

@@ -57,7 +57,7 @@ module.exports = {
 					blue: '#1C2E4A',
 					green: '#74C138', // Matches the leaf/Ali green
 					silver: '#E1E1E1', // Matches the C chrome
-					dark: '#0A0A0A'   // Matches the original background
+					dark: '#1C1C1C'   // Matches the logo background
 				}
 			},
 			keyframes: {

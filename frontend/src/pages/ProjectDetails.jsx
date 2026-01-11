@@ -13,7 +13,7 @@ const ProjectDetails = () => {
 
     if (!project) {
         return (
-            <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center text-white">
+            <div className="min-h-screen bg-brand-dark flex flex-col items-center justify-center text-white">
                 <h2 className="text-4xl font-light mb-4">Project Not Found</h2>
                 <Link to="/work" className="text-brand-green border-b border-brand-green pb-1 hover:text-white transition-colors">
                     Back to Work
@@ -23,7 +23,7 @@ const ProjectDetails = () => {
     }
 
     return (
-        <div className="min-h-screen bg-[#0a0a0a] pt-32 pb-20 px-6 lg:px-12">
+        <div className="min-h-screen bg-brand-dark pt-32 pb-20 px-6 lg:px-12">
             <SEO
                 title={`${project.title} | Ras Ali`}
                 description={`Details about ${project.title}, a ${project.subtitle} project by Ras Ali.`}

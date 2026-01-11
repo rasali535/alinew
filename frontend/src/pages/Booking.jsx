@@ -38,7 +38,7 @@ const Booking = () => {
         : 'Ready to start a project? Tell me about your needs.';
 
     return (
-        <section className="min-h-screen bg-[#0a0a0a] pt-32 pb-20 px-6 lg:px-12 flex items-center">
+        <section className="min-h-screen bg-brand-dark pt-32 pb-20 px-6 lg:px-12 flex items-center">
             <SEO
                 title={`${pageTitle} | Ras Ali`}
                 description="Book Ras Ali for your next project. Services include Bass Performance, Sound Engineering, Video Production, and Web Development."
@@ -64,7 +64,7 @@ const Booking = () => {
                                     value={formData.name}
                                     onChange={handleChange}
                                     required
-                                    className="w-full bg-[#0a0a0a] border border-white/20 rounded-lg px-4 py-3 text-white focus:border-brand-green focus:outline-none transition-colors"
+                                    className="w-full bg-brand-dark border border-white/20 rounded-lg px-4 py-3 text-white focus:border-brand-green focus:outline-none transition-colors"
                                     placeholder="Your Name"
                                 />
                             </div>
@@ -76,7 +76,7 @@ const Booking = () => {
                                     value={formData.email}
                                     onChange={handleChange}
                                     required
-                                    className="w-full bg-[#0a0a0a] border border-white/20 rounded-lg px-4 py-3 text-white focus:border-brand-green focus:outline-none transition-colors"
+                                    className="w-full bg-brand-dark border border-white/20 rounded-lg px-4 py-3 text-white focus:border-brand-green focus:outline-none transition-colors"
                                     placeholder="your@email.com"
                                 />
                             </div>
@@ -89,7 +89,7 @@ const Booking = () => {
                                 value={formData.service}
                                 onChange={handleChange}
                                 required
-                                className="w-full bg-[#0a0a0a] border border-white/20 rounded-lg px-4 py-3 text-white focus:border-brand-green focus:outline-none transition-colors"
+                                className="w-full bg-brand-dark border border-white/20 rounded-lg px-4 py-3 text-white focus:border-brand-green focus:outline-none transition-colors"
                             >
                                 <option value="" disabled>Select a service</option>
                                 {services.map((s) => (
@@ -107,7 +107,7 @@ const Booking = () => {
                                 onChange={handleChange}
                                 required
                                 rows="5"
-                                className="w-full bg-[#0a0a0a] border border-white/20 rounded-lg px-4 py-3 text-white focus:border-brand-green focus:outline-none transition-colors"
+                                className="w-full bg-brand-dark border border-white/20 rounded-lg px-4 py-3 text-white focus:border-brand-green focus:outline-none transition-colors"
                                 placeholder="Tell me about your project..."
                             ></textarea>
                         </div>

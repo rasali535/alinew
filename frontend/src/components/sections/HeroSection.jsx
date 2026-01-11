@@ -26,7 +26,7 @@ const HeroSection = () => {
   }, []);
 
   return (
-    <section className="relative min-h-screen bg-[#0a0a0a] pt-32 pb-20 px-6 lg:px-12 flex flex-col justify-between overflow-hidden">
+    <section className="relative min-h-screen bg-brand-dark pt-32 pb-20 px-6 lg:px-12 flex flex-col justify-between overflow-hidden">
       {/* Background Moving Graphics */}
       <div className="absolute inset-0 pointer-events-none">
         <div

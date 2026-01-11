@@ -4,7 +4,7 @@ import { companyInfo } from '../data/mock';
 
 const About = () => {
     return (
-        <section className="min-h-screen bg-[#0a0a0a] pt-32 pb-20 px-6 lg:px-12">
+        <section className="min-h-screen bg-brand-dark pt-32 pb-20 px-6 lg:px-12">
             <SEO
                 title="About Me | Ras Ali"
                 description={`Learn more about Ras Ali, a Creative Technologist based in ${companyInfo.location}. Bridging the gap between artistic expression and digital innovation.`}
@@ -28,7 +28,7 @@ const About = () => {
                                 className="w-full h-full object-cover opacity-80 hover:opacity-100 transition-opacity duration-700"
                             />
                         </div>
-                        <div className="absolute -bottom-6 -right-6 w-48 h-48 rounded-full border border-white/10 bg-[#0a0a0a] flex items-center justify-center animate-spin-slow">
+                        <div className="absolute -bottom-6 -right-6 w-48 h-48 rounded-full border border-white/10 bg-brand-dark flex items-center justify-center animate-spin-slow">
                             <div className="text-white/30 text-xs uppercase tracking-widest text-center">
                                 Creative<br />Technologist
                             </div>
