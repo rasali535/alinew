@@ -1,13 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import SEO from '../components/common/SEO';
+import { services } from '../data/mock';
 
 const Booking = () => {
+    const { serviceId } = useParams();
     const [formData, setFormData] = useState({
         name: '',
         email: '',
         service: '',
         message: ''
     });
+
+    // Find the pre-selected service if serviceId exists
+    const preSelectedService = serviceId ? services.find(s => s.id === parseInt(serviceId)) : null;
+
+    useEffect(() => {
+        if (preSelectedService) {
+            setFormData(prev => ({ ...prev, service: preSelectedService.title }));
+        }
+    }, [preSelectedService]);
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -20,19 +32,24 @@ const Booking = () => {
         setFormData({ name: '', email: '', service: '', message: '' });
     };
 
+    const pageTitle = preSelectedService ? `Book ${preSelectedService.title}` : 'Booking';
+    const pageDesc = preSelectedService
+        ? `Ready to start your ${preSelectedService.title} project? Fill out the form below.`
+        : 'Ready to start a project? Tell me about your needs.';
+
     return (
         <section className="min-h-screen bg-[#0a0a0a] pt-32 pb-20 px-6 lg:px-12 flex items-center">
             <SEO
-                title="Book a Session | Ras Ali"
+                title={`${pageTitle} | Ras Ali`}
                 description="Book Ras Ali for your next project. Services include Bass Performance, Sound Engineering, Video Production, and Web Development."
             />
             <div className="max-w-4xl mx-auto w-full">
                 <div className="text-center mb-16">
-                    <h1 className="text-white text-5xl md:text-7xl lg:text-8xl font-light tracking-tight mb-6">
-                        BOOKING
+                    <h1 className="text-white text-4xl md:text-6xl lg:text-7xl font-light tracking-tight mb-6">
+                        {pageTitle.toUpperCase()}
                     </h1>
                     <p className="text-white/50 text-lg">
-                        Ready to start a project? Tell me about your needs.
+                        {pageDesc}
                     </p>
                 </div>
 
@@ -75,10 +92,9 @@ const Booking = () => {
                                 className="w-full bg-[#0a0a0a] border border-white/20 rounded-lg px-4 py-3 text-white focus:border-lime-400 focus:outline-none transition-colors"
                             >
                                 <option value="" disabled>Select a service</option>
-                                <option value="Bass Recording/Performance">Bass Recording/Performance</option>
-                                <option value="Sound Engineering/Mixing">Sound Engineering/Mixing</option>
-                                <option value="Video Production">Video Production</option>
-                                <option value="Web Development">Web Development</option>
+                                {services.map((s) => (
+                                    <option key={s.id} value={s.title}>{s.title}</option>
+                                ))}
                                 <option value="Other">Other</option>
                             </select>
                         </div>

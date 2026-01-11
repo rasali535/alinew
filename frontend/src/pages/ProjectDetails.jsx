@@ -99,9 +99,17 @@ const ProjectDetails = () => {
                         <div>
                             <h4 className="text-white/50 text-sm uppercase tracking-widest mb-4">Services</h4>
                             <ul className="space-y-2">
-                                <li className="text-white">{project.category}</li>
-                                <li className="text-white">Creative Direction</li>
-                                <li className="text-white">Technical Implementation</li>
+                                {project.roles ? (
+                                    project.roles.map((role, index) => (
+                                        <li key={index} className="text-white">{role}</li>
+                                    ))
+                                ) : (
+                                    <>
+                                        <li className="text-white">{project.category}</li>
+                                        <li className="text-white">Creative Direction</li>
+                                        <li className="text-white">Technical Implementation</li>
+                                    </>
+                                )}
                             </ul>
                         </div>
                         <div>

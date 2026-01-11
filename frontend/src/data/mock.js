@@ -17,7 +17,7 @@ export const featuredProjects = [
     id: 1,
     title: 'Live at Jazz Festival',
     subtitle: 'Bass Performance',
-    image: 'https://picsum.photos/seed/jazz/800/600',
+    image: '/assets/images/ras-ali-bass-1.jpg',
     category: 'Music'
   },
   {
@@ -52,7 +52,7 @@ export const featuredProjects = [
     id: 6,
     title: 'Event Highlights',
     subtitle: 'Videography & Post-Production',
-    image: 'https://picsum.photos/seed/event/800/600',
+    image: '/assets/images/ras-ali-bass-3.png',
     category: 'Video'
   },
   {
@@ -108,21 +108,24 @@ export const featuredProjects = [
     title: 'The Melody Gospel',
     subtitle: 'TV Show Production',
     image: 'https://picsum.photos/seed/gospel/800/600',
-    category: 'TV Production'
+    category: 'TV Production',
+    roles: ['Music Director', 'Composer', 'Sound Engineer', 'Intro Composer', 'Show Director']
   },
   {
     id: 14,
     title: 'Pula Pitch',
     subtitle: 'Business Reality TV Show',
     image: 'https://picsum.photos/seed/pula/800/600',
-    category: 'TV Production'
+    category: 'TV Production',
+    roles: ['Videographer Main Camera', 'Props Set up', 'Pre and Post Production']
   },
   {
     id: 15,
     title: 'Dedications',
     subtitle: 'Music Request Show',
-    image: 'https://picsum.photos/seed/dedications/800/600',
-    category: 'TV Production'
+    image: '/assets/images/ras-ali-bass-2.png',
+    category: 'TV Production',
+    roles: ['Bassist', 'Artist Liaison', 'Arrangements & Composition']
   }
 ];
 
@@ -156,7 +159,14 @@ export const aiLabsImages = [
 ];
 
 export const clients = [
-  'Local Artists', 'Event Organizers', 'Corporate Clients', 'Podcasters', 'Music Studios'
+  'Caroline Sithole (Jazz)',
+  'Channty Natural (Reggae)',
+  'The Space Live Band',
+  'Tlotlo Hotel & Conference Center',
+  'Masa Square Protea Hotel',
+  'Colmas Studios',
+  'Sound Hub Studios',
+  'Livewire Recording Studios'
 ];
 
 export const awards = [

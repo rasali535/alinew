@@ -23,7 +23,7 @@ const About = () => {
                     <div className="relative">
                         <div className="aspect-[3/4] rounded-lg overflow-hidden bg-white/5 border border-white/10">
                             <img
-                                src="https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=800&h=1000&fit=crop"
+                                src="/assets/images/ras-ali-formal.jpg"
                                 alt="Ras Ali"
                                 className="w-full h-full object-cover opacity-80 hover:opacity-100 transition-opacity duration-700"
                             />

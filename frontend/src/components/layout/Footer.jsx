@@ -63,12 +63,6 @@ const Footer = () => {
               >
                 rasali@themaplin.com
               </a>
-              <a
-                href="mailto:maplininc@gmail.com"
-                className="block text-white/70 hover:text-lime-400 text-sm transition-colors duration-300"
-              >
-                maplininc@gmail.com
-              </a>
               <p className="text-white/50 text-sm">Gaborone, Botswana</p>
             </div>
             <div className="flex gap-4 mt-6">

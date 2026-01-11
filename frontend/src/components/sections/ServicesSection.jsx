@@ -44,6 +44,14 @@ const ServiceCard = ({ service, isExpanded, onToggle }) => (
           </span>
         ))}
       </div>
+      <div className="px-6 lg:px-12 mt-8 mb-4">
+        <Link
+          to={`/booking/${service.id}`}
+          className="inline-block bg-lime-400 text-black px-6 py-2 rounded-full text-sm font-medium hover:bg-white transition-colors duration-300"
+        >
+          Book {service.title}
+        </Link>
+      </div>
     </div>
   </div>
 );
