@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import SEO from '../components/common/SEO';
 
 const Booking = () => {
     const [formData, setFormData] = useState({
@@ -21,6 +22,10 @@ const Booking = () => {
 
     return (
         <section className="min-h-screen bg-[#0a0a0a] pt-32 pb-20 px-6 lg:px-12 flex items-center">
+            <SEO
+                title="Book a Session | Ras Ali"
+                description="Book Ras Ali for your next project. Services include Bass Performance, Sound Engineering, Video Production, and Web Development."
+            />
             <div className="max-w-4xl mx-auto w-full">
                 <div className="text-center mb-16">
                     <h1 className="text-white text-5xl md:text-7xl lg:text-8xl font-light tracking-tight mb-6">

@@ -1,9 +1,14 @@
 import React from 'react';
+import SEO from '../components/common/SEO';
 import { companyInfo } from '../data/mock';
 
 const About = () => {
     return (
         <section className="min-h-screen bg-[#0a0a0a] pt-32 pb-20 px-6 lg:px-12">
+            <SEO
+                title="About Me | Ras Ali"
+                description={`Learn more about Ras Ali, a Creative Technologist based in ${companyInfo.location}. Bridging the gap between artistic expression and digital innovation.`}
+            />
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="mb-20">
