@@ -23,7 +23,7 @@ const Footer = () => {
           <div className="lg:col-span-2">
             <Link to="/" className="flex items-center gap-2 mb-6">
               <img
-                src="/assets/images/logo-transparent.png"
+                src="/assets/images/logo-full.png"
                 alt="Ras Ali Logo"
                 className="h-32 md:h-40 w-auto object-contain"
               />
