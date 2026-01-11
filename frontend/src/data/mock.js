@@ -17,8 +17,11 @@ export const featuredProjects = [
     id: 4,
     title: 'Artist Portfolio',
     subtitle: 'Web Development',
-    image: logoImage, // Using SVG Logo as requested
-    category: 'Web'
+    image: '/assets/images/logo-full.png', // Using high-res logo
+    category: 'Web',
+    roles: ['Full Stack Development', 'UI/UX Design', 'Brand Identity'],
+    date: '2024 - Present',
+    description: "Designed and developed a personal portfolio to showcase a multi-disciplinary skill set. Built with React and Tailwind CSS, focusing on performance, SEO, and a premium dark-mode aesthetic to reflect a tech-forward brand identity."
   },
   {
     id: 7,
@@ -26,7 +29,10 @@ export const featuredProjects = [
     subtitle: 'Tourism Website',
     image: 'https://picsum.photos/seed/eagle/800/600',
     category: 'Web',
-    link: 'https://www.eagletouchtours.com'
+    link: 'https://www.eagletouchtours.com',
+    roles: ['Frontend Development', 'UI Design', 'Content Management'],
+    date: '2023',
+    description: "Created a vibrant tourism website for Eagle Touch Tours. The project focused on showcasing tour packages with high-quality imagery and an intuitive booking inquiry system, helping to increase customer engagement and inquiries."
   },
   {
     id: 8,
@@ -34,7 +40,10 @@ export const featuredProjects = [
     subtitle: 'Safari & Travel Website',
     image: 'https://picsum.photos/seed/peregrine/800/600',
     category: 'Web',
-    link: 'https://www.peregrinetoursandsafaris.com'
+    link: 'https://www.peregrinetoursandsafaris.com',
+    roles: ['Web Design', 'Responsive Development', 'SEO Optimization'],
+    date: '2023',
+    description: "Developed a safari and travel website for Peregrine Tours. The site features a responsive layout optimized for mobile devices, ensuring travelers can easily access safari details and itineraries on the go."
   },
   {
     id: 9,
@@ -42,7 +51,10 @@ export const featuredProjects = [
     subtitle: 'Luxury Travel Website',
     image: 'https://picsum.photos/seed/safari/800/600',
     category: 'Web',
-    link: 'https://www.thesafaributler.com'
+    link: 'https://www.thesafaributler.com',
+    roles: ['Custom Development', 'Luxury Branding', 'User Experience'],
+    date: '2022',
+    description: "Crafted a high-end web experience for The Safari Butler, emphasizing luxury and exclusivity. The design uses elegant typography and spacious layouts to mirror the premium nature of their bespoke travel services."
   },
   {
     id: 10,
@@ -50,7 +62,10 @@ export const featuredProjects = [
     subtitle: 'Corporate Website',
     image: 'https://picsum.photos/seed/pameltex/800/600',
     category: 'Web',
-    link: 'https://www.pameltex.com'
+    link: 'https://www.pameltex.com',
+    roles: ['Corporate Web Development', 'Information Architecture', 'Performance Optimization'],
+    date: '2024',
+    description: "Built an efficient and comprehensive corporate website for Pameltex. The focus was on clear information architecture to present their diverse services professionally, ensuring fast load times and accessibility for corporate clients."
   },
   {
     id: 11,
@@ -58,7 +73,10 @@ export const featuredProjects = [
     subtitle: 'E-commerce Website',
     image: 'https://picsum.photos/seed/lebville/800/600',
     category: 'Web',
-    link: 'https://www.lebvilleboutique.com'
+    link: 'https://www.lebvilleboutique.com',
+    roles: ['E-commerce Development', 'Payment Integration', 'Mobile Optimization'],
+    date: '2023',
+    description: "Built a stylish e-commerce platform for Lebville Boutique. Key features include a seamless shopping cart experience, secure payment gateway integration, and a mobile-first design to capture mobile shoppers."
   },
   {
     id: 12,
@@ -66,7 +84,10 @@ export const featuredProjects = [
     subtitle: 'Travel Agency Website',
     image: 'https://picsum.photos/seed/bbtravel/800/600',
     category: 'Web',
-    link: 'https://www.bbtraveltours.com'
+    link: 'https://www.bbtraveltours.com',
+    roles: ['Web Development', 'CMS Integration', 'SEO Strategy'],
+    date: '2022',
+    description: "Developed a travel agency website for BB Travel Tours with a focus on ease of content management. Integrated a CMS to allow the client to easily update packages and pricing, paired with a solid SEO strategy to boost visibility."
   },
   {
     id: 13,

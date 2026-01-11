@@ -25,7 +25,7 @@ const Footer = () => {
               <img
                 src="/assets/images/logo-transparent.png"
                 alt="Ras Ali Logo"
-                className="h-12 w-auto object-contain"
+                className="h-32 md:h-40 w-auto object-contain"
               />
             </Link>
             <p className="text-white/50 text-sm max-w-md leading-relaxed">

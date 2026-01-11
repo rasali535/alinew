@@ -25,7 +25,7 @@ const Header = () => {
           <img
             src="/assets/images/logo-transparent.png"
             alt="Ras Ali Logo"
-            className="h-10 w-auto object-contain"
+            className="h-20 md:h-24 w-auto object-contain"
           />
         </Link>
 
