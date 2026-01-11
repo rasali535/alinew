@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { services } from '../../data/mock';
-import { ArrowUpRight, Music, Mic2, Video, Code } from 'lucide-react';
+import { ArrowUpRight, Music, Mic2, Video, Code, Palette } from 'lucide-react';
 
 // Icons map
 const iconMap = {
     'Bassist': Music,
     'Sound Engineer': Mic2,
     'Videographer': Video,
-    'Developer': Code
+    'Developer': Code,
+    'Media & Branding': Palette
 };
 
 // Image map (Using placeholders relevant to the service)
@@ -16,7 +17,8 @@ const imageMap = {
     'Bassist': 'https://images.unsplash.com/photo-1514320291940-b3712c7859cb?auto=format&fit=crop&q=80&w=800',
     'Sound Engineer': 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?auto=format&fit=crop&q=80&w=800',
     'Videographer': 'https://images.unsplash.com/photo-1535016120720-40c6874c3b1c?auto=format&fit=crop&q=80&w=800',
-    'Developer': 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&q=80&w=800'
+    'Developer': 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&q=80&w=800',
+    'Media & Branding': 'https://images.unsplash.com/photo-1626785774573-4b799314346d?auto=format&fit=crop&q=80&w=800'
 };
 
 const ServiceCard = ({ service, index }) => {

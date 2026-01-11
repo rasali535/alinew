@@ -135,12 +135,17 @@ export const services = [
   {
     id: 3,
     title: 'Videographer',
-    items: ['Music Videos', 'Event Coverage', 'Documentaries', 'Video Editing']
+    items: ['Music Videos', 'Event Coverage', 'Documentaries', 'Video Editing', 'Adverts', 'Pre & Post Production', 'Voice Overs']
   },
   {
     id: 4,
     title: 'Developer',
-    items: ['Web Development', 'App Development', 'USSD Solutions', 'Frontend & Backend', 'GitHub']
+    items: ['Web Development', 'React Applications', 'UI/UX Implementation', 'Technical Consulting', 'App Development', 'USSD Solutions', 'Frontend & Backend', 'GitHub']
+  },
+  {
+    id: 5,
+    title: 'Media & Branding',
+    items: ['Logos', 'Motion Graphics', 'Company Profiles', 'Business Cards', 'Banners', 'Posters']
   }
 ];
 
