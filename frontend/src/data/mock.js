@@ -140,7 +140,7 @@ export const services = [
   {
     id: 4,
     title: 'Developer',
-    items: ['Web Development', 'React Applications', 'UI/UX Implementation', 'Technical Consulting']
+    items: ['Web Development', 'App Development', 'USSD Solutions', 'Frontend & Backend', 'GitHub']
   }
 ];
 
