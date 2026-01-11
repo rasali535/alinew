@@ -36,12 +36,12 @@ const Footer = () => {
           {/* Links */}
           <div>
             <h4 className="text-white/40 text-xs uppercase tracking-wider mb-4">Navigation</h4>
-            <div className="space-y-3">
+            <div className="flex flex-wrap gap-6">
               {['Home', 'About', 'Services', 'Work', 'Booking'].map((link) => (
                 <Link
                   key={link}
                   to={link === 'Home' ? '/' : `/${link.toLowerCase().replace(' ', '-')}`}
-                  className="block text-white/70 hover:text-white text-sm transition-colors duration-300"
+                  className="text-white/70 hover:text-white text-sm transition-colors duration-300"
                 >
                   {link}
                 </Link>
@@ -52,10 +52,10 @@ const Footer = () => {
           {/* Contact */}
           <div>
             <h4 className="text-white/40 text-xs uppercase tracking-wider mb-4">Contact</h4>
-            <div className="space-y-3">
+            <div className="flex flex-wrap gap-6 items-center">
               <a
                 href="mailto:rasali@themaplin.com"
-                className="block text-white/70 hover:text-brand-green text-sm transition-colors duration-300"
+                className="text-white/70 hover:text-brand-green text-sm transition-colors duration-300"
               >
                 rasali@themaplin.com
               </a>
@@ -84,7 +84,7 @@ const Footer = () => {
         {/* Bottom Section */}
         <div className="flex flex-col lg:flex-row items-center justify-between pt-8 border-t border-white/10">
           <p className="text-white/40 text-xs mb-4 lg:mb-0">
-            © 2025 Ras Ali. All rights reserved.
+            © 2014 - 2025 Ras Ali. All rights reserved.
           </p>
           <div className="flex gap-6">
             <a href="#" className="text-white/40 hover:text-white text-xs transition-colors duration-300">
