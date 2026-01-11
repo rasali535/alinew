@@ -103,11 +103,11 @@ export const featuredProjects = [
     id: 14,
     title: 'Pula Pitch',
     subtitle: 'Business Reality TV Show',
-    image: 'https://picsum.photos/seed/pula/800/600',
+    image: '/assets/images/pula-pitch-logo.jpg',
     category: 'TV Production',
-    roles: ['Videographer Main Camera', 'Props Set up', 'Pre and Post Production'],
+    roles: ['Videographer Main Camera', 'Props Set up', 'Pre-Production Planning'],
     date: '2023',
-    description: "Pula Pitch is a business reality TV show where I was responsible for the main camera work, set design and prop setup, as well as handling both pre-production planning and post-production editing. This project demanded sharp visual storytelling and seamless technical execution."
+    description: "Pula Pitch is a business reality TV show where I was responsible for the main camera work, set design, and prop setup, as well as handling pre-production planning. This project demanded sharp visual storytelling and seamless technical execution during filming."
   },
   {
     id: 15,
@@ -190,9 +190,9 @@ export const companyInfo = {
 
 export const socialLinks = [
   { name: 'Instagram', url: 'https://www.instagram.com/ali_chiwartze/', icon: 'Instagram' },
-  { name: 'Facebook', url: 'https://www.facebook.com/share/18k8V1f6b5/', icon: 'Facebook' },
+  { name: 'Facebook', url: 'https://www.facebook.com/rasali2023/', icon: 'Facebook' },
   { name: 'YouTube', url: 'https://youtube.com/@rasali2023?si=Q3W58-ZgWvFDrxN_', icon: 'Youtube' },
-  { name: 'GitHub', url: 'https://github.com/maplininc', icon: 'Github' },
+  { name: 'GitHub', url: 'https://github.com/rasali535', icon: 'Github' },
   { name: 'WhatsApp', url: 'https://wa.me/26777150423', icon: 'Phone' },
   { name: 'Email', url: 'mailto:rasali@themaplin.com', icon: 'Mail' }
 ];

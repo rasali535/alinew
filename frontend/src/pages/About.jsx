@@ -59,7 +59,7 @@ const About = () => {
                                 <span className="text-white/50 text-sm uppercase tracking-wider">Years Experience</span>
                             </div>
                             <div>
-                                <span className="block text-4xl text-brand-green font-light mb-2">50+</span>
+                                <span className="block text-4xl text-brand-green font-light mb-2">15+</span>
                                 <span className="text-white/50 text-sm uppercase tracking-wider">Projects Completed</span>
                             </div>
                         </div>

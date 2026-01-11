@@ -89,7 +89,7 @@ const ServicesSection = () => {
       <div className="flex justify-center mt-16 px-6">
         <Link
           to="/services"
-          className="inline-flex items-center gap-2 text-white border border-white/20 rounded-full px-8 py-4 hover:bg-white hover:text-black transition-all duration-300 group"
+          className="inline-flex items-center gap-2 text-white border border-white/20 rounded-full px-6 py-3 md:px-8 md:py-4 text-sm md:text-base hover:bg-white hover:text-black transition-all duration-300 group whitespace-nowrap"
         >
           <span>Explore Services</span>
           <span className="transform group-hover:translate-x-1 transition-transform duration-300">→</span>
