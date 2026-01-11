@@ -69,16 +69,22 @@ const ProjectDetails = () => {
                     <div className="lg:col-span-2 space-y-8">
                         <h3 className="text-2xl text-white font-light">About the Project</h3>
                         <div className="text-white/70 text-lg leading-relaxed space-y-6">
-                            <p>
-                                This project represents a synthesis of technical precision and creative vision.
-                                Executed with a focus on delivering high-impact results, it showcases the
-                                core capabilities of Ras Ali's multi-disciplinary approach.
-                            </p>
-                            <p>
-                                From initial concept to final delivery, every detail was carefully considered
-                                to ensure the final output not only met but exceeded expectations. The workflow
-                                integrated modern tools and methodologies to achieve a polished, professional standard.
-                            </p>
+                            {project.description ? (
+                                <p>{project.description}</p>
+                            ) : (
+                                <>
+                                    <p>
+                                        This project represents a synthesis of technical precision and creative vision.
+                                        Executed with a focus on delivering high-impact results, it showcases the
+                                        core capabilities of Ras Ali's multi-disciplinary approach.
+                                    </p>
+                                    <p>
+                                        From initial concept to final delivery, every detail was carefully considered
+                                        to ensure the final output not only met but exceeded expectations. The workflow
+                                        integrated modern tools and methodologies to achieve a polished, professional standard.
+                                    </p>
+                                </>
+                            )}
                         </div>
                         {project.link && (
                             <div className="pt-8">
@@ -114,7 +120,7 @@ const ProjectDetails = () => {
                         </div>
                         <div>
                             <h4 className="text-white/50 text-sm uppercase tracking-widest mb-4">Date</h4>
-                            <p className="text-white">2024</p>
+                            <p className="text-white">{project.date || '2024'}</p>
                         </div>
                         <div>
                             <h4 className="text-white/50 text-sm uppercase tracking-widest mb-4">Client</h4>

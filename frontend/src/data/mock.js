@@ -14,46 +14,11 @@ const logoImage = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5
 
 export const featuredProjects = [
   {
-    id: 1,
-    title: 'Live at Jazz Festival',
-    subtitle: 'Bass Performance',
-    image: '/assets/images/ras-ali-bass-1.jpg',
-    category: 'Music'
-  },
-  {
-    id: 2,
-    title: 'Studio Sessions Vol. 1',
-    subtitle: 'Sound Engineering & Mixing',
-    image: 'https://picsum.photos/seed/studio/800/600',
-    category: 'Audio'
-  },
-  {
-    id: 3,
-    title: 'Urban Rhythm',
-    subtitle: 'Music Video Directed & Edited',
-    image: 'https://picsum.photos/seed/video/800/600',
-    category: 'Video'
-  },
-  {
     id: 4,
     title: 'Artist Portfolio',
     subtitle: 'Web Development',
     image: logoImage, // Using SVG Logo as requested
     category: 'Web'
-  },
-  {
-    id: 5,
-    title: 'Podcast Series',
-    subtitle: 'Audio Editing & Production',
-    image: 'https://picsum.photos/seed/podcast/800/600',
-    category: 'Audio'
-  },
-  {
-    id: 6,
-    title: 'Event Highlights',
-    subtitle: 'Videography & Post-Production',
-    image: '/assets/images/ras-ali-bass-3.png',
-    category: 'Video'
   },
   {
     id: 7,
@@ -109,7 +74,9 @@ export const featuredProjects = [
     subtitle: 'TV Show Production',
     image: 'https://picsum.photos/seed/gospel/800/600',
     category: 'TV Production',
-    roles: ['Music Director', 'Composer', 'Sound Engineer', 'Intro Composer', 'Show Director']
+    roles: ['Music Director', 'Composer', 'Sound Engineer', 'Intro Composer', 'Show Director'],
+    date: '2014 - 2023',
+    description: "The Melody Gospel is a long-running TV production where I served in multiple key capacities. From directing the show to composing the intro music, engineering the sound, and directing the musical performances, this project highlights a comprehensive range of production skills over nearly a decade."
   },
   {
     id: 14,
@@ -117,7 +84,9 @@ export const featuredProjects = [
     subtitle: 'Business Reality TV Show',
     image: 'https://picsum.photos/seed/pula/800/600',
     category: 'TV Production',
-    roles: ['Videographer Main Camera', 'Props Set up', 'Pre and Post Production']
+    roles: ['Videographer Main Camera', 'Props Set up', 'Pre and Post Production'],
+    date: '2023',
+    description: "Pula Pitch is a business reality TV show where I was responsible for the main camera work, set design and prop setup, as well as handling both pre-production planning and post-production editing. This project demanded sharp visual storytelling and seamless technical execution."
   },
   {
     id: 15,
@@ -125,7 +94,9 @@ export const featuredProjects = [
     subtitle: 'Music Request Show',
     image: '/assets/images/ras-ali-bass-2.png',
     category: 'TV Production',
-    roles: ['Bassist', 'Artist Liaison', 'Arrangements & Composition']
+    roles: ['Bassist', 'Artist Liaison', 'Arrangements & Composition'],
+    date: '2019 - 2020',
+    description: "For the 'Dedications' music request show, I served as the resident bassist, managed relationships as the artist liaison, and handled musical arrangements and composition. My role was central to ensuring the musical quality and smooth operation of the show's performances."
   }
 ];
 
@@ -167,11 +138,6 @@ export const clients = [
   'Colmas Studios',
   'Sound Hub Studios',
   'Livewire Recording Studios'
-];
-
-export const awards = [
-  { name: 'Best Bassist', year: '2023', image: 'https://picsum.photos/seed/award1/100/100' },
-  { name: 'Sound Mix Award', year: '2024', image: 'https://picsum.photos/seed/award2/100/100' }
 ];
 
 export const faqs = [

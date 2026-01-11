@@ -2,7 +2,6 @@ import React from 'react';
 import SEO from '../components/common/SEO';
 import FeaturedProjects from '../components/sections/FeaturedProjects';
 import ClientsSection from '../components/sections/ClientsSection';
-import AwardsSection from '../components/sections/AwardsSection';
 
 const Work = () => {
     return (
@@ -13,7 +12,6 @@ const Work = () => {
             />
             <FeaturedProjects limit={false} showViewAll={false} />
             <ClientsSection />
-            <AwardsSection />
         </div>
     );
 };
