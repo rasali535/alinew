@@ -84,7 +84,7 @@ const Footer = () => {
         {/* Bottom Section */}
         <div className="flex flex-col lg:flex-row items-center justify-between pt-8 border-t border-white/10">
           <p className="text-white/40 text-xs mb-4 lg:mb-0">
-            © 2014 - 2025 Ras Ali. All rights reserved.
+            © 2014 - 2026 Ras Ali. All rights reserved.
           </p>
           <div className="flex gap-6">
             <a href="#" className="text-white/40 hover:text-white text-xs transition-colors duration-300">
