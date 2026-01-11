@@ -22,15 +22,11 @@ const Header = () => {
       <nav className="flex items-center justify-between">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 group">
-          <div className="flex gap-0.5">
-            <div className="w-3 h-3 rounded-full bg-lime-400"></div>
-            <div className="w-3 h-3 rounded-full bg-lime-400"></div>
-            <div className="w-3 h-3 rounded-full bg-white/30"></div>
-          </div>
-          <div className="flex flex-col leading-none">
-            <span className="text-white text-sm font-medium tracking-tight">RAS</span>
-            <span className="text-white text-sm font-medium tracking-tight">ALI</span>
-          </div>
+          <img
+            src="/assets/images/logo.png"
+            alt="Ras Ali Logo"
+            className="h-10 w-auto object-contain"
+          />
         </Link>
 
         {/* Desktop Navigation */}
