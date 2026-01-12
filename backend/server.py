@@ -57,8 +57,8 @@ async def root():
 @api_router.post("/booking")
 async def create_booking(booking: BookingRequest):
     # Get email config from env
-    smtp_host = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
-    smtp_port = int(os.environ.get('SMTP_PORT', '587'))
+    smtp_host = os.environ.get('SMTP_HOST', 'smtp.titan.email')
+    smtp_port = int(os.environ.get('SMTP_PORT', '465'))
     smtp_user = os.environ.get('SMTP_USER')
     smtp_password = os.environ.get('SMTP_PASSWORD')
     receiver_email = "hello@themaplin.com"
@@ -87,9 +87,8 @@ async def create_booking(booking: BookingRequest):
         
         msg.attach(MIMEText(body, 'plain'))
 
-        server = smtplib.SMTP(smtp_host, smtp_port)
-        server.ehlo()
-        server.starttls()
+        # Use SMTP_SSL for port 465
+        server = smtplib.SMTP_SSL(smtp_host, smtp_port)
         server.ehlo()
         server.login(smtp_user, smtp_password)
         text = msg.as_string()
