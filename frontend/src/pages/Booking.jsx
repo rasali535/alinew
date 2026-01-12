@@ -30,9 +30,13 @@ const Booking = () => {
         e.preventDefault();
 
         try {
-            await axios.post('/api/booking', formData);
-            alert(`Thank you ${formData.name}! Your booking request for ${formData.service} has been sent.`);
-            setFormData({ name: '', email: '', service: '', message: '' });
+            const response = await axios.post('/api/booking', formData);
+            if (response.data && response.data.message) {
+                alert(`Thank you ${formData.name}! Your booking request for ${formData.service} has been sent.`);
+                setFormData({ name: '', email: '', service: '', message: '' });
+            } else {
+                throw new Error('Invalid response from server');
+            }
         } catch (error) {
             console.error('Error sending booking:', error);
             alert('There was an error sending your booking. Please try again or contact us directly at hello@themaplin.com');
