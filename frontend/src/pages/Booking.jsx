@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { useParams } from 'react-router-dom';
 import SEO from '../components/common/SEO';
 import { services } from '../data/mock';
@@ -25,11 +26,17 @@ const Booking = () => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        // Start simulating simple submission
-        alert(`Thank you ${formData.name}! Your booking request for ${formData.service} has been received.`);
-        setFormData({ name: '', email: '', service: '', message: '' });
+
+        try {
+            await axios.post('http://localhost:8000/api/booking', formData);
+            alert(`Thank you ${formData.name}! Your booking request for ${formData.service} has been sent.`);
+            setFormData({ name: '', email: '', service: '', message: '' });
+        } catch (error) {
+            console.error('Error sending booking:', error);
+            alert('There was an error sending your booking. Please try again or contact us directly at hello@themaplin.com');
+        }
     };
 
     const pageTitle = preSelectedService ? `Book ${preSelectedService.title}` : 'Booking';

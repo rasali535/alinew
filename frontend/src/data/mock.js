@@ -199,6 +199,6 @@ export const socialLinks = [
   { name: 'YouTube', url: 'https://youtube.com/@rasali2023?si=Q3W58-ZgWvFDrxN_', icon: 'Youtube' },
   { name: 'GitHub', url: 'https://github.com/rasali535', icon: 'Github' },
   { name: 'WhatsApp', url: 'https://wa.me/26777150423', icon: 'Phone' },
-  { name: 'Email', url: 'mailto:rasali@themaplin.com', icon: 'Mail' }
+  { name: 'Email', url: 'mailto:hello@themaplin.com', icon: 'Mail' }
 ];
 

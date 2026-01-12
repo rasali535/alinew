@@ -54,10 +54,10 @@ const Footer = () => {
             <h4 className="text-white/40 text-xs uppercase tracking-wider mb-4">Contact</h4>
             <div className="flex flex-wrap gap-6 items-center">
               <a
-                href="mailto:rasali@themaplin.com"
+                href="mailto:hello@themaplin.com"
                 className="text-white/70 hover:text-brand-green text-sm transition-colors duration-300"
               >
-                rasali@themaplin.com
+                hello@themaplin.com
               </a>
               <p className="text-white/50 text-sm">Gaborone, Botswana</p>
             </div>
