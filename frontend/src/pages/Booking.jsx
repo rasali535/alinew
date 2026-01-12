@@ -30,17 +30,21 @@ const Booking = () => {
         e.preventDefault();
 
         try {
-            const response = await axios.post('/api/booking', formData);
+            const response = await axios.post('http://localhost:8000/api/booking', formData);
             if (response.data && response.data.message) {
                 alert(`Thank you ${formData.name}! Your booking request for ${formData.service} has been sent.`);
                 setFormData({ name: '', email: '', service: '', message: '' });
             } else {
-                throw new Error('Invalid response from server');
+                console.log('Unexpected response:', response.data);
+                if (typeof response.data === 'string' && response.data.trim().startsWith('<!DOCTYPE html>')) {
+                    throw new Error('Backend not reachable (received HTML instead of JSON). Is server.py running?');
+                }
+                throw new Error('Invalid response format from server: ' + JSON.stringify(response.data).substring(0, 100));
             }
         } catch (error) {
             console.error('Error sending booking:', error);
             const errorMessage = error.response?.data?.detail || error.message || 'Unknown error';
-            alert(`Error: ${errorMessage}. Please try again or contact us directly at hello@themaplin.com`);
+            alert(`Error: ${errorMessage}`);
         }
     };
 
