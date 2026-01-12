@@ -97,8 +97,16 @@ async def create_booking(booking: BookingRequest):
         
         return {"message": "Booking request sent successfully"}
     except Exception as e:
-        print(f"Error sending email: {e}")
-        raise HTTPException(status_code=500, detail=f"Error sending email: {str(e)}")
+        error_msg = f"Error sending email: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        # Log to file manually to be sure
+        try:
+            with open("backend_error.log", "a") as f:
+                f.write(f"{datetime.now()}: {error_msg}\n")
+        except:
+            pass
+        print(error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
 
 @api_router.post("/status", response_model=StatusCheck)
 async def create_status_check(input: StatusCheckCreate):
@@ -149,3 +157,7 @@ logger = logging.getLogger(__name__)
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)

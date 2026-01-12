@@ -39,7 +39,8 @@ const Booking = () => {
             }
         } catch (error) {
             console.error('Error sending booking:', error);
-            alert('There was an error sending your booking. Please try again or contact us directly at hello@themaplin.com');
+            const errorMessage = error.response?.data?.detail || error.message || 'Unknown error';
+            alert(`Error: ${errorMessage}. Please try again or contact us directly at hello@themaplin.com`);
         }
     };
 
