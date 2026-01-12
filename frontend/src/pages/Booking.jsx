@@ -30,7 +30,7 @@ const Booking = () => {
         e.preventDefault();
 
         try {
-            await axios.post('http://localhost:8000/api/booking', formData);
+            await axios.post('/api/booking', formData);
             alert(`Thank you ${formData.name}! Your booking request for ${formData.service} has been sent.`);
             setFormData({ name: '', email: '', service: '', message: '' });
         } catch (error) {
