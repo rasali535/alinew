@@ -30,10 +30,16 @@ const Booking = () => {
         e.preventDefault();
 
         try {
-            // Use relative path - setupProxy.js will forward to backend
-            const apiUrl = '/api/booking';
+            // Use environment variable or fallback to relative path
+            const apiUrl = process.env.REACT_APP_API_URL || '/api/booking';
 
-            const response = await axios.post(apiUrl, formData);
+            console.log('Sending booking to:', apiUrl);
+
+            const response = await axios.post(apiUrl, formData, {
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
 
             if (response.data && response.data.message) {
                 alert(`Thank you ${formData.name}! Your booking request for ${formData.service} has been sent.`);
