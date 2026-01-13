@@ -30,12 +30,12 @@ const Booking = () => {
         e.preventDefault();
 
         try {
-            // Determine API URL: Use localhost:8000 for development, relative path for production
-            const apiUrl = process.env.NODE_ENV === 'development'
-                ? 'http://localhost:8000/api/booking'
-                : '/api/booking';
+            // Determine API URL with robust check
+            const isDev = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1');
+            const apiUrl = isDev ? 'http://localhost:8000/api/booking' : '/api/booking';
 
-            console.log('Sending booking request to:', apiUrl);
+            // alert(`Debug: Sending to ${apiUrl}`); // Uncomment for debugging if needed
+
             const response = await axios.post(apiUrl, formData);
 
             if (response.data && response.data.message) {
@@ -49,13 +49,10 @@ const Booking = () => {
             console.error('Error sending booking:', error);
             let errorMessage = error.message;
 
-            // Check for specific error types
             if (error.response?.data?.detail) {
                 errorMessage = error.response.data.detail;
-            } else if (typeof error.response?.data === 'string' && error.response.data.trim().startsWith('<')) {
-                errorMessage = 'Backend server is unreachable or returning HTML (check if backend is running)';
-            } else if (error.message === 'Network Error') {
-                errorMessage = 'Cannot connect to backend server. Is it running?';
+            } else if (typeof error.response?.data === 'string' && error.response.data.includes('<!DOCTYPE html>')) {
+                errorMessage = 'Backend Not Reachable (Serving HTML). Ensure Backend is running on port 8000.';
             }
 
             alert(`Error: ${errorMessage}. Please try again or contact us directly at hello@themaplin.com`);
