@@ -30,11 +30,11 @@ transporter.verify(function (error, success) {
     }
 });
 
-// Routes
-app.get('/', (req, res) => {
-    res.send({ message: "Hello World from Node.js" });
-});
+// Serve static files from the React app
+const path = require('path');
+app.use(express.static(path.join(__dirname, '../frontend/build')));
 
+// Routes
 app.get('/api', (req, res) => {
     res.send({ message: "API is working" });
 });
@@ -119,6 +119,12 @@ app.post('/api/contact', async (req, res) => {
         }
         res.status(500).json({ detail: `Error sending email: ${error.message}` });
     }
+});
+
+// The "catchall" handler: for any request that doesn't
+// match one above, send back React's index.html file.
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/build/index.html'));
 });
 
 // Start Server

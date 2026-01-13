@@ -21,8 +21,9 @@ const Contact = () => {
         setStatus('loading');
 
         try {
-            // Use relative path which works with the proxy setup
-            const apiUrl = '/api/contact';
+            // Construct API URL based on environment
+            const baseUrl = process.env.REACT_APP_API_BASE_URL || '';
+            const apiUrl = `${baseUrl}/api/contact`;
 
             await axios.post(apiUrl, formData, {
                 headers: {

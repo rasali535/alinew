@@ -31,8 +31,11 @@ const Booking = () => {
 
         try {
             // Use environment variable or fallback to relative path
-            // Use relative path to leverage proxy and avoid CORS
-            const apiUrl = '/api/booking';
+            // Construct API URL based on environment
+            // In dev (empty base): /api/booking (uses proxy)
+            // In prod (defined base): https://.../api/booking
+            const baseUrl = process.env.REACT_APP_API_BASE_URL || '';
+            const apiUrl = `${baseUrl}/api/booking`;
 
             console.log('Sending booking to:', apiUrl);
 
