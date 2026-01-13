@@ -30,14 +30,20 @@ const Booking = () => {
         e.preventDefault();
 
         try {
-            const apiUrl = process.env.REACT_APP_API_URL || '/api/booking';
+            // Hardcoded URL to ensure connection works immediately without server restart
+            const apiUrl = 'http://localhost:8000/api/booking';
             const response = await axios.post(apiUrl, formData);
+
             if (response.data && response.data.message) {
                 alert(`Thank you ${formData.name}! Your booking request for ${formData.service} has been sent.`);
                 setFormData({ name: '', email: '', service: '', message: '' });
             } else {
-                console.error('Invalid response format:', response.data);
-                throw new Error('Invalid response from server');
+                console.error('Unexpected response:', response);
+                // Check if response is HTML (common proxy error)
+                if (typeof response.data === 'string' && response.data.trim().startsWith('<')) {
+                    throw new Error('Backend server returning HTML. Check API URL or Proxy.');
+                }
+                throw new Error('Invalid response format from server');
             }
         } catch (error) {
             console.error('Error sending booking:', error);
