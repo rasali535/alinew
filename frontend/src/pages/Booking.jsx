@@ -30,8 +30,10 @@ const Booking = () => {
         e.preventDefault();
 
         try {
-            // Hardcoded URL to ensure connection works immediately without server restart
-            const apiUrl = 'http://localhost:8000/api/booking';
+            // Determine API URL: Use localhost:8000 for development, relative path for production
+            const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            const apiUrl = isLocal ? 'http://localhost:8000/api/booking' : '/api/booking';
+
             const response = await axios.post(apiUrl, formData);
 
             if (response.data && response.data.message) {
