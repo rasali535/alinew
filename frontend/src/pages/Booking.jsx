@@ -31,9 +31,11 @@ const Booking = () => {
 
         try {
             // Determine API URL: Use localhost:8000 for development, relative path for production
-            const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-            const apiUrl = isLocal ? 'http://localhost:8000/api/booking' : '/api/booking';
+            const apiUrl = process.env.NODE_ENV === 'development'
+                ? 'http://localhost:8000/api/booking'
+                : '/api/booking';
 
+            console.log('Sending booking request to:', apiUrl);
             const response = await axios.post(apiUrl, formData);
 
             if (response.data && response.data.message) {
@@ -41,15 +43,21 @@ const Booking = () => {
                 setFormData({ name: '', email: '', service: '', message: '' });
             } else {
                 console.error('Unexpected response:', response);
-                // Check if response is HTML (common proxy error)
-                if (typeof response.data === 'string' && response.data.trim().startsWith('<')) {
-                    throw new Error('Backend server returning HTML. Check API URL or Proxy.');
-                }
                 throw new Error('Invalid response format from server');
             }
         } catch (error) {
             console.error('Error sending booking:', error);
-            const errorMessage = error.response?.data?.detail || error.message || 'Unknown error';
+            let errorMessage = error.message;
+
+            // Check for specific error types
+            if (error.response?.data?.detail) {
+                errorMessage = error.response.data.detail;
+            } else if (typeof error.response?.data === 'string' && error.response.data.trim().startsWith('<')) {
+                errorMessage = 'Backend server is unreachable or returning HTML (check if backend is running)';
+            } else if (error.message === 'Network Error') {
+                errorMessage = 'Cannot connect to backend server. Is it running?';
+            }
+
             alert(`Error: ${errorMessage}. Please try again or contact us directly at hello@themaplin.com`);
         }
     };
