@@ -30,11 +30,13 @@ const Booking = () => {
         e.preventDefault();
 
         try {
-            const response = await axios.post('/api/booking', formData);
+            const apiUrl = process.env.REACT_APP_API_URL || '/api/booking';
+            const response = await axios.post(apiUrl, formData);
             if (response.data && response.data.message) {
                 alert(`Thank you ${formData.name}! Your booking request for ${formData.service} has been sent.`);
                 setFormData({ name: '', email: '', service: '', message: '' });
             } else {
+                console.error('Invalid response format:', response.data);
                 throw new Error('Invalid response from server');
             }
         } catch (error) {
