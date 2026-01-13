@@ -30,11 +30,8 @@ const Booking = () => {
         e.preventDefault();
 
         try {
-            // Determine API URL with robust check
-            const isDev = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1');
-            const apiUrl = isDev ? 'http://localhost:8000/api/booking' : '/api/booking';
-
-            // alert(`Debug: Sending to ${apiUrl}`); // Uncomment for debugging if needed
+            // Use relative path - setupProxy.js will forward to backend
+            const apiUrl = '/api/booking';
 
             const response = await axios.post(apiUrl, formData);
 
