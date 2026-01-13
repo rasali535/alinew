@@ -5,6 +5,7 @@ export const navLinks = [
   { name: 'Services', href: '/services' },
   { name: 'Work', href: '/work' },
   { name: 'Booking', href: '/booking' },
+  { name: 'Contact', href: '/contact' },
 ];
 
 export const heroWords = ['BASSIST.', 'ENGINEER.', 'VISUALS.', 'DEVELOPER.'];
@@ -198,7 +199,7 @@ export const socialLinks = [
   { name: 'Facebook', url: 'https://www.facebook.com/rasali2023/', icon: 'Facebook' },
   { name: 'YouTube', url: 'https://youtube.com/@rasali2023?si=Q3W58-ZgWvFDrxN_', icon: 'Youtube' },
   { name: 'GitHub', url: 'https://github.com/rasali535', icon: 'Github' },
-  { name: 'WhatsApp', url: 'https://wa.me/26777150423', icon: 'Phone' },
+  { name: 'WhatsApp', url: 'https://wa.me/26772534203', icon: 'Phone' },
   { name: 'Email', url: 'mailto:hello@themaplin.com', icon: 'Mail' }
 ];
 

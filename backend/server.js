@@ -80,6 +80,47 @@ app.post('/api/booking', async (req, res) => {
     }
 });
 
+app.post('/api/contact', async (req, res) => {
+    console.log("Received contact request:", req.body);
+    const { name, email, subject, message } = req.body;
+
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASSWORD) {
+        return res.status(500).json({ detail: "SMTP credentials not configured" });
+    }
+
+    const mailOptions = {
+        from: process.env.SMTP_USER,
+        to: "hello@themaplin.com",
+        replyTo: email,
+        subject: `New Contact Inquiry: ${subject || 'General Inquiry'}`,
+        text: `
+        New Contact Inquiry Details:
+        
+        Name: ${name}
+        Email: ${email}
+        Subject: ${subject}
+        
+        Message:
+        ${message}
+        `
+    };
+
+    try {
+        await transporter.sendMail(mailOptions);
+        console.log("Contact email sent successfully");
+        res.json({ message: "Contact request sent successfully" });
+    } catch (error) {
+        console.error("Error sending contact email:", error);
+        const fs = require('fs');
+        try {
+            fs.appendFileSync('backend_error.log', `${new Date().toISOString()} - Contact Error: ${error.message}\n${JSON.stringify(error)}\n`);
+        } catch (logErr) {
+            console.error("Could not write to log file:", logErr);
+        }
+        res.status(500).json({ detail: `Error sending email: ${error.message}` });
+    }
+});
+
 // Start Server
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);

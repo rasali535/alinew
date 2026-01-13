@@ -37,7 +37,7 @@ const Footer = () => {
           <div>
             <h4 className="text-white/40 text-xs uppercase tracking-wider mb-4">Navigation</h4>
             <div className="flex flex-wrap gap-6">
-              {['Home', 'About', 'Services', 'Work', 'Booking'].map((link) => (
+              {['Home', 'About', 'Services', 'Work', 'Booking', 'Contact'].map((link) => (
                 <Link
                   key={link}
                   to={link === 'Home' ? '/' : `/${link.toLowerCase().replace(' ', '-')}`}
@@ -52,14 +52,23 @@ const Footer = () => {
           {/* Contact */}
           <div>
             <h4 className="text-white/40 text-xs uppercase tracking-wider mb-4">Contact</h4>
-            <div className="flex flex-wrap gap-6 items-center">
+            <div className="flex flex-col gap-2">
               <a
                 href="mailto:hello@themaplin.com"
                 className="text-white/70 hover:text-brand-green text-sm transition-colors duration-300"
               >
                 hello@themaplin.com
               </a>
-              <p className="text-white/50 text-sm">Gaborone, Botswana</p>
+              <a
+                href="tel:+26772534203"
+                className="text-white/70 hover:text-brand-green text-sm transition-colors duration-300"
+              >
+                +267 72 534 203
+              </a>
+              <p className="text-white/50 text-sm">
+                Plot 18680 Khuhurutse St Phase 2,<br />
+                Gaborone, Botswana
+              </p>
             </div>
             <div className="flex gap-4 mt-6">
               {socialLinks.map((social) => {

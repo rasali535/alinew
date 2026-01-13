@@ -10,6 +10,7 @@ import Work from './pages/Work';
 import ProjectDetails from './pages/ProjectDetails';
 import AILabs from './pages/AILabs';
 import Booking from './pages/Booking';
+import Contact from './pages/Contact';
 import Cursor from './components/ui/Cursor';
 import Preloader from './components/ui/Preloader';
 
@@ -30,7 +31,7 @@ function App() {
             <Route path="/ai-labs" element={<AILabs />} />
             <Route path="/booking" element={<Booking />} />
             <Route path="/booking/:serviceId" element={<Booking />} />
-            <Route path="/contact" element={<Booking />} />
+            <Route path="/contact" element={<Contact />} />
           </Routes>
         </main>
         <Footer />
