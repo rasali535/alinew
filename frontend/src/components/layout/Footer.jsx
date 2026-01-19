@@ -60,14 +60,14 @@ const Footer = () => {
                 hello@themaplin.com
               </a>
               <a
-                href="tel:+26772534203"
+                href="tel:+26777150423"
                 className="text-white/70 hover:text-brand-green text-sm transition-colors duration-300"
               >
-                +267 72 534 203
+                +267 77 150 423
               </a>
               <p className="text-white/50 text-sm">
-                Plot 18680 Khuhurutse St Phase 2,<br />
-                Gaborone, Botswana
+                Plot 74212 G.North,<br />
+                Gaborone Botswana
               </p>
             </div>
             <div className="flex gap-4 mt-6">

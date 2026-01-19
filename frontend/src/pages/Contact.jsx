@@ -78,8 +78,8 @@ const Contact = () => {
                             </div>
                             <div>
                                 <h3 className="text-white text-lg font-medium mb-1">Phone</h3>
-                                <a href="tel:+26772534203" className="text-white/60 hover:text-white transition-colors">
-                                    +267 72 534 203
+                                <a href="tel:+26777150423" className="text-white/60 hover:text-white transition-colors">
+                                    +267 77 150 423
                                 </a>
                             </div>
                         </div>
@@ -91,8 +91,8 @@ const Contact = () => {
                             <div>
                                 <h3 className="text-white text-lg font-medium mb-1">Location</h3>
                                 <p className="text-white/60">
-                                    Plot 18680 Khuhurutse St Phase 2,<br />
-                                    Gaborone
+                                    Plot 74212 G.North,<br />
+                                    Gaborone Botswana
                                 </p>
                             </div>
                         </div>
