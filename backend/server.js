@@ -31,8 +31,17 @@ transporter.verify(function (error, success) {
 });
 
 // Serve static files from the React app
+// Serve static files from the React app
 const path = require('path');
-app.use(express.static(path.join(__dirname, '../frontend/build')));
+const fs = require('fs');
+
+// Check for local public folder (Production/Hostinger structure) or fallback to sibling directory (Dev)
+const productionBuildPath = path.join(__dirname, 'public');
+const devBuildPath = path.join(__dirname, '../frontend/build');
+
+const buildPath = fs.existsSync(productionBuildPath) ? productionBuildPath : devBuildPath;
+
+app.use(express.static(buildPath));
 
 // Routes
 app.get('/api', (req, res) => {
@@ -124,7 +133,7 @@ app.post('/api/contact', async (req, res) => {
 // The "catchall" handler: for any request that doesn't
 // match one above, send back React's index.html file.
 app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../frontend/build/index.html'));
+    res.sendFile(path.join(buildPath, 'index.html'));
 });
 
 // Start Server
