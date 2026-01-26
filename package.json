@@ -7,8 +7,7 @@
     "start": "node server.js",
     "dev": "craco start",
     "build": "craco build",
-    "test": "craco test",
-    "heroku-postbuild": "craco build"
+    "test": "craco test"
   },
   "dependencies": {
     "@craco/craco": "^7.1.0",
