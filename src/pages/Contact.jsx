@@ -107,84 +107,101 @@ const Contact = () => {
                     {/* Decorative gradient blob */}
                     <div className="absolute -top-24 -right-24 w-64 h-64 bg-brand-green/20 rounded-full blur-3xl pointer-events-none"></div>
 
-                    <form onSubmit={handleSubmit} className="space-y-6 relative z-10">
-                        <div className="space-y-2">
-                            <label className="text-white/70 text-sm uppercase tracking-wider font-medium ml-1">Name</label>
-                            <input
-                                type="text"
-                                name="name"
-                                value={formData.name}
-                                onChange={handleChange}
-                                required
-                                className="w-full bg-brand-dark/50 border border-white/20 rounded-xl px-4 py-4 text-white placeholder:text-white/20 focus:border-brand-green focus:ring-1 focus:ring-brand-green focus:outline-none transition-all"
-                                placeholder="John Doe"
-                            />
-                        </div>
-
-                        <div className="space-y-2">
-                            <label className="text-white/70 text-sm uppercase tracking-wider font-medium ml-1">Email</label>
-                            <input
-                                type="email"
-                                name="email"
-                                value={formData.email}
-                                onChange={handleChange}
-                                required
-                                className="w-full bg-brand-dark/50 border border-white/20 rounded-xl px-4 py-4 text-white placeholder:text-white/20 focus:border-brand-green focus:ring-1 focus:ring-brand-green focus:outline-none transition-all"
-                                placeholder="john@example.com"
-                            />
-                        </div>
-
-                        <div className="space-y-2">
-                            <label className="text-white/70 text-sm uppercase tracking-wider font-medium ml-1">Subject</label>
-                            <input
-                                type="text"
-                                name="subject"
-                                value={formData.subject}
-                                onChange={handleChange}
-                                required
-                                className="w-full bg-brand-dark/50 border border-white/20 rounded-xl px-4 py-4 text-white placeholder:text-white/20 focus:border-brand-green focus:ring-1 focus:ring-brand-green focus:outline-none transition-all"
-                                placeholder="Project Inquiry"
-                            />
-                        </div>
-
-                        <div className="space-y-2">
-                            <label className="text-white/70 text-sm uppercase tracking-wider font-medium ml-1">Message</label>
-                            <textarea
-                                name="message"
-                                value={formData.message}
-                                onChange={handleChange}
-                                required
-                                rows="4"
-                                className="w-full bg-brand-dark/50 border border-white/20 rounded-xl px-4 py-4 text-white placeholder:text-white/20 focus:border-brand-green focus:ring-1 focus:ring-brand-green focus:outline-none transition-all resize-none"
-                                placeholder="Tell me more about your project..."
-                            ></textarea>
-                        </div>
-
-                        <button
-                            type="submit"
-                            disabled={status === 'loading' || status === 'success'}
-                            className={`w-full group relative flex items-center justify-center gap-3 py-4 rounded-xl text-lg font-medium transition-all duration-300 ${status === 'success'
-                                ? 'bg-brand-green text-black cursor-default'
-                                : 'bg-white text-black hover:bg-brand-green hover:text-white'
-                                }`}
-                        >
-                            {status === 'loading' && <Loader2 className="w-5 h-5 animate-spin" />}
-                            {status === 'success' && <span>Message Sent!</span>}
-                            {status === 'error' && <span>Try Again</span>}
-                            {status === 'idle' && (
-                                <>
-                                    <span>Send Message</span>
-                                    <Send className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                                </>
-                            )}
-                        </button>
-
-                        {status === 'error' && (
-                            <p className="text-red-400 text-center text-sm mt-2">
-                                Something went wrong. Please try again later.
+                    {status === 'success' ? (
+                        <div className="flex flex-col items-center justify-center py-12 text-center animate-in fade-in zoom-in duration-500">
+                            <div className="w-20 h-20 bg-brand-green/10 rounded-full flex items-center justify-center mb-6">
+                                <Send className="w-10 h-10 text-brand-green" />
+                            </div>
+                            <h3 className="text-2xl text-white font-medium mb-4">Message Sent!</h3>
+                            <p className="text-white/60 max-w-md">
+                                Thank you for reaching out. I've received your message and will get back to you as soon as possible.
                             </p>
-                        )}
-                    </form>
+                            <button
+                                onClick={() => setStatus('idle')}
+                                className="mt-8 text-brand-green hover:text-white transition-colors"
+                            >
+                                Send another message
+                            </button>
+                        </div>
+                    ) : (
+                        <form onSubmit={handleSubmit} className="space-y-6 relative z-10">
+                            <div className="space-y-2">
+                                <label className="text-white/70 text-sm uppercase tracking-wider font-medium ml-1">Name</label>
+                                <input
+                                    type="text"
+                                    name="name"
+                                    value={formData.name}
+                                    onChange={handleChange}
+                                    required
+                                    className="w-full bg-brand-dark/50 border border-white/20 rounded-xl px-4 py-4 text-white placeholder:text-white/20 focus:border-brand-green focus:ring-1 focus:ring-brand-green focus:outline-none transition-all"
+                                    placeholder="John Doe"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-white/70 text-sm uppercase tracking-wider font-medium ml-1">Email</label>
+                                <input
+                                    type="email"
+                                    name="email"
+                                    value={formData.email}
+                                    onChange={handleChange}
+                                    required
+                                    className="w-full bg-brand-dark/50 border border-white/20 rounded-xl px-4 py-4 text-white placeholder:text-white/20 focus:border-brand-green focus:ring-1 focus:ring-brand-green focus:outline-none transition-all"
+                                    placeholder="john@example.com"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-white/70 text-sm uppercase tracking-wider font-medium ml-1">Subject</label>
+                                <input
+                                    type="text"
+                                    name="subject"
+                                    value={formData.subject}
+                                    onChange={handleChange}
+                                    required
+                                    className="w-full bg-brand-dark/50 border border-white/20 rounded-xl px-4 py-4 text-white placeholder:text-white/20 focus:border-brand-green focus:ring-1 focus:ring-brand-green focus:outline-none transition-all"
+                                    placeholder="Project Inquiry"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-white/70 text-sm uppercase tracking-wider font-medium ml-1">Message</label>
+                                <textarea
+                                    name="message"
+                                    value={formData.message}
+                                    onChange={handleChange}
+                                    required
+                                    rows="4"
+                                    className="w-full bg-brand-dark/50 border border-white/20 rounded-xl px-4 py-4 text-white placeholder:text-white/20 focus:border-brand-green focus:ring-1 focus:ring-brand-green focus:outline-none transition-all resize-none"
+                                    placeholder="Tell me more about your project..."
+                                ></textarea>
+                            </div>
+
+                            <button
+                                type="submit"
+                                disabled={status === 'loading'}
+                                className={`w-full group relative flex items-center justify-center gap-3 py-4 rounded-xl text-lg font-medium transition-all duration-300 bg-white text-black hover:bg-brand-green hover:text-white`}
+                            >
+                                {status === 'loading' ? (
+                                    <>
+                                        <Loader2 className="w-5 h-5 animate-spin" />
+                                        <span>Sending...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span>Send Message</span>
+                                        <Send className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                                    </>
+                                )}
+                            </button>
+
+                            {status === 'error' && (
+                                <p className="text-red-400 text-center text-sm mt-2">
+                                    Something went wrong. Please try again later.
+                                </p>
+                            )}
+                        </form>
+                    )}
                 </div>
             </div>
         </section>
