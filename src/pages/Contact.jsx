@@ -21,18 +21,21 @@ const Contact = () => {
         setStatus('loading');
 
         try {
-            // Construct API URL based on environment
-            const baseUrl = process.env.REACT_APP_API_BASE_URL || '';
-            const apiUrl = `${baseUrl}/api/contact`;
+            // Updated to point to PHP handler
+            const apiUrl = '/send_mail.php';
 
-            await axios.post(apiUrl, formData, {
+            const response = await axios.post(apiUrl, formData, {
                 headers: {
                     'Content-Type': 'application/json',
                 },
             });
 
-            setStatus('success');
-            setFormData({ name: '', email: '', subject: '', message: '' });
+            if (response.data.success) {
+                setStatus('success');
+                setFormData({ name: '', email: '', subject: '', message: '' });
+            } else {
+                throw new Error(response.data.message || 'Server error');
+            }
         } catch (error) {
             console.error('Error sending message:', error);
             setStatus('error');
