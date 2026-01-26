@@ -2,10 +2,10 @@
   "name": "alinew-production",
   "version": "1.0.0",
   "description": "Production entry point for Alinew",
-  "main": "backend/server.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node backend/server.js",
-    "build": "cd frontend && npm install && npm run build",
+    "start": "node server.js",
+    "build": "cd frontend && npm install && npm run build && cd .. && node move-build.js",
     "heroku-postbuild": "npm run build"
   },
   "dependencies": {
