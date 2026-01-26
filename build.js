@@ -17,7 +17,8 @@ const run = (command, cwd) => {
 const rootDir = __dirname;
 const frontendDir = path.join(rootDir, 'frontend');
 const frontendBuildDir = path.join(frontendDir, 'build');
-const publicDir = path.join(rootDir, 'public');
+// Deployments often look for 'build' or 'dist' folder. 'public' can be confused with source public.
+const publicDir = path.join(rootDir, 'build');
 
 console.log('--- STARTING PRODUCTION BUILD ---');
 

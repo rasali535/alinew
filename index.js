@@ -33,9 +33,9 @@ transporter.verify(function (error, success) {
 });
 
 // Serve static files from the React app
-// Priority 1: Production (Root public folder)
+// Priority 1: Production (Root build folder)
 // Priority 2: Dev (Frontend build folder)
-const productionBuildPath = path.join(__dirname, 'public');
+const productionBuildPath = path.join(__dirname, 'build');
 const devBuildPath = path.join(__dirname, 'frontend/build');
 
 const buildPath = fs.existsSync(productionBuildPath) ? productionBuildPath : devBuildPath;
