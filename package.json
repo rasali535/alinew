@@ -2,9 +2,9 @@
   "name": "alinew-production",
   "version": "1.0.0",
   "description": "Production entry point for Alinew",
-  "main": "app.js",
+  "main": "index.js",
   "scripts": {
-    "start": "node app.js",
+    "start": "node index.js",
     "build": "cd frontend && npm install && npm run build && cd .. && node move-build.js",
     "test": "echo \"No tests specified\" && exit 0",
     "heroku-postbuild": "npm run build"
