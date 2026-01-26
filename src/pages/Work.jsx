@@ -9,6 +9,7 @@ const Work = () => {
             <SEO
                 title="Work | Ras Ali"
                 description="Explore the portfolio of Ras Ali. Featured projects in web design, development, and creative technology."
+                url="/work"
             />
             <FeaturedProjects limit={false} showViewAll={false} />
             <ClientsSection />

@@ -12,6 +12,7 @@ const AILabs = () => {
             <SEO
                 title="Inside AI Labs | Ras Ali"
                 description={companyInfo.aiLabsDescription}
+                url="/ai-labs"
             />
 
             <div className="max-w-7xl mx-auto">

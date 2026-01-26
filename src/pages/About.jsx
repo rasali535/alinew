@@ -8,6 +8,7 @@ const About = () => {
             <SEO
                 title="About Me | Ras Ali"
                 description={`Learn more about Ras Ali, a Creative Technologist based in ${companyInfo.location}. Bridging the gap between artistic expression and digital innovation.`}
+                url="/about"
             />
             <div className="max-w-7xl mx-auto">
                 {/* Header */}

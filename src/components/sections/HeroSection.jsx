@@ -51,12 +51,8 @@ const HeroSection = () => {
         }}>
         <div className="mb-20">
           <h1 className="text-white text-4xl md:text-5xl lg:text-6xl font-light italic tracking-tight leading-tight">
-            MULTI-DISCIPLINARY
-          </h1>
-          <h1 className="text-white text-4xl md:text-5xl lg:text-6xl font-light italic tracking-tight leading-tight">
-            CREATIVE &
-          </h1>
-          <h1 className="text-white text-4xl md:text-5xl lg:text-6xl font-light italic tracking-tight leading-tight">
+            MULTI-DISCIPLINARY <br />
+            CREATIVE & <br />
             TECHNOLOGIST.
           </h1>
         </div>

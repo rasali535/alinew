@@ -68,6 +68,7 @@ const Booking = () => {
             <SEO
                 title={`${pageTitle} | Ras Ali`}
                 description="Book Ras Ali for your next project. Services include Bass Performance, Sound Engineering, Video Production, and Web Development."
+                url="/booking"
             />
             <div className="max-w-4xl mx-auto w-full">
                 <div className="text-center mb-16">

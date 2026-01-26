@@ -47,6 +47,7 @@ const Contact = () => {
             <SEO
                 title="Contact | Ras Ali"
                 description="Get in touch with Ras Ali for premium web design, development, and digital experiences."
+                url="/contact"
             />
 
             <div className="max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">

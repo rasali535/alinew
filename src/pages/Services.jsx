@@ -9,6 +9,7 @@ const Services = () => {
             <SEO
                 title="Services | Ras Ali"
                 description="Professional services by Ras Ali including Web Development, UI/UX Design, Corporate Branding, and Custom Software Solutions."
+                url="/services"
             />
             <ServicesPageGrid />
             <AILabsSection />

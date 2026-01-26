@@ -13,6 +13,7 @@ const Home = () => {
             <SEO
                 title="Ras Ali - Multi-Disciplinary Creative & Technologist"
                 description="Ras Ali is a multi-disciplinary creative and technologist based in Gaborone, specializing in premium web design, development, and digital experiences."
+                url="/"
             />
             <HeroSection />
             <FeaturedProjects limit={6} showViewAll={true} />
