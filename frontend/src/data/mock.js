@@ -190,6 +190,8 @@ export const companyInfo = {
   name: 'Ras Ali',
   tagline: 'Multi-Disciplinary Creative & Technologist',
   location: 'Gaborone, Botswana',
+  address: 'Plot 74212 G.North, Gaborone Botswana',
+  phone: '+267 77 150 423',
   description: "I am a multi-talented creative professional specializing in music, sound engineering, videography, and web development. I bring a unique blend of artistic and technical skills to every project.",
   aiLabsDescription: 'Exploring the intersection of creativity and technology. Constantly learning and experimenting with new tools to enhance artistic expression.'
 };

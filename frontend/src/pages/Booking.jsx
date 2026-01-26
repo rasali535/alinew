@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useParams } from 'react-router-dom';
 import SEO from '../components/common/SEO';
 import { services } from '../data/mock';
+import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 
 const Booking = () => {
     const { serviceId } = useParams();
@@ -12,6 +13,8 @@ const Booking = () => {
         service: '',
         message: ''
     });
+    const [status, setStatus] = useState('idle'); // idle, loading, success, error
+    const [errorMessage, setErrorMessage] = useState('');
 
     // Find the pre-selected service if serviceId exists
     const preSelectedService = serviceId ? services.find(s => s.id === parseInt(serviceId)) : null;
@@ -28,41 +31,34 @@ const Booking = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setStatus('loading');
+        setErrorMessage('');
 
         try {
-            // Use environment variable or fallback to relative path
             // Construct API URL based on environment
-            // In dev (empty base): /api/booking (uses proxy)
-            // In prod (defined base): https://.../api/booking
             const baseUrl = process.env.REACT_APP_API_BASE_URL || '';
             const apiUrl = `${baseUrl}/api/booking`;
 
-            console.log('Sending booking to:', apiUrl);
-
-            const response = await axios.post(apiUrl, formData, {
+            await axios.post(apiUrl, formData, {
                 headers: {
                     'Content-Type': 'application/json',
                 },
             });
 
-            if (response.data && response.data.message) {
-                alert(`Thank you ${formData.name}! Your booking request for ${formData.service} has been sent.`);
-                setFormData({ name: '', email: '', service: '', message: '' });
-            } else {
-                console.error('Unexpected response:', response);
-                throw new Error('Invalid response format from server');
-            }
+            setStatus('success');
+            setFormData({ name: '', email: '', service: '', message: '' });
         } catch (error) {
             console.error('Error sending booking:', error);
-            let errorMessage = error.message;
+            let msg = error.message;
 
             if (error.response?.data?.detail) {
-                errorMessage = error.response.data.detail;
+                msg = error.response.data.detail;
             } else if (typeof error.response?.data === 'string' && error.response.data.includes('<!DOCTYPE html>')) {
-                errorMessage = 'Backend Not Reachable (Serving HTML). Ensure Backend is running on port 8000.';
+                msg = 'Backend Connection Failed. Please ensure the server is running.';
             }
 
-            alert(`Error: ${errorMessage}. Please try again or contact us directly at hello@themaplin.com`);
+            setErrorMessage(msg);
+            setStatus('error');
         }
     };
 
@@ -87,72 +83,115 @@ const Booking = () => {
                     </p>
                 </div>
 
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-8 md:p-12">
-                    <form onSubmit={handleSubmit} className="space-y-8">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                            <div className="space-y-2">
-                                <label className="text-white/70 text-sm uppercase tracking-wider">Name</label>
-                                <input
-                                    type="text"
-                                    name="name"
-                                    value={formData.name}
-                                    onChange={handleChange}
-                                    required
-                                    className="w-full bg-brand-dark border border-white/20 rounded-lg px-4 py-3 text-white focus:border-brand-green focus:outline-none transition-colors"
-                                    placeholder="Your Name"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-white/70 text-sm uppercase tracking-wider">Email</label>
-                                <input
-                                    type="email"
-                                    name="email"
-                                    value={formData.email}
-                                    onChange={handleChange}
-                                    required
-                                    className="w-full bg-brand-dark border border-white/20 rounded-lg px-4 py-3 text-white focus:border-brand-green focus:outline-none transition-colors"
-                                    placeholder="your@email.com"
-                                />
-                            </div>
-                        </div>
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-8 md:p-12 relative overflow-hidden">
+                    {/* Decorative Elements */}
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-brand-green/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
 
-                        <div className="space-y-2">
-                            <label className="text-white/70 text-sm uppercase tracking-wider">Service Needed</label>
-                            <select
-                                name="service"
-                                value={formData.service}
-                                onChange={handleChange}
-                                required
-                                className="w-full bg-brand-dark border border-white/20 rounded-lg px-4 py-3 text-white focus:border-brand-green focus:outline-none transition-colors"
+                    {status === 'success' ? (
+                        <div className="flex flex-col items-center justify-center py-12 text-center animate-in fade-in zoom-in duration-500">
+                            <div className="w-20 h-20 bg-brand-green/10 rounded-full flex items-center justify-center mb-6">
+                                <CheckCircle className="w-10 h-10 text-brand-green" />
+                            </div>
+                            <h3 className="text-2xl text-white font-medium mb-4">Request Sent Successfully!</h3>
+                            <p className="text-white/60 max-w-md">
+                                Thank you for reaching out. I'll get back to you regarding your {formData.service || 'project'} inquiry as soon as possible.
+                            </p>
+                            <button
+                                onClick={() => setStatus('idle')}
+                                className="mt-8 text-brand-green hover:text-white transition-colors"
                             >
-                                <option value="" disabled>Select a service</option>
-                                {services.map((s) => (
-                                    <option key={s.id} value={s.title}>{s.title}</option>
-                                ))}
-                                <option value="Other">Other</option>
-                            </select>
+                                Send another request
+                            </button>
                         </div>
+                    ) : (
+                        <form onSubmit={handleSubmit} className="space-y-8 relative z-10">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className="space-y-2">
+                                    <label className="text-white/70 text-sm uppercase tracking-wider">Name</label>
+                                    <input
+                                        type="text"
+                                        name="name"
+                                        value={formData.name}
+                                        onChange={handleChange}
+                                        required
+                                        disabled={status === 'loading'}
+                                        className="w-full bg-brand-dark/50 border border-white/20 rounded-lg px-4 py-3 text-white placeholder:text-white/20 focus:border-brand-green focus:outline-none transition-colors disabled:opacity-50"
+                                        placeholder="Your Name"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-white/70 text-sm uppercase tracking-wider">Email</label>
+                                    <input
+                                        type="email"
+                                        name="email"
+                                        value={formData.email}
+                                        onChange={handleChange}
+                                        required
+                                        disabled={status === 'loading'}
+                                        className="w-full bg-brand-dark/50 border border-white/20 rounded-lg px-4 py-3 text-white placeholder:text-white/20 focus:border-brand-green focus:outline-none transition-colors disabled:opacity-50"
+                                        placeholder="your@email.com"
+                                    />
+                                </div>
+                            </div>
 
-                        <div className="space-y-2">
-                            <label className="text-white/70 text-sm uppercase tracking-wider">Message</label>
-                            <textarea
-                                name="message"
-                                value={formData.message}
-                                onChange={handleChange}
-                                required
-                                rows="5"
-                                className="w-full bg-brand-dark border border-white/20 rounded-lg px-4 py-3 text-white focus:border-brand-green focus:outline-none transition-colors"
-                                placeholder="Tell me about your project..."
-                            ></textarea>
-                        </div>
+                            <div className="space-y-2">
+                                <label className="text-white/70 text-sm uppercase tracking-wider">Service Needed</label>
+                                <select
+                                    name="service"
+                                    value={formData.service}
+                                    onChange={handleChange}
+                                    required
+                                    disabled={status === 'loading'}
+                                    className="w-full bg-brand-dark/50 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-brand-green focus:outline-none transition-colors disabled:opacity-50"
+                                >
+                                    <option value="" disabled>Select a service</option>
+                                    {services.map((s) => (
+                                        <option key={s.id} value={s.title}>{s.title}</option>
+                                    ))}
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
 
-                        <button
-                            type="submit"
-                            className="w-full bg-brand-green text-black font-medium py-4 rounded-full text-lg hover:bg-white transition-colors duration-300"
-                        >
-                            Send Booking Request
-                        </button>
-                    </form>
+                            <div className="space-y-2">
+                                <label className="text-white/70 text-sm uppercase tracking-wider">Message</label>
+                                <textarea
+                                    name="message"
+                                    value={formData.message}
+                                    onChange={handleChange}
+                                    required
+                                    rows="5"
+                                    disabled={status === 'loading'}
+                                    className="w-full bg-brand-dark/50 border border-white/20 rounded-lg px-4 py-3 text-white placeholder:text-white/20 focus:border-brand-green focus:outline-none transition-colors disabled:opacity-50"
+                                    placeholder="Tell me about your project..."
+                                ></textarea>
+                            </div>
+
+                            {status === 'error' && (
+                                <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 flex items-start gap-3">
+                                    <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                                    <div>
+                                        <h4 className="text-red-500 font-medium text-sm">Action Failed</h4>
+                                        <p className="text-red-400 text-sm mt-1">{errorMessage}</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            <button
+                                type="submit"
+                                disabled={status === 'loading'}
+                                className="w-full bg-brand-green text-black font-medium py-4 rounded-full text-lg hover:bg-white transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            >
+                                {status === 'loading' ? (
+                                    <>
+                                        <Loader2 className="w-5 h-5 animate-spin" />
+                                        <span>Sending Request...</span>
+                                    </>
+                                ) : (
+                                    <span>Send Booking Request</span>
+                                )}
+                            </button>
+                        </form>
+                    )}
                 </div>
             </div>
         </section>
