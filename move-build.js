@@ -3,7 +3,7 @@ const path = require('path');
 
 // Paths
 const frontendBuildDir = path.join(__dirname, 'frontend', 'build');
-const backendPublicDir = path.join(__dirname, 'backend', 'public');
+const backendPublicDir = path.join(__dirname, 'public');
 
 // Ensure frontend build exists
 if (!fs.existsSync(frontendBuildDir)) {
