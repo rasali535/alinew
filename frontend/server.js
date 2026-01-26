@@ -33,12 +33,8 @@ transporter.verify(function (error, success) {
 });
 
 // Serve static files from the React app
-// Priority 1: Production (Root build folder)
-// Priority 2: Dev (Frontend build folder)
-const productionBuildPath = path.join(__dirname, 'build');
-const devBuildPath = path.join(__dirname, 'frontend/build');
-
-const buildPath = fs.existsSync(productionBuildPath) ? productionBuildPath : devBuildPath;
+// We assume we are running inside the frontend directory, so build is just './build'
+const buildPath = path.join(__dirname, 'build');
 
 console.log('Serving static files from:', buildPath);
 app.use(express.static(buildPath));
