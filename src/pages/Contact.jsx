@@ -116,6 +116,9 @@ const Contact = () => {
                             <p className="text-white/60 max-w-md">
                                 Thank you for reaching out. I've received your message and will get back to you as soon as possible.
                             </p>
+                            <p className="mt-4 text-brand-green font-medium tracking-wide">
+                                THE FUTURE IS HARMONY AND LOGIC
+                            </p>
                             <button
                                 onClick={() => setStatus('idle')}
                                 className="mt-8 text-brand-green hover:text-white transition-colors"
