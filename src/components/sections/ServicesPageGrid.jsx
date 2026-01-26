@@ -14,11 +14,11 @@ const iconMap = {
 
 // Image map (Using placeholders relevant to the service)
 const imageMap = {
-    'Bassist': 'https://images.unsplash.com/photo-1514320291940-b3712c7859cb?auto=format&fit=crop&q=80&w=800',
-    'Sound Engineer': 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?auto=format&fit=crop&q=80&w=800',
-    'Videographer': 'https://images.unsplash.com/photo-1535016120720-40c6874c3b1c?auto=format&fit=crop&q=80&w=800',
-    'Developer': 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&q=80&w=800',
-    'Media & Branding': 'https://images.unsplash.com/photo-1626785774573-4b799314346d?auto=format&fit=crop&q=80&w=800'
+    'Bassist': '/assets/images/service-bassist.jpg',
+    'Sound Engineer': '/assets/images/service-sound.png',
+    'Videographer': '/assets/images/service-video.png',
+    'Developer': '/assets/images/service-dev.png',
+    'Media & Branding': '/assets/images/service-branding.png'
 };
 
 const ServiceCard = ({ service, index }) => {
