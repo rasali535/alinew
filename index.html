@@ -37,21 +37,27 @@
     <script type="module">
         window.addEventListener('load', async () => {
             try {
-                const Chatbot = await import('https://cdn.jsdelivr.net/npm/@n8n/chat/dist/chat.bundle.es.js');
-                if (Chatbot && Chatbot.mount) {
+                const ChatbotModule = await import('https://cdn.jsdelivr.net/npm/@n8n/chat/dist/chat.bundle.es.js');
+                console.log('📦 Module keys:', Object.keys(ChatbotModule));
+                console.log('📦 Full module:', ChatbotModule);
+
+                // Try different possible exports
+                const Chatbot = ChatbotModule.default || ChatbotModule.Chatbot || ChatbotModule.createChat || ChatbotModule;
+
+                if (typeof Chatbot === 'object' && Chatbot.mount) {
                     Chatbot.mount({
                         webhookUrl: 'https://themap.app.n8n.cloud/webhook/002f4683-030b-450d-a944-0cd77f23400c/chat',
                         mode: 'window',
                     });
                     console.log('✅ n8n chatbot loaded');
-                } else if (Chatbot && Chatbot.default && Chatbot.default.mount) {
-                    Chatbot.default.mount({
+                } else if (typeof Chatbot === 'function') {
+                    const instance = Chatbot({
                         webhookUrl: 'https://themap.app.n8n.cloud/webhook/002f4683-030b-450d-a944-0cd77f23400c/chat',
                         mode: 'window',
                     });
-                    console.log('✅ n8n chatbot loaded (via default)');
+                    console.log('✅ n8n chatbot loaded (function)');
                 } else {
-                    console.error('❌ Chatbot module structure:', Chatbot);
+                    console.error('❌ Could not find mount method. Module:', ChatbotModule);
                 }
             } catch (error) {
                 console.error('❌ n8n chatbot failed:', error);
