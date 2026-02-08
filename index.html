@@ -34,7 +34,20 @@
 <body>
     <div id="root"></div>
     <script type="module" src="/src/index.jsx"></script>
-
+    <script type="module">
+        window.addEventListener('load', async () => {
+            try {
+                const { default: Chatbot } = await import('https://cdn.jsdelivr.net/npm/@n8n/chat/dist/chat.bundle.es.js');
+                Chatbot.mount({
+                    webhookUrl: 'https://themap.app.n8n.cloud/webhook/002f4683-030b-450d-a944-0cd77f23400c/chat',
+                    mode: 'window',
+                });
+                console.log('✅ n8n chatbot loaded');
+            } catch (error) {
+                console.error('❌ n8n chatbot failed:', error);
+            }
+        });
+    </script>
 </body>
 
 </html>
