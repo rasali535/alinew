@@ -14,6 +14,8 @@ import Contact from './pages/Contact';
 import Cursor from './components/ui/Cursor';
 import Preloader from './components/ui/Preloader';
 
+import Chatbot from '@/components/common/Chatbot';
+
 function App() {
   return (
     <div className="App bg-brand-dark min-h-screen">
@@ -35,6 +37,7 @@ function App() {
           </Routes>
         </main>
         <Footer />
+        <Chatbot />
       </BrowserRouter>
     </div>
   );

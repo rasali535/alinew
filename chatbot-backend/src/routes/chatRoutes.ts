@@ -72,4 +72,16 @@ router.delete(
     asyncHandler(chatController.deleteSession.bind(chatController))
 );
 
+import { leadController } from '../controllers/leadController.js';
+
+/**
+ * POST /api/leads
+ * Capture lead information
+ */
+router.post(
+    '/leads',
+    authenticateApiKey,
+    asyncHandler(leadController.createLead.bind(leadController))
+);
+
 export default router;
