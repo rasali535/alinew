@@ -14,16 +14,26 @@ async function startServer(): Promise<void> {
 
         // Connect to database
         logger.info('Connecting to database...');
-        await db.connect();
+        try {
+            await db.connect();
+        } catch (error) {
+            logger.warn('Failed to connect to database. Continuing without DB connection. API endpoints requiring DB will fail.', {
+                error: error instanceof Error ? error.message : String(error)
+            });
+        }
 
         // Run migrations (Phase 2 & 3)
         // Check if migrations should run (default: true in dev, false in prod unless forced)
-        const shouldRunMigrations = config.nodeEnv !== 'production' || process.env.RUN_MIGRATIONS === 'true';
+        if (db.isReady()) {
+            const shouldRunMigrations = config.nodeEnv !== 'production' || process.env.RUN_MIGRATIONS === 'true';
 
-        if (shouldRunMigrations) {
-            await db.runMigrations();
+            if (shouldRunMigrations) {
+                await db.runMigrations();
+            } else {
+                logger.info('Skipping migrations in production (set RUN_MIGRATIONS=true to enable)');
+            }
         } else {
-            logger.info('Skipping migrations in production (set RUN_MIGRATIONS=true to enable)');
+            logger.warn('Skipping migrations because database is not connected');
         }
 
         // Create Express app
@@ -43,6 +53,16 @@ async function startServer(): Promise<void> {
                 chat: `http://${config.host}:${config.port}/api/chat`,
                 sessions: `http://${config.host}:${config.port}/api/sessions`,
             });
+        });
+
+        // Handle server startup errors (e.g., EADDRINUSE)
+        server.on('error', (error: NodeJS.ErrnoException) => {
+            if (error.code === 'EADDRINUSE') {
+                logger.error(`Port ${config.port} is already in use`, { error });
+            } else {
+                logger.error('Server error', { error });
+            }
+            process.exit(1);
         });
 
         // Graceful shutdown handlers

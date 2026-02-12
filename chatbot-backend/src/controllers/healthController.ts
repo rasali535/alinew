@@ -7,7 +7,7 @@ import { logger } from '../utils/logger.js';
  * GET /health
  * Health check endpoint
  */
-export async function healthCheck(req: Request, res: Response): Promise<Response> {
+export async function healthCheck(_req: Request, res: Response): Promise<Response> {
     const startTime = Date.now();
 
     // Check services concurrently
@@ -46,7 +46,7 @@ export async function healthCheck(req: Request, res: Response): Promise<Response
  * GET /
  * Root endpoint
  */
-export function root(req: Request, res: Response): Response {
+export function root(_req: Request, res: Response): Response {
     return res.status(200).json({
         name: 'Chatbot Backend API',
         version: '1.0.0',

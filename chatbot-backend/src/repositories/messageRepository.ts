@@ -20,6 +20,8 @@ interface MessageRow {
  * Repository for message data access
  */
 export class MessageRepository {
+    private inMemoryMessages: Map<string, ChatMessage[]> = new Map();
+
     /**
      * Save a new message
      */
@@ -30,6 +32,19 @@ export class MessageRepository {
         tokensUsed?: number,
         metadata?: Record<string, unknown>
     ): Promise<ChatMessage> {
+        if (!db.isReady()) {
+            const message: ChatMessage = {
+                role,
+                content,
+                timestamp: new Date(),
+            };
+            const history = this.inMemoryMessages.get(sessionId) || [];
+            history.push(message);
+            this.inMemoryMessages.set(sessionId, history);
+            logger.debug('Message saved in-memory', { sessionId, role });
+            return message;
+        }
+
         try {
             const result = await db.query<MessageRow>(
                 `INSERT INTO messages (session_id, role, content, tokens_used, metadata)
@@ -49,7 +64,7 @@ export class MessageRepository {
                 throw new DatabaseError('Failed to create message');
             }
 
-            logger.debug('Message saved', {
+            logger.debug('Message saved to DB', {
                 sessionId,
                 role,
                 messageId: row.id,
@@ -76,6 +91,22 @@ export class MessageRepository {
             tokensUsed?: number;
         }>
     ): Promise<ChatMessage[]> {
+        if (!db.isReady()) {
+            const savedMessages: ChatMessage[] = [];
+            const history = this.inMemoryMessages.get(sessionId) || [];
+            for (const msg of messages) {
+                const message: ChatMessage = {
+                    role: msg.role,
+                    content: msg.content,
+                    timestamp: new Date(),
+                };
+                savedMessages.push(message);
+                history.push(message);
+            }
+            this.inMemoryMessages.set(sessionId, history);
+            return savedMessages;
+        }
+
         try {
             return await db.transaction(async (client) => {
                 const savedMessages: ChatMessage[] = [];
@@ -93,7 +124,7 @@ export class MessageRepository {
                     }
                 }
 
-                logger.info('Multiple messages saved', {
+                logger.info('Multiple messages saved to DB', {
                     sessionId,
                     count: savedMessages.length,
                 });
@@ -113,6 +144,11 @@ export class MessageRepository {
         sessionId: string,
         limit: number = 20
     ): Promise<ChatMessage[]> {
+        if (!db.isReady()) {
+            const history = this.inMemoryMessages.get(sessionId) || [];
+            return history.slice(-limit);
+        }
+
         try {
             const result = await db.query<MessageRow>(
                 `SELECT * FROM messages
@@ -143,6 +179,10 @@ export class MessageRepository {
      * Get all messages for a session
      */
     async getAllBySessionId(sessionId: string): Promise<ChatMessage[]> {
+        if (!db.isReady()) {
+            return this.inMemoryMessages.get(sessionId) || [];
+        }
+
         try {
             const result = await db.query<MessageRow>(
                 `SELECT * FROM messages
@@ -162,6 +202,10 @@ export class MessageRepository {
      * Get message count for a session
      */
     async getCountBySessionId(sessionId: string): Promise<number> {
+        if (!db.isReady()) {
+            return (this.inMemoryMessages.get(sessionId) || []).length;
+        }
+
         try {
             const result = await db.query<{ count: string }>(
                 'SELECT COUNT(*) as count FROM messages WHERE session_id = $1',
@@ -179,6 +223,11 @@ export class MessageRepository {
      * Delete all messages for a session
      */
     async deleteBySessionId(sessionId: string): Promise<number> {
+        const inMemoryCount = (this.inMemoryMessages.get(sessionId) || []).length;
+        this.inMemoryMessages.delete(sessionId);
+
+        if (!db.isReady()) return inMemoryCount;
+
         try {
             const result = await db.query(
                 'DELETE FROM messages WHERE session_id = $1',
@@ -191,7 +240,7 @@ export class MessageRepository {
                 logger.info('Messages deleted', { sessionId, count: deletedCount });
             }
 
-            return deletedCount;
+            return deletedCount + inMemoryCount;
         } catch (error) {
             logger.error('Failed to delete messages', { error, sessionId });
             throw new DatabaseError('Failed to delete messages', error);
@@ -202,6 +251,8 @@ export class MessageRepository {
      * Get total token usage for a session
      */
     async getTotalTokensBySessionId(sessionId: string): Promise<number> {
+        if (!db.isReady()) return 0; // In-memory doesn't track tokens for now
+
         try {
             const result = await db.query<{ total: string | null }>(
                 `SELECT SUM(tokens_used) as total 
@@ -225,6 +276,13 @@ export class MessageRepository {
         sessionId: string,
         limit: number = 20
     ): Promise<ChatMessage[]> {
+        if (!db.isReady()) {
+            const history = this.inMemoryMessages.get(sessionId) || [];
+            return history
+                .filter(m => m.role !== 'system')
+                .slice(-limit);
+        }
+
         try {
             const result = await db.query<MessageRow>(
                 `SELECT * FROM messages

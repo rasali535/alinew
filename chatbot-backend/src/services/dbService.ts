@@ -71,7 +71,7 @@ export class DatabaseService {
     /**
      * Execute a query with parameters
      */
-    async query<T = any>(text: string, params?: any[]): Promise<QueryResult<T>> {
+    async query<T extends import('pg').QueryResultRow = any>(text: string, params?: any[]): Promise<QueryResult<T>> {
         const start = Date.now();
 
         try {

@@ -1,7 +1,8 @@
 # Dockerization and Cloud Run Deployment Script
 
 param (
-    [string]$ProjectID = "YOUR_PROJECT_ID", # Replace with your project ID
+    [string]$ProjectID = "gen-lang-client-0940432200", # Set default Project ID
+
     [string]$Region = "us-central1",
     [string]$ServiceName = "chatbot-backend",
     [string]$DB_URL = "", # Optional: Pass DB URL as argument or rely on env

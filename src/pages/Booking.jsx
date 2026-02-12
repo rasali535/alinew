@@ -67,7 +67,7 @@ const Booking = () => {
         <section className="min-h-screen bg-brand-dark pt-32 pb-20 px-6 lg:px-12 flex items-center">
             <SEO
                 title={`${pageTitle} | Ras Ali`}
-                description="Book Ras Ali for your next project. Services include Bass Performance, Sound Engineering, Video Production, and Web Development."
+                description="Book Ras Ali for your next project. Services include Bass Performance, Sound Engineering, Video Production, Web Development, and AI/Chatbot Development."
                 url="/booking"
             />
             <div className="max-w-4xl mx-auto w-full">

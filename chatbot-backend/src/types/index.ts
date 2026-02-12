@@ -65,6 +65,14 @@ export interface AppConfig {
         expiryHours: number;
         maxContextMessages: number;
     };
+    email: {
+        service?: string;
+        host?: string;
+        port?: number;
+        user: string;
+        pass: string;
+        notificationEmail: string;
+    };
 }
 
 export interface ApiError {

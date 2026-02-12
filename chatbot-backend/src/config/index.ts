@@ -74,6 +74,15 @@ export const config: AppConfig = {
         expiryHours: getEnvAsInt('SESSION_EXPIRY_HOURS', 24),
         maxContextMessages: getEnvAsInt('MAX_CONTEXT_MESSAGES', 10),
     },
+
+    email: {
+        service: process.env.EMAIL_SERVICE,
+        host: process.env.EMAIL_HOST,
+        port: getEnvAsInt('EMAIL_PORT', 587),
+        user: process.env.EMAIL_USER || '',
+        pass: process.env.EMAIL_PASS || '',
+        notificationEmail: process.env.LEAD_NOTIFICATION_EMAIL || process.env.EMAIL_USER || 'hello@themaplin.com',
+    },
 };
 
 /**

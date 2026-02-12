@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { services } from '../../data/mock';
-import { ArrowUpRight, Music, Mic2, Video, Code, Palette } from 'lucide-react';
+import { ArrowUpRight, Music, Mic2, Video, Code, Palette, Bot } from 'lucide-react';
 
 // Icons map
 const iconMap = {
@@ -9,7 +9,8 @@ const iconMap = {
     'Sound Engineer': Mic2,
     'Videographer': Video,
     'Developer': Code,
-    'Media & Branding': Palette
+    'Media & Branding': Palette,
+    'AI & Chatbots': Bot
 };
 
 // Image map (Using placeholders relevant to the service)
@@ -18,7 +19,8 @@ const imageMap = {
     'Sound Engineer': '/assets/images/service-sound.png',
     'Videographer': '/assets/images/service-video.png',
     'Developer': '/assets/images/service-dev.png',
-    'Media & Branding': '/assets/images/service-branding.png'
+    'Media & Branding': '/assets/images/service-branding.png',
+    'AI & Chatbots': 'https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&q=80&w=1000'
 };
 
 const ServiceCard = ({ service, index }) => {

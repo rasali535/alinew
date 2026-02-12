@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { db } from '../services/dbService.js';
 import { logger } from '../utils/logger.js';
+import { emailService } from '../services/emailService.js';
 
 
 /**
@@ -22,43 +23,52 @@ export class LeadController {
             return res.status(400).json({ error: 'Name and Email are required' });
         }
 
-        try {
-            // Check if lead already exists for this email
-            const existingLead = await db.query(
-                'SELECT * FROM leads WHERE email = $1',
-                [email]
-            );
+        let leadId = null;
+        let isNew = true;
 
-            if (existingLead.rowCount && existingLead.rowCount > 0) {
-                // Update existing lead? Or just return success
-                logger.info('Lead already exists', { email });
-                return res.status(200).json({
-                    id: existingLead.rows[0].id,
-                    message: 'Lead information updated',
-                    isNew: false
-                });
+        // Try to save to database if connected
+        if (db.isReady()) {
+            try {
+                // Check if lead already exists for this email
+                const existingLead = await db.query(
+                    'SELECT * FROM leads WHERE email = $1',
+                    [email]
+                );
+
+                if (existingLead.rowCount && existingLead.rowCount > 0) {
+                    leadId = existingLead.rows[0].id;
+                    isNew = false;
+                    logger.info('Lead already exists in DB', { email });
+                } else {
+                    const result = await db.query(
+                        `INSERT INTO leads (session_id, name, email, phone, source)
+                         VALUES ($1, $2, $3, $4, $5)
+                         RETURNING id`,
+                        [sessionId || null, name, email, phone || null, source || 'chatbot']
+                    );
+                    leadId = result.rows[0].id;
+                    logger.info('New lead saved to DB', { leadId });
+                }
+            } catch (error) {
+                logger.error('Failed to save lead to database', { error });
+                // Continue to send email even if DB fails
             }
-
-            const result = await db.query(
-                `INSERT INTO leads (session_id, name, email, phone, source)
-                 VALUES ($1, $2, $3, $4, $5)
-                 RETURNING id, name, email, created_at`,
-                [sessionId || null, name, email, phone || null, source || 'chatbot']
-            );
-
-            const newLead = result.rows[0];
-
-            logger.info('New lead created', { leadId: newLead.id });
-
-            return res.status(201).json({
-                ...newLead,
-                isNew: true
-            });
-
-        } catch (error) {
-            logger.error('Failed to create lead', { error });
-            return res.status(500).json({ error: 'Failed to save lead information' });
+        } else {
+            logger.warn('Database not connected, skipping DB save for lead');
         }
+
+        // Send email notification
+        try {
+            await emailService.sendLeadNotification({ name, email, phone, source });
+        } catch (emailError) {
+            logger.error('Failed to send lead email', { error: emailError });
+        }
+
+        return res.status(201).json({
+            id: leadId,
+            message: 'Lead received',
+            isNew
+        });
     }
 }
 

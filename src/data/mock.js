@@ -147,6 +147,11 @@ export const services = [
     id: 5,
     title: 'Media & Branding',
     items: ['Logos', 'Motion Graphics', 'Company Profiles', 'Business Cards', 'Banners', 'Posters']
+  },
+  {
+    id: 6,
+    title: 'AI & Chatbots',
+    items: ['Custom AI Solutions', 'Intelligent Chatbots', 'Workflow Automation', 'Gemini AI Integration', 'Lead Generation Bots']
   }
 ];
 
