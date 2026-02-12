@@ -152,18 +152,18 @@ export default function Chatbot() {
         <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
             {/* Chat Window */}
             {isOpen && (
-                <Card className="w-[350px] sm:w-[400px] h-[550px] shadow-xl border-border animate-in slide-in-from-bottom-5 fade-in duration-300 flex flex-col mb-4 bg-background border-primary/20">
-                    <CardHeader className="p-4 border-b bg-primary/10 flex flex-row items-center justify-between space-y-0">
+                <Card className="w-[350px] sm:w-[400px] h-[550px] shadow-xl border-border animate-in slide-in-from-bottom-5 fade-in duration-300 flex flex-col mb-4 bg-background border-green-500/20">
+                    <CardHeader className="p-4 border-b bg-green-500/10 flex flex-row items-center justify-between space-y-0">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-md">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-emerald-700 flex items-center justify-center shadow-md">
                                 <Bot className="w-6 h-6 text-white" />
                             </div>
                             <div>
-                                <CardTitle className="text-base font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-purple-400">Ziggie</CardTitle>
+                                <CardTitle className="text-base font-bold bg-clip-text text-transparent bg-gradient-to-r from-green-500 to-emerald-400">Ziggie</CardTitle>
                                 <p className="text-xs text-muted-foreground">Ras Ali's AI Assistant</p>
                             </div>
                         </div>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/20" onClick={() => setIsOpen(false)}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-green-500/20" onClick={() => setIsOpen(false)}>
                             <X className="h-4 w-4" />
                         </Button>
                     </CardHeader>
@@ -176,7 +176,7 @@ export default function Chatbot() {
                                     className={cn(
                                         "flex w-max max-w-[85%] flex-col gap-2 rounded-2xl px-4 py-3 text-sm shadow-sm",
                                         msg.role === 'user'
-                                            ? "ml-auto bg-primary text-primary-foreground rounded-br-none"
+                                            ? "ml-auto bg-green-600 text-white rounded-br-none"
                                             : "bg-muted/80 backdrop-blur-sm rounded-bl-none border border-border/50"
                                     )}
                                 >
@@ -186,7 +186,7 @@ export default function Chatbot() {
 
                             {/* Lead Form inside Chat */}
                             {showLeadForm && (
-                                <div className="bg-muted/50 p-4 rounded-xl border border-primary/10 space-y-3 animate-in fade-in zoom-in-95 duration-300">
+                                <div className="bg-muted/50 p-4 rounded-xl border border-green-500/10 space-y-3 animate-in fade-in zoom-in-95 duration-300">
                                     <p className="text-sm font-medium text-foreground/80 mb-2">Please share your details to continue:</p>
                                     <form onSubmit={handleLeadSubmit} className="space-y-3">
                                         <Input
@@ -194,7 +194,7 @@ export default function Chatbot() {
                                             value={leadFormData.name}
                                             onChange={e => setLeadFormData({ ...leadFormData, name: e.target.value })}
                                             required
-                                            className="bg-background/80"
+                                            className="bg-background/80 focus-visible:ring-green-500/50"
                                         />
                                         <Input
                                             placeholder="Email Address"
@@ -202,16 +202,16 @@ export default function Chatbot() {
                                             value={leadFormData.email}
                                             onChange={e => setLeadFormData({ ...leadFormData, email: e.target.value })}
                                             required
-                                            className="bg-background/80"
+                                            className="bg-background/80 focus-visible:ring-green-500/50"
                                         />
                                         <Input
                                             placeholder="Phone Number (Optional)"
                                             type="tel"
                                             value={leadFormData.phone}
                                             onChange={e => setLeadFormData({ ...leadFormData, phone: e.target.value })}
-                                            className="bg-background/80"
+                                            className="bg-background/80 focus-visible:ring-green-500/50"
                                         />
-                                        <Button type="submit" className="w-full" disabled={isLoading}>
+                                        <Button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white" disabled={isLoading}>
                                             {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                                             Start Chatting
                                         </Button>
@@ -239,9 +239,9 @@ export default function Chatbot() {
                                 value={inputValue}
                                 onChange={(e) => setInputValue(e.target.value)}
                                 disabled={isLoading || showLeadForm}
-                                className="flex-1 bg-background/80 focus-visible:ring-primary/50"
+                                className="flex-1 bg-background/80 focus-visible:ring-green-500/50"
                             />
-                            <Button type="submit" size="icon" disabled={isLoading || !inputValue.trim() || showLeadForm} className="bg-primary hover:bg-primary/90 shadow-sm">
+                            <Button type="submit" size="icon" disabled={isLoading || !inputValue.trim() || showLeadForm} className="bg-green-600 hover:bg-green-700 shadow-sm text-white">
                                 <Send className="h-4 w-4" />
                                 <span className="sr-only">Send</span>
                             </Button>
@@ -255,7 +255,7 @@ export default function Chatbot() {
                 <Button
                     onClick={() => setIsOpen(true)}
                     size="icon"
-                    className="h-14 w-14 rounded-full shadow-lg hover:scale-105 transition-transform duration-200"
+                    className="h-14 w-14 rounded-full shadow-lg hover:scale-105 transition-transform duration-200 bg-green-600 hover:bg-green-700 text-white"
                 >
                     <MessageSquare className="h-7 w-7" />
                     <span className="sr-only">Open Chat</span>
