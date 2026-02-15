@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, X, Send, User, Bot, Loader2 } from 'lucide-react';
+import { X, Send, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import axios from 'axios';
 import { cn } from '@/lib/utils';
 
 // Access API URL from environment or default to localhost
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:9090';
+
+// Mascot Image Path
+const MASCOT_IMAGE = '/assets/images/ziggie-mascot.jpeg';
 
 export default function Chatbot() {
     const [isOpen, setIsOpen] = useState(false);
@@ -256,8 +258,12 @@ export default function Chatbot() {
                     <Card className="w-[350px] sm:w-[400px] h-[550px] shadow-xl border-border flex flex-col bg-background border-green-500/20">
                         <CardHeader className="p-4 border-b bg-green-500/10 flex flex-row items-center justify-between space-y-0">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-emerald-700 flex items-center justify-center shadow-md">
-                                    <Bot className="w-6 h-6 text-white" />
+                                <div className="w-10 h-10 rounded-full border border-green-500/30 overflow-hidden shadow-sm bg-white">
+                                    <img
+                                        src={MASCOT_IMAGE}
+                                        alt="Ziggie Mascot"
+                                        className="w-full h-full object-cover"
+                                    />
                                 </div>
                                 <div>
                                     <CardTitle className="text-base font-bold bg-clip-text text-transparent bg-gradient-to-r from-green-500 to-emerald-400">Ziggie</CardTitle>
@@ -281,7 +287,16 @@ export default function Chatbot() {
                                                 : "bg-muted/80 backdrop-blur-sm rounded-bl-none border border-border/50"
                                         )}
                                     >
-                                        {msg.content}
+                                        {msg.role !== 'user' ? (
+                                            <div className="flex items-start gap-2">
+                                                <div className="w-6 h-6 rounded-full overflow-hidden flex-shrink-0 mt-0.5 border border-green-500/20">
+                                                    <img src={MASCOT_IMAGE} alt="Bot" className="w-full h-full object-cover" />
+                                                </div>
+                                                <div>{msg.content}</div>
+                                            </div>
+                                        ) : (
+                                            <div>{msg.content}</div>
+                                        )}
                                     </div>
                                 ))}
 
@@ -357,7 +372,8 @@ export default function Chatbot() {
                 <div
                     className={cn(
                         "absolute pointer-events-auto transition-all duration-[2000ms] ease-in-out cursor-pointer group flex flex-col items-center",
-                        mascotState === 'walking' && "animate-bounce" // Bobbing while walking
+                        mascotState === 'walking' && "animate-bounce", // Bobbing while walking
+                        mascotState === 'idle' && "animate-pulse" // Breathing/Pulse when idle
                     )}
                     style={{
                         bottom: mascotPosition.bottom,
@@ -379,16 +395,16 @@ export default function Chatbot() {
                     )}
 
                     <div className={cn(
-                        "h-14 w-14 rounded-full shadow-lg flex items-center justify-center transition-all duration-500",
+                        "h-16 w-16 rounded-full shadow-lg flex items-center justify-center transition-all duration-500 border-2 border-green-500/50 bg-white overflow-hidden",
                         mascotState === 'sleeping'
-                            ? "bg-slate-700 scale-90 opacity-80" // Sleeping style
-                            : "bg-green-600 hover:bg-green-700 hover:scale-105" // Awake style
+                            ? "grayscale opacity-80 scale-95" // Sleeping style
+                            : "hover:scale-110 hover:shadow-green-500/50 shadow-green-500/20" // Awake style
                     )}>
-                        {mascotState === 'sleeping' ? (
-                            <Bot className="h-7 w-7 text-slate-400 rotate-12" /> // Sleeping icon pose
-                        ) : (
-                            <MessageSquare className="h-7 w-7 text-white" />
-                        )}
+                        <img
+                            src={MASCOT_IMAGE}
+                            alt="Ziggie Mascot"
+                            className="w-full h-full object-cover"
+                        />
                     </div>
                 </div>
             )}
