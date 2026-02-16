@@ -7,7 +7,16 @@ import axios from 'axios';
 import { cn } from '@/lib/utils';
 
 // Access API URL from environment or default to localhost
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:9090';
+const getApiUrl = () => {
+    const url = import.meta.env.VITE_API_URL || 'http://localhost:9090';
+    // Ensure URL has protocol (common issue on Render)
+    if (url && !url.startsWith('http')) {
+        return `https://${url}`;
+    }
+    return url;
+};
+
+const API_URL = getApiUrl();
 
 // Mascot Image Path
 const MASCOT_IMAGE = '/assets/images/ziggie-mascot.jpeg';
