@@ -10,7 +10,7 @@ async function testEmail() {
             source: 'test_script_dry_run'
         });
         console.log('✓ Email notification sent successfully to hello@themaplin.com');
-    } catch (error) {
+    } catch (error: any) {
         console.error('Email Failed:', error.message);
     }
 }

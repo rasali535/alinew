@@ -41,7 +41,7 @@ async function testBot() {
         console.log('Ziggy Final Response:', leadRes.data.response);
 
         console.log('\n--- Test Completed Successfully ---');
-    } catch (error) {
+    } catch (error: any) {
         console.error('Test Failed:', error.response?.data || error.message);
     }
 }

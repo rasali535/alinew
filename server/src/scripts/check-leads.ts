@@ -26,7 +26,7 @@ async function checkLeads() {
             date: r.created_at
         })));
         console.log('--------------------------------');
-    } catch (err) {
+    } catch (err: any) {
         console.error('Database Error:', err.message);
     } finally {
         await client.end();

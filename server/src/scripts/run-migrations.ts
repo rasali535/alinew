@@ -43,8 +43,8 @@ async function migrate() {
         }
 
         console.log('All migrations completed successfully! 🚀');
-    } catch (err) {
-        console.error('Migration failed:', err);
+    } catch (err: any) {
+        console.error('Database Error:', err.message);
     } finally {
         await client.end();
     }
