@@ -18,9 +18,11 @@ export async function healthCheck(_req: Request, res: Response): Promise<Respons
 
     const duration = Date.now() - startTime;
     const healthy = geminiHealthy && dbHealthy;
-
     const status = healthy ? 'ok' : 'degraded';
-    const statusCode = healthy ? 200 : 503;
+
+    // We return 200 even if degraded to let the orchestrator (Render/Cloud Run) 
+    // keep the service alive while we investigate logs.
+    const statusCode = 200;
 
     logger.info('Health check', {
         status,

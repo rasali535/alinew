@@ -29,7 +29,13 @@ export function createApp(): Application {
 
     // CORS configuration
     const corsOrigins = process.env.CORS_ORIGINS
-        ? process.env.CORS_ORIGINS.split(',')
+        ? process.env.CORS_ORIGINS.split(',').flatMap(origin => {
+            const trimmed = origin.trim();
+            if (!trimmed.startsWith('http') && trimmed.includes('.')) {
+                return [`https://${trimmed}`, `http://${trimmed}`];
+            }
+            return [trimmed];
+        })
         : (config.nodeEnv === 'production' ? [] : '*');
 
     app.use(cors({

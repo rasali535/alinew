@@ -108,16 +108,16 @@ export default function Chatbot() {
 
         if (!storedSessionId) {
             try {
-                console.log('Creating new Ziggy session at:', `${API_URL}/api/sessions`);
+                console.log('Ziggy attempting connection to:', `${API_URL}/api/sessions`);
                 const response = await axios.post(`${API_URL}/api/sessions`, {
                     userId: `user-${Math.random().toString(36).substr(2, 9)}`,
                     metadata: { source: 'web_ziggy' }
-                });
+                }, { timeout: 8000 });
                 storedSessionId = response.data.id;
                 localStorage.setItem('chat_session_id', storedSessionId);
+                console.log('Ziggy Connected! Session:', storedSessionId);
             } catch (error) {
-                console.error('Failed to create Ziggy session. Ziggy might be offline.', error);
-                // Don't return yet, we already set the greeting
+                console.error('Ziggy Connection Error:', error.message);
             }
         }
 
