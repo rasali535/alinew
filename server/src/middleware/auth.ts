@@ -7,7 +7,7 @@ import { logger } from '../utils/logger.js';
  * Simple API key authentication middleware
  * Checks for X-API-Key header
  */
-export function authenticateApiKey(req: Request, res: Response, next: NextFunction): void {
+export function authenticateApiKey(req: Request, _res: Response, next: NextFunction): void {
     // Skip authentication in development if no API key is configured
     if (config.nodeEnv === 'development' && !config.apiKey) {
         logger.debug('Skipping API key authentication in development');
@@ -43,7 +43,7 @@ export function authenticateApiKey(req: Request, res: Response, next: NextFuncti
  * Optional authentication - doesn't fail if no auth provided
  * Useful for endpoints that work with or without authentication
  */
-export function optionalAuth(req: Request, res: Response, next: NextFunction): void {
+export function optionalAuth(req: Request, _res: Response, next: NextFunction): void {
     const apiKey = req.headers['x-api-key'];
 
     if (apiKey && apiKey === config.apiKey) {

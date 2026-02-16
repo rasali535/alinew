@@ -10,7 +10,7 @@ export function errorHandler(
     err: Error | AppError,
     req: Request,
     res: Response,
-    next: NextFunction
+    _next: NextFunction
 ): void {
     // Log the error
     if (err instanceof AppError) {
@@ -46,7 +46,7 @@ export function errorHandler(
             status: 'error',
             message: err.message,
             code: err.code,
-            ...(err.details && { details: err.details }),
+            ...(err.details ? { details: err.details } : {}),
         });
     } else {
         // Don't leak error details in production for unknown errors

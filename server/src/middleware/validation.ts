@@ -7,7 +7,7 @@ import { ValidationError } from '../utils/errors.js';
  * Validates request body, query, or params against a Zod schema
  */
 export function validate(schema: ZodSchema, source: 'body' | 'query' | 'params' = 'body') {
-    return (req: Request, res: Response, next: NextFunction) => {
+    return (req: Request, _res: Response, next: NextFunction) => {
         try {
             const data = req[source];
             schema.parse(data);

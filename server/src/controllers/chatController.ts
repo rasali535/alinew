@@ -3,7 +3,7 @@ import { geminiService } from '../services/geminiService.js';
 import { sessionRepository } from '../repositories/sessionRepository.js';
 import { messageRepository } from '../repositories/messageRepository.js';
 import { logger } from '../utils/logger.js';
-import { ChatResponse, ChatRequest, ChatMessage } from '../types/index.js';
+import { ChatResponse, ChatRequest } from '../types/index.js';
 import { NotFoundError } from '../utils/errors.js';
 
 /**
@@ -60,12 +60,14 @@ export class ChatController {
         const { id: sessionId } = req.params;
 
         // Verify session exists
+        if (!sessionId) throw new NotFoundError('Session ID');
         const session = await sessionRepository.getById(sessionId);
         if (!session) {
             throw new NotFoundError('Session');
         }
 
         // Get messages using repository
+        if (!sessionId) throw new NotFoundError('Session ID');
         const messages = await messageRepository.getAllBySessionId(sessionId);
 
         return res.status(200).json({
@@ -83,11 +85,13 @@ export class ChatController {
         const { id: sessionId } = req.params;
 
         // Verify session
+        if (!sessionId) throw new NotFoundError('Session ID');
         const session = await sessionRepository.getById(sessionId);
         if (!session) {
             throw new NotFoundError('Session');
         }
 
+        if (!sessionId) throw new NotFoundError('Session ID');
         const deletedCount = await messageRepository.deleteBySessionId(sessionId);
 
         return res.status(200).json({
@@ -118,12 +122,14 @@ export class ChatController {
     async getSession(req: Request, res: Response): Promise<Response> {
         const { id: sessionId } = req.params;
 
+        if (!sessionId) throw new NotFoundError('Session ID');
         const session = await sessionRepository.getById(sessionId);
 
         if (!session) {
             throw new NotFoundError('Session');
         }
 
+        if (!sessionId) throw new NotFoundError('Session ID');
         const messageCount = await messageRepository.getCountBySessionId(sessionId);
 
         return res.status(200).json({
@@ -139,6 +145,7 @@ export class ChatController {
     async deleteSession(req: Request, res: Response): Promise<Response> {
         const { id: sessionId } = req.params;
 
+        if (!sessionId) throw new NotFoundError('Session ID');
         const deleted = await sessionRepository.delete(sessionId);
 
         if (!deleted) {
