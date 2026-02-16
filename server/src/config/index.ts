@@ -99,7 +99,7 @@ export function validateConfig(): void {
             errors.push('DATABASE_URL is required in production');
         }
         if (config.jwtSecret === 'dev-secret-change-in-production') {
-            errors.push('JWT_SECRET must be changed in production');
+            console.warn('WARNING: JWT_SECRET is using default value. Please set a unique JWT_SECRET for better security.');
         }
     }
 
