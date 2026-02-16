@@ -46,6 +46,7 @@ export const config: AppConfig = {
     gemini: {
         projectId: process.env.GOOGLE_CLOUD_PROJECT || '',
         location: process.env.VERTEX_AI_LOCATION || 'us-central1',
+        apiKey: process.env.GEMINI_API_KEY || process.env.API_KEY || '',
         model: process.env.GEMINI_MODEL || 'gemini-1.5-pro',
         maxOutputTokens: getEnvAsInt('GEMINI_MAX_OUTPUT_TOKENS', 2048),
         temperature: getEnvAsFloat('GEMINI_TEMPERATURE', 0.7),

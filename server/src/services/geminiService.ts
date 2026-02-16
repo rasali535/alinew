@@ -34,6 +34,7 @@ export class GeminiService {
             this.vertexAI = new VertexAI({
                 project: projectId || 'placeholder-project',
                 location: config.gemini.location,
+                googleAuthOptions: config.gemini.apiKey ? { apiKey: config.gemini.apiKey } : undefined
             });
 
             // Load Portfolio Data
@@ -327,7 +328,10 @@ Tone: Professional, knowledgeable, creative, and strictly helpful. You represent
             );
             return !!result.response;
         } catch (error) {
-            logger.error('Gemini health check failed', { error });
+            logger.error('Gemini health check failed', {
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined
+            });
             return false;
         }
     }

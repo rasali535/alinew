@@ -34,6 +34,7 @@ export interface Session {
 export interface GeminiConfig {
     projectId: string;
     location: string;
+    apiKey?: string;
     model: string;
     maxOutputTokens: number;
     temperature: number;
