@@ -8,11 +8,23 @@ import { cn } from '@/lib/utils';
 
 // Access API URL from environment or default to localhost
 const getApiUrl = () => {
-    const url = import.meta.env.VITE_API_URL || 'http://localhost:9090';
-    // Ensure URL has protocol (common issue on Render)
+    let url = import.meta.env.VITE_API_URL;
+
+    // Check if the URL is coming in without a protocol (common on Render)
     if (url && !url.startsWith('http')) {
-        return `https://${url}`;
+        url = `https://${url}`;
     }
+
+    // Fallback for local development
+    if (!url) {
+        url = 'http://localhost:9090';
+    }
+
+    console.log('--- Ziggy Debug ---');
+    console.log('Environment variable VITE_API_URL:', import.meta.env.VITE_API_URL);
+    console.log('Computed API_URL:', url);
+    console.log('-------------------');
+
     return url;
 };
 
