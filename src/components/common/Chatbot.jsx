@@ -12,6 +12,13 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:9090';
 // Mascot Image Path
 const MASCOT_IMAGE = '/assets/images/ziggie-mascot.jpeg';
 
+const QUICK_REPLIES = {
+    '🎹 Services': "I can hook you up with Ras Ali's expert services:\n\n1. Bass Performance (Session/Live)\n2. Sound Engineering (Mixing/Mastering)\n3. Videography & Media\n4. Software Development (USSD/Web/AI)\n\nWhich one are you interested in?",
+    '📅 Book Session': "Let's sync! ⚡ I can help you book a session with Ras Ali. \n\nPlease tell me what you specifically need (e.g., 'I need a bassist for a gig' or 'I want an AI chatbot'), and share your email/phone so we can confirm the slot.",
+    '📍 Location': "Ras Ali is based in the heart of Gaborone, Botswana. 🇧🇼 He works globally but loves the local vibe!",
+    '🤖 Who is Ziggy?': "Yo! I'm Ziggy, Ras Ali's digital right hand. I'm a blend of artistic soul and technical logic, just like my creator. I handle the sync between his creative work and your vision."
+};
+
 export default function Chatbot() {
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState([]);
@@ -29,6 +36,15 @@ export default function Chatbot() {
         }
     }, [messages, isOpen, showLeadForm]);
 
+    const handleQuickReply = (key) => {
+        const text = QUICK_REPLIES[key];
+        setMessages(prev => [
+            ...prev,
+            { role: 'user', content: key },
+            { role: 'assistant', content: text }
+        ]);
+    };
+
     const handleLeadSubmit = async (e) => {
         e.preventDefault();
         if (!leadFormData.name || !leadFormData.email) return;
@@ -37,18 +53,17 @@ export default function Chatbot() {
         try {
             await axios.post(`${API_URL}/api/leads`, {
                 sessionId,
-                ...leadFormData
+                ...leadFormData,
+                source: 'ziggy_web_intro'
             });
 
             localStorage.setItem('chat_lead_info', JSON.stringify(leadFormData));
             setShowLeadForm(false);
-            setMessages(prev => [...prev, { role: 'assistant', content: `Nice to meet you, ${leadFormData.name}! How can I help you today?` }]);
+            setMessages(prev => [...prev, { role: 'assistant', content: `Dope! Nice to meet you, ${leadFormData.name}. 🚀 How can I help you vibe with Ras Ali's world today?` }]);
         } catch (error) {
             console.error('Failed to save lead info:', error);
-            // Allow them to proceed anyway? Or show error?
-            // Let's allow proceed to avoid blocking
             setShowLeadForm(false);
-            setMessages(prev => [...prev, { role: 'assistant', content: "Thanks! How can I help you today?" }]);
+            setMessages(prev => [...prev, { role: 'assistant', content: "Thanks for the info! How can I help you today?" }]);
         } finally {
             setIsLoading(false);
         }
@@ -65,8 +80,8 @@ export default function Chatbot() {
             try {
                 // Create new session
                 const response = await axios.post(`${API_URL}/api/sessions`, {
-                    userId: `user-${Math.random().toString(36).substr(2, 9)}`, // Simple random ID
-                    metadata: { source: 'web_widget' }
+                    userId: `user-${Math.random().toString(36).substr(2, 9)}`,
+                    metadata: { source: 'web_ziggy' }
                 });
                 storedSessionId = response.data.id;
                 localStorage.setItem('chat_session_id', storedSessionId);
@@ -84,11 +99,10 @@ export default function Chatbot() {
             setMessages([
                 {
                     role: 'assistant',
-                    content: "Hello! I'm Ziggie, Ras Ali's AI assistant. 🎸 I'm here to help you explore his work in music, sound engineering, and tech development.\n\nI can assist you with:\n• Professional Bass Performance\n• Sound Engineering (Mixing/Mastering)\n• Creative Videography\n• Full-Stack Development\n\nBefore we start, could you please introduce yourself?"
+                    content: "Yo! I'm Ziggy, Ras Ali's digital right hand. 🎸 I'm here to help you navigate his world of music, code, and visuals.\n\nI can get you sorted with bookings, portfolios, or technical consultation.\n\nBefore we dive in, what's your name?"
                 }
             ]);
         } else {
-            // If we have lead info, verify history or just greet
             try {
                 const historyRes = await axios.get(`${API_URL}/api/chat/${storedSessionId}`);
                 if (historyRes.data.messages && historyRes.data.messages.length > 0) {
@@ -101,7 +115,7 @@ export default function Chatbot() {
                     setMessages([
                         {
                             role: 'assistant',
-                            content: `Welcome back, ${leadInfo.name}! 👋 I'm Ziggie. How can I assist you with Ras Ali's services today?`
+                            content: `Welcome back, ${leadInfo.name}! 🚀 Ziggy here. How can I help you today?`
                         }
                     ]);
                 }
@@ -110,7 +124,7 @@ export default function Chatbot() {
                 setMessages([
                     {
                         role: 'assistant',
-                        content: "Hello again! I'm Ziggie, Ras Ali's AI assistant. How can I help you today?"
+                        content: "Yo! I'm Ziggy. Status: Online and ready to sync. How can I help you?"
                     }
                 ]);
             }
@@ -261,13 +275,13 @@ export default function Chatbot() {
                                 <div className="w-10 h-10 rounded-full border border-green-500/30 overflow-hidden shadow-sm bg-white">
                                     <img
                                         src={MASCOT_IMAGE}
-                                        alt="Ziggie Mascot"
+                                        alt="Ziggy Mascot"
                                         className="w-full h-full object-cover"
                                     />
                                 </div>
                                 <div>
-                                    <CardTitle className="text-base font-bold bg-clip-text text-transparent bg-gradient-to-r from-green-500 to-emerald-400">Ziggie</CardTitle>
-                                    <p className="text-xs text-muted-foreground">Ras Ali's AI Assistant</p>
+                                    <CardTitle className="text-base font-bold bg-clip-text text-transparent bg-gradient-to-r from-green-500 to-emerald-400">Ziggy</CardTitle>
+                                    <p className="text-xs text-muted-foreground">Ras Ali's Personal Assistant</p>
                                 </div>
                             </div>
                             <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-green-500/20" onClick={() => setIsOpen(false)}>
@@ -275,8 +289,8 @@ export default function Chatbot() {
                             </Button>
                         </CardHeader>
 
-                        <CardContent className="flex-1 p-0 overflow-hidden relative">
-                            <div ref={scrollRef} className="h-full overflow-y-auto p-4 space-y-4">
+                        <CardContent className="flex-1 p-0 overflow-hidden relative flex flex-col">
+                            <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
                                 {messages.map((msg, index) => (
                                     <div
                                         key={index}
@@ -299,6 +313,21 @@ export default function Chatbot() {
                                         )}
                                     </div>
                                 ))}
+
+                                {/* Quick Replies */}
+                                {!showLeadForm && messages.length > 0 && (
+                                    <div className="flex flex-wrap gap-2 pt-2 pb-4">
+                                        {Object.keys(QUICK_REPLIES).map((key) => (
+                                            <button
+                                                key={key}
+                                                onClick={() => handleQuickReply(key)}
+                                                className="px-3 py-1.5 rounded-full border border-green-500/30 bg-green-500/5 text-[11px] text-green-400 hover:bg-green-500/20 transition-all"
+                                            >
+                                                {key}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
 
                                 {/* Lead Form inside Chat */}
                                 {showLeadForm && (

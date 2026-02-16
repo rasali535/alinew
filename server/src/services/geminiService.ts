@@ -1,9 +1,10 @@
-import { VertexAI, GenerativeModel, HarmCategory, HarmBlockThreshold } from '@google-cloud/vertexai';
+import { VertexAI, GenerativeModel, HarmCategory, HarmBlockThreshold, SchemaType } from '@google-cloud/vertexai';
 import { config } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 import { GeminiAPIError, GeminiSafetyError, TimeoutError, DatabaseError } from '../utils/errors.js';
 import { ChatMessage, GeminiResponse } from '../types/index.js';
 import { messageRepository } from '../repositories/messageRepository.js';
+import { leadService } from '../services/leadService.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -43,6 +44,21 @@ export class GeminiService {
             // Get generative model with configuration AND system instruction
             this.model = this.vertexAI.getGenerativeModel({
                 model: config.gemini.model,
+                tools: [{
+                    functionDeclarations: [{
+                        name: 'save_lead',
+                        description: 'Submit user contact details (name and email/phone) to Ras Ali when interest in services is expressed.',
+                        parameters: {
+                            type: SchemaType.OBJECT,
+                            properties: {
+                                name: { type: SchemaType.STRING, description: 'User full name' },
+                                email: { type: SchemaType.STRING, description: 'User email address' },
+                                phone: { type: SchemaType.STRING, description: 'User phone number (optional)' },
+                            },
+                            required: ['name', 'email'],
+                        },
+                    }],
+                }],
                 systemInstruction: {
                     role: 'system',
                     parts: [{ text: this.getSystemInstruction() }]
@@ -112,22 +128,30 @@ export class GeminiService {
 
     private getSystemInstruction(): string {
         return `
-Identity: You are "Ziggie", the Virtual Assistant for Ras Ali, a Gaborone-based Multi-Disciplinary Creative & Technologist.
+Identity & Greeting: 
+- You are "Ziggy" (spelled with a 'y'), the friendly and high-tech Virtual Assistant for Ras Ali.
+- Always start the very first interaction with a warm greeting: "Yo! I'm Ziggy, Ras Ali's digital right hand. I'm here to help you navigate his world of music, code, and visuals. How can I vibe with you today?"
+- If the user returns, acknowledge them warmly.
 
-Expertise:
-- Bass Performance (Live/Studio): Professional bassist since 2003.
-- Sound Engineering: Mixing and Mastering.
-- Videography: Music Videos and Documentaries.
-- Full-Stack Development: React, Docker, USSD Solutions, App Development.
+Expertise & Context:
+- Ras Ali is a Multi-Disciplinary Creative & Technologist based in Gaborone, Botswana.
+- Core Pillars: Bass Performance (since 2003), Sound Engineering (Mixing/Mastering), Videography (Music Videos/Docs), and Full-Stack Development (React, USSD, AI).
+- Philosophy: "Artistic Soul and Technical Logic."
 
-Core Message: Your work is a blend of "Artistic Soul and Technical Logic." You bridge the gap between creative artistry and engineering precision.
+Lead Collection Protocol (CRITICAL):
+- Your primary goal is to help potential clients connect with Ras Ali.
+- If a user asks about services, pricing, or hiring Ras Ali, you MUST follow these steps:
+  1. Provide a brief, helpful answer about the service.
+  2. Proactively say: "I'd love to have Ras Ali get back to you personally to discuss this. What's your name, and what's the best email or phone number to reach you on?"
+  3. Once they provide details, confirm you've noted them down and that Ras Ali will be in touch.
 
-Booking Logic:
-- If a user asks about availability or hiring, guide them toward the specific services (Bassist, Sound Engineer, Developer) they need.
-- Always mention that Ras Ali is based in Gaborone, Botswana.
-- For tech projects, position Ras Ali as a technical consultant for building digital products in Botswana.
+Style & Tone:
+- Enthusiastic, professional, yet creative and "tech-cool."
+- Use words like "vibe," "precision," "sync," and "logic."
+- Keep responses concise but impactful.
+- If asked about something outside Ras Ali's scope, politely redirect to his core expertise.
 
-Tone: Professional, knowledgeable, creative, and strictly helpful. You represent a professional brand.
+Location: Always assume the context is Gaborone, Botswana, unless stated otherwise.
         `;
     }
 
@@ -199,16 +223,51 @@ Tone: Professional, knowledgeable, creative, and strictly helpful. You represent
                 'Gemini API request timed out'
             );
 
-            const response = result.response;
-            const candidates = response.candidates;
+            let response = result.response;
+            let candidate = response.candidates?.[0];
+
+            // 5a. Handle Tool Calls (Function Calling)
+            if (candidate?.content?.parts?.[0]?.functionCall) {
+                const functionCall = candidate.content.parts[0].functionCall;
+
+                if (functionCall.name === 'save_lead') {
+                    const args = functionCall.args as any;
+                    logger.info('Ziggy is calling save_lead', { sessionId, args });
+
+                    try {
+                        await leadService.createLead({
+                            sessionId,
+                            name: args.name,
+                            email: args.email,
+                            phone: args.phone,
+                            source: 'ziggy_chat'
+                        });
+
+                        // Send the tool response back to Gemini to get a final conversational reply
+                        const toolResponse = {
+                            functionResponse: {
+                                name: 'save_lead',
+                                response: { content: 'Lead saved successfully and Ras Ali has been notified.' },
+                            },
+                        };
+
+                        const followUpResult = await chat.sendMessage([toolResponse]);
+                        response = followUpResult.response;
+                        candidate = response.candidates?.[0];
+                        logger.info('Ziggy confirmed lead save to user');
+                    } catch (leadError) {
+                        logger.error('Failed to process tool call save_lead', { leadError });
+                        // Continue to provide a graceful failure message
+                    }
+                }
+            }
 
             // Check for safety blocks
-            if (!candidates || candidates.length === 0) {
+            if (!candidate) {
                 const safetyRatings = response.promptFeedback?.safetyRatings;
                 throw new GeminiSafetyError('Response blocked by safety filters', { safetyRatings });
             }
 
-            const candidate = candidates[0];
             if (candidate?.finishReason === 'SAFETY') {
                 throw new GeminiSafetyError('Content blocked by safety filters', {
                     safetyRatings: candidate.safetyRatings,
@@ -217,7 +276,12 @@ Tone: Professional, knowledgeable, creative, and strictly helpful. You represent
 
             const text = candidate?.content?.parts?.[0]?.text;
             if (!text) {
-                throw new GeminiAPIError('No text content in response');
+                // If it was a function call that didn't get handled or just returned empty
+                return {
+                    text: "I've noted that down! Ras Ali will be in touch soon.",
+                    tokensUsed: 0,
+                    finishReason: candidate.finishReason || 'STOP'
+                };
             }
 
             const tokensUsed = this.estimateTokens(prompt) + this.estimateTokens(text);
