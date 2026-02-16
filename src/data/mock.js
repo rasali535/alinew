@@ -124,7 +124,7 @@ export const featuredProjects = [
     id: 16,
     title: 'Bridging the USSD-Web Gap',
     subtitle: 'Supabase & AI Case Study',
-    image: '/assets/images/ussd-bridge.jpg',
+    image: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop',
     category: 'Case Study',
     link: '/case-study/ussd-web-gap',
     roles: ['System Architecture', 'Supabase Edge Functions', 'AI Integration', 'pgvector Implementation'],

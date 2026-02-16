@@ -67,7 +67,7 @@ const USSDCaseStudy = () => {
                 {/* Featured Image Section */}
                 <div className="relative aspect-[21/9] w-full rounded-3xl overflow-hidden bg-white/5 mb-32 border border-white/10 group animate-in shadow-2xl shadow-brand-green/5">
                     <img
-                        src="/assets/images/ussd-bridge.jpg"
+                        src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop"
                         alt="USSD-Web Gap Visualization"
                         className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                         onError={(e) => {
