@@ -33,7 +33,7 @@ You can enable extensions via the Supabase Dashboard:
 Update your `.env` file (or Render Environment Variables) with the following:
 
 ```env
-DATABASE_URL=postgresql://postgres.wctqmtwaoaugxlqkslhn:xOruveqI2UiOpBsX@aws-0-us-west-2.pooler.supabase.com:6543/postgres
+DATABASE_URL=postgresql://postgres.wctqmtwaoaugxlqkslhn:xOruveqI2UiOpBsX@aws-1-eu-west-1.pooler.supabase.com:6543/postgres
 DATABASE_SSL=true
 ```
 
