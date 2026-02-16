@@ -12,7 +12,7 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: GOOGLE_CLOUD_PROJECT
-        sync: false
+        value: gen-lang-client-0940432200
       - key: VERTEX_AI_LOCATION
         value: us-central1
       - key: GEMINI_MODEL

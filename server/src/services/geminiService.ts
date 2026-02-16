@@ -6,21 +6,33 @@ import { ChatMessage, GeminiResponse } from '../types/index.js';
 import { messageRepository } from '../repositories/messageRepository.js';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * Service for interacting with Google's Gemini AI via Vertex AI
  * Handles conversation history persistence via MessageRepository
  */
 export class GeminiService {
-    private vertexAI: VertexAI;
-    private model: GenerativeModel;
+    private vertexAI!: VertexAI;
+    private model!: GenerativeModel;
     private portfolioData: any;
+    private initialized: boolean = false;
+    private initError: string | null = null;
 
     constructor() {
         try {
             // Initialize Vertex AI client
+            const projectId = config.gemini.projectId || process.env.GOOGLE_CLOUD_PROJECT;
+
+            if (!projectId && config.nodeEnv === 'production') {
+                logger.error('GOOGLE_CLOUD_PROJECT is missing in production environment');
+            }
+
             this.vertexAI = new VertexAI({
-                project: config.gemini.projectId,
+                project: projectId || 'placeholder-project',
                 location: config.gemini.location,
             });
 
@@ -60,14 +72,19 @@ export class GeminiService {
                 ],
             });
 
+            this.initialized = true;
             logger.info('Gemini service initialized', {
-                project: config.gemini.projectId,
+                project: projectId || 'placeholder-project',
                 location: config.gemini.location,
                 model: config.gemini.model,
             });
         } catch (error) {
-            logger.error('Failed to initialize Gemini service', { error });
-            throw new GeminiAPIError('Failed to initialize Gemini service', error);
+            this.initialized = false;
+            this.initError = error instanceof Error ? error.message : String(error);
+            logger.error('Failed to initialize Gemini service. Chat features will be unavailable.', {
+                error: this.initError
+            });
+            // Do not throw here to allow server to start
         }
     }
 
@@ -137,6 +154,9 @@ Tone: Professional, knowledgeable, creative, and strictly helpful. You represent
      * @returns The generated response
      */
     async generateChatResponse(sessionId: string, message: string): Promise<GeminiResponse> {
+        if (!this.initialized) {
+            throw new GeminiAPIError(`Gemini service is not initialized: ${this.initError || 'Unknown error'}`);
+        }
         const startTime = Date.now();
         logger.info('Processing chat message', { sessionId, messageLength: message.length });
 

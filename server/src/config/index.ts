@@ -57,7 +57,7 @@ export const config: AppConfig = {
         connectionString: process.env.DATABASE_URL || '',
         poolMin: getEnvAsInt('DATABASE_POOL_MIN', 2),
         poolMax: getEnvAsInt('DATABASE_POOL_MAX', 10),
-        ssl: getEnvAsBool('DATABASE_SSL', false),
+        ssl: process.env.DATABASE_SSL ? getEnvAsBool('DATABASE_SSL', false) : (process.env.NODE_ENV === 'production'),
     },
 
     jwtSecret: process.env.JWT_SECRET || 'dev-secret-change-in-production',
