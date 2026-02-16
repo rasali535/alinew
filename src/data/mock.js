@@ -119,6 +119,17 @@ export const featuredProjects = [
     roles: ['Bassist', 'Artist Liaison', 'Arrangements & Composition'],
     date: '2019 - 2020',
     description: "For the 'Dedications' music request show, I served as the resident bassist, managed relationships as the artist liaison, and handled musical arrangements and composition. My role was central to ensuring the musical quality and smooth operation of the show's performances."
+  },
+  {
+    id: 16,
+    title: 'Bridging the USSD-Web Gap',
+    subtitle: 'Supabase & AI Case Study',
+    image: '/assets/images/ussd-bridge.jpg',
+    category: 'Case Study',
+    link: '/case-study/ussd-web-gap',
+    roles: ['System Architecture', 'Supabase Edge Functions', 'AI Integration', 'pgvector Implementation'],
+    date: '2024',
+    description: "A comprehensive case study demonstrating a scalable architecture designed to synchronize USSD interactions with modern web platforms using an AI-driven interface. Built with Supabase, Gemini API, and pgvector."
   }
 ];
 

@@ -116,6 +116,28 @@
                 "audio",
                 "recording"
             ]
+        },
+        {
+            "name": "USSD-Web Bridge",
+            "type": "Case Study (AI & Cloud)",
+            "description": "A scalable architecture designed to synchronize USSD interactions with modern web platforms using Supabase and Gemini AI.",
+            "tech_stack": [
+                "Supabase",
+                "Gemini API",
+                "pgvector",
+                "Edge Functions",
+                "TypeScript"
+            ],
+            "context_keywords": [
+                "ussd",
+                "ai",
+                "supabase",
+                "vector database",
+                "africa",
+                "bridging technology",
+                "real-time",
+                "pgvector"
+            ]
         }
     ]
 }

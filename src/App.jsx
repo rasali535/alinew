@@ -11,6 +11,7 @@ import ProjectDetails from './pages/ProjectDetails';
 import AILabs from './pages/AILabs';
 import Booking from './pages/Booking';
 import Contact from './pages/Contact';
+import USSDCaseStudy from './pages/USSDCaseStudy';
 import Cursor from './components/ui/Cursor';
 import Preloader from './components/ui/Preloader';
 
@@ -34,6 +35,7 @@ function App() {
             <Route path="/booking" element={<Booking />} />
             <Route path="/booking/:serviceId" element={<Booking />} />
             <Route path="/contact" element={<Contact />} />
+            <Route path="/case-study/ussd-web-gap" element={<USSDCaseStudy />} />
           </Routes>
         </main>
         <Footer />
