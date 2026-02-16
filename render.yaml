@@ -1,0 +1,41 @@
+services:
+  # Backend Web Service
+  - type: web
+    name: alinew-chatbot-backend
+    runtime: node
+    rootDir: server
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: GOOGLE_CLOUD_PROJECT
+        sync: false
+      - key: VERTEX_AI_LOCATION
+        value: us-central1
+      - key: GEMINI_MODEL
+        value: gemini-1.5-pro
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_SSL
+        value: "true"
+      - key: CORS_ORIGINS
+        fromService:
+          type: web
+          name: alinew-chatbot-frontend
+          property: host
+
+  # Frontend Static Site
+  - type: web
+    name: alinew-chatbot-frontend
+    runtime: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: alinew-chatbot-backend
+          property: host

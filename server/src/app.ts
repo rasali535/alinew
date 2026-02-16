@@ -28,10 +28,12 @@ export function createApp(): Application {
     }));
 
     // CORS configuration
+    const corsOrigins = process.env.CORS_ORIGINS
+        ? process.env.CORS_ORIGINS.split(',')
+        : (config.nodeEnv === 'production' ? [] : '*');
+
     app.use(cors({
-        origin: config.nodeEnv === 'production'
-            ? ['https://yourdomain.com'] // Update with your frontend domain
-            : '*',
+        origin: corsOrigins,
         credentials: true,
     }));
 
