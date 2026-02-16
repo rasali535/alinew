@@ -39,6 +39,7 @@ coverage/
 *.json
 !tsconfig.json
 !package.json
+!src/data/*.json
 service-account-key.json
 gcp-key.json
 

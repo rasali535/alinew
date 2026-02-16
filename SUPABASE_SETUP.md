@@ -37,10 +37,15 @@ DATABASE_URL=postgresql://postgres.wctqmtwaoaugxlqkslhn:[PASSWORD]@aws-0-us-east
 DATABASE_SSL=true
 ```
 
+## Troubleshooting
+
+### "Tenant or user not found" Error
+
+If you see this error in the Render logs:
+
+1. **Check Project ID**: Ensure `wctqmtwaoaugxlqkslhn` is correct in your `DATABASE_URL`.
+2. **Special Characters**: Nếu password của bạn có các ký tự đặc biệt như `@`, `#`, `:`, `/`, bạn **phải** mã hóa chúng (URL Encode). Ví dụ: `@` trở thành `%40`.
+3. **Use Transaction Pooler**: Ensure you are using the **Pooler URI** (Port 6543) and not the direct connection (Port 5432).
+4. **Project Status**: Verify your Supabase project is not "Paused".
+
 *Note: For Render, ensure `DATABASE_SSL` is set to `true` to allow encrypted connections to Supabase.*
-
-## 5. Run Migrations
-
-When you start the backend server (`npm start` or `npm run dev`), it will automatically attempt to run migrations if the database is connected.
-
-Alternatively, you can copy the contents of `server/src/database/migrations/001_initial_schema.sql` and `002_create_leads_table.sql` and run them directly in the **Supabase SQL Editor**.
