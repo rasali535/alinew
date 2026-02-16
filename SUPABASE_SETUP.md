@@ -14,7 +14,7 @@ This project is compatible with Supabase as the PostgreSQL backend. Follow these
 2. Find the **Connection string** section.
 3. Select **URI** (not Transaction Pooler for initial setup/migrations).
 4. Copy the URL. It should look like:
-   `postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres`
+   `postgresql://postgres.wctqmtwaoaugxlqkslhn:[PASSWORD]@aws-0-us-east-1.pooler.supabase.com:6543/postgres`
 5. Replace `[PASSWORD]` with your actual database password.
 
 ## 3. Enable Extensions
@@ -33,7 +33,7 @@ You can enable extensions via the Supabase Dashboard:
 Update your `.env` file (or Render Environment Variables) with the following:
 
 ```env
-DATABASE_URL=postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres
+DATABASE_URL=postgresql://postgres.wctqmtwaoaugxlqkslhn:[PASSWORD]@aws-0-us-east-1.pooler.supabase.com:6543/postgres
 DATABASE_SSL=true
 ```
 

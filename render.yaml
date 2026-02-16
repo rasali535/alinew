@@ -19,6 +19,10 @@ services:
         value: gemini-1.5-pro
       - key: JWT_SECRET
         generateValue: true
+      - key: SUPABASE_URL
+        value: https://wctqmtwaoaugxlqkslhn.supabase.co
+      - key: SUPABASE_KEY
+        value: sb_publishable_1-8pEZLl81uyXPIWeUuZuw_-N5QP4U6
       - key: DATABASE_SSL
         value: "true"
       - key: CORS_ORIGINS
