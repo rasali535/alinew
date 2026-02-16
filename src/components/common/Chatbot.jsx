@@ -79,30 +79,9 @@ export default function Chatbot() {
     };
 
     const initChatSession = async () => {
-        let storedSessionId = localStorage.getItem('chat_session_id');
-        if (storedSessionId === 'undefined' || storedSessionId === 'null') {
-            storedSessionId = null;
-        }
         const hasLeadInfo = localStorage.getItem('chat_lead_info');
 
-        if (!storedSessionId) {
-            try {
-                // Create new session
-                const response = await axios.post(`${API_URL}/api/sessions`, {
-                    userId: `user-${Math.random().toString(36).substr(2, 9)}`,
-                    metadata: { source: 'web_ziggy' }
-                });
-                storedSessionId = response.data.id;
-                localStorage.setItem('chat_session_id', storedSessionId);
-            } catch (error) {
-                console.error('Failed to create session:', error);
-                return null;
-            }
-        }
-
-        setSessionId(storedSessionId);
-
-        // Check if we need to collect lead info
+        // 1. Immediately Set Greeting (Crucial for UX)
         if (!hasLeadInfo) {
             setShowLeadForm(true);
             setMessages([
@@ -112,6 +91,40 @@ export default function Chatbot() {
                 }
             ]);
         } else {
+            const leadInfo = JSON.parse(hasLeadInfo);
+            setMessages([
+                {
+                    role: 'assistant',
+                    content: `Welcome back, ${leadInfo.name}! 🚀 Ziggy here. How can I help you today?`
+                }
+            ]);
+        }
+
+        // 2. Resolve Session ID
+        let storedSessionId = localStorage.getItem('chat_session_id');
+        if (storedSessionId === 'undefined' || storedSessionId === 'null') {
+            storedSessionId = null;
+        }
+
+        if (!storedSessionId) {
+            try {
+                console.log('Creating new Ziggy session at:', `${API_URL}/api/sessions`);
+                const response = await axios.post(`${API_URL}/api/sessions`, {
+                    userId: `user-${Math.random().toString(36).substr(2, 9)}`,
+                    metadata: { source: 'web_ziggy' }
+                });
+                storedSessionId = response.data.id;
+                localStorage.setItem('chat_session_id', storedSessionId);
+            } catch (error) {
+                console.error('Failed to create Ziggy session. Ziggy might be offline.', error);
+                // Don't return yet, we already set the greeting
+            }
+        }
+
+        setSessionId(storedSessionId);
+
+        // 3. Load History if available
+        if (storedSessionId && hasLeadInfo) {
             try {
                 const historyRes = await axios.get(`${API_URL}/api/chat/${storedSessionId}`);
                 if (historyRes.data.messages && historyRes.data.messages.length > 0) {
@@ -119,25 +132,12 @@ export default function Chatbot() {
                         role: msg.role,
                         content: msg.content
                     })));
-                } else {
-                    const leadInfo = JSON.parse(hasLeadInfo);
-                    setMessages([
-                        {
-                            role: 'assistant',
-                            content: `Welcome back, ${leadInfo.name}! 🚀 Ziggy here. How can I help you today?`
-                        }
-                    ]);
                 }
             } catch (error) {
-                console.error('Failed to load history', error);
-                setMessages([
-                    {
-                        role: 'assistant',
-                        content: "Yo! I'm Ziggy. Status: Online and ready to sync. How can I help you?"
-                    }
-                ]);
+                console.warn('Could not sync history, keeping offline greeting.', error);
             }
         }
+
         return storedSessionId;
     };
 
