@@ -1,29 +1,26 @@
 import axios from 'axios';
 
 async function scan() {
-    const targets = [
-        'https://alinew.onrender.com',
-        'https://alinew-chatbot-backend.onrender.com',
-        'https://alinew-chatbot-frontend.onrender.com',
-        'https://alinew-backend.onrender.com'
-    ];
+    const prefixes = ['alinew', 'rasali', 'chatbot', 'alinew-chatbot-backend', 'rasali-chatbot'];
+    const suffixes = ['', '-backend', '-api', '-server', '-prod'];
 
-    console.log('--- Scanning Render Services ---');
+    const targets: string[] = [];
+    prefixes.forEach(p => {
+        suffixes.forEach(s => {
+            targets.push(`https://${p}${s}.onrender.com`);
+        });
+    });
+
+    console.log(`--- Scanning ${targets.length} possible Render URLs ---`);
     for (const url of targets) {
-        console.log(`Checking ${url}...`);
         try {
-            const res = await axios.get(url, { timeout: 5000 });
-            console.log(`[${res.status}] Body: ${JSON.stringify(res.data).substring(0, 100)}`);
-            if (JSON.stringify(res.data).includes('Chatbot')) {
-                console.log('!!! FOUND BACKEND !!!');
-                // Check version if available
-                try {
-                    const health = await axios.get(`${url}/health`, { timeout: 3000 });
-                    console.log(`Health: ${JSON.stringify(health.data)}`);
-                } catch (e) { }
-            }
+            const res = await axios.get(url, { timeout: 3000 });
+            console.log(`[${res.status}] ${url} -> ${JSON.stringify(res.data).substring(0, 50)}`);
         } catch (err: any) {
-            console.log(`Failed: ${err.message}`);
+            // Only log if it's not a 404 (means something is there)
+            if (err.response && err.response.status !== 404) {
+                console.log(`[${err.response.status}] ${url}`);
+            }
         }
     }
 }

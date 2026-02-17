@@ -4,8 +4,8 @@ services:
     name: alinew-chatbot-backend
     runtime: node
     rootDir: server
-    buildCommand: npm install --legacy-peer-deps && npm run build
-    startCommand: npm start
+    buildCommand: npm install && npm run build
+    startCommand: node dist/server.js
     envVars:
       - key: NODE_ENV
         value: production
