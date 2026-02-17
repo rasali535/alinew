@@ -5,8 +5,8 @@
         "lib": [
             "ES2022"
         ],
-        "module": "ES2022",
-        "moduleResolution": "bundler",
+        "module": "NodeNext",
+        "moduleResolution": "NodeNext",
         /* Emit */
         "outDir": "./dist",
         "rootDir": "./src",

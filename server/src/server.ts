@@ -1,5 +1,5 @@
 import { createApp } from './app.js';
-import { config, validateConfig } from './config/index.js';
+import { config } from './config/index.js';
 import { logger } from './utils/logger.js';
 import { db } from './services/dbService.js';
 import fs from 'fs';
