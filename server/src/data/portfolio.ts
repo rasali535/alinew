@@ -1,0 +1,143 @@
+export const portfolioData = {
+    "profile": {
+        "name": "Ras Ali",
+        "location": "Gaborone, Botswana",
+        "website": "www.rasalibassist.themaplin.com",
+        "title": "Multi-Disciplinary Creative & Technologist",
+        "tagline": "Artistic Soul and Technical Logic",
+        "core_skills": [
+            "Bass Performance (Live/Studio)",
+            "Sound Engineering (Mixing/Mastering)",
+            "Videography (Music Videos/Documentaries)",
+            "Full-Stack Development (React, Docker, USSD)"
+        ]
+    },
+    "projects": [
+        {
+            "name": "Eagle Touch Tours",
+            "type": "Web Development",
+            "description": "Developed a full-stack booking and tour management platform for a safari operator.",
+            "tech_stack": [
+                "React",
+                "Node.js",
+                "PostgreSQL",
+                "Google Maps API"
+            ],
+            "context_keywords": [
+                "safari",
+                "tourism",
+                "booking",
+                "travel",
+                "botswana"
+            ]
+        },
+        {
+            "name": "Pameltex",
+            "type": "Web Development",
+            "description": "Created a corporate website for a textile manufacturing company, focusing on SEO and catalog showcase.",
+            "tech_stack": [
+                "Next.js",
+                "SEO",
+                "Tailwind CSS"
+            ],
+            "context_keywords": [
+                "textile",
+                "manufacturing",
+                "corporate",
+                "catalog",
+                "seo"
+            ]
+        },
+        {
+            "name": "The Safari Butler",
+            "type": "App Development",
+            "description": "Built a mobile-first concierge app for luxury safari lodges to manage guest experiences.",
+            "tech_stack": [
+                "React Native",
+                "Firebase",
+                "Google Cloud Functions"
+            ],
+            "context_keywords": [
+                "luxury",
+                "concierge",
+                "app",
+                "mobile",
+                "lodges"
+            ]
+        },
+        {
+            "name": "Lebville Boutique",
+            "type": "E-commerce",
+            "description": "Designed and deployed a boutique e-commerce store with integrated payment gateways for specialized fashion items.",
+            "tech_stack": [
+                "Shopify",
+                "Liquid",
+                "Stripe Integration"
+            ],
+            "context_keywords": [
+                "fashion",
+                "ecommerce",
+                "store",
+                "retail",
+                "payment"
+            ]
+        },
+        {
+            "name": "Live Bass Performance",
+            "type": "Music",
+            "description": "Professional bassist performing live since 2003, specializing in jazz, afro-pop, and fusion genres.",
+            "tech_stack": [
+                "5-String Bass",
+                "Live Sound",
+                "Improvisation"
+            ],
+            "context_keywords": [
+                "bass",
+                "music",
+                "performance",
+                "jazz",
+                "live band",
+                "session musician"
+            ]
+        },
+        {
+            "name": "Studio Sound Engineering",
+            "type": "Audio",
+            "description": "Mixing and mastering engineer for local artists, ensuring broadcast-quality sound.",
+            "tech_stack": [
+                "Pro Tools",
+                "Logic Pro X",
+                "Analog Gear"
+            ],
+            "context_keywords": [
+                "mixing",
+                "mastering",
+                "sound engineering",
+                "audio",
+                "recording"
+            ]
+        },
+        {
+            "name": "USSD-Web Bridge",
+            "type": "Case Study (AI & Cloud)",
+            "description": "A scalable architecture designed to synchronize USSD interactions with modern web platforms using Supabase and Gemini AI.",
+            "tech_stack": [
+                "Supabase",
+                "Gemini API",
+                "pgvector",
+                "Edge Functions",
+                "TypeScript"
+            ],
+            "context_keywords": [
+                "ussd",
+                "ai",
+                "supabase",
+                "vector database",
+                "africa",
+                "bridging technology",
+                "real-time",
+                "pgvector"
+            ]
+        }
+    ]
+};

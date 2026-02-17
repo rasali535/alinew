@@ -4,13 +4,8 @@ import { logger } from '../utils/logger.js';
 import { GeminiAPIError, GeminiSafetyError, TimeoutError, DatabaseError } from '../utils/errors.js';
 import { ChatMessage, GeminiResponse } from '../types/index.js';
 import { messageRepository } from '../repositories/messageRepository.js';
+import { portfolioData } from '../data/portfolio.js';
 import { leadService } from '../services/leadService.js';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 /**
  * Service for interacting with Google's Gemini AI via Vertex AI
@@ -38,8 +33,8 @@ export class GeminiService {
                 googleAuthOptions: config.gemini.apiKey ? { apiKey: config.gemini.apiKey } : undefined
             });
 
-            // Load Portfolio Data
-            this.loadPortfolioData();
+            // Set Portfolio Data from static import
+            this.portfolioData = portfolioData;
 
             // Get generative model with configuration AND system instruction
             this.model = this.vertexAI.getGenerativeModel({
@@ -102,27 +97,6 @@ export class GeminiService {
                 error: this.initError
             });
             // Do not throw here to allow server to start
-        }
-    }
-
-    private loadPortfolioData() {
-        try {
-            // Assuming portfolio.json is in src/data/
-            // During runtime, it might be in dist/data/ or we need to resolve correctly
-            // For now, let's try to find it relative to this file
-            const dataPath = path.resolve(__dirname, '../data/portfolio.json');
-
-            if (fs.existsSync(dataPath)) {
-                const rawData = fs.readFileSync(dataPath, 'utf-8');
-                this.portfolioData = JSON.parse(rawData);
-                logger.info('Portfolio data loaded successfully');
-            } else {
-                logger.warn(`Portfolio data not found at ${dataPath}. Using default context.`);
-                this.portfolioData = { projects: [] };
-            }
-        } catch (error) {
-            logger.error('Failed to load portfolio data', { error });
-            this.portfolioData = { projects: [] };
         }
     }
 
