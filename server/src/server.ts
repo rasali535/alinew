@@ -30,18 +30,17 @@ async function startServer(): Promise<void> {
             });
         }
 
-        // Run migrations (Phase 2 & 3)
-        // Check if migrations should run (default: true in dev, false in prod unless forced)
+        // Run migrations
         if (db.isReady()) {
-            const shouldRunMigrations = config.nodeEnv !== 'production' || process.env.RUN_MIGRATIONS === 'true';
+            // Always run migrations if RUN_MIGRATIONS is true, ignoring NODE_ENV
+            const runMigrations = process.env.RUN_MIGRATIONS === 'true';
 
-            if (shouldRunMigrations) {
+            if (runMigrations) {
+                logger.info('Running database migrations...');
                 await db.runMigrations();
             } else {
-                logger.info('Skipping migrations in production (set RUN_MIGRATIONS=true to enable)');
+                logger.info('Skipping migrations (RUN_MIGRATIONS != true)');
             }
-        } else {
-            logger.warn('Skipping migrations because database is not connected');
         }
 
         // Create Express app

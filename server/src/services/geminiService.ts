@@ -315,7 +315,16 @@ Location: Always assume the context is Gaborone, Botswana, unless stated otherwi
                 durationMs: duration
             });
 
-            // Re-throw appropriate errors
+            // FALLBACK: If Gemini fails in production, return a friendly message instead of a 502
+            if (config.nodeEnv === 'production') {
+                return {
+                    text: "I'm currently vibing with some technical upgrades! 🎸 Hit me up about Ras Ali's services, portfolio, or bookings—I've got all that info ready for you.",
+                    tokensUsed: 0,
+                    finishReason: 'OTHER'
+                };
+            }
+
+            // Re-throw appropriate errors in dev
             if (error instanceof GeminiSafetyError || error instanceof TimeoutError || error instanceof DatabaseError) {
                 throw error;
             }
