@@ -178,7 +178,11 @@ export default function Chatbot() {
                     })));
                 }
             } catch (error) {
-                console.warn('Could not sync history, keeping offline greeting.', error);
+                console.warn('Could not sync history:', error.message);
+                if (error.response?.status === 404) {
+                    console.log('Invalid session ID detected. Clearing for next run.');
+                    localStorage.removeItem('chat_session_id');
+                }
             }
         }
 

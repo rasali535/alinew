@@ -29,17 +29,34 @@ export function createApp(): Application {
 
     // CORS configuration
     const corsOrigins = process.env.CORS_ORIGINS
-        ? process.env.CORS_ORIGINS.split(',').flatMap(origin => {
-            const trimmed = origin.trim();
-            if (!trimmed.startsWith('http') && trimmed.includes('.')) {
-                return [`https://${trimmed}`, `http://${trimmed}`];
-            }
-            return [trimmed];
-        })
-        : (config.nodeEnv === 'production' ? [] : '*');
+        ? process.env.CORS_ORIGINS.split(',').map(o => o.trim())
+        : [];
+
+    // Always allow these domains in production/development
+    const allowedOrigins = [
+        ...corsOrigins,
+        'https://rasalibassist.themaplin.com',
+        'http://rasalibassist.themaplin.com',
+        /\.themaplin\.com$/,
+        /\.onrender\.com$/
+    ];
 
     app.use(cors({
-        origin: corsOrigins,
+        origin: (origin, callback) => {
+            // Allow requests with no origin (like mobile apps or curl)
+            if (!origin) return callback(null, true);
+
+            const isAllowed = allowedOrigins.some(allowed => {
+                if (allowed instanceof RegExp) return allowed.test(origin);
+                return allowed === origin;
+            });
+
+            if (isAllowed || config.nodeEnv === 'development') {
+                callback(null, true);
+            } else {
+                callback(new Error('Not allowed by CORS'));
+            }
+        },
         credentials: true,
     }));
 

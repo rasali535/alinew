@@ -8,9 +8,11 @@ import { logger } from '../utils/logger.js';
  * Checks for X-API-Key header
  */
 export function authenticateApiKey(req: Request, _res: Response, next: NextFunction): void {
-    // Skip authentication in development if no API key is configured
-    if (config.nodeEnv === 'development' && !config.apiKey) {
-        logger.debug('Skipping API key authentication in development');
+    // Skip authentication if no API key is configured
+    if (!config.apiKey) {
+        if (config.nodeEnv === 'production') {
+            logger.warn('API key authentication skipped: No API_KEY configured on server.');
+        }
         return next();
     }
 
