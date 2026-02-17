@@ -40,6 +40,33 @@ const QUICK_REPLIES = {
     '🤖 Who is Ziggy?': "Yo! I'm Ziggy, Ras Ali's digital right hand. I'm a blend of artistic soul and technical logic, just like my creator. I handle the sync between his creative work and your vision."
 };
 
+const LOCAL_KNOWLEDGBASE = [
+    {
+        patterns: [/service/i, /what.*do/i, /offer/i, /help.*with/i],
+        response: "Ras Ali offers a elite range of creative and technical services:\n\n• **Bass Performance**: Session work & live performances (Ras has been grooving since 2003).\n• **Sound Engineering**: Professional Mixing & Mastering to give your audio that logic-driven precision.\n• **Videography**: High-quality Music Videos and Documentaries.\n• **Software Development**: Specialized in React, USSD, and AI integrations.\n\nWhich of these would you like to explore?"
+    },
+    {
+        patterns: [/book/i, /hire/i, /schedule/i, /appointment/i, /session/i],
+        response: "Ready to sync? 🚀 To book a session or hire Ras Ali, just drop your details (Name, Email/Phone) and tell me a bit about your project. I'll make sure he gets the message and gets back to you ASAP!"
+    },
+    {
+        patterns: [/who.*ras/i, /about.*ras/i, /who.*ali/i, /creative/i],
+        response: "Ras Ali is a Multi-Disciplinary Creative & Technologist based in Gaborone, Botswana. 🇧🇼\n\nHe lives at the intersection of **Artistic Soul** (Music/Visuals) and **Technical Logic** (Code/Engineering). Whether he's laying down a bass line or architecting a software solution, he brings 20+ years of creative precision to the table."
+    },
+    {
+        patterns: [/work/i, /portfolio/i, /project/i, /example/i, /show.*me/i],
+        response: "Ras Ali's portfolio is a vibe! 🎬\n\n• **Music**: Over two decades of bass performance for various artists.\n• **Visuals**: Directed and edited numerous music videos and documentary shorts.\n• **Tech**: Built complex USSD bridges, React applications, and AI-powered tools (like me!).\n\nYou can see the 'Featured Projects' section on this site for a deeper look."
+    },
+    {
+        patterns: [/price/i, /cost/i, /how.*much/i, /rate/i],
+        response: "Rates vary depending on the precision and scale of the project. 💎 To give you an accurate quote, Ras Ali would need a few details about your needs. Shall we get your contact info so he can send you a breakdown?"
+    },
+    {
+        patterns: [/hello/i, /hi /i, /yo/i, /hey/i],
+        response: "Yo! Ziggy here. Status: Ready to sync. How can I help you vibe with Ras Ali's work today?"
+    }
+];
+
 export default function Chatbot() {
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState([]);
@@ -179,6 +206,21 @@ export default function Chatbot() {
         setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
         setIsLoading(true);
 
+        // --- PHASE 1: Local Knowledge Check (Non-AI) ---
+        const localMatch = LOCAL_KNOWLEDGBASE.find(item =>
+            item.patterns.some(pattern => pattern.test(userMessage))
+        );
+
+        if (localMatch) {
+            // Artificial delay for "Ziggy is thinking" vibe
+            setTimeout(() => {
+                setMessages(prev => [...prev, { role: 'assistant', content: localMatch.response }]);
+                setIsLoading(false);
+            }, 600);
+            return;
+        }
+
+        // --- PHASE 2: AI Backend Call ---
         // Check sessionId, retry init if missing
         let currentSessionId = sessionId;
         if (!currentSessionId) {
