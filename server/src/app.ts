@@ -28,28 +28,8 @@ export function createApp(): Application {
     }));
 
     // CORS configuration
-    const allowedOrigins = [
-        'https://rasalibassist.themaplin.com',
-        'http://rasalibassist.themaplin.com',
-        'https://alinew.onrender.com',
-        'http://localhost:5173',
-        'http://localhost:9090'
-    ];
-
     app.use(cors({
-        origin: (origin, callback) => {
-            if (!origin) return callback(null, true);
-
-            const isAllowed = allowedOrigins.includes(origin) ||
-                origin.endsWith('.themaplin.com') ||
-                origin.endsWith('.onrender.com');
-
-            if (isAllowed || config.nodeEnv === 'development') {
-                callback(null, true);
-            } else {
-                callback(new Error('Not allowed by CORS'));
-            }
-        },
+        origin: true, // Allow all origins reflectively
         credentials: true,
     }));
 
@@ -87,6 +67,9 @@ export function createApp(): Application {
 
     // Root endpoint
     app.get('/', root);
+
+    // Simple ping for connectivity tests
+    app.get('/ping', (_req, res) => res.send('pong'));
 
     // Health check endpoint (no auth required)
     app.get('/health', healthCheck);
