@@ -15,9 +15,14 @@ const getApiUrl = () => {
         url = `https://${url}`;
     }
 
-    // Fallback for local development
+    // Fallback for local development or missing production env
     if (!url) {
-        url = 'http://localhost:9090';
+        // If we are on the live site, try the Render backend URL
+        if (typeof window !== 'undefined' && (window.location.hostname.includes('themaplin.com') || window.location.hostname.includes('onrender.com'))) {
+            url = 'https://alinew-chatbot-backend.onrender.com';
+        } else {
+            url = 'http://localhost:9090';
+        }
     }
 
     console.log('--- Ziggy Debug ---');
