@@ -250,8 +250,13 @@ export default function Chatbot() {
             const assistantMessage = response.data.response;
             setMessages(prev => [...prev, { role: 'assistant', content: assistantMessage }]);
         } catch (error) {
-            console.error('Failed to send message:', error);
-            setMessages(prev => [...prev, { role: 'assistant', content: "I'm having trouble connecting right now. Please check your connection." }]);
+            console.error('Ziggy Send Error:', {
+                message: error.message,
+                status: error.response?.status,
+                data: error.response?.data,
+                config: error.config
+            });
+            setMessages(prev => [...prev, { role: 'assistant', content: "I'm having trouble connecting right now. Status: " + (error.response?.status || 'Network Error') }]);
         } finally {
             setIsLoading(false);
         }
