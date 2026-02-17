@@ -1,0 +1,42 @@
+name: Deploy to Hostinger
+
+on:
+    push:
+        branches: ["main"]
+    workflow_dispatch: # Allow manual trigger
+
+jobs:
+    build-and-deploy:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "20.x"
+                  cache: "npm"
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Build frontend
+              run: npm run build
+              env:
+                  VITE_API_URL: https://alinew.onrender.com
+
+            - name: Deploy to Hostinger via FTP
+              uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+              with:
+                  server: ${{ secrets.FTP_SERVER }}
+                  username: ${{ secrets.FTP_USERNAME }}
+                  password: ${{ secrets.FTP_PASSWORD }}
+                  local-dir: ./build/
+                  server-dir: /public_html/
+                  dangerous-clean-slate: true # Remove old files before upload
+                  exclude: |
+                      **/.git*
+                      **/.git*/**
+                      **/node_modules/**

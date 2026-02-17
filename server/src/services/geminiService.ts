@@ -130,7 +130,7 @@ Location: Always assume the context is Gaborone, Botswana, unless stated otherwi
     }
 
     private getRelevantContext(message: string): string {
-        if (!this.portfolioData || !this.portfolioData.projects) return '';
+        if (!this.portfolioData?.projects) return '';
 
         const lowerMessage = message.toLowerCase();
         const relevantProjects = this.portfolioData.projects.filter((project: any) => {
@@ -240,7 +240,17 @@ Location: Always assume the context is Gaborone, Botswana, unless stated otherwi
                         logger.info('Ziggy confirmed lead save to user');
                     } catch (leadError) {
                         logger.error('Failed to process tool call save_lead', { leadError });
-                        // Continue to provide a graceful failure message
+
+                        // Send error response to Gemini so it knows the tool failed
+                        const errorToolResponse = {
+                            functionResponse: {
+                                name: 'save_lead',
+                                response: { error: 'Failed to save lead details due to an internal system error.' },
+                            },
+                        };
+                        const followUpResult = await chat.sendMessage([errorToolResponse]);
+                        response = followUpResult.response;
+                        candidate = response.candidates?.[0];
                     }
                 }
             }
@@ -324,7 +334,7 @@ Location: Always assume the context is Gaborone, Botswana, unless stated otherwi
      */
     private formatChatHistory(history: ChatMessage[]): Array<{ role: string; parts: Array<{ text: string }> }> {
         return history
-            .filter((msg) => msg.role !== 'system')
+            .filter((msg) => msg.role !== 'system' && msg.content && msg.content.trim() !== '')
             .map((msg) => ({
                 role: msg.role === 'assistant' ? 'model' : 'user',
                 parts: [{ text: msg.content }],
