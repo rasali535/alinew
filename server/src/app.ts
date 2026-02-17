@@ -2,6 +2,8 @@ import express, { Application } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import fs from 'fs';
+import path from 'path';
 import { config } from './config/index.js';
 import { logger } from './utils/logger.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
@@ -76,13 +78,21 @@ export function createApp(): Application {
 
     // Temporary logs endpoint for debugging
     app.get('/debug-logs', (req, res) => {
-        const fs = require('fs');
-        const path = require('path');
-        const logPath = path.join(process.cwd(), 'logs/error.log');
+        const type = req.query.type === 'combined' ? 'combined.log' : 'error.log';
+        const logPath = path.join(process.cwd(), 'logs', type);
+
         if (fs.existsSync(logPath)) {
-            res.sendFile(logPath);
+            const content = fs.readFileSync(logPath, 'utf8');
+            res.header('Content-Type', 'text/plain');
+            res.send(content);
         } else {
-            res.status(404).json({ error: 'Log file not found', path: logPath });
+            res.status(404).json({
+                error: 'Log file not found',
+                path: logPath,
+                existingFiles: fs.existsSync(path.join(process.cwd(), 'logs'))
+                    ? fs.readdirSync(path.join(process.cwd(), 'logs'))
+                    : 'logs dir missing'
+            });
         }
     });
 

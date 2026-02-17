@@ -2,12 +2,20 @@ import { createApp } from './app.js';
 import { config, validateConfig } from './config/index.js';
 import { logger } from './utils/logger.js';
 import { db } from './services/dbService.js';
+import fs from 'fs';
+import path from 'path';
 
 /**
  * Start the server
  */
 async function startServer(): Promise<void> {
     try {
+        // Ensure logs directory exists
+        const logsDir = path.join(process.cwd(), 'logs');
+        if (!fs.existsSync(logsDir)) {
+            fs.mkdirSync(logsDir, { recursive: true });
+        }
+
         // Validate configuration
         logger.info('Validating configuration...');
         validateConfig();
