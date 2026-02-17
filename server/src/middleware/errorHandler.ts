@@ -13,19 +13,22 @@ export function errorHandler(
     _next: NextFunction
 ): void {
     // Log the error
-    if (err instanceof AppError) {
-        if (err.status >= 500) {
+    const isAppError = (err as any).status !== undefined && (err as any).isOperational !== undefined;
+
+    if (isAppError) {
+        const appErr = err as AppError;
+        if (appErr.status >= 500) {
             logger.error('Server error', {
-                error: err.message,
-                code: err.code,
-                stack: err.stack,
+                error: appErr.message,
+                code: appErr.code,
+                stack: appErr.stack,
                 path: req.path,
                 method: req.method,
             });
         } else {
             logger.warn('Client error', {
-                error: err.message,
-                code: err.code,
+                error: appErr.message,
+                code: appErr.code,
                 path: req.path,
                 method: req.method,
             });
@@ -33,6 +36,7 @@ export function errorHandler(
     } else {
         // Unknown error
         logger.error('Unexpected error', {
+            name: err.name,
             error: err.message,
             stack: err.stack,
             path: req.path,
@@ -41,12 +45,13 @@ export function errorHandler(
     }
 
     // Send error response
-    if (err instanceof AppError && err.isOperational) {
-        res.status(err.status).json({
+    if (isAppError) {
+        const appErr = err as AppError;
+        res.status(appErr.status).json({
             status: 'error',
-            message: err.message,
-            code: err.code,
-            ...(err.details ? { details: err.details } : {}),
+            message: appErr.message,
+            code: appErr.code,
+            ...(appErr.details ? { details: appErr.details } : {}),
         });
     } else {
         // Don't leak error details in production for unknown errors
