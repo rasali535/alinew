@@ -28,28 +28,21 @@ export function createApp(): Application {
     }));
 
     // CORS configuration
-    const corsOrigins = process.env.CORS_ORIGINS
-        ? process.env.CORS_ORIGINS.split(',').map(o => o.trim())
-        : [];
-
-    // Always allow these domains in production/development
     const allowedOrigins = [
-        ...corsOrigins,
         'https://rasalibassist.themaplin.com',
         'http://rasalibassist.themaplin.com',
-        /\.themaplin\.com$/,
-        /\.onrender\.com$/
+        'https://alinew.onrender.com',
+        'http://localhost:5173',
+        'http://localhost:9090'
     ];
 
     app.use(cors({
         origin: (origin, callback) => {
-            // Allow requests with no origin (like mobile apps or curl)
             if (!origin) return callback(null, true);
 
-            const isAllowed = allowedOrigins.some(allowed => {
-                if (allowed instanceof RegExp) return allowed.test(origin);
-                return allowed === origin;
-            });
+            const isAllowed = allowedOrigins.includes(origin) ||
+                origin.endsWith('.themaplin.com') ||
+                origin.endsWith('.onrender.com');
 
             if (isAllowed || config.nodeEnv === 'development') {
                 callback(null, true);

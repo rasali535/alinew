@@ -19,7 +19,7 @@ const getApiUrl = () => {
     if (!url) {
         // If we are on the live site, try the Render backend URL
         if (typeof window !== 'undefined' && (window.location.hostname.includes('themaplin.com') || window.location.hostname.includes('onrender.com'))) {
-            url = 'https://alinew-chatbot-backend.onrender.com';
+            url = 'https://alinew.onrender.com';
         } else {
             url = 'http://localhost:9090';
         }
