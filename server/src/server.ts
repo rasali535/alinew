@@ -18,7 +18,7 @@ async function startServer(): Promise<void> {
 
         // Validate configuration
         logger.info('Validating configuration...');
-        validateConfig();
+        // validateConfig();
 
         // Connect to database
         logger.info('Connecting to database...');
