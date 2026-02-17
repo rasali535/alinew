@@ -74,6 +74,18 @@ export function createApp(): Application {
     // Health check endpoint (no auth required)
     app.get('/health', healthCheck);
 
+    // Temporary logs endpoint for debugging
+    app.get('/debug-logs', (req, res) => {
+        const fs = require('fs');
+        const path = require('path');
+        const logPath = path.join(process.cwd(), 'logs/error.log');
+        if (fs.existsSync(logPath)) {
+            res.sendFile(logPath);
+        } else {
+            res.status(404).json({ error: 'Log file not found', path: logPath });
+        }
+    });
+
     // API routes
     app.use('/api', chatRoutes);
 
