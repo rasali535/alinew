@@ -71,7 +71,7 @@ export function createApp(): Application {
     app.get('/', root);
 
     // Simple ping for connectivity tests
-    app.get('/ping', (_req, res) => res.send('pong'));
+    app.get('/ping', (_req, res) => res.send('pong-v5'));
 
     // Health check endpoint (no auth required)
     app.get('/health', healthCheck);
