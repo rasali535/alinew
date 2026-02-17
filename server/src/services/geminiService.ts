@@ -206,7 +206,16 @@ Location: Always assume the context is Gaborone, Botswana, unless stated otherwi
             const context = this.getRelevantContext(message);
             const prompt = message + context;
 
-            // 5. Call Gemini API
+            // 5. Short-circuit for testing
+            if (message.toLowerCase() === 'ping-ai') {
+                return {
+                    text: 'AI Service is reachable and responding to internal pings.',
+                    tokensUsed: 0,
+                    finishReason: 'STOP'
+                };
+            }
+
+            // 6. Call Gemini API
             logger.debug('Calling Gemini API', {
                 sessionId,
                 historyLength: chatHistoryForGemini.length,
@@ -219,7 +228,7 @@ Location: Always assume the context is Gaborone, Botswana, unless stated otherwi
 
             const result = await this.withTimeout(
                 chat.sendMessage(prompt),
-                30000, // 30s timeout
+                15000, // Reduced to 15s to beat Render's 30s timeout
                 'Gemini API request timed out'
             );
 
@@ -400,7 +409,7 @@ Location: Always assume the context is Gaborone, Botswana, unless stated otherwi
                 'Health check timeout'
             );
             return !!result.response;
-        } catch (error) {
+        } catch (error: any) {
             logger.error('Gemini health check failed', {
                 error: error instanceof Error ? error.message : String(error),
                 stack: error instanceof Error ? error.stack : undefined

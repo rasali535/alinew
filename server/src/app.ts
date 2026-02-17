@@ -6,6 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { config } from './config/index.js';
 import { logger } from './utils/logger.js';
+import { db } from './services/dbService.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import chatRoutes from './routes/chatRoutes.js';
 import { healthCheck, root } from './controllers/healthController.js';
@@ -75,6 +76,17 @@ export function createApp(): Application {
 
     // Health check endpoint (no auth required)
     app.get('/health', healthCheck);
+
+    // Simple DB test
+    app.get('/test-db', async (_req, res) => {
+        try {
+            const start = Date.now();
+            const result = await db.query('SELECT NOW()');
+            res.json({ status: 'ok', time: result.rows[0], duration: Date.now() - start });
+        } catch (err: any) {
+            res.status(500).json({ status: 'error', message: err.message });
+        }
+    });
 
     // Temporary logs endpoint for debugging
     app.get('/debug-logs', (req, res) => {
