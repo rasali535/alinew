@@ -51,8 +51,8 @@ export async function healthCheck(_req: Request, res: Response): Promise<Respons
 export function root(_req: Request, res: Response): Response {
     return res.status(200).json({
         name: 'Chatbot Backend API',
-        version: '1.0.1',
-        status: 'running-v5',
+        version: '1.0.2',
+        status: 'running-v6',
         documentation: '/api/docs',
     });
 }

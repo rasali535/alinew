@@ -78,7 +78,7 @@ export function createApp(): Application {
 
     // Temporary logs endpoint for debugging
     app.get('/debug-logs', (req, res) => {
-        const type = req.query.type === 'combined' ? 'combined.log' : 'error.log';
+        const type = (req.query.type as string) === 'combined' ? 'combined.log' : 'error.log';
         const logPath = path.join(process.cwd(), 'logs', type);
 
         if (fs.existsSync(logPath)) {
