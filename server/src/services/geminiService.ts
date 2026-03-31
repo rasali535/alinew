@@ -1,4 +1,9 @@
-import { VertexAI, GenerativeModel, HarmCategory, HarmBlockThreshold, SchemaType } from '@google-cloud/vertexai';
+import { 
+    GoogleGenerativeAI, 
+    GenerativeModel, 
+    HarmCategory, 
+    HarmBlockThreshold 
+} from '@google/generative-ai';
 import { config } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 import { GeminiAPIError, GeminiSafetyError, TimeoutError, DatabaseError } from '../utils/errors.js';
@@ -8,11 +13,11 @@ import { portfolioData } from '../data/portfolio.js';
 import { leadService } from '../services/leadService.js';
 
 /**
- * Service for interacting with Google's Gemini AI via Vertex AI
+ * Service for interacting with Google's Gemini AI via Google AI SDK
  * Handles conversation history persistence via MessageRepository
  */
 export class GeminiService {
-    private vertexAI!: VertexAI;
+    private genAI!: GoogleGenerativeAI;
     private model!: GenerativeModel;
     private portfolioData: any;
     private initialized: boolean = false;
@@ -20,75 +25,45 @@ export class GeminiService {
 
     constructor() {
         try {
-            // Initialize Vertex AI client
-            const projectId = config.gemini.projectId || process.env.GOOGLE_CLOUD_PROJECT;
+            const apiKey = config.gemini.apiKey;
 
-            if (!projectId && config.nodeEnv === 'production') {
-                logger.error('GOOGLE_CLOUD_PROJECT is missing in production environment');
+            if (!apiKey) {
+                throw new Error('GEMINI_API_KEY is missing');
             }
 
-            this.vertexAI = new VertexAI({
-                project: projectId || 'placeholder-project',
-                location: config.gemini.location,
-                googleAuthOptions: config.gemini.apiKey ? { apiKey: config.gemini.apiKey } : undefined
-            });
+            // Initialize Google AI SDK
+            this.genAI = new GoogleGenerativeAI(apiKey);
 
             // Set Portfolio Data from static import
             this.portfolioData = portfolioData;
 
             // Get generative model with configuration AND system instruction
-            this.model = this.vertexAI.getGenerativeModel({
-                model: config.gemini.model,
+            this.model = this.genAI.getGenerativeModel({
+                model: config.gemini.model || 'gemini-1.5-pro',
+                systemInstruction: this.getSystemInstruction(),
                 tools: [{
                     functionDeclarations: [{
                         name: 'save_lead',
                         description: 'Submit user contact details (name and email/phone) to Ras Ali when interest in services is expressed.',
                         parameters: {
-                            type: SchemaType.OBJECT,
+                            type: 'OBJECT' as any,
                             properties: {
-                                name: { type: SchemaType.STRING, description: 'User full name' },
-                                email: { type: SchemaType.STRING, description: 'User email address' },
-                                phone: { type: SchemaType.STRING, description: 'User phone number (optional)' },
+                                name: { type: 'STRING' as any, description: 'User full name' },
+                                email: { type: 'STRING' as any, description: 'User email address' },
+                                phone: { type: 'STRING' as any, description: 'User phone number (optional)' },
                             },
                             required: ['name', 'email'],
                         },
                     }],
                 }],
-                systemInstruction: {
-                    role: 'system',
-                    parts: [{ text: this.getSystemInstruction() }]
-                },
-                generationConfig: {
-                    maxOutputTokens: config.gemini.maxOutputTokens,
-                    temperature: config.gemini.temperature,
-                    topP: config.gemini.topP,
-                    topK: config.gemini.topK,
-                },
-                safetySettings: [
-                    {
-                        category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-                        threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                    },
-                    {
-                        category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                        threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                    },
-                    {
-                        category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-                        threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                    },
-                    {
-                        category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-                        threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                    },
-                ],
-            });
+            }, {
+                apiVersion: 'v1beta'
+            }); // USING v1beta FOR 2.0 MODELS
 
             this.initialized = true;
-            logger.info('Gemini service initialized', {
-                project: projectId || 'placeholder-project',
-                location: config.gemini.location,
+            logger.info('Gemini (Google AI) service initialized', {
                 model: config.gemini.model,
+                apiVersion: 'v1beta'
             });
         } catch (error) {
             this.initialized = false;
@@ -96,7 +71,6 @@ export class GeminiService {
             logger.error('Failed to initialize Gemini service. Chat features will be unavailable.', {
                 error: this.initError
             });
-            // Do not throw here to allow server to start
         }
     }
 
@@ -148,9 +122,6 @@ Location: Always assume the context is Gaborone, Botswana, unless stated otherwi
 
     /**
      * Process a user message: save to DB, fetch history, call Gemini, save response
-     * @param sessionId - The session ID
-     * @param message - The user's message
-     * @returns The generated response
      */
     async generateChatResponse(sessionId: string, message: string): Promise<GeminiResponse> {
         if (!this.initialized) {
@@ -163,17 +134,16 @@ Location: Always assume the context is Gaborone, Botswana, unless stated otherwi
             // 1. Save User Message to Database
             await messageRepository.create(sessionId, 'user', message);
 
-            // 2. Fetch Conversation History (limit to maxContextMessages)
+            // 2. Fetch Conversation History
             const history = await messageRepository.getConversationHistory(
                 sessionId,
                 config.session.maxContextMessages
             );
 
-            // 3. Format history for Gemini API
-            let chatHistoryForGemini: Array<{ role: string; parts: Array<{ text: string }> }> = [];
+            // 3. Format history for Google AI SDK
+            let chatHistory: any[] = [];
             if (history.length > 1) {
-                const previousMessages = history.slice(0, -1);
-                chatHistoryForGemini = this.formatChatHistory(previousMessages);
+                chatHistory = this.formatChatHistory(history.slice(0, -1));
             }
 
             // 4. Inject Local Context
@@ -183,39 +153,39 @@ Location: Always assume the context is Gaborone, Botswana, unless stated otherwi
             // 5. Short-circuit for testing
             if (message.toLowerCase() === 'ping-ai') {
                 return {
-                    text: 'AI Service is reachable and responding to internal pings.',
+                    text: 'AI Service (Google AI) is reachable and responding to internal pings.',
                     tokensUsed: 0,
                     finishReason: 'STOP'
                 };
             }
 
             // 6. Call Gemini API
-            logger.debug('Calling Gemini API', {
-                sessionId,
-                historyLength: chatHistoryForGemini.length,
-                hasContext: !!context
-            });
-
             const chat = this.model.startChat({
-                history: chatHistoryForGemini,
+                history: chatHistory,
+                generationConfig: {
+                    maxOutputTokens: config.gemini.maxOutputTokens,
+                    temperature: config.gemini.temperature,
+                    topP: config.gemini.topP,
+                    topK: config.gemini.topK,
+                }
             });
 
             const result = await this.withTimeout(
                 chat.sendMessage(prompt),
-                15000, // Reduced to 15s to beat Render's 30s timeout
+                25000,
                 'Gemini API request timed out'
             );
 
             let response = result.response;
-            let candidate = response.candidates?.[0];
+            let responseText = response.text();
 
-            // 5a. Handle Tool Calls (Function Calling)
-            if (candidate?.content?.parts?.[0]?.functionCall) {
-                const functionCall = candidate.content.parts[0].functionCall;
-
-                if (functionCall.name === 'save_lead') {
-                    const args = functionCall.args as any;
-                    logger.info('Ziggy is calling save_lead', { sessionId, args });
+            // Handle Function Calling (if any - Google AI handle check)
+            const functionCalls = response.functionCalls();
+            if (functionCalls && functionCalls.length > 0) {
+                const call = functionCalls[0];
+                if (call.name === 'save_lead') {
+                    const args = call.args as any;
+                    logger.info('Ziggy is calling save_lead (Google AI)', { sessionId, args });
 
                     try {
                         await leadService.createLead({
@@ -226,89 +196,45 @@ Location: Always assume the context is Gaborone, Botswana, unless stated otherwi
                             source: 'ziggy_chat'
                         });
 
-                        // Send the tool response back to Gemini to get a final conversational reply
-                        const toolResponse = {
+                        const followUp = await chat.sendMessage([{
                             functionResponse: {
                                 name: 'save_lead',
                                 response: { content: 'Lead saved successfully and Ras Ali has been notified.' },
                             },
-                        };
-
-                        const followUpResult = await chat.sendMessage([toolResponse]);
-                        response = followUpResult.response;
-                        candidate = response.candidates?.[0];
-                        logger.info('Ziggy confirmed lead save to user');
-                    } catch (leadError) {
-                        logger.error('Failed to process tool call save_lead', { leadError });
-
-                        // Send error response to Gemini so it knows the tool failed
-                        const errorToolResponse = {
+                        }]);
+                        responseText = followUp.response.text();
+                    } catch (error) {
+                        logger.error('Failed tool call save_lead', { error });
+                        const followUp = await chat.sendMessage([{
                             functionResponse: {
                                 name: 'save_lead',
-                                response: { error: 'Failed to save lead details due to an internal system error.' },
+                                response: { error: 'Failed to save lead details internally.' },
                             },
-                        };
-                        const followUpResult = await chat.sendMessage([errorToolResponse]);
-                        response = followUpResult.response;
-                        candidate = response.candidates?.[0];
+                        }]);
+                        responseText = followUp.response.text();
                     }
                 }
             }
 
-            // Check for safety blocks
-            if (!candidate) {
-                const safetyRatings = response.promptFeedback?.safetyRatings;
-                throw new GeminiSafetyError('Response blocked by safety filters', { safetyRatings });
-            }
+            const tokensUsed = this.estimateTokens(prompt) + this.estimateTokens(responseText);
 
-            if (candidate?.finishReason === 'SAFETY') {
-                throw new GeminiSafetyError('Content blocked by safety filters', {
-                    safetyRatings: candidate.safetyRatings,
-                });
-            }
-
-            const text = candidate?.content?.parts?.[0]?.text;
-            if (!text) {
-                // If it was a function call that didn't get handled or just returned empty
-                return {
-                    text: "I've noted that down! Ras Ali will be in touch soon.",
-                    tokensUsed: 0,
-                    finishReason: candidate.finishReason || 'STOP'
-                };
-            }
-
-            const tokensUsed = this.estimateTokens(prompt) + this.estimateTokens(text);
-
-            // 6. Save Assistant Response to Database
-            await messageRepository.create(sessionId, 'assistant', text, tokensUsed);
-
-            const duration = Date.now() - startTime;
-            logger.info('Chat response completed', {
-                sessionId,
-                tokensUsed,
-                durationMs: duration,
-            });
+            // 7. Save Assistant Response
+            await messageRepository.create(sessionId, 'assistant', responseText, tokensUsed);
 
             return {
-                text,
+                text: responseText,
                 tokensUsed,
-                finishReason: candidate.finishReason,
-                safetyRatings: candidate.safetyRatings?.map((rating) => ({
-                    category: rating.category || 'UNKNOWN',
-                    probability: rating.probability || 'UNKNOWN',
-                })),
+                finishReason: 'STOP',
             };
 
         } catch (error) {
-            // Log the error with context
             const duration = Date.now() - startTime;
-            logger.error('Error processing chat', {
+            logger.error('Error processing chat (Google AI)', {
                 sessionId,
                 error: error instanceof Error ? error.message : String(error),
                 durationMs: duration
             });
 
-            // FALLBACK: If Gemini fails in production, return a friendly message instead of a 502
             if (config.nodeEnv === 'production') {
                 return {
                     text: "I'm currently vibing with some technical upgrades! 🎸 Hit me up about Ras Ali's services, portfolio, or bookings—I've got all that info ready for you.",
@@ -317,22 +243,11 @@ Location: Always assume the context is Gaborone, Botswana, unless stated otherwi
                 };
             }
 
-            // Re-throw appropriate errors in dev
-            if (error instanceof GeminiSafetyError || error instanceof TimeoutError || error instanceof DatabaseError) {
-                throw error;
-            }
-
-            throw new GeminiAPIError(
-                error instanceof Error ? error.message : 'Unknown error during chat processing',
-                error
-            );
+            throw error;
         }
     }
 
-    /**
-     * Format chat history for Gemini API
-     */
-    private formatChatHistory(history: ChatMessage[]): Array<{ role: string; parts: Array<{ text: string }> }> {
+    private formatChatHistory(history: ChatMessage[]) {
         return history
             .filter((msg) => msg.role !== 'system' && msg.content && msg.content.trim() !== '')
             .map((msg) => ({
@@ -341,29 +256,15 @@ Location: Always assume the context is Gaborone, Botswana, unless stated otherwi
             }));
     }
 
-    /**
-     * Estimate token count (rough approximation)
-     */
     private estimateTokens(text: string): number {
         return Math.ceil(text.length / 4);
     }
 
-    /**
-     * Wrap a promise with a timeout
-     */
-    private async withTimeout<T>(
-        promise: Promise<T>,
-        timeoutMs: number,
-        errorMessage: string
-    ): Promise<T> {
+    private async withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessage: string): Promise<T> {
         let timeoutHandle: NodeJS.Timeout;
-
         const timeoutPromise = new Promise<never>((_, reject) => {
-            timeoutHandle = setTimeout(() => {
-                reject(new TimeoutError(errorMessage));
-            }, timeoutMs);
+            timeoutHandle = setTimeout(() => reject(new TimeoutError(errorMessage)), timeoutMs);
         });
-
         try {
             const result = await Promise.race([promise, timeoutPromise]);
             clearTimeout(timeoutHandle!);
@@ -374,27 +275,21 @@ Location: Always assume the context is Gaborone, Botswana, unless stated otherwi
         }
     }
 
-    /**
-     * Generate embeddings (placeholder)
-     */
-    async generateEmbedding(_text: string): Promise<number[]> {
-        // TODO: Implement using Vertex AI Text Embeddings API
-        return [];
-    }
-
-    /**
-     * Health check for Gemini service
-     */
     async healthCheck(): Promise<boolean> {
+        if (!this.initialized) return false;
         try {
+            logger.info('Gemini health check starting', { model: config.gemini.model });
             const result = await this.withTimeout(
                 this.model.generateContent('Hello'),
-                5000,
+                10000,
                 'Health check timeout'
             );
-            return !!result.response;
-        } catch (error: any) {
-            logger.error('Gemini health check failed', {
+            const text = result.response.text();
+            logger.info('Gemini health check success', { text: text.substring(0, 20) });
+            return !!text;
+        } catch (error) {
+            logger.error('Gemini health check failed (Google AI)', { 
+                model: config.gemini.model,
                 error: error instanceof Error ? error.message : String(error),
                 stack: error instanceof Error ? error.stack : undefined
             });
@@ -403,5 +298,4 @@ Location: Always assume the context is Gaborone, Botswana, unless stated otherwi
     }
 }
 
-// Export singleton instance
 export const geminiService = new GeminiService();

@@ -36,6 +36,17 @@ const getApiUrl = () => {
 };
 
 const API_URL = getApiUrl();
+const API_KEY = import.meta.env.VITE_API_KEY || 'AIzaSyByz1QviGaYVn3y3ax2S3E1Uhrrhw6J5j0';
+
+// Global axios defaults for easier chat management
+const chatAxios = axios.create({
+    baseURL: API_URL,
+    headers: {
+        'x-api-key': API_KEY,
+        'Content-Type': 'application/json'
+    },
+    timeout: 30000 // Match server timeout for Render stability
+});
 
 // Mascot Image Path
 const MASCOT_IMAGE = '/assets/images/ziggie-mascot.jpeg';
@@ -106,7 +117,7 @@ export default function Chatbot() {
 
         setIsLoading(true);
         try {
-            await axios.post(`${API_URL}/api/leads`, {
+            await chatAxios.post('/api/leads', {
                 sessionId,
                 ...leadFormData,
                 source: 'ziggy_web_intro'
@@ -155,10 +166,10 @@ export default function Chatbot() {
         if (!storedSessionId) {
             try {
                 console.log('Ziggy attempting connection to:', `${API_URL}/api/sessions`);
-                const response = await axios.post(`${API_URL}/api/sessions`, {
+                const response = await chatAxios.post('/api/sessions', {
                     userId: `user-${Math.random().toString(36).substr(2, 9)}`,
                     metadata: { source: 'web_ziggy' }
-                }, { timeout: 8000 });
+                });
                 storedSessionId = response.data.id;
                 localStorage.setItem('chat_session_id', storedSessionId);
                 console.log('Ziggy Connected! Session:', storedSessionId);
@@ -172,7 +183,7 @@ export default function Chatbot() {
         // 3. Load History if available
         if (storedSessionId && hasLeadInfo) {
             try {
-                const historyRes = await axios.get(`${API_URL}/api/chat/${storedSessionId}`);
+                const historyRes = await chatAxios.get(`/api/chat/${storedSessionId}`);
                 if (historyRes.data.messages && historyRes.data.messages.length > 0) {
                     setMessages(historyRes.data.messages.map(msg => ({
                         role: msg.role,
@@ -244,7 +255,7 @@ export default function Chatbot() {
         }
 
         try {
-            const response = await axios.post(`${API_URL}/api/chat`, {
+            const response = await chatAxios.post('/api/chat', {
                 sessionId: currentSessionId,
                 message: userMessage
             });
