@@ -1,12 +1,10 @@
 import { 
     GoogleGenerativeAI, 
-    GenerativeModel, 
-    HarmCategory, 
-    HarmBlockThreshold 
+    GenerativeModel 
 } from '@google/generative-ai';
 import { config } from '../config/index.js';
 import { logger } from '../utils/logger.js';
-import { GeminiAPIError, GeminiSafetyError, TimeoutError, DatabaseError } from '../utils/errors.js';
+import { GeminiAPIError, TimeoutError } from '../utils/errors.js';
 import { ChatMessage, GeminiResponse } from '../types/index.js';
 import { messageRepository } from '../repositories/messageRepository.js';
 import { portfolioData } from '../data/portfolio.js';
@@ -183,7 +181,7 @@ Location: Always assume the context is Gaborone, Botswana, unless stated otherwi
             const functionCalls = response.functionCalls();
             if (functionCalls && functionCalls.length > 0) {
                 const call = functionCalls[0];
-                if (call.name === 'save_lead') {
+                if (call && call.name === 'save_lead') {
                     const args = call.args as any;
                     logger.info('Ziggy is calling save_lead (Google AI)', { sessionId, args });
 
