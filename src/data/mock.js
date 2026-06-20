@@ -200,9 +200,27 @@ export const services = [
 ];
 
 export const aiLabsImages = [
-  'https://picsum.photos/seed/ai1/400/225',
-  'https://picsum.photos/seed/ai2/400/225',
-  'https://picsum.photos/seed/ai3/400/225'
+  'https://images.unsplash.com/photo-1586528116311-ad8ed7c508c0?q=80&w=2070&auto=format&fit=crop',
+  'https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop',
+  'https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop'
+];
+
+export const aiPrototypes = [
+  {
+    title: 'Supplier Risk Monitor',
+    image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=2015&auto=format&fit=crop',
+    status: 'Live on Vercel'
+  },
+  {
+    title: 'Agent Workflow Viz',
+    image: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop',
+    status: 'R&D Prototype'
+  },
+  {
+    title: 'LearnFlow EdTech AI',
+    image: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=2070&auto=format&fit=crop',
+    status: 'Live on Vercel'
+  }
 ];
 
 export const clients = [

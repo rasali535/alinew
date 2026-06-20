@@ -75,12 +75,12 @@ const HeroSection = () => {
       {/* Large Brand Name */}
       <div className="relative overflow-hidden z-10">
         <h2
-          className="text-white text-[12vw] md:text-[14vw] lg:text-[16vw] font-light tracking-tighter leading-none transition-transform duration-100 ease-out"
+          className="text-white text-[10vw] md:text-[12vw] lg:text-[14vw] font-light tracking-tighter leading-none transition-transform duration-100 ease-out"
           style={{
             transform: `translate(${mousePos.x * 30}px, ${mousePos.y * 10}px)`
           }}
         >
-          ras ali
+          ras ali labs
         </h2>
       </div>
 

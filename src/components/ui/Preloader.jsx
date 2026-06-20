@@ -39,8 +39,8 @@ const Preloader = () => {
                 {/* Logo/Name Reveal */}
                 <div className="overflow-hidden mb-8">
                     <div className="flex flex-col items-center">
-                        <span className="text-white text-2xl font-light tracking-[0.3em] mb-2">RAS ALI</span>
-                        <div className="w-12 h-[1px] bg-brand-gold"></div>
+                        <span className="text-white text-2xl font-light tracking-[0.3em] mb-2">RAS ALI LABS</span>
+                        <div className="w-16 h-[1px] bg-brand-gold"></div>
                     </div>
                 </div>
 

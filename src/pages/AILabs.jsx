@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import SEO from '../components/common/SEO';
-import { aiLabsImages, companyInfo } from '../data/mock';
+import { aiLabsImages, aiPrototypes, companyInfo } from '../data/mock';
 
 const AILabs = () => {
     useEffect(() => {
@@ -62,20 +62,20 @@ const AILabs = () => {
 
                 {/* Additional Gallery */}
                 <div className="mb-24">
-                    <h2 className="text-3xl font-light text-white mb-12">Latest Experiments</h2>
+                    <h2 className="text-3xl font-light text-white mb-12">Latest Experiments & Prototypes</h2>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        {aiLabsImages.map((image, i) => (
+                        {aiPrototypes.map((prototype, i) => (
                             <div key={i} className="group cursor-pointer">
                                 <div className="aspect-square rounded-xl overflow-hidden bg-white/5 mb-4 border border-white/10">
                                     <img
-                                        src={image}
-                                        alt={`Experiment ${i + 1}`}
+                                        src={prototype.image}
+                                        alt={prototype.title}
                                         className="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all duration-500"
                                     />
                                 </div>
                                 <div className="flex justify-between items-baseline">
-                                    <span className="text-white text-lg font-light">Prototype 00{i + 1}</span>
-                                    <span className="text-brand-gold text-xs uppercase tracking-widest">R&D</span>
+                                    <span className="text-white text-lg font-light">{prototype.title}</span>
+                                    <span className="text-brand-gold text-xs uppercase tracking-widest">{prototype.status}</span>
                                 </div>
                             </div>
                         ))}
