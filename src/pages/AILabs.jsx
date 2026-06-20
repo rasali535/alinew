@@ -37,10 +37,9 @@ const AILabs = () => {
                             />
                         </div>
                         <div>
-                            <h3 className="text-2xl text-white font-light mb-4">Generative Visuals</h3>
+                            <h3 className="text-2xl text-white font-light mb-4">Supply Chain Sentinel AI</h3>
                             <p className="text-white/70 leading-relaxed">
-                                Exploring the boundaries of generative art using algorithms and neural networks.
-                                Creating unique, evolving visual landscapes that react to sound and data input.
+                                A comprehensive AI-driven executive dashboard and risk monitor. It features real-time supplier intelligence, automated risk monitoring, agent-driven workflow visualization, and an intelligent strategy center to orchestrate complex global supply chains.
                             </p>
                         </div>
                     </div>
@@ -53,10 +52,9 @@ const AILabs = () => {
                             />
                         </div>
                         <div>
-                            <h3 className="text-2xl text-white font-light mb-4">Audio Synthesis</h3>
+                            <h3 className="text-2xl text-white font-light mb-4">Intelligent Trade Infrastructure</h3>
                             <p className="text-white/70 leading-relaxed">
-                                Leveraging AI to design new sounds and textures. Experimenting with style transfer
-                                in audio and creating adaptive soundscapes for immersive environments.
+                                Bridging the gap between accessible USSD technology and modern web interfaces using Supabase, pgvector, and Google's Gemini API. This architecture deploys specialized AI agents for trade discovery, compliance, and logistics orchestration across Africa.
                             </p>
                         </div>
                     </div>
