@@ -237,12 +237,12 @@ export const faqs = [
 
 export const companyInfo = {
   name: 'Ras Ali',
-  tagline: 'Multi-Disciplinary Creative & Technologist',
+  tagline: 'Software Engineer, AI Integrator & Creative Technologist',
   location: 'Gaborone, Botswana',
   address: 'Plot 74212 G.North, Gaborone Botswana',
   phone: '+267 77 150 423',
-  description: "I am a multi-talented creative professional specializing in music, sound engineering, videography, and web development. I bring a unique blend of artistic and technical skills to every project.",
-  aiLabsDescription: 'Exploring the intersection of creativity and technology. Constantly learning and experimenting with new tools to enhance artistic expression.'
+  description: "I am the founder of Ras Ali Labs, a global software and innovation hub. While my roots are deeply planted in music, sound engineering, and creative media, my focus has evolved into architecting robust web applications, enterprise B2B platforms, and cutting-edge AI solutions.",
+  aiLabsDescription: 'Pioneering the intersection of artificial intelligence and enterprise software. At Ras Ali Labs, we build intelligent systems that drive global trade, education, and digital transformation.'
 };
 
 export const socialLinks = [
@@ -251,6 +251,6 @@ export const socialLinks = [
   { name: 'YouTube', url: 'https://youtube.com/@rasali2023?si=Q3W58-ZgWvFDrxN_', icon: 'Youtube' },
   { name: 'GitHub', url: 'https://github.com/rasali535', icon: 'Github' },
   { name: 'WhatsApp', url: 'https://wa.me/26777150423', icon: 'Phone' },
-  { name: 'Email', url: 'mailto:hello@themaplin.com', icon: 'Mail' }
+  { name: 'Email', url: 'mailto:ali@rasalilabs.com', icon: 'Mail' }
 ];
 

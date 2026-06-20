@@ -37,20 +37,19 @@ const About = () => {
                     </div>
 
                     <div className="space-y-12">
-                        <div>
                             <h2 className="text-3xl font-light text-white mb-6">Who I Am</h2>
                             <p className="text-white/70 text-lg leading-relaxed">
                                 {companyInfo.description}
                             </p>
                             <p className="text-white/70 text-lg leading-relaxed mt-6">
-                                Based in {companyInfo.location}, I bridge the gap between artistic expression and digital innovation. Whether laying down a bass groove, mixing a track, filming a documentary, or coding a React application, my goal is always the same: to create something that resonates.
+                                Based in {companyInfo.location}, I bridge the gap between creative expression and digital innovation. Whether I'm building an AI-powered course platform, architecting cross-border trade infrastructure, or producing multimedia content, my goal is always the same: to deliver impactful, scalable, and beautifully designed solutions.
                             </p>
                         </div>
 
                         <div>
                             <h2 className="text-3xl font-light text-white mb-6">My Approach</h2>
                             <p className="text-white/70 text-lg leading-relaxed">
-                                I believe in a holistic approach to creativity. Sound influences visuals, code enables interaction, and design ties it all together. By mastering multiple disciplines, I offer a unique perspective that allows for seamless integration of diverse media in any project.
+                                I believe in a holistic approach to software and creativity. Clean code enables powerful interactions, AI unlocks new capabilities, and intuitive design ties it all together. By mastering both the creative and technical disciplines, I offer a unique perspective that ensures digital products are not only highly functional, but truly resonate with users.
                             </p>
                         </div>
 
@@ -60,7 +59,7 @@ const About = () => {
                                 <span className="text-white/50 text-sm uppercase tracking-wider">Years Experience</span>
                             </div>
                             <div>
-                                <span className="block text-4xl text-brand-gold font-light mb-2">15+</span>
+                                <span className="block text-4xl text-brand-gold font-light mb-2">20+</span>
                                 <span className="text-white/50 text-sm uppercase tracking-wider">Projects Completed</span>
                             </div>
                         </div>
