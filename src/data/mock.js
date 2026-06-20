@@ -18,7 +18,7 @@ export const featuredProjects = [
     id: 4,
     title: 'Artist Portfolio',
     subtitle: 'Web Development',
-    image: '/assets/images/logo-full.png', // Using high-res logo
+    image: '/assets/images/logo.png', // Using high-res logo
     category: 'Web',
     roles: ['Full Stack Development', 'UI/UX Design', 'Brand Identity'],
     date: '2024 - Present',
@@ -130,6 +130,39 @@ export const featuredProjects = [
     roles: ['System Architecture', 'Supabase Edge Functions', 'AI Integration', 'pgvector Implementation'],
     date: '2024',
     description: "A comprehensive case study demonstrating a scalable architecture designed to synchronize USSD interactions with modern web platforms using an AI-driven interface. Built with Supabase, Gemini API, and pgvector."
+  },
+  {
+    id: 17,
+    title: 'Talent Centre',
+    subtitle: 'Management and Training Consultants',
+    image: 'https://images.unsplash.com/photo-1552664730-d307ca884978?q=80&w=2070&auto=format&fit=crop',
+    category: 'Web',
+    link: 'https://talentcentre.co.za/',
+    roles: ['Web Development', 'UI/UX Design', 'Business Consulting'],
+    date: '2024',
+    description: "Developed an online presence for Talent Centre, an ideal business consulting agency. The website showcases their services in Business Advisory, Management Consultancy, Training, and Empowerment Programs."
+  },
+  {
+    id: 18,
+    title: 'Pula Trade Africa',
+    subtitle: 'Powering Enterprise Trade Across Africa',
+    image: 'https://images.unsplash.com/photo-1586528116311-ad8ed7c508c0?q=80&w=2070&auto=format&fit=crop',
+    category: 'Platform',
+    link: 'https://grey-rabbit-363724.hostingersite.com/',
+    roles: ['Platform Development', 'AI Integration', 'B2B Infrastructure'],
+    date: '2024',
+    description: "A comprehensive cross-border B2B trade infrastructure platform connecting suppliers, buyers, and logistics providers across the SADC corridor. Features specialized AI agents for trade discovery, compliance, and logistics orchestration."
+  },
+  {
+    id: 19,
+    title: 'LearnFlow',
+    subtitle: 'AI-Powered Course Platform',
+    image: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=2070&auto=format&fit=crop',
+    category: 'Platform',
+    link: 'https://pohei.de/',
+    roles: ['Platform Development', 'AI Integration', 'EdTech'],
+    date: '2024',
+    description: "LearnFlow is an AI-powered course platform designed to help educators build school-ready materials, automate tasks, and create personalized learning experiences in minutes."
   }
 ];
 
