@@ -37,6 +37,7 @@ const About = () => {
                     </div>
 
                     <div className="space-y-12">
+                        <div>
                             <h2 className="text-3xl font-light text-white mb-6">Who I Am</h2>
                             <p className="text-white/70 text-lg leading-relaxed">
                                 {companyInfo.description}
