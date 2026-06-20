@@ -30,7 +30,7 @@ const HeroSection = () => {
       {/* Background Moving Graphics */}
       <div className="absolute inset-0 pointer-events-none">
         <div
-          className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-brand-green/10 rounded-full blur-[120px] transition-transform duration-100 ease-out"
+          className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-brand-gold/10 rounded-full blur-[120px] transition-transform duration-100 ease-out"
           style={{
             transform: `translate(${mousePos.x * -20}px, ${mousePos.y * 20}px)`
           }}
@@ -99,7 +99,7 @@ const HeroSection = () => {
             </p>
             <Link
               to="/about"
-              className="inline-flex items-center gap-2 text-white mt-4 text-sm hover:text-brand-green transition-colors duration-300 group"
+              className="inline-flex items-center gap-2 text-white mt-4 text-sm hover:text-brand-gold transition-colors duration-300 group"
             >
               About ME
               <span className="transform group-hover:translate-x-1 transition-transform duration-300">→</span>

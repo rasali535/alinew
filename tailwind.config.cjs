@@ -55,8 +55,10 @@ module.exports = {
 				},
 				brand: {
 					blue: '#1C2E4A',
-					green: '#74C138', // Matches the leaf/Ali green
-					silver: '#E1E1E1', // Matches the C chrome
+					gold: '#D4AF37',  // Matches the logo metallic gold
+					red: '#8B1C24',   // Matches the logo deep red
+					green: '#138241', // Matches the logo dark green
+					silver: '#E1E1E1',
 					dark: '#1C1C1C'   // Matches the logo background
 				}
 			},

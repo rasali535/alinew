@@ -28,14 +28,14 @@ const USSDCaseStudy = () => {
             />
 
             {/* Background Accents */}
-            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-brand-green/10 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/2 -z-10" />
+            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-brand-gold/10 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/2 -z-10" />
             <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-blue-500/10 blur-[120px] rounded-full translate-y-1/2 -translate-x-1/2 -z-10" />
 
             <div className="max-w-6xl mx-auto px-6 lg:px-12">
                 {/* Navigation */}
                 <Link
                     to="/work"
-                    className="inline-flex items-center gap-2 text-white/50 hover:text-brand-green mb-12 transition-all duration-300 group"
+                    className="inline-flex items-center gap-2 text-white/50 hover:text-brand-gold mb-12 transition-all duration-300 group"
                 >
                     <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
                     <span className="text-sm uppercase tracking-widest font-medium">Back to Work</span>
@@ -44,12 +44,12 @@ const USSDCaseStudy = () => {
                 {/* Hero Header */}
                 <header className="mb-20">
                     <div className="flex flex-col gap-4 mb-8">
-                        <span className="text-brand-green font-medium tracking-[0.2em] uppercase text-sm animate-in fade-in slide-in-from-bottom-4 duration-700">
+                        <span className="text-brand-gold font-medium tracking-[0.2em] uppercase text-sm animate-in fade-in slide-in-from-bottom-4 duration-700">
                             Technical Case Study
                         </span>
                         <h1 className="text-white text-5xl md:text-7xl lg:text-8xl font-light tracking-tight leading-[0.95] animate-in fade-in slide-in-from-bottom-8 duration-1000">
                             Bridging the <br />
-                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-green to-blue-400 font-normal">
+                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-gold to-blue-400 font-normal">
                                 USSD-Web Gap
                             </span>
                         </h1>
@@ -65,7 +65,7 @@ const USSDCaseStudy = () => {
                 </header>
 
                 {/* Featured Image Section */}
-                <div className="relative aspect-[21/9] w-full rounded-3xl overflow-hidden bg-white/5 mb-32 border border-white/10 group animate-in shadow-2xl shadow-brand-green/5">
+                <div className="relative aspect-[21/9] w-full rounded-3xl overflow-hidden bg-white/5 mb-32 border border-white/10 group animate-in shadow-2xl shadow-brand-gold/5">
                     <img
                         src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop"
                         alt="USSD-Web Gap Visualization"
@@ -85,7 +85,7 @@ const USSDCaseStudy = () => {
                         {/* Overview */}
                         <section id="overview">
                             <h2 className="text-3xl text-white font-light mb-8 flex items-center gap-3">
-                                <span className="w-10 h-[1px] bg-brand-green" />
+                                <span className="w-10 h-[1px] bg-brand-gold" />
                                 Project Overview
                             </h2>
                             <p className="text-white/70 text-xl leading-relaxed font-light">
@@ -136,14 +136,14 @@ const USSDCaseStudy = () => {
                         {/* The Solution */}
                         <section id="solution">
                             <div className="flex items-center gap-4 mb-8">
-                                <div className="w-12 h-[1px] bg-brand-green" />
+                                <div className="w-12 h-[1px] bg-brand-gold" />
                                 <h2 className="text-3xl text-white font-light uppercase tracking-widest text-sm">The Solution</h2>
                             </div>
                             <h3 className="text-4xl md:text-5xl text-white font-light mb-10 leading-tight">
-                                "The <span className="text-brand-green italic">Intelligent Edge</span>"
+                                "The <span className="text-brand-gold italic">Intelligent Edge</span>"
                             </h3>
                             <p className="text-white/70 text-xl leading-relaxed font-light mb-12">
-                                I developed a prototype that utilizes <span className="text-white font-normal underline decoration-brand-green/30 decoration-2 underline-offset-4">Supabase</span> as the central nervous system to unify user identity and intent across all touchpoints.
+                                I developed a prototype that utilizes <span className="text-white font-normal underline decoration-brand-gold/30 decoration-2 underline-offset-4">Supabase</span> as the central nervous system to unify user identity and intent across all touchpoints.
                             </p>
 
                             {/* Tech Stack Grid */}
@@ -155,7 +155,7 @@ const USSDCaseStudy = () => {
                                     { title: 'Supabase Realtime', desc: 'Instant state synchronization between USSD and Web dashboards.', icon: <Zap /> },
                                 ].map((item, i) => (
                                     <div key={i} className="p-8 rounded-2xl bg-white/5 border border-white/5 hover:border-white/10 transition-all duration-300">
-                                        <div className="text-brand-green mb-6">{item.icon}</div>
+                                        <div className="text-brand-gold mb-6">{item.icon}</div>
                                         <h4 className="text-white font-medium mb-3">{item.title}</h4>
                                         <p className="text-white/50 text-sm font-light leading-relaxed">{item.desc}</p>
                                     </div>
@@ -165,11 +165,11 @@ const USSDCaseStudy = () => {
 
                         {/* Architecture Pipeline */}
                         <section id="architecture" className="relative group">
-                            <div className="absolute inset-0 bg-brand-green/5 blur-[100px] rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+                            <div className="absolute inset-0 bg-brand-gold/5 blur-[100px] rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
 
                             <h2 className="text-3xl text-white font-light mb-12">Architecture Highlight</h2>
                             <div className="bg-gradient-to-br from-white/[0.08] to-transparent border border-white/10 rounded-3xl p-10 lg:p-14 relative z-10">
-                                <h3 className="text-2xl text-brand-green font-medium mb-8">The USSD-to-Vector Pipeline</h3>
+                                <h3 className="text-2xl text-brand-gold font-medium mb-8">The USSD-to-Vector Pipeline</h3>
                                 <p className="text-white/70 mb-12 font-light italic">
                                     When a user queries the bot about a USSD service (e.g., "How do I register for Vuka?"), the system executes:
                                 </p>
@@ -182,7 +182,7 @@ const USSDCaseStudy = () => {
                                     ].map((step, i) => (
                                         <div key={i} className="flex gap-8 group/step">
                                             <div className="flex flex-col items-center">
-                                                <div className="w-10 h-10 rounded-full border border-brand-green/50 flex items-center justify-center text-brand-green font-medium bg-brand-dark group-hover/step:bg-brand-green group-hover/step:text-black transition-all duration-500">
+                                                <div className="w-10 h-10 rounded-full border border-brand-gold/50 flex items-center justify-center text-brand-gold font-medium bg-brand-dark group-hover/step:bg-brand-gold group-hover/step:text-black transition-all duration-500">
                                                     {i + 1}
                                                 </div>
                                                 {i < 2 && <div className="w-[1px] h-full bg-white/10 mt-4" />}
@@ -204,12 +204,12 @@ const USSDCaseStudy = () => {
                             {/* Key Features */}
                             <div className="p-8 rounded-3xl border border-white/10 bg-white/5 backdrop-blur-md">
                                 <h4 className="text-white font-medium mb-8 flex items-center gap-2">
-                                    <Zap size={18} className="text-brand-green" />
+                                    <Zap size={18} className="text-brand-gold" />
                                     Key Technical Features
                                 </h4>
                                 <ul className="space-y-8">
                                     <li className="space-y-2">
-                                        <div className="flex items-center gap-3 text-brand-green">
+                                        <div className="flex items-center gap-3 text-brand-gold">
                                             <ShieldCheck size={18} />
                                             <span className="text-white text-sm font-medium">Row Level Security (RLS)</span>
                                         </div>
@@ -218,7 +218,7 @@ const USSDCaseStudy = () => {
                                         </p>
                                     </li>
                                     <li className="space-y-2">
-                                        <div className="flex items-center gap-3 text-brand-green">
+                                        <div className="flex items-center gap-3 text-brand-gold">
                                             <Globe size={18} />
                                             <span className="text-white text-sm font-medium">Edge Functions</span>
                                         </div>
@@ -227,7 +227,7 @@ const USSDCaseStudy = () => {
                                         </p>
                                     </li>
                                     <li className="space-y-2">
-                                        <div className="flex items-center gap-3 text-brand-green">
+                                        <div className="flex items-center gap-3 text-brand-gold">
                                             <Smartphone size={18} />
                                             <span className="text-white text-sm font-medium">State Persistence</span>
                                         </div>
@@ -252,7 +252,7 @@ const USSDCaseStudy = () => {
 
                             {/* Share/Actions */}
                             <div className="pt-8 flex flex-col gap-4">
-                                <button className="w-full bg-brand-green text-black font-semibold py-4 rounded-2xl flex items-center justify-center gap-2 hover:bg-white transition-all duration-500 hover:shadow-[0_0_20px_rgba(163,230,53,0.3)] group">
+                                <button className="w-full bg-brand-gold text-black font-semibold py-4 rounded-2xl flex items-center justify-center gap-2 hover:bg-white transition-all duration-500 hover:shadow-[0_0_20px_rgba(163,230,53,0.3)] group">
                                     Share Case Study
                                     <Share2 size={18} className="group-hover:rotate-12 transition-transform" />
                                 </button>
@@ -270,7 +270,7 @@ const USSDCaseStudy = () => {
                     <p className="text-white/30 font-light mb-10">Next Case Study</p>
                     <Link
                         to="/work/10"
-                        className="text-4xl md:text-6xl text-white font-light hover:text-brand-green transition-colors duration-500"
+                        className="text-4xl md:text-6xl text-white font-light hover:text-brand-gold transition-colors duration-500"
                     >
                         Pameltex Corporate →
                     </Link>

@@ -82,12 +82,12 @@ const Booking = () => {
 
                 <div className="bg-white/5 border border-white/10 rounded-2xl p-8 md:p-12 relative overflow-hidden">
                     {/* Decorative Elements */}
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-brand-green/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-brand-gold/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
 
                     {status === 'success' ? (
                         <div className="flex flex-col items-center justify-center py-12 text-center animate-in fade-in zoom-in duration-500">
-                            <div className="w-20 h-20 bg-brand-green/10 rounded-full flex items-center justify-center mb-6">
-                                <CheckCircle className="w-10 h-10 text-brand-green" />
+                            <div className="w-20 h-20 bg-brand-gold/10 rounded-full flex items-center justify-center mb-6">
+                                <CheckCircle className="w-10 h-10 text-brand-gold" />
                             </div>
                             <h3 className="text-2xl text-white font-medium mb-4">Request Sent Successfully!</h3>
                             <p className="text-white/60 max-w-md">
@@ -95,7 +95,7 @@ const Booking = () => {
                             </p>
                             <button
                                 onClick={() => setStatus('idle')}
-                                className="mt-8 text-brand-green hover:text-white transition-colors"
+                                className="mt-8 text-brand-gold hover:text-white transition-colors"
                             >
                                 Send another request
                             </button>
@@ -112,7 +112,7 @@ const Booking = () => {
                                         onChange={handleChange}
                                         required
                                         disabled={status === 'loading'}
-                                        className="w-full bg-brand-dark/50 border border-white/20 rounded-lg px-4 py-3 text-white placeholder:text-white/20 focus:border-brand-green focus:outline-none transition-colors disabled:opacity-50"
+                                        className="w-full bg-brand-dark/50 border border-white/20 rounded-lg px-4 py-3 text-white placeholder:text-white/20 focus:border-brand-gold focus:outline-none transition-colors disabled:opacity-50"
                                         placeholder="Your Name"
                                     />
                                 </div>
@@ -125,7 +125,7 @@ const Booking = () => {
                                         onChange={handleChange}
                                         required
                                         disabled={status === 'loading'}
-                                        className="w-full bg-brand-dark/50 border border-white/20 rounded-lg px-4 py-3 text-white placeholder:text-white/20 focus:border-brand-green focus:outline-none transition-colors disabled:opacity-50"
+                                        className="w-full bg-brand-dark/50 border border-white/20 rounded-lg px-4 py-3 text-white placeholder:text-white/20 focus:border-brand-gold focus:outline-none transition-colors disabled:opacity-50"
                                         placeholder="your@email.com"
                                     />
                                 </div>
@@ -139,7 +139,7 @@ const Booking = () => {
                                     onChange={handleChange}
                                     required
                                     disabled={status === 'loading'}
-                                    className="w-full bg-brand-dark/50 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-brand-green focus:outline-none transition-colors disabled:opacity-50"
+                                    className="w-full bg-brand-dark/50 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-brand-gold focus:outline-none transition-colors disabled:opacity-50"
                                 >
                                     <option value="" disabled>Select a service</option>
                                     {services.map((s) => (
@@ -158,7 +158,7 @@ const Booking = () => {
                                     required
                                     rows="5"
                                     disabled={status === 'loading'}
-                                    className="w-full bg-brand-dark/50 border border-white/20 rounded-lg px-4 py-3 text-white placeholder:text-white/20 focus:border-brand-green focus:outline-none transition-colors disabled:opacity-50"
+                                    className="w-full bg-brand-dark/50 border border-white/20 rounded-lg px-4 py-3 text-white placeholder:text-white/20 focus:border-brand-gold focus:outline-none transition-colors disabled:opacity-50"
                                     placeholder="Tell me about your project..."
                                 ></textarea>
                             </div>
@@ -176,7 +176,7 @@ const Booking = () => {
                             <button
                                 type="submit"
                                 disabled={status === 'loading'}
-                                className="w-full bg-brand-green text-black font-medium py-4 rounded-full text-lg hover:bg-white transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                className="w-full bg-brand-gold text-black font-medium py-4 rounded-full text-lg hover:bg-white transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                             >
                                 {status === 'loading' ? (
                                     <>

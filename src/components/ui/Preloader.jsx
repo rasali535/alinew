@@ -33,20 +33,20 @@ const Preloader = () => {
                 <div className="relative w-24 h-24 mb-8">
                     <div className="absolute inset-0 border border-white/20 rounded-full animate-ping opacity-20" style={{ animationDuration: '2s' }}></div>
                     <div className="absolute inset-2 border border-white/40 rounded-full animate-ping opacity-20" style={{ animationDuration: '2s', animationDelay: '0.3s' }}></div>
-                    <div className="absolute inset-4 border border-brand-green/60 rounded-full animate-pulse"></div>
+                    <div className="absolute inset-4 border border-brand-gold/60 rounded-full animate-pulse"></div>
                 </div>
 
                 {/* Logo/Name Reveal */}
                 <div className="overflow-hidden mb-8">
                     <div className="flex flex-col items-center">
                         <span className="text-white text-2xl font-light tracking-[0.3em] mb-2">RAS ALI</span>
-                        <div className="w-12 h-[1px] bg-brand-green"></div>
+                        <div className="w-12 h-[1px] bg-brand-gold"></div>
                     </div>
                 </div>
 
                 {/* Tagline Reveal with Zoom In/Out effect */}
                 <div className="overflow-hidden mt-4">
-                    <p className="text-brand-green/90 text-sm md:text-base font-medium tracking-[0.4em] uppercase opacity-0"
+                    <p className="text-brand-gold/90 text-sm md:text-base font-medium tracking-[0.4em] uppercase opacity-0"
                         style={{ animation: 'zoomInOut 3s ease-in-out forwards', animationDelay: '0.5s' }}
                     >
                         THE FUTURE IS HARMONY AND LOGIC

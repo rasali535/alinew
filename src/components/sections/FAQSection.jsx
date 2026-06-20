@@ -8,14 +8,14 @@ const FAQItem = ({ faq, isOpen, onToggle }) => (
     onClick={onToggle}
   >
     <div className="flex items-center justify-between">
-      <h3 className="text-white text-lg md:text-xl font-light group-hover:text-brand-green transition-colors duration-300 pr-4">
+      <h3 className="text-white text-lg md:text-xl font-light group-hover:text-brand-gold transition-colors duration-300 pr-4">
         {faq.question}
       </h3>
       <div className="flex-shrink-0">
         {isOpen ? (
-          <Minus className="w-5 h-5 text-brand-green" />
+          <Minus className="w-5 h-5 text-brand-gold" />
         ) : (
-          <Plus className="w-5 h-5 text-white/50 group-hover:text-brand-green transition-colors duration-300" />
+          <Plus className="w-5 h-5 text-white/50 group-hover:text-brand-gold transition-colors duration-300" />
         )}
       </div>
     </div>

@@ -48,8 +48,8 @@ const ServiceCard = ({ service, index }) => {
 
                 {/* Top Section: Icon & Index */}
                 <div className="flex items-start justify-between">
-                    <div className="rounded-full bg-white/10 p-4 backdrop-blur-md transition-all duration-300 group-hover:bg-brand-green/20 group-hover:text-brand-green">
-                        <Icon size={32} className="text-white transition-colors duration-300 group-hover:text-brand-green" />
+                    <div className="rounded-full bg-white/10 p-4 backdrop-blur-md transition-all duration-300 group-hover:bg-brand-gold/20 group-hover:text-brand-gold">
+                        <Icon size={32} className="text-white transition-colors duration-300 group-hover:text-brand-gold" />
                     </div>
                     <span className="text-xl font-light text-white/30 font-mono">
                         0{index + 1}
@@ -69,7 +69,7 @@ const ServiceCard = ({ service, index }) => {
                                 key={idx}
                                 className="flex items-center gap-2 text-sm text-white/60 transition-all duration-300 hover:text-white"
                             >
-                                <span className="h-1 w-1 rounded-full bg-brand-green" />
+                                <span className="h-1 w-1 rounded-full bg-brand-gold" />
                                 {item}
                             </div>
                         ))}
@@ -77,7 +77,7 @@ const ServiceCard = ({ service, index }) => {
 
                     <Link
                         to={`/booking/${service.id}`}
-                        className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-6 py-3 text-sm text-white backdrop-blur-sm transition-all duration-300 hover:border-brand-green hover:bg-brand-green hover:text-black"
+                        className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-6 py-3 text-sm text-white backdrop-blur-sm transition-all duration-300 hover:border-brand-gold hover:bg-brand-gold hover:text-black"
                     >
                         Start Project
                         <ArrowUpRight size={16} />
@@ -95,8 +95,8 @@ const ServicesPageGrid = () => {
                 {/* Introduction */}
                 <div className="mb-16 max-w-2xl">
                     <div className="flex items-center gap-2 mb-4">
-                        <div className="h-[1px] w-8 bg-brand-green"></div>
-                        <span className="text-brand-green text-sm uppercase tracking-widest">My Expertise</span>
+                        <div className="h-[1px] w-8 bg-brand-gold"></div>
+                        <span className="text-brand-gold text-sm uppercase tracking-widest">My Expertise</span>
                     </div>
                     <h2 className="text-5xl md:text-6xl lg:text-7xl font-light text-white tracking-tight leading-none mb-6">
                         Crafting Digital <br /> <span className="italic text-white/50">Masterpieces</span>

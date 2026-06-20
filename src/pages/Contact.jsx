@@ -55,7 +55,7 @@ const Contact = () => {
                 <div className="space-y-12">
                     <div>
                         <h1 className="text-white text-5xl md:text-7xl font-light tracking-tight mb-6">
-                            LET'S <span className="text-brand-green">TALK</span>
+                            LET'S <span className="text-brand-gold">TALK</span>
                         </h1>
                         <p className="text-white/60 text-lg max-w-lg leading-relaxed">
                             Have a project in mind or just want to say hello?
@@ -65,8 +65,8 @@ const Contact = () => {
 
                     <div className="space-y-8">
                         <div className="flex items-start gap-6 group">
-                            <div className="p-4 rounded-full bg-white/5 border border-white/10 group-hover:border-brand-green/50 transition-colors">
-                                <Mail className="w-6 h-6 text-brand-green" />
+                            <div className="p-4 rounded-full bg-white/5 border border-white/10 group-hover:border-brand-gold/50 transition-colors">
+                                <Mail className="w-6 h-6 text-brand-gold" />
                             </div>
                             <div>
                                 <h3 className="text-white text-lg font-medium mb-1">Email</h3>
@@ -77,8 +77,8 @@ const Contact = () => {
                         </div>
 
                         <div className="flex items-start gap-6 group">
-                            <div className="p-4 rounded-full bg-white/5 border border-white/10 group-hover:border-brand-green/50 transition-colors">
-                                <Phone className="w-6 h-6 text-brand-green" />
+                            <div className="p-4 rounded-full bg-white/5 border border-white/10 group-hover:border-brand-gold/50 transition-colors">
+                                <Phone className="w-6 h-6 text-brand-gold" />
                             </div>
                             <div>
                                 <h3 className="text-white text-lg font-medium mb-1">Phone</h3>
@@ -89,8 +89,8 @@ const Contact = () => {
                         </div>
 
                         <div className="flex items-start gap-6 group">
-                            <div className="p-4 rounded-full bg-white/5 border border-white/10 group-hover:border-brand-green/50 transition-colors">
-                                <MapPin className="w-6 h-6 text-brand-green" />
+                            <div className="p-4 rounded-full bg-white/5 border border-white/10 group-hover:border-brand-gold/50 transition-colors">
+                                <MapPin className="w-6 h-6 text-brand-gold" />
                             </div>
                             <div>
                                 <h3 className="text-white text-lg font-medium mb-1">Location</h3>
@@ -106,23 +106,23 @@ const Contact = () => {
                 {/* Contact Form Side */}
                 <div className="bg-white/5 border border-white/10 rounded-3xl p-8 md:p-12 relative overflow-hidden backdrop-blur-sm">
                     {/* Decorative gradient blob */}
-                    <div className="absolute -top-24 -right-24 w-64 h-64 bg-brand-green/20 rounded-full blur-3xl pointer-events-none"></div>
+                    <div className="absolute -top-24 -right-24 w-64 h-64 bg-brand-gold/20 rounded-full blur-3xl pointer-events-none"></div>
 
                     {status === 'success' ? (
                         <div className="flex flex-col items-center justify-center py-12 text-center animate-in fade-in zoom-in duration-500">
-                            <div className="w-20 h-20 bg-brand-green/10 rounded-full flex items-center justify-center mb-6">
-                                <Send className="w-10 h-10 text-brand-green" />
+                            <div className="w-20 h-20 bg-brand-gold/10 rounded-full flex items-center justify-center mb-6">
+                                <Send className="w-10 h-10 text-brand-gold" />
                             </div>
                             <h3 className="text-2xl text-white font-medium mb-4">Message Sent!</h3>
                             <p className="text-white/60 max-w-md">
                                 Thank you for reaching out. I've received your message and will get back to you as soon as possible.
                             </p>
-                            <p className="mt-4 text-brand-green font-medium tracking-wide">
+                            <p className="mt-4 text-brand-gold font-medium tracking-wide">
                                 THE FUTURE IS HARMONY AND LOGIC
                             </p>
                             <button
                                 onClick={() => setStatus('idle')}
-                                className="mt-8 text-brand-green hover:text-white transition-colors"
+                                className="mt-8 text-brand-gold hover:text-white transition-colors"
                             >
                                 Send another message
                             </button>
@@ -137,7 +137,7 @@ const Contact = () => {
                                     value={formData.name}
                                     onChange={handleChange}
                                     required
-                                    className="w-full bg-brand-dark/50 border border-white/20 rounded-xl px-4 py-4 text-white placeholder:text-white/20 focus:border-brand-green focus:ring-1 focus:ring-brand-green focus:outline-none transition-all"
+                                    className="w-full bg-brand-dark/50 border border-white/20 rounded-xl px-4 py-4 text-white placeholder:text-white/20 focus:border-brand-gold focus:ring-1 focus:ring-brand-gold focus:outline-none transition-all"
                                     placeholder="John Doe"
                                 />
                             </div>
@@ -150,7 +150,7 @@ const Contact = () => {
                                     value={formData.email}
                                     onChange={handleChange}
                                     required
-                                    className="w-full bg-brand-dark/50 border border-white/20 rounded-xl px-4 py-4 text-white placeholder:text-white/20 focus:border-brand-green focus:ring-1 focus:ring-brand-green focus:outline-none transition-all"
+                                    className="w-full bg-brand-dark/50 border border-white/20 rounded-xl px-4 py-4 text-white placeholder:text-white/20 focus:border-brand-gold focus:ring-1 focus:ring-brand-gold focus:outline-none transition-all"
                                     placeholder="john@example.com"
                                 />
                             </div>
@@ -163,7 +163,7 @@ const Contact = () => {
                                     value={formData.subject}
                                     onChange={handleChange}
                                     required
-                                    className="w-full bg-brand-dark/50 border border-white/20 rounded-xl px-4 py-4 text-white placeholder:text-white/20 focus:border-brand-green focus:ring-1 focus:ring-brand-green focus:outline-none transition-all"
+                                    className="w-full bg-brand-dark/50 border border-white/20 rounded-xl px-4 py-4 text-white placeholder:text-white/20 focus:border-brand-gold focus:ring-1 focus:ring-brand-gold focus:outline-none transition-all"
                                     placeholder="Project Inquiry"
                                 />
                             </div>
@@ -176,7 +176,7 @@ const Contact = () => {
                                     onChange={handleChange}
                                     required
                                     rows="4"
-                                    className="w-full bg-brand-dark/50 border border-white/20 rounded-xl px-4 py-4 text-white placeholder:text-white/20 focus:border-brand-green focus:ring-1 focus:ring-brand-green focus:outline-none transition-all resize-none"
+                                    className="w-full bg-brand-dark/50 border border-white/20 rounded-xl px-4 py-4 text-white placeholder:text-white/20 focus:border-brand-gold focus:ring-1 focus:ring-brand-gold focus:outline-none transition-all resize-none"
                                     placeholder="Tell me more about your project..."
                                 ></textarea>
                             </div>
@@ -184,7 +184,7 @@ const Contact = () => {
                             <button
                                 type="submit"
                                 disabled={status === 'loading'}
-                                className={`w-full group relative flex items-center justify-center gap-3 py-4 rounded-xl text-lg font-medium transition-all duration-300 bg-white text-black hover:bg-brand-green hover:text-white`}
+                                className={`w-full group relative flex items-center justify-center gap-3 py-4 rounded-xl text-lg font-medium transition-all duration-300 bg-white text-black hover:bg-brand-gold hover:text-white`}
                             >
                                 {status === 'loading' ? (
                                     <>

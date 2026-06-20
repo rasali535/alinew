@@ -150,7 +150,7 @@ export const featuredProjects = [
     category: 'Platform',
     link: 'https://grey-rabbit-363724.hostingersite.com/',
     roles: ['Platform Development', 'AI Integration', 'B2B Infrastructure'],
-    date: '2024',
+    date: '2026',
     description: "A comprehensive cross-border B2B trade infrastructure platform connecting suppliers, buyers, and logistics providers across the SADC corridor. Features specialized AI agents for trade discovery, compliance, and logistics orchestration."
   },
   {
@@ -161,7 +161,7 @@ export const featuredProjects = [
     category: 'Platform',
     link: 'https://pohei.de/',
     roles: ['Platform Development', 'AI Integration', 'EdTech'],
-    date: '2024',
+    date: '2025',
     description: "LearnFlow is an AI-powered course platform designed to help educators build school-ready materials, automate tasks, and create personalized learning experiences in minutes."
   }
 ];

@@ -55,13 +55,13 @@ const Footer = () => {
             <div className="flex flex-col gap-2">
               <a
                 href="mailto:hello@themaplin.com"
-                className="text-white/70 hover:text-brand-green text-sm transition-colors duration-300"
+                className="text-white/70 hover:text-brand-gold text-sm transition-colors duration-300"
               >
                 hello@themaplin.com
               </a>
               <a
                 href="tel:+26777150423"
-                className="text-white/70 hover:text-brand-green text-sm transition-colors duration-300"
+                className="text-white/70 hover:text-brand-gold text-sm transition-colors duration-300"
               >
                 +267 77 150 423
               </a>
@@ -79,7 +79,7 @@ const Footer = () => {
                     href={social.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-white/40 hover:text-brand-green transition-colors duration-300 transform hover:scale-110"
+                    className="text-white/40 hover:text-brand-gold transition-colors duration-300 transform hover:scale-110"
                     aria-label={social.name}
                   >
                     <Icon size={20} />

@@ -56,11 +56,11 @@ const About = () => {
 
                         <div className="grid grid-cols-2 gap-8 pt-8 border-t border-white/10">
                             <div>
-                                <span className="block text-4xl text-brand-green font-light mb-2">10+</span>
+                                <span className="block text-4xl text-brand-gold font-light mb-2">10+</span>
                                 <span className="text-white/50 text-sm uppercase tracking-wider">Years Experience</span>
                             </div>
                             <div>
-                                <span className="block text-4xl text-brand-green font-light mb-2">15+</span>
+                                <span className="block text-4xl text-brand-gold font-light mb-2">15+</span>
                                 <span className="text-white/50 text-sm uppercase tracking-wider">Projects Completed</span>
                             </div>
                         </div>
