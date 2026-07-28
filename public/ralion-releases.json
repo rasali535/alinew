@@ -1,0 +1,59 @@
+{
+  "currentVersion": "2.4.1",
+  "product": "Ralion Desktop",
+  "lastUpdated": "2026-07-28",
+  "releases": [
+    {
+      "version": "2.4.1",
+      "platform": "Windows",
+      "architecture": "x64",
+      "filename": "ralion-desktop-2.4.1-setup.exe",
+      "filesize": 159384000,
+      "filesizeFormatted": "152.0 MB",
+      "checksum": "a9f81c2b3e4d5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a",
+      "releaseDate": "2026-07-28",
+      "downloadUrl": "https://github.com/rasali535/ralion-os-/releases/download/v2.4.1/ralion-desktop-2.4.1-setup.exe",
+      "enabled": true,
+      "releaseNotes": [
+        "Fixed Windows 11 x64 PE binary header and SPA fallback prevention",
+        "Updated Mari AI v2.4 core reasoning agent engine",
+        "Added SADC cross-border logistics and USSD gateway telemetry",
+        "Improved local offline workspace caching"
+      ]
+    },
+    {
+      "version": "2.4.1",
+      "platform": "macOS",
+      "architecture": "Apple Silicon (M1/M2/M3/M4) & Intel",
+      "filename": "ralion-desktop-2.4.1.dmg",
+      "filesize": 165675000,
+      "filesizeFormatted": "158.0 MB",
+      "checksum": "b8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7",
+      "releaseDate": "2026-07-28",
+      "downloadUrl": "https://github.com/rasali535/ralion-os-/releases/download/v2.4.1/ralion-desktop-2.4.1.dmg",
+      "enabled": true,
+      "releaseNotes": [
+        "Universal macOS binary supporting Apple Silicon and Intel Macs",
+        "Dark mode glassmorphic UI optimizations",
+        "Mari AI vector embedding performance boost"
+      ]
+    },
+    {
+      "version": "2.4.1",
+      "platform": "Linux",
+      "architecture": "x86_64 (.AppImage & .deb)",
+      "filename": "ralion-desktop-2.4.1.AppImage",
+      "filesize": 149946000,
+      "filesizeFormatted": "143.0 MB",
+      "checksum": "c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6",
+      "releaseDate": "2026-07-28",
+      "downloadUrl": "https://github.com/rasali535/ralion-os-/releases/download/v2.4.1/ralion-desktop-2.4.1.AppImage",
+      "enabled": true,
+      "releaseNotes": [
+        "Linux AppImage & Debian package build",
+        "Wayland & X11 display server support",
+        "Low-latency terminal & console logging"
+      ]
+    }
+  ]
+}

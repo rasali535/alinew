@@ -1,5 +1,6 @@
 // Lightweight, Privacy-Focused Analytics Tracker for Ras Ali Labs Ecosystem
-// Tracks product visits, signups, Ralion launches, downloads, conversions, and product_events.
+// Tracks product visits, signups, Ralion launches, downloads (download_events), conversions, and product_events.
+import { supabase } from './supabase';
 
 class AnalyticsTracker {
   constructor() {
@@ -7,7 +8,7 @@ class AnalyticsTracker {
     this.debug = false;
   }
 
-  logEvent(eventName, eventData = {}) {
+  async logEvent(eventName, eventData = {}) {
     const payload = {
       event: eventName,
       data: eventData,
@@ -42,17 +43,33 @@ class AnalyticsTracker {
     this.logEvent('ralion_launch', { subRoute });
   }
 
-  trackDownload(platform, assetName) {
-    this.logEvent('download', { platform, asset: assetName });
+  // Track Download Events & log to Supabase download_events table
+  async trackDownload(platform, version = '2.4.1', product = 'Ralion Desktop') {
+    this.logEvent('download', { platform, version, product });
+
+    try {
+      // Log to Supabase download_events table
+      const { error } = await supabase.from('download_events').insert([
+        {
+          product,
+          version,
+          platform,
+          created_at: new Date().toISOString()
+        }
+      ]);
+      if (error) {
+        console.warn('download_events insert note (fallback active):', error.message);
+      }
+    } catch (err) {
+      console.warn('Analytics DB log note:', err.message);
+    }
   }
 
   trackConversion(type, metadata = {}) {
     this.logEvent('conversion', { type, ...metadata });
   }
 
-  // Product Events Tracking
   trackProductEvent(eventType, metadata = {}) {
-    // Examples: user_created_customer, user_created_project, user_used_mari_ai, user_invited_team, user_upgraded_plan
     this.logEvent('product_event', { eventType, ...metadata });
   }
 }

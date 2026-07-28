@@ -19,6 +19,8 @@ import Changelog from './pages/Changelog';
 import BetaProgram from './pages/BetaProgram';
 import Solutions from './pages/Solutions';
 import Downloads from './pages/Downloads';
+import Releases from './pages/Releases';
+import AdminReleases from './pages/AdminReleases';
 import DeveloperPortal from './pages/DeveloperPortal';
 import About from './pages/About';
 import Services from './pages/Services';
@@ -77,9 +79,13 @@ function App() {
                 <Route path="/changelog" element={<Changelog />} />
                 <Route path="/beta" element={<BetaProgram />} />
 
+                {/* Versioned Downloads & Release Management */}
+                <Route path="/downloads" element={<Downloads />} />
+                <Route path="/downloads/releases" element={<Releases />} />
+                <Route path="/admin/releases" element={<AdminReleases />} />
+
                 {/* Ecosystem Links */}
                 <Route path="/solutions" element={<Solutions />} />
-                <Route path="/downloads" element={<Downloads />} />
                 <Route path="/developers" element={<DeveloperPortal />} />
                 <Route path="/developer" element={<DeveloperPortal />} />
 
