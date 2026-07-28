@@ -165,6 +165,28 @@ export const featuredProjects = [
     roles: ['Platform Development', 'AI Integration', 'EdTech'],
     date: '2025',
     description: "LearnFlow is an AI-powered course platform designed to help educators build school-ready materials, automate tasks, and create personalized learning experiences in minutes."
+  },
+  {
+    id: 20,
+    title: 'Pameltech Labs',
+    subtitle: 'Technology & Innovation Lab',
+    image: 'https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=2070&auto=format&fit=crop',
+    category: 'Platform',
+    link: 'https://pameltechlabs.com',
+    roles: ['Software Architecture', 'Full Stack Development', 'AI Research & R&D'],
+    date: '2026',
+    description: "Architected and developed Pameltech Labs, a modern tech innovation platform specializing in high-performance enterprise systems, hardware-software integration, and AI-driven automation."
+  },
+  {
+    id: 21,
+    title: 'Academy Foundations',
+    subtitle: 'Educational Infrastructure & Foundation Platform',
+    image: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=2070&auto=format&fit=crop',
+    category: 'Web',
+    link: 'https://academyfoundations.com',
+    roles: ['Web Development', 'EdTech Systems', 'UI/UX Design', 'Platform Integration'],
+    date: '2025',
+    description: "Built the online platform for Academy Foundations, focusing on educational empowerment, digital learning resources, and intuitive student-institution onboarding."
   }
 ];
 
