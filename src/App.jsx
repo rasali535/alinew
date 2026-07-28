@@ -19,6 +19,7 @@ import Changelog from './pages/Changelog';
 import BetaProgram from './pages/BetaProgram';
 import Solutions from './pages/Solutions';
 import Downloads from './pages/Downloads';
+import RalionDownload from './pages/RalionDownload';
 import Releases from './pages/Releases';
 import AdminReleases from './pages/AdminReleases';
 import DeveloperPortal from './pages/DeveloperPortal';
@@ -81,6 +82,7 @@ function App() {
 
                 {/* Versioned Downloads & Release Management */}
                 <Route path="/downloads" element={<Downloads />} />
+                <Route path="/downloads/ralion" element={<RalionDownload />} />
                 <Route path="/downloads/releases" element={<Releases />} />
                 <Route path="/admin/releases" element={<AdminReleases />} />
 

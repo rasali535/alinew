@@ -1,5 +1,6 @@
-// Versioned Release Management Data Layer for Ralion Desktop
+// Versioned Release Management & Supabase Integration Data Layer for Ralion
 import releasesData from '../../public/ralion-releases.json';
+import { supabase } from '../lib/supabase';
 
 export const getLatestRelease = (platform = 'Windows') => {
   return (
@@ -14,7 +15,37 @@ export const getAllReleases = () => {
 };
 
 export const getCurrentVersion = () => {
-  return releasesData.currentVersion || '2.4.1';
+  return releasesData.currentVersion || '2.4.2';
+};
+
+// Phase 2: Fetch release information dynamically from Supabase database
+export const fetchLatestReleaseFromSupabase = async (productName = 'Ralion', platform = 'Windows') => {
+  try {
+    const { data, error } = await supabase
+      .from('releases')
+      .select('*')
+      .eq('product_name', productName)
+      .eq('is_latest', true)
+      .ilike('platform', `%${platform}%`)
+      .maybeSingle();
+
+    if (error || !data) {
+      return getLatestRelease(platform);
+    }
+
+    return {
+      product_name: data.product_name || 'Ralion',
+      version: data.version || '2.4.2',
+      platform: data.platform || platform,
+      architecture: data.architecture || 'x64',
+      download_url: data.file_url || data.download_url,
+      filesizeFormatted: data.file_size || '152 MB',
+      checksum: data.checksum || '',
+      release_notes: data.release_notes || ['Ralion v2.4.2 Release']
+    };
+  } catch (err) {
+    return getLatestRelease(platform);
+  }
 };
 
 export const formatBytes = (bytes) => {

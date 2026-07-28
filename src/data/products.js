@@ -39,41 +39,46 @@ export const productsData = [
     },
     features: [
       {
-        id: 'crm',
-        title: 'Intelligent CRM & Lead Pipeline',
-        description: 'Complete customer relationship management with automated deal pipelines, interaction histories, and contact enrichment.',
-        icon: 'UserCheck'
-      },
-
-      {
-        id: 'projects',
-        title: 'Enterprise Project & Task Management',
-        description: 'Track complex project milestones, sprint tasks, resource allocations, and real-time team collaboration.',
+        id: 'business',
+        title: 'Business Management',
+        description: 'Complete core business management with customer CRM, deal pipelines, task tracking, and document vaults.',
         icon: 'Briefcase'
       },
       {
-        id: 'automation',
-        title: 'Autonomous Workflow Automation',
-        description: 'Trigger multi-step operational workflows, document generation, and cross-system database syncs automatically.',
-        icon: 'Zap'
+        id: 'social-media',
+        title: 'Social Media Management',
+        description: 'Automated content scheduling, cross-channel engagement tracking, and digital campaign analytics.',
+        icon: 'Share2'
       },
       {
-        id: 'mari-ai',
-        title: 'Embedded Mari AI Intelligence',
-        description: 'Deploy specialized Mari AI reasoning agents for contextual document analysis, decision support, and voice synthesis.',
+        id: 'growth',
+        title: 'Growth Management',
+        description: 'Revenue forecasting, conversion funnel optimization, and customer acquisition metrics.',
+        icon: 'TrendingUp'
+      },
+      {
+        id: 'logistics',
+        title: 'Logistics Management',
+        description: 'Cross-border cargo telemetry, fleet dispatch tracking, and border clearance documentation.',
+        icon: 'Truck'
+      },
+      {
+        id: 'health',
+        title: 'Health Management',
+        description: 'Patient consultations, health records, electronic prescriptions, and appointment scheduling.',
+        icon: 'Activity'
+      },
+      {
+        id: 'trade',
+        title: 'Trade Management',
+        description: 'B2B SADC trade orchestration, commodity pricing, customs compliance, and supplier portals.',
+        icon: 'Globe'
+      },
+      {
+        id: 'ai-assistants',
+        title: 'AI Assistants',
+        description: 'Specialized Mari AI reasoning agents for contextual decision support, document RAG, and voice synthesis.',
         icon: 'Bot'
-      },
-      {
-        id: 'industry-modules',
-        title: 'Modular Industry Add-ons',
-        description: 'Tailor Ralion with specialized modules for trade logistics, retail inventory, USSD gateways, and government compliance.',
-        icon: 'Layers'
-      },
-      {
-        id: 'security',
-        title: 'Bank-Grade Isolation & RLS Security',
-        description: 'Tenant isolation, row-level security (RLS), end-to-end encryption, and complete audit logging.',
-        icon: 'ShieldCheck'
       }
     ],
     solutions: [

@@ -1,6 +1,15 @@
-// Lightweight, Privacy-Focused Analytics Tracker for Ras Ali Labs Ecosystem
-// Tracks product visits, signups, Ralion launches, downloads (download_events), conversions, and product_events.
+// Lightweight, Privacy-Focused Analytics & Supabase Download Tracking Engine
 import { supabase } from './supabase';
+
+const getAnonymousSessionId = () => {
+  if (typeof window === 'undefined') return 'server_session';
+  let sessionId = localStorage.getItem('ralion_anonymous_session_id');
+  if (!sessionId) {
+    sessionId = 'anon_' + Math.random().toString(36).substring(2, 11) + '_' + Date.now();
+    localStorage.setItem('ralion_anonymous_session_id', sessionId);
+  }
+  return sessionId;
+};
 
 class AnalyticsTracker {
   constructor() {
@@ -43,25 +52,35 @@ class AnalyticsTracker {
     this.logEvent('ralion_launch', { subRoute });
   }
 
-  // Track Download Events & log to Supabase download_events table
-  async trackDownload(platform, version = '2.4.1', product = 'Ralion Desktop') {
-    this.logEvent('download', { platform, version, product });
+  // Phase 3 — Download Tracking into Supabase 'downloads' table
+  async trackDownload(platform, version = '2.4.2', product = 'Ralion', releaseId = null) {
+    const anonymousSessionId = getAnonymousSessionId();
+    this.logEvent('download', { platform, version, product, anonymousSessionId });
 
     try {
-      // Log to Supabase download_events table
-      const { error } = await supabase.from('download_events').insert([
+      // 1. Insert into 'downloads' table (Phase 3 requirement)
+      const { error: downloadsError } = await supabase.from('downloads').insert([
         {
-          product,
-          version,
-          platform,
+          release_id: releaseId || `ralion_v${version}_${platform.toLowerCase()}`,
+          platform: platform.toLowerCase(),
+          anonymous_session_id: anonymousSessionId,
           created_at: new Date().toISOString()
         }
       ]);
-      if (error) {
-        console.warn('download_events insert note (fallback active):', error.message);
+
+      if (downloadsError) {
+        // Fallback insert into 'download_events'
+        await supabase.from('download_events').insert([
+          {
+            product,
+            version,
+            platform,
+            created_at: new Date().toISOString()
+          }
+        ]);
       }
     } catch (err) {
-      console.warn('Analytics DB log note:', err.message);
+      console.warn('Download tracking note:', err.message);
     }
   }
 
