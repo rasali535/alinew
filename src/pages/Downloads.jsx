@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getLatestRelease, getAllReleases } from '../data/releases';
-import { validateDownloadBinary, triggerBinaryDownload } from '../lib/downloadValidator';
+import { triggerBinaryDownload } from '../lib/downloadValidator';
 import { analytics } from '../lib/analytics';
 import SEO from '../components/common/SEO';
 import {
@@ -22,8 +22,6 @@ import {
 const Downloads = () => {
   const [userOS, setUserOS] = useState('Windows');
   const [copiedSha, setCopiedSha] = useState('');
-  const [downloadError, setDownloadError] = useState('');
-  const [isDownloading, setIsDownloading] = useState(false);
 
   useEffect(() => {
     // OS Auto-Detection
@@ -45,23 +43,11 @@ const Downloads = () => {
     setTimeout(() => setCopiedSha(''), 2000);
   };
 
-  const handleDownload = async (rel) => {
-    setDownloadError('');
-    setIsDownloading(true);
+  const handleDownload = (rel) => {
     analytics.trackDownload(rel.platform, rel.version, 'Ralion Desktop');
 
-    // Validate binary headers & size before triggering download
-    const validation = await validateDownloadBinary(rel.downloadUrl, rel.filesize);
-
-    if (!validation.valid) {
-      setDownloadError(`Download Validation Warning: ${validation.reason}`);
-      setIsDownloading(false);
-      return;
-    }
-
-    // Trigger download
+    // Trigger direct site download without opening external GitHub tabs or redirecting
     triggerBinaryDownload(rel.downloadUrl, rel.filename);
-    setIsDownloading(false);
   };
 
   return (
@@ -99,16 +85,9 @@ const Downloads = () => {
         <div className="bg-brand-gold/10 border border-brand-gold/30 rounded-2xl p-4 mb-8 flex items-center justify-between gap-4 max-w-3xl mx-auto text-xs">
           <div className="flex items-center gap-3 text-brand-gold">
             <ShieldCheck size={20} className="shrink-0" />
-            <span>Detected OS: <strong className="text-white">{userOS}</strong>. Downloading versioned 64-bit installer with verified headers.</span>
+            <span>Detected OS: <strong className="text-white">{userOS}</strong>. 1-Click direct site download for Windows x64.</span>
           </div>
         </div>
-
-        {downloadError && (
-          <div className="mb-8 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs flex items-center gap-3 max-w-3xl mx-auto">
-            <AlertTriangle size={20} className="shrink-0" />
-            <div>{downloadError}</div>
-          </div>
-        )}
 
         {/* Desktop Installers Grid (Windows x64, macOS, Linux) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
@@ -175,7 +154,6 @@ const Downloads = () => {
 
                 <button
                   onClick={() => handleDownload(rel)}
-                  disabled={isDownloading}
                   className={`w-full py-4 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 ${
                     isDetected
                       ? 'bg-gradient-to-r from-brand-gold to-amber-500 text-black shadow-lg shadow-brand-gold/20 hover:scale-105'
