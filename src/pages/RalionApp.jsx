@@ -1,5 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { analytics } from '../lib/analytics';
+import SEO from '../components/common/SEO';
 import {
   Cpu,
   Bot,
@@ -19,13 +22,43 @@ import {
   BarChart2,
   Settings,
   RefreshCw,
-  ExternalLink
+  ExternalLink,
+  Briefcase,
+  Users,
+  Search,
+  Plus
 } from 'lucide-react';
 
 const RalionApp = () => {
   const { user, openAuthModal, signOut } = useAuth();
-  const [activeTab, setActiveTab] = useState('overview');
+  const location = useLocation();
+  const navigate = useNavigate();
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Sync active sub-route (/ralion/dashboard, /ralion/crm, /ralion/mari-ai, /ralion/settings, /ralion/login)
+  const getSubTabFromPath = (path) => {
+    if (path.includes('/ralion/crm')) return 'crm';
+    if (path.includes('/ralion/mari-ai')) return 'mari-ai';
+    if (path.includes('/ralion/data')) return 'data';
+    if (path.includes('/ralion/ussd')) return 'ussd';
+    if (path.includes('/ralion/settings')) return 'settings';
+    if (path.includes('/ralion/login')) return 'login';
+    return 'dashboard';
+  };
+
+  const [activeTab, setActiveTab] = useState(getSubTabFromPath(location.pathname));
+
+  useEffect(() => {
+    const currentSub = getSubTabFromPath(location.pathname);
+    setActiveTab(currentSub);
+    analytics.trackRalionLaunch(currentSub);
+  }, [location.pathname]);
+
+  const changeTab = (tab) => {
+    setActiveTab(tab);
+    if (tab === 'dashboard') navigate('/ralion/dashboard');
+    else navigate(`/ralion/${tab}`);
+  };
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -34,6 +67,11 @@ const RalionApp = () => {
 
   return (
     <div className="min-h-screen bg-[#141414] text-white pt-24 pb-12 px-4 md:px-8">
+      <SEO
+        title="Ralion OS Workspace | Ras Ali Labs"
+        description="Unified AI Business Operating System platform interface."
+      />
+
       <div className="max-w-7xl mx-auto">
         {/* Top Operational Header */}
         <div className="bg-[#1c1c1c] border border-white/10 rounded-2xl p-6 mb-6 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -48,8 +86,8 @@ const RalionApp = () => {
                   v2.4.0 Live Engine
                 </span>
               </div>
-              <p className="text-white/50 text-xs mt-0.5">
-                rasalilabs.com/ralion — Unified Enterprise Intelligence Entry Point
+              <p className="text-white/50 text-xs mt-0.5 font-mono">
+                rasalilabs.com/ralion/{activeTab} — Unified Enterprise Entry Point
               </p>
             </div>
           </div>
@@ -58,11 +96,14 @@ const RalionApp = () => {
           <div className="flex items-center gap-3 self-stretch md:self-auto justify-between md:justify-end border-t md:border-t-0 border-white/10 pt-4 md:pt-0">
             {user ? (
               <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs">
+                <Link
+                  to="/account"
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs hover:bg-white/10 transition-colors"
+                >
                   <UserCheck size={14} className="text-emerald-400" />
                   <span className="text-white font-medium max-w-[120px] truncate">{user.email}</span>
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-brand-gold/20 text-brand-gold font-bold">SSO</span>
-                </div>
+                </Link>
                 <button
                   onClick={signOut}
                   className="p-2 rounded-xl bg-white/5 hover:bg-red-500/10 hover:text-red-400 text-white/60 transition-colors"
@@ -114,7 +155,7 @@ const RalionApp = () => {
               <Bot size={20} />
             </div>
             <div>
-              <div className="text-white/50 text-[10px] uppercase font-semibold">AI Multi-Agents</div>
+              <div className="text-white/50 text-[10px] uppercase font-semibold">Mari AI Multi-Agents</div>
               <div className="text-white text-sm font-bold">12 Workers Active</div>
             </div>
           </div>
@@ -149,29 +190,40 @@ const RalionApp = () => {
             </div>
 
             <button
-              onClick={() => setActiveTab('overview')}
+              onClick={() => changeTab('dashboard')}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                activeTab === 'overview'
+                activeTab === 'dashboard'
                   ? 'bg-brand-gold text-black font-bold shadow-md shadow-brand-gold/10'
                   : 'text-white/70 hover:text-white hover:bg-white/5'
               }`}
             >
-              <BarChart2 size={16} /> Executive Command Dashboard
+              <BarChart2 size={16} /> Dashboard
             </button>
 
             <button
-              onClick={() => setActiveTab('agents')}
+              onClick={() => changeTab('crm')}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                activeTab === 'agents'
+                activeTab === 'crm'
                   ? 'bg-brand-gold text-black font-bold shadow-md shadow-brand-gold/10'
                   : 'text-white/70 hover:text-white hover:bg-white/5'
               }`}
             >
-              <Bot size={16} /> AI Multi-Agent Studio
+              <Users size={16} /> CRM & Deals Pipeline
             </button>
 
             <button
-              onClick={() => setActiveTab('data')}
+              onClick={() => changeTab('mari-ai')}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                activeTab === 'mari-ai'
+                  ? 'bg-brand-gold text-black font-bold shadow-md shadow-brand-gold/10'
+                  : 'text-white/70 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Bot size={16} /> Mari AI Studio
+            </button>
+
+            <button
+              onClick={() => changeTab('data')}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
                 activeTab === 'data'
                   ? 'bg-brand-gold text-black font-bold shadow-md shadow-brand-gold/10'
@@ -182,18 +234,7 @@ const RalionApp = () => {
             </button>
 
             <button
-              onClick={() => setActiveTab('ussd')}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                activeTab === 'ussd'
-                  ? 'bg-brand-gold text-black font-bold shadow-md shadow-brand-gold/10'
-                  : 'text-white/70 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <Smartphone size={16} /> USSD Protocol Bridge
-            </button>
-
-            <button
-              onClick={() => setActiveTab('settings')}
+              onClick={() => changeTab('settings')}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
                 activeTab === 'settings'
                   ? 'bg-brand-gold text-black font-bold shadow-md shadow-brand-gold/10'
@@ -203,35 +244,29 @@ const RalionApp = () => {
               <Settings size={16} /> Ecosystem Settings
             </button>
 
-            {/* Ecosystem Cross-Links */}
+            {/* Ecosystem Navigation Links */}
             <div className="pt-4 mt-4 border-t border-white/10 space-y-1">
               <div className="px-3 py-1 text-white/40 text-[10px] font-semibold uppercase tracking-wider">
-                Cross-Product Launchers
+                Ecosystem Links
               </div>
-              <a
-                href="/products/mari-ai"
-                className="flex items-center justify-between px-3 py-2 text-xs text-white/60 hover:text-purple-400 rounded-lg hover:bg-white/5 transition-colors"
+              <Link
+                to="/account"
+                className="flex items-center justify-between px-3 py-2 text-xs text-white/60 hover:text-brand-gold rounded-lg hover:bg-white/5 transition-colors"
               >
-                <span>Mari AI Studio</span> <ExternalLink size={12} />
-              </a>
-              <a
-                href="/products/tradegrid-africa"
-                className="flex items-center justify-between px-3 py-2 text-xs text-white/60 hover:text-blue-400 rounded-lg hover:bg-white/5 transition-colors"
+                <span>SSO User Account</span> <ExternalLink size={12} />
+              </Link>
+              <Link
+                to="/downloads"
+                className="flex items-center justify-between px-3 py-2 text-xs text-white/60 hover:text-brand-gold rounded-lg hover:bg-white/5 transition-colors"
               >
-                <span>TradeGrid Africa</span> <ExternalLink size={12} />
-              </a>
-              <a
-                href="/products/dfs-platform"
-                className="flex items-center justify-between px-3 py-2 text-xs text-white/60 hover:text-amber-400 rounded-lg hover:bg-white/5 transition-colors"
-              >
-                <span>DFS Gateway</span> <ExternalLink size={12} />
-              </a>
+                <span>Desktop App Download</span> <ExternalLink size={12} />
+              </Link>
             </div>
           </div>
 
           {/* Interactive Workspace Panel */}
           <div className="lg:col-span-9 bg-[#1c1c1c] border border-white/10 rounded-2xl p-6 shadow-xl">
-            {activeTab === 'overview' && (
+            {activeTab === 'dashboard' && (
               <div>
                 <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/10">
                   <div>
@@ -292,27 +327,87 @@ const RalionApp = () => {
                   </div>
                 </div>
 
-                {/* Simulated Terminal Output */}
+                {/* Console Output */}
                 <div className="bg-black border border-white/10 rounded-xl p-4 font-mono text-xs text-emerald-400 space-y-1">
                   <div className="flex items-center justify-between border-b border-white/10 pb-2 mb-2 text-white/40">
                     <span className="flex items-center gap-1.5"><Terminal size={14} /> System Console Logs</span>
-                    <span>rasalilabs.com/ralion</span>
+                    <span>rasalilabs.com/ralion/dashboard</span>
                   </div>
-                  <div>[SYS_INIT] Ralion OS Kernel initialized successfully.</div>
-                  <div>[SUPABASE] Connected to postgres.wctqmtwaoaugxlqkslhn.supabase.co:6543</div>
+                  <div>[SYS_INIT] Ralion OS Kernel v2.4.0 active.</div>
+                  <div>[SUPABASE] Connected to yidsfihagwttlmhfynmf.supabase.co</div>
                   <div>[AUTH] Single Sign-On (SSO) tenant provider ready.</div>
-                  <div>[READY] System operational. Awaiting command inputs...</div>
+                  <div>[READY] System operational. Awaiting user commands...</div>
                 </div>
               </div>
             )}
 
-            {activeTab === 'agents' && (
+            {activeTab === 'crm' && (
               <div>
-                <h2 className="text-xl font-bold text-white mb-2">AI Multi-Agent Studio</h2>
+                <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/10">
+                  <div>
+                    <h2 className="text-xl font-bold text-white">CRM & Deals Pipeline</h2>
+                    <p className="text-white/50 text-xs">Customer relationship management, leads, and deal stage tracking.</p>
+                  </div>
+                  <button className="py-2 px-4 rounded-xl bg-brand-gold text-black font-bold text-xs flex items-center gap-1.5 hover:scale-105 transition-transform">
+                    <Plus size={14} /> New Lead Contact
+                  </button>
+                </div>
+
+                {/* CRM Deals Stage Columns */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-black/40 border border-white/10 rounded-xl p-4">
+                    <h4 className="text-xs font-bold text-white/70 uppercase mb-3 flex justify-between">
+                      <span>Inbound Leads</span>
+                      <span className="text-brand-gold">3</span>
+                    </h4>
+                    <div className="space-y-3">
+                      <div className="bg-[#252525] p-3 rounded-lg border border-white/5 text-xs">
+                        <div className="font-bold text-white mb-1">Eagle Touch Tours</div>
+                        <div className="text-white/50">Tourism Platform Deal • $12,000</div>
+                      </div>
+                      <div className="bg-[#252525] p-3 rounded-lg border border-white/5 text-xs">
+                        <div className="font-bold text-white mb-1">Peregrine Safaris</div>
+                        <div className="text-white/50">USSD Booking Bridge • $8,500</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-black/40 border border-white/10 rounded-xl p-4">
+                    <h4 className="text-xs font-bold text-white/70 uppercase mb-3 flex justify-between">
+                      <span>Negotiation</span>
+                      <span className="text-purple-400">2</span>
+                    </h4>
+                    <div className="space-y-3">
+                      <div className="bg-[#252525] p-3 rounded-lg border border-white/5 text-xs">
+                        <div className="font-bold text-white mb-1">Pameltex Enterprise</div>
+                        <div className="text-white/50">Ralion Pro Deployment • $45,000</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-black/40 border border-white/10 rounded-xl p-4">
+                    <h4 className="text-xs font-bold text-white/70 uppercase mb-3 flex justify-between">
+                      <span>Closed Won</span>
+                      <span className="text-emerald-400">5</span>
+                    </h4>
+                    <div className="space-y-3">
+                      <div className="bg-[#252525] p-3 rounded-lg border border-white/5 text-xs">
+                        <div className="font-bold text-white mb-1">Talent Centre Africa</div>
+                        <div className="text-white/50">Mari AI RAG System • $28,000</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'mari-ai' && (
+              <div>
+                <h2 className="text-xl font-bold text-white mb-2">Mari AI Reasoning Studio</h2>
                 <p className="text-white/50 text-xs mb-6">Orchestrate and deploy specialized Gemini LLM reasoning agents.</p>
                 <div className="bg-black/40 border border-white/10 rounded-xl p-6 text-center">
                   <Bot size={48} className="mx-auto text-purple-400 mb-4 animate-bounce" />
-                  <h3 className="text-lg font-bold text-white mb-2">Multi-Agent Engine Active</h3>
+                  <h3 className="text-lg font-bold text-white mb-2">Mari AI Multi-Agent Engine Active</h3>
                   <p className="text-white/60 text-xs max-w-md mx-auto mb-6">
                     Connect Mari AI LLM agents directly to your Ralion enterprise workflows.
                   </p>
@@ -320,7 +415,7 @@ const RalionApp = () => {
                     href="/products/mari-ai"
                     className="inline-flex items-center gap-2 py-2.5 px-6 rounded-xl bg-purple-600 text-white text-xs font-bold hover:bg-purple-500 transition-colors"
                   >
-                    Configure Mari AI Agents <ArrowRight size={14} />
+                    Configure Mari AI Agent Prompts <ArrowRight size={14} />
                   </a>
                 </div>
               </div>
@@ -334,7 +429,7 @@ const RalionApp = () => {
                   <Database size={48} className="mx-auto text-blue-400 mb-4" />
                   <h3 className="text-lg font-bold text-white mb-2">Supabase PostgreSQL Connected</h3>
                   <p className="text-white/60 text-xs max-w-md mx-auto mb-4">
-                    Target Instance: postgres.wctqmtwaoaugxlqkslhn.supabase.co
+                    Target Instance: yidsfihagwttlmhfynmf.supabase.co
                   </p>
                   <span className="inline-block px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-semibold border border-emerald-500/20">
                     pgvector & uuid-ossp enabled
@@ -343,35 +438,15 @@ const RalionApp = () => {
               </div>
             )}
 
-            {activeTab === 'ussd' && (
-              <div>
-                <h2 className="text-xl font-bold text-white mb-2">USSD Protocol Bridge</h2>
-                <p className="text-white/50 text-xs mb-6">Synchronize USSD feature phone sessions with web platform state.</p>
-                <div className="bg-black/40 border border-white/10 rounded-xl p-6 text-center">
-                  <Smartphone size={48} className="mx-auto text-amber-400 mb-4" />
-                  <h3 className="text-lg font-bold text-white mb-2">USSD Gateway Ready</h3>
-                  <p className="text-white/60 text-xs max-w-md mx-auto mb-6">
-                    Bridging feature phone USSD sessions directly into Ralion enterprise web state.
-                  </p>
-                  <a
-                    href="/case-study/ussd-web-gap"
-                    className="inline-flex items-center gap-2 py-2.5 px-6 rounded-xl bg-amber-500 text-black text-xs font-bold hover:bg-amber-400 transition-colors"
-                  >
-                    View USSD-Web Case Study <ArrowRight size={14} />
-                  </a>
-                </div>
-              </div>
-            )}
-
             {activeTab === 'settings' && (
               <div>
                 <h2 className="text-xl font-bold text-white mb-2">Ecosystem Settings</h2>
-                <p className="text-white/50 text-xs mb-6">Single Sign-On and workspace preferences.</p>
+                <p className="text-white/50 text-xs mb-6 font-mono">rasalilabs.com/ralion/settings</p>
                 <div className="space-y-4 text-xs text-white/80">
                   <div className="bg-black/40 border border-white/10 p-4 rounded-xl flex items-center justify-between">
                     <div>
-                      <div className="font-semibold text-white">Domain Policy</div>
-                      <div className="text-white/50 text-[11px]">Subdomains disabled — running on rasalilabs.com/ralion</div>
+                      <div className="font-semibold text-white">Single-Domain Policy</div>
+                      <div className="text-white/50 text-[11px]">Subdomains disabled — running on rasalilabs.com/ralion/*</div>
                     </div>
                     <span className="px-2.5 py-1 rounded bg-brand-gold/10 text-brand-gold font-bold">Active</span>
                   </div>

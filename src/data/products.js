@@ -1,135 +1,183 @@
 // Data-driven Product Architecture for Ras Ali Labs Ecosystem
-// Central repository for product metadata, features, pricing, and routing.
+// Central repository for product metadata, features, industry solutions, pricing, and routing.
 
 export const productsData = [
   {
     id: 'ralion',
     slug: 'ralion',
     name: 'Ralion',
-    tagline: 'The Operating System for Enterprise Intelligence & Automation',
-    category: 'Enterprise Platform / OS',
+    tagline: 'AI-powered Business Operating System — Empowered to Prosper',
+    category: 'Enterprise OS / Business Automation',
     status: 'Available',
-    statusBadge: 'Featured Product',
+    statusBadge: 'Featured OS',
     badgeColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-    description: 'Ralion is an intelligent enterprise operating system designed to unify business workflows, automated data pipelines, autonomous AI agents, and cross-system integrations into one powerful desktop & web interface.',
-    longDescription: `Ralion bridges the gap between legacy enterprise systems, cloud workloads, and multi-agent AI automation. Built with modular micro-frontend architecture, high-speed PostgreSQL & pgvector backends, and multi-tenant role-based access control, Ralion powers modern high-growth enterprises to operate at maximum efficiency.`,
+    description: 'Ralion is an AI-powered business operating system that manages customers, projects, documents, and core operations in one unified workspace backed by Mari AI reasoning.',
+    longDescription: `Ralion bridges the gap between customer relationship management (CRM), project management, intelligent workflow automation, multi-agent AI execution, and secure document storage. Built with modular micro-frontend architecture, Supabase PostgreSQL, and bank-grade role-based access control, Ralion powers small businesses, high-growth enterprises, and government initiatives to operate at maximum efficiency.`,
     icon: 'Cpu',
     appUrl: '/ralion',
     accentColor: '#D4AF37', // Brand Gold
     cta: {
-      primary: { text: 'Launch Ralion', href: '/ralion' },
-      secondary: { text: 'Start Free', href: '#pricing' },
-      auth: { text: 'Login', href: '#auth' }
+      primary: { text: 'Start Free', href: '#pricing' },
+      secondary: { text: 'Download Desktop App', href: '/downloads' },
+      login: { text: 'Login', href: '#auth' },
+      launch: { text: 'Launch Ralion', href: '/ralion' }
+    },
+    seo: {
+      title: 'Ralion | AI Business Operating System | Ras Ali Labs',
+      description: 'Manage customers, projects, documents and business operations with Ralion powered by Mari AI.'
     },
     hero: {
-      title: 'Next-Gen Enterprise Operating System',
-      subtitle: 'Streamline operations, orchestrate AI agents, and execute multi-channel data workflows on a single unified platform.',
+      title: 'Ralion — AI-powered Business Operating System',
+      tagline: 'Empowered to Prosper',
+      subtitle: 'Streamline operations, automate CRM pipelines, orchestrate Mari AI agents, and manage enterprise projects on a single unified platform.',
       stats: [
         { label: 'System Uptime', value: '99.99%' },
         { label: 'Workflow Execution Speed', value: '< 45ms' },
-        { label: 'Active Micro-Modules', value: '40+' },
+        { label: 'Active Business Modules', value: '40+' },
         { label: 'Security & Auth Compliance', value: 'Enterprise Grade' }
       ]
     },
     features: [
       {
-        id: 'ai-orchestration',
-        title: 'Autonomous Multi-Agent Orchestration',
-        description: 'Deploy specialized AI agents for data extraction, document processing, customer routing, and autonomous task execution.',
+        id: 'crm',
+        title: 'Intelligent CRM & Lead Pipeline',
+        description: 'Complete customer relationship management with automated deal pipelines, interaction histories, and contact enrichment.',
+        icon: 'UserCheck'
+      },
+
+      {
+        id: 'projects',
+        title: 'Enterprise Project & Task Management',
+        description: 'Track complex project milestones, sprint tasks, resource allocations, and real-time team collaboration.',
+        icon: 'Briefcase'
+      },
+      {
+        id: 'automation',
+        title: 'Autonomous Workflow Automation',
+        description: 'Trigger multi-step operational workflows, document generation, and cross-system database syncs automatically.',
+        icon: 'Zap'
+      },
+      {
+        id: 'mari-ai',
+        title: 'Embedded Mari AI Intelligence',
+        description: 'Deploy specialized Mari AI reasoning agents for contextual document analysis, decision support, and voice synthesis.',
         icon: 'Bot'
       },
       {
-        id: 'unified-auth',
-        title: 'Unified Supabase SSO Authentication',
-        description: 'Single-sign-on access control across all Ras Ali Labs products with role-based policies and encrypted session keys.',
-        icon: 'ShieldCheck'
-      },
-      {
-        id: 'data-pipelines',
-        title: 'Real-time Data Streaming & Storage',
-        description: 'Instant data synchronization across web, mobile, and API endpoints backed by vector embeddings and low-latency storage.',
-        icon: 'Database'
-      },
-      {
-        id: 'modular-apps',
-        title: 'Modular App Marketplace',
-        description: 'Extend Ralion capabilities on demand with custom business plugins, USSD gateways, and automated reporting engines.',
+        id: 'industry-modules',
+        title: 'Modular Industry Add-ons',
+        description: 'Tailor Ralion with specialized modules for trade logistics, retail inventory, USSD gateways, and government compliance.',
         icon: 'Layers'
       },
       {
-        id: 'analytics',
-        title: 'Real-Time Operational Analytics',
-        description: 'Interactive dashboard analytics, telemetry monitoring, and audit logging built into every subsystem.',
-        icon: 'BarChart3'
+        id: 'security',
+        title: 'Bank-Grade Isolation & RLS Security',
+        description: 'Tenant isolation, row-level security (RLS), end-to-end encryption, and complete audit logging.',
+        icon: 'ShieldCheck'
+      }
+    ],
+    solutions: [
+      {
+        id: 'small-business',
+        name: 'Small Business',
+        title: 'All-in-One Operating System for Growing Teams',
+        description: 'Consolidate CRM, invoicing, project tracking, and customer communication into a single affordable workspace.',
+        highlights: [
+          'Unified Customer & Contact Database',
+          'Automated Quotations & Invoice Tracking',
+          'Built-in Mari AI Assistant',
+          'Fast 5-Minute Onboarding Setup'
+        ]
       },
       {
-        id: 'enterprise-security',
-        title: 'Bank-Grade Security & Isolation',
-        description: 'End-to-end encryption, tenant isolation, and strict regulatory compliance controls.',
-        icon: 'Lock'
+        id: 'enterprise',
+        name: 'Enterprise',
+        title: 'High-Throughput Orchestration for Scaled Organizations',
+        description: 'Multi-tenant infrastructure with custom RBAC roles, dedicated Supabase instances, and 24/7 priority support.',
+        highlights: [
+          'Dedicated PostgreSQL & pgvector Database',
+          'Unlimited Team Seats & Micro-Modules',
+          'Custom USSD & API Gateway Integration',
+          'SLA Guarantee & Dedicated Account Manager'
+        ]
+      },
+      {
+        id: 'government',
+        name: 'Government',
+        title: 'Sovereign Digital Infrastructure & Compliance',
+        description: 'On-premise or single-tenant cloud deployments meeting strict data sovereignty and regulatory standards.',
+        highlights: [
+          'Data Sovereignty & On-Premise Support',
+          'Full Regulatory Audit Trail Logging',
+          'Air-gapped & Secure Vault Enclaves',
+          'Custom Departmental Integration Bridges'
+        ]
       }
     ],
     screenshots: [
       {
         id: 1,
         title: 'Ralion Executive Dashboard',
-        caption: 'Central control room for live system metrics, agent activity, and real-time business telemetry.',
+        caption: 'Central control room for live business metrics, CRM pipelines, and real-time operational telemetry.',
         image: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop'
       },
       {
         id: 2,
-        title: 'AI Multi-Agent Control Hub',
+        title: 'Mari AI Multi-Agent Studio',
         caption: 'Orchestrate, monitor, and train specialized AI worker agents across departments.',
         image: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop'
       },
       {
         id: 3,
-        title: 'Workflow Automation Builder',
-        caption: 'Visual workflow canvas for connecting USSD gateways, APIs, databases, and LLM prompts.',
+        title: 'CRM & Project Workspace Canvas',
+        caption: 'Visual workflow canvas connecting deal stages, team assignments, and database queries.',
         image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=2015&auto=format&fit=crop'
       }
     ],
     pricing: [
       {
-        name: 'Starter',
+        id: 'community',
+        name: 'Community',
         price: 'Free',
         period: 'forever',
-        description: 'Ideal for individual developers and small teams exploring Ralion.',
+        description: 'Ideal for small teams and solo entrepreneurs starting with Ralion.',
         features: [
           'Up to 3 Active Workspace Modules',
           'Single Admin User Account',
-          '1,000 AI Agent Executions / mo',
-          'Community Support & Documentation',
-          'Standard Supabase Auth'
+          '1,000 Mari AI Executions / mo',
+          'Standard CRM & Project Modules',
+          'Community Support & Documentation'
         ],
         ctaText: 'Start Free',
         popular: false
       },
       {
+        id: 'professional',
         name: 'Professional',
         price: '$49',
         period: 'per month',
-        description: 'For growing enterprises requiring advanced automation and multi-agent capabilities.',
+        description: 'For growing businesses requiring advanced CRM, project tracking, and Mari AI automation.',
         features: [
           'Unlimited Active Workspace Modules',
-          'Up to 15 Team Members',
-          '50,000 AI Agent Executions / mo',
-          'Priority 24/7 Technical Support',
+          'Up to 15 Team Seats',
+          '50,000 Mari AI Executions / mo',
+          'Priority Technical Support 24/7',
           'Custom USSD & API Gateway Access',
-          'Full Telemetry & Audit Logs'
+          'Full Audit Logs & Telemetry'
         ],
         ctaText: 'Start 14-Day Free Trial',
         popular: true
       },
       {
+        id: 'enterprise',
         name: 'Enterprise',
         price: 'Custom',
         period: 'billed annually',
         description: 'Dedicated infrastructure, custom SLA, and tailored AI model fine-tuning.',
         features: [
           'Dedicated Private Cloud Instance',
-          'Unlimited Team Seats & Roles',
-          'Custom AI Agent Training & RAG',
+          'Unlimited Team Seats & Custom Roles',
+          'Custom Mari AI Model Fine-Tuning',
           'Dedicated Success Manager & SLA',
           'On-Premise or Single-Tenant Deployment'
         ],
@@ -148,14 +196,18 @@ export const productsData = [
     statusBadge: 'Public Beta',
     badgeColor: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
     description: 'Mari AI powers contextual customer interactions, voice & text synthesis, multi-lingual automated support, and deep reasoning across corporate channels.',
-    longDescription: `Mari AI combines cutting-edge Gemini LLM architectures with pgvector knowledge retrieval to deliver accurate, contextual AI assistance. Integrated directly into Ras Ali Labs products, Mari AI automates complex customer service flows and enterprise knowledge retrieval.`,
+    longDescription: `Mari AI combines cutting-edge Gemini LLM architectures with pgvector knowledge retrieval to deliver accurate, contextual AI assistance. Integrated directly into Ralion and Ras Ali Labs products, Mari AI automates complex customer service flows and enterprise knowledge retrieval.`,
     icon: 'Sparkles',
     appUrl: '/products/mari-ai',
     accentColor: '#a855f7',
     cta: {
       primary: { text: 'Explore Mari AI', href: '/products/mari-ai' },
       secondary: { text: 'Request Beta Access', href: '#contact' },
-      auth: { text: 'Login', href: '#auth' }
+      login: { text: 'Login', href: '#auth' }
+    },
+    seo: {
+      title: 'Mari AI | Conversational Intelligence | Ras Ali Labs',
+      description: 'Deploy contextual AI reasoning agents powered by Gemini and pgvector.'
     },
     hero: {
       title: 'Contextual AI for Modern Enterprises',
@@ -189,6 +241,7 @@ export const productsData = [
     ],
     pricing: [
       {
+        id: 'developer',
         name: 'Developer',
         price: 'Free',
         period: 'in beta',
@@ -203,6 +256,7 @@ export const productsData = [
         popular: false
       },
       {
+        id: 'scale',
         name: 'Scale',
         price: '$79',
         period: 'per month',
@@ -236,7 +290,11 @@ export const productsData = [
     cta: {
       primary: { text: 'Learn More', href: '/products/tradegrid-africa' },
       secondary: { text: 'Join Waitlist', href: '#contact' },
-      auth: { text: 'Login', href: '#auth' }
+      login: { text: 'Login', href: '#auth' }
+    },
+    seo: {
+      title: 'TradeGrid Africa | Enterprise B2B Protocol | Ras Ali Labs',
+      description: 'Cross-border B2B trade infrastructure connecting SADC corridors.'
     },
     hero: {
       title: 'Powering Sovereign African B2B Commerce',
@@ -270,6 +328,7 @@ export const productsData = [
     ],
     pricing: [
       {
+        id: 'enterprise-participant',
         name: 'Enterprise Participant',
         price: 'Custom',
         period: 'per trade volume',
@@ -302,7 +361,11 @@ export const productsData = [
     cta: {
       primary: { text: 'Explore DFS Platform', href: '/products/dfs-platform' },
       secondary: { text: 'Developer Docs', href: '/developers' },
-      auth: { text: 'Login', href: '#auth' }
+      login: { text: 'Login', href: '#auth' }
+    },
+    seo: {
+      title: 'DFS Platform | USSD Gateway & Telecom Bridge | Ras Ali Labs',
+      description: 'Connect USSD feature phone sessions and mobile wallets to modern web applications.'
     },
     hero: {
       title: 'Bridging USSD, Telecoms & Modern Banking',
@@ -336,6 +399,7 @@ export const productsData = [
     ],
     pricing: [
       {
+        id: 'fintech-api',
         name: 'Fintech API Access',
         price: 'Tiered',
         period: 'per API call',

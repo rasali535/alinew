@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { navLinks } from '../../data/mock';
 import { useAuth } from '../../context/AuthContext';
-import { User, LogOut, ChevronDown, Sparkles } from 'lucide-react';
+import { User, LogOut, ChevronDown, Sparkles, Building2, UserCheck } from 'lucide-react';
 
 const Header = () => {
   const [currentTime, setCurrentTime] = useState('');
@@ -83,24 +83,38 @@ const Header = () => {
               </button>
 
               {isUserDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-[#252525] border border-white/10 rounded-xl p-2 shadow-2xl z-50 animate-fadeIn">
+                <div className="absolute right-0 mt-2 w-52 bg-[#252525] border border-white/10 rounded-xl p-2 shadow-2xl z-50 animate-fadeIn">
                   <div className="px-3 py-2 border-b border-white/10 mb-1">
                     <p className="text-white font-medium text-xs truncate">{user.email}</p>
                     <span className="text-[10px] text-brand-gold">Unified SSO Account</span>
                   </div>
                   <Link
-                    to="/ralion"
+                    to="/ralion/dashboard"
                     onClick={() => setIsUserDropdownOpen(false)}
                     className="flex items-center gap-2 px-3 py-2 text-xs text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
                   >
                     <Sparkles size={14} className="text-brand-gold" /> Launch Ralion OS
+                  </Link>
+                  <Link
+                    to="/onboarding"
+                    onClick={() => setIsUserDropdownOpen(false)}
+                    className="flex items-center gap-2 px-3 py-2 text-xs text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                  >
+                    <Building2 size={14} className="text-purple-400" /> Organization Onboarding
+                  </Link>
+                  <Link
+                    to="/account"
+                    onClick={() => setIsUserDropdownOpen(false)}
+                    className="flex items-center gap-2 px-3 py-2 text-xs text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                  >
+                    <UserCheck size={14} className="text-emerald-400" /> Account & Licenses
                   </Link>
                   <button
                     onClick={() => {
                       signOut();
                       setIsUserDropdownOpen(false);
                     }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 rounded-lg transition-colors border-t border-white/10 mt-1 pt-2"
                   >
                     <LogOut size={14} /> Sign Out
                   </button>
@@ -173,11 +187,18 @@ const Header = () => {
               <div className="space-y-3">
                 <div className="text-white/60 text-xs truncate">Logged in as: {user.email}</div>
                 <Link
-                  to="/ralion"
+                  to="/ralion/dashboard"
                   onClick={() => setIsMenuOpen(false)}
                   className="w-full py-2.5 rounded-xl bg-brand-gold text-black font-bold text-center block text-sm"
                 >
                   Launch Ralion OS
+                </Link>
+                <Link
+                  to="/account"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="w-full py-2.5 rounded-xl bg-white/10 text-white font-semibold text-center block text-sm"
+                >
+                  Account Profile
                 </Link>
                 <button
                   onClick={() => {

@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { getProductBySlug, productsData } from '../data/products';
+import { getProductBySlug } from '../data/products';
 import { useAuth } from '../context/AuthContext';
+import { analytics } from '../lib/analytics';
+import SEO from '../components/common/SEO';
 import {
   Cpu,
   Sparkles,
@@ -18,7 +20,12 @@ import {
   CheckCircle2,
   ExternalLink,
   ChevronRight,
-  Play
+  UserCheck,
+  Briefcase,
+  Download,
+  Building2,
+  Building,
+  Store
 } from 'lucide-react';
 
 const iconMap = {
@@ -31,7 +38,10 @@ const iconMap = {
   Database: Database,
   Layers: Layers,
   BarChart3: BarChart3,
-  Lock: Lock
+  Lock: Lock,
+  UserCheck: UserCheck,
+  Briefcase: Briefcase,
+  Zap: Zap
 };
 
 const ProductDetail = () => {
@@ -40,11 +50,22 @@ const ProductDetail = () => {
   const { openAuthModal, user } = useAuth();
   const product = getProductBySlug(slug || 'ralion');
   const [activeScreenshot, setActiveScreenshot] = useState(0);
+  const [activeSolutionTab, setActiveSolutionTab] = useState(0);
 
   const isRalion = product.slug === 'ralion';
 
+  useEffect(() => {
+    analytics.trackProductVisit(product.slug);
+  }, [product.slug]);
+
   return (
     <div className="min-h-screen bg-[#1c1c1c] text-white pt-28 pb-20 px-6 lg:px-12">
+      {/* SEO Head Tags */}
+      <SEO
+        title={product.seo?.title || `${product.name} | Ras Ali Labs`}
+        description={product.seo?.description || product.description}
+      />
+
       {/* Dynamic Background Blur */}
       <div className="absolute top-24 left-1/2 -translate-x-1/2 w-[900px] h-[500px] bg-gradient-to-r from-brand-gold/15 via-purple-500/10 to-emerald-500/10 rounded-full blur-[160px] pointer-events-none"></div>
 
@@ -61,20 +82,29 @@ const ProductDetail = () => {
         {/* Hero Section */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center mb-20">
           <div className="lg:col-span-7">
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-brand-gold text-xs font-semibold uppercase tracking-wider mb-6">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-brand-gold text-xs font-semibold uppercase tracking-wider mb-4">
               <Sparkles size={14} /> {product.statusBadge}
             </div>
-            <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight mb-6 bg-gradient-to-r from-white via-white/90 to-white/70 bg-clip-text text-transparent">
+
+            <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight mb-3 bg-gradient-to-r from-white via-white/90 to-white/70 bg-clip-text text-transparent">
               {product.hero.title}
             </h1>
+
+            <div className="text-brand-gold font-bold text-sm uppercase tracking-widest mb-6">
+              — Empowered to Prosper
+            </div>
+
             <p className="text-white/70 text-lg md:text-xl leading-relaxed mb-8 font-normal">
               {product.hero.subtitle}
             </p>
 
-            {/* CTAs: Start Free, Login, Launch Ralion */}
+            {/* CTA Buttons: Start Free, Login, Download Desktop App, Launch Ralion */}
             <div className="flex flex-wrap items-center gap-4 mb-10">
               <button
-                onClick={() => (user ? navigate('/ralion') : openAuthModal('signup'))}
+                onClick={() => {
+                  analytics.trackConversion('start_free_hero');
+                  user ? navigate('/ralion/dashboard') : openAuthModal('signup');
+                }}
                 className="py-4 px-8 rounded-2xl bg-gradient-to-r from-brand-gold to-amber-500 text-black text-sm font-bold shadow-xl shadow-brand-gold/20 hover:scale-105 transition-all flex items-center gap-2"
               >
                 Start Free <ArrowRight size={16} />
@@ -89,9 +119,18 @@ const ProductDetail = () => {
                 </button>
               )}
 
+              <Link
+                to="/downloads"
+                onClick={() => analytics.trackDownload('desktop_nav', 'Ralion Desktop')}
+                className="py-4 px-8 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/15 text-white text-sm font-semibold transition-all flex items-center gap-2"
+              >
+                <Download size={16} className="text-brand-gold" /> Download Desktop App
+              </Link>
+
               {isRalion && (
                 <Link
-                  to="/ralion"
+                  to="/ralion/dashboard"
+                  onClick={() => analytics.trackRalionLaunch('hero')}
                   className="py-4 px-8 rounded-2xl border border-brand-gold/50 text-brand-gold text-sm font-bold hover:bg-brand-gold/10 transition-all flex items-center gap-2"
                 >
                   Launch Ralion <ExternalLink size={16} />
@@ -121,7 +160,7 @@ const ProductDetail = () => {
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent rounded-2xl flex items-end p-6">
                 <div>
                   <span className="text-brand-gold text-xs font-semibold uppercase tracking-wider block mb-1">
-                    Live Platform Shell
+                    Live Operating System Shell
                   </span>
                   <h4 className="text-white font-bold text-lg">{product.name} Control Suite</h4>
                 </div>
@@ -130,11 +169,11 @@ const ProductDetail = () => {
           </div>
         </div>
 
-        {/* Product Description Section */}
+        {/* Product Capabilities Overview */}
         <div className="mb-24 bg-[#252525] border border-white/10 rounded-3xl p-8 md:p-12 shadow-2xl">
           <div className="max-w-3xl mb-8">
             <h2 className="text-2xl md:text-3xl font-extrabold text-white mb-4">
-              Architected for Scalable Enterprise Autonomy
+              Comprehensive Business Operating Architecture
             </h2>
             <p className="text-white/70 text-base leading-relaxed mb-6">
               {product.longDescription}
@@ -144,12 +183,12 @@ const ProductDetail = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6 border-t border-white/10">
             <div className="flex gap-4">
               <div className="w-10 h-10 rounded-xl bg-brand-gold/10 text-brand-gold flex items-center justify-center shrink-0">
-                <ShieldCheck size={20} />
+                <UserCheck size={20} />
               </div>
               <div>
-                <h4 className="text-white font-semibold text-sm mb-1">Unified Supabase Auth</h4>
+                <h4 className="text-white font-semibold text-sm mb-1">Integrated CRM & Leads</h4>
                 <p className="text-white/50 text-xs leading-relaxed">
-                  Single identity across Ralion, Mari AI, TradeGrid, and DFS Platform.
+                  Automated contact pipelines, interaction histories, and deal closures.
                 </p>
               </div>
             </div>
@@ -159,35 +198,35 @@ const ProductDetail = () => {
                 <Bot size={20} />
               </div>
               <div>
-                <h4 className="text-white font-semibold text-sm mb-1">Multi-Agent Intelligence</h4>
+                <h4 className="text-white font-semibold text-sm mb-1">Mari AI Reasoning Agents</h4>
                 <p className="text-white/50 text-xs leading-relaxed">
-                  Orchestrate Gemini LLM reasoning agents alongside custom microservices.
+                  Contextual AI document parsing, decision support, and natural reasoning.
                 </p>
               </div>
             </div>
 
             <div className="flex gap-4">
               <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0">
-                <Database size={20} />
+                <Briefcase size={20} />
               </div>
               <div>
-                <h4 className="text-white font-semibold text-sm mb-1">Vector Storage & Streaming</h4>
+                <h4 className="text-white font-semibold text-sm mb-1">Enterprise Project Workspace</h4>
                 <p className="text-white/50 text-xs leading-relaxed">
-                  pgvector semantic indexers with sub-millisecond retrieval.
+                  Sprint tracking, document vault, and real-time team collaboration.
                 </p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Features Section */}
+        {/* Feature Sections */}
         <div className="mb-24">
           <div className="text-center max-w-2xl mx-auto mb-16">
             <h2 className="text-3xl md:text-4xl font-extrabold text-white mb-4">
-              Core Platform Capabilities
+              Features Built for Operational Growth
             </h2>
             <p className="text-white/60 text-sm">
-              Comprehensive feature suite designed for high-performance enterprise teams.
+              Features designed to manage CRM pipelines, projects, AI automation, and security.
             </p>
           </div>
 
@@ -210,12 +249,78 @@ const ProductDetail = () => {
           </div>
         </div>
 
+        {/* Industry Solutions Section (Small Business, Enterprise, Government) */}
+        {product.solutions && (
+          <div className="mb-24">
+            <div className="text-center max-w-2xl mx-auto mb-12">
+              <h2 className="text-3xl md:text-4xl font-extrabold text-white mb-4">
+                Tailored Industry Solutions
+              </h2>
+              <p className="text-white/60 text-sm">
+                Deployed across small businesses, enterprises, and public sector organizations.
+              </p>
+            </div>
+
+            {/* Solution Selector Tabs */}
+            <div className="flex flex-wrap justify-center gap-3 mb-8">
+              {product.solutions.map((sol, idx) => (
+                <button
+                  key={sol.id}
+                  onClick={() => setActiveSolutionTab(idx)}
+                  className={`px-6 py-3 rounded-xl text-xs font-bold transition-all ${
+                    activeSolutionTab === idx
+                      ? 'bg-brand-gold text-black shadow-lg shadow-brand-gold/20'
+                      : 'bg-white/5 text-white/70 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  {sol.name}
+                </button>
+              ))}
+            </div>
+
+            {/* Solution Active Panel */}
+            <div className="bg-[#252525] border border-white/10 rounded-3xl p-8 md:p-12 shadow-2xl flex flex-col lg:flex-row items-center justify-between gap-8">
+              <div className="max-w-xl">
+                <span className="text-brand-gold text-xs font-bold uppercase tracking-wider mb-2 block">
+                  {product.solutions[activeSolutionTab].name} Solution
+                </span>
+                <h3 className="text-2xl md:text-3xl font-extrabold text-white mb-4">
+                  {product.solutions[activeSolutionTab].title}
+                </h3>
+                <p className="text-white/70 text-sm leading-relaxed mb-6">
+                  {product.solutions[activeSolutionTab].description}
+                </p>
+                <div className="space-y-2.5">
+                  {product.solutions[activeSolutionTab].highlights.map((item, hIdx) => (
+                    <div key={hIdx} className="flex items-center gap-2 text-xs text-white/90 font-medium">
+                      <CheckCircle2 size={16} className="text-brand-gold shrink-0" />
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="w-full lg:w-96 bg-black/40 border border-white/10 p-6 rounded-2xl text-center">
+                <Building2 size={40} className="mx-auto text-brand-gold mb-3" />
+                <h4 className="text-white font-bold text-base mb-2">Ready to scale your organization?</h4>
+                <p className="text-white/50 text-xs mb-6">Create your unified account and activate {product.solutions[activeSolutionTab].name} modules instantly.</p>
+                <button
+                  onClick={() => openAuthModal('signup')}
+                  className="w-full py-3 rounded-xl bg-brand-gold text-black font-bold text-xs hover:scale-105 transition-transform"
+                >
+                  Activate Solution
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Screenshots Area */}
         {product.screenshots && product.screenshots.length > 0 && (
           <div className="mb-24">
             <div className="text-center max-w-2xl mx-auto mb-12">
               <h2 className="text-3xl md:text-4xl font-extrabold text-white mb-4">
-                Interactive Platform Previews
+                Interactive Workspace Previews
               </h2>
               <p className="text-white/60 text-sm">
                 Explore actual interface screenshots and operational workspaces.
@@ -265,17 +370,17 @@ const ProductDetail = () => {
           <div id="pricing" className="mb-24">
             <div className="text-center max-w-2xl mx-auto mb-16">
               <h2 className="text-3xl md:text-4xl font-extrabold text-white mb-4">
-                Transparent Enterprise Pricing
+                Transparent Pricing Plans
               </h2>
               <p className="text-white/60 text-sm">
-                Choose the right plan to scale your digital operations with zero hidden fees.
+                Select a community, professional, or enterprise tier to scale your operations.
               </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {product.pricing.map((tier, idx) => (
+              {product.pricing.map((tier) => (
                 <div
-                  key={idx}
+                  key={tier.id}
                   className={`relative bg-[#252525] border rounded-3xl p-8 flex flex-col justify-between transition-all duration-300 ${
                     tier.popular
                       ? 'border-brand-gold shadow-2xl shadow-brand-gold/10 ring-1 ring-brand-gold/50'
@@ -307,7 +412,10 @@ const ProductDetail = () => {
                   </div>
 
                   <button
-                    onClick={() => (user ? navigate('/ralion') : openAuthModal('signup'))}
+                    onClick={() => {
+                      analytics.trackConversion('pricing_tier_select', { tier: tier.id });
+                      user ? navigate('/ralion/dashboard') : openAuthModal('signup');
+                    }}
                     className={`w-full py-3.5 rounded-xl font-bold text-xs transition-all ${
                       tier.popular
                         ? 'bg-gradient-to-r from-brand-gold to-amber-500 text-black shadow-lg shadow-brand-gold/20 hover:scale-105'
@@ -324,11 +432,11 @@ const ProductDetail = () => {
 
         {/* Final CTA Bar */}
         <div className="text-center bg-gradient-to-r from-brand-gold/20 via-[#252525] to-[#1c1c1c] border border-brand-gold/30 rounded-3xl p-12 shadow-2xl">
-          <h2 className="text-3xl font-extrabold text-white mb-4">
-            Ready to deploy {product.name}?
+          <h2 className="text-3xl font-extrabold text-white mb-3">
+            Empowered to Prosper with {product.name}
           </h2>
           <p className="text-white/60 text-sm max-w-xl mx-auto mb-8">
-            Create your unified Ras Ali Labs account in less than 60 seconds and experience the complete product suite.
+            Create your unified Ras Ali Labs account in seconds and unlock AI-powered business operations.
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-4">
@@ -338,20 +446,20 @@ const ProductDetail = () => {
             >
               Start Free
             </button>
+
             <button
               onClick={() => openAuthModal('login')}
               className="py-4 px-8 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold text-sm transition-all"
             >
               Login
             </button>
-            {isRalion && (
-              <Link
-                to="/ralion"
-                className="py-4 px-8 rounded-xl border border-brand-gold text-brand-gold font-bold text-sm hover:bg-brand-gold/10 transition-all flex items-center gap-2"
-              >
-                Launch Ralion <ExternalLink size={16} />
-              </Link>
-            )}
+
+            <Link
+              to="/downloads"
+              className="py-4 px-8 rounded-xl bg-white/5 border border-white/20 text-white font-semibold text-sm hover:bg-white/10 transition-all flex items-center gap-2"
+            >
+              <Download size={16} className="text-brand-gold" /> Download Desktop App
+            </Link>
           </div>
         </div>
       </div>
