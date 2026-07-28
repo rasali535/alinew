@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Youtube, Facebook, Instagram, Phone, Mail, Github, Sparkles } from 'lucide-react';
-import { socialLinks, navLinks } from '../../data/mock';
+import { Youtube, Facebook, Instagram, Phone, Mail, Github, Sparkles, ArrowRight } from 'lucide-react';
+import { socialLinks } from '../../data/mock';
 
 const Footer = () => {
   const iconMap = {
@@ -17,7 +17,7 @@ const Footer = () => {
     <footer className="bg-[#191919] border-t border-white/10 py-16 px-6 lg:px-12 text-white">
       <div className="max-w-7xl mx-auto">
         {/* Top Section */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10 mb-16">
           {/* Logo & Tagline */}
           <div className="lg:col-span-2">
             <Link to="/" className="flex items-center gap-3 mb-4 group">
@@ -31,25 +31,25 @@ const Footer = () => {
               Empowered to Prosper
             </p>
             <p className="text-white/60 text-sm max-w-md leading-relaxed mb-6">
-              Ras Ali Labs is the central enterprise software & AI innovation platform. Architecting intelligent systems, high-speed data pipelines, and sovereign trade platforms.
+              Ralion OS is the AI-powered business operating system that helps organizations run, automate, and grow. Combining enterprise CRM, workflow automation, and Mari AI intelligence into one platform.
             </p>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <Link
-                to="/ralion/community"
-                className="px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold hover:bg-emerald-500/20 transition-all flex items-center gap-1.5"
+                to="/products/ralion"
+                className="px-4 py-2 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-brand-gold text-xs font-semibold hover:bg-brand-gold/20 transition-all flex items-center gap-1.5"
               >
-                <Sparkles size={12} /> Community Edition Free
+                <Sparkles size={12} /> Explore Ralion OS
               </Link>
               <Link
-                to="/beta"
-                className="px-3.5 py-1.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400 text-xs font-semibold hover:bg-purple-500/20 transition-all"
+                to="/contact"
+                className="px-4 py-2 rounded-full bg-white/10 text-white text-xs font-semibold hover:bg-white/20 transition-all"
               >
-                Join Beta Program
+                Request Enterprise Demo
               </Link>
             </div>
           </div>
 
-          {/* Ecosystem Products */}
+          {/* Products Column */}
           <div>
             <h4 className="text-white/40 text-xs font-semibold uppercase tracking-wider mb-4">Products</h4>
             <div className="flex flex-col gap-2.5">
@@ -57,7 +57,7 @@ const Footer = () => {
                 Ralion OS
               </Link>
               <Link to="/products/mari-ai" className="text-white/70 hover:text-brand-gold text-sm transition-colors">
-                Mari AI
+                Mari AI Engine
               </Link>
               <Link to="/products/tradegrid-africa" className="text-white/70 hover:text-brand-gold text-sm transition-colors">
                 TradeGrid Africa
@@ -66,29 +66,48 @@ const Footer = () => {
                 DFS Platform
               </Link>
               <Link to="/changelog" className="text-white/70 hover:text-brand-gold text-sm transition-colors">
-                Changelog (v1.0.0)
+                Changelog (v2.4.2)
               </Link>
             </div>
           </div>
 
-          {/* SaaS Navigation */}
+          {/* Industry Solutions Column */}
           <div>
-            <h4 className="text-white/40 text-xs font-semibold uppercase tracking-wider mb-4">Resources</h4>
+            <h4 className="text-white/40 text-xs font-semibold uppercase tracking-wider mb-4">Solutions</h4>
             <div className="flex flex-col gap-2.5">
+              <Link to="/solutions" className="text-white/70 hover:text-brand-gold text-sm transition-colors">
+                Funeral OS
+              </Link>
+              <Link to="/solutions" className="text-white/70 hover:text-brand-gold text-sm transition-colors">
+                Logistics OS
+              </Link>
+              <Link to="/solutions" className="text-white/70 hover:text-brand-gold text-sm transition-colors">
+                Health OS
+              </Link>
+              <Link to="/solutions" className="text-white/70 hover:text-brand-gold text-sm transition-colors">
+                Trade OS
+              </Link>
+            </div>
+          </div>
+
+          {/* Enterprise & Company Column */}
+          <div>
+            <h4 className="text-white/40 text-xs font-semibold uppercase tracking-wider mb-4">Enterprise & Support</h4>
+            <div className="flex flex-col gap-2.5">
+              <Link to="/pricing" className="text-white/70 hover:text-brand-gold text-sm transition-colors">
+                Security & Isolation
+              </Link>
               <Link to="/pricing" className="text-white/70 hover:text-brand-gold text-sm transition-colors">
                 Pricing & Plans
               </Link>
-              <Link to="/demo" className="text-white/70 hover:text-brand-gold text-sm transition-colors">
-                Interactive Demo
-              </Link>
-              <Link to="/docs" className="text-white/70 hover:text-brand-gold text-sm transition-colors">
-                Documentation Portal
+              <Link to="/about" className="text-white/70 hover:text-brand-gold text-sm transition-colors">
+                About Ras Ali Labs
               </Link>
               <Link to="/support" className="text-white/70 hover:text-brand-gold text-sm transition-colors">
-                Support & Ticket Portal
+                Customer Support
               </Link>
-              <Link to="/developers" className="text-white/70 hover:text-brand-gold text-sm transition-colors">
-                Developer Portal
+              <Link to="/contact" className="text-white/70 hover:text-brand-gold text-sm transition-colors">
+                Contact Enterprise Sales
               </Link>
             </div>
           </div>

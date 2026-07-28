@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import './App.css';
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import Header from './components/layout/Header';
 import Footer from './components/layout/Footer';
@@ -22,7 +22,6 @@ import Downloads from './pages/Downloads';
 import RalionDownload from './pages/RalionDownload';
 import Releases from './pages/Releases';
 import AdminReleases from './pages/AdminReleases';
-import DeveloperPortal from './pages/DeveloperPortal';
 import About from './pages/About';
 import Services from './pages/Services';
 import Work from './pages/Work';
@@ -88,8 +87,8 @@ function App() {
 
                 {/* Ecosystem Links */}
                 <Route path="/solutions" element={<Solutions />} />
-                <Route path="/developers" element={<DeveloperPortal />} />
-                <Route path="/developer" element={<DeveloperPortal />} />
+                <Route path="/developers" element={<Navigate to="/products/ralion" replace />} />
+                <Route path="/developer" element={<Navigate to="/products/ralion" replace />} />
 
                 {/* Main Company Pages */}
                 <Route path="/" element={<Home />} />

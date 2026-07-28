@@ -2,12 +2,13 @@
 export const navLinks = [
   { name: 'Home', href: '/' },
   { name: 'Products', href: '/products' },
+  { name: 'Solutions', href: '/solutions' },
   { name: 'Pricing', href: '/pricing' },
   { name: 'Demo', href: '/demo' },
-  { name: 'Docs', href: '/docs' },
   { name: 'Support', href: '/support' },
   { name: 'Downloads', href: '/downloads' },
-  { name: 'Developer Portal', href: '/developers' },
+  { name: 'About', href: '/about' },
+  { name: 'Contact', href: '/contact' },
 ];
 
 export const heroWords = ['BASSIST.', 'ENGINEER.', 'VISUALS.', 'DEVELOPER.'];
