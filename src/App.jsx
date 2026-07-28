@@ -7,6 +7,8 @@ import Footer from './components/layout/Footer';
 import Home from './pages/Home';
 import Products from './pages/Products';
 import ProductDetail from './pages/ProductDetail';
+import RalionCRMProduct from './pages/RalionCRMProduct';
+import RalionGrowthProduct from './pages/RalionGrowthProduct';
 import RalionApp from './pages/RalionApp';
 import CommunityEdition from './pages/CommunityEdition';
 import Onboarding from './pages/Onboarding';
@@ -65,6 +67,8 @@ function App() {
                 <Route path="/solutions" element={<Solutions />} />
                 <Route path="/industries" element={<Industries />} />
                 <Route path="/products" element={<Products />} />
+                <Route path="/products/ralion-crm" element={<RalionCRMProduct />} />
+                <Route path="/products/ralion-growth" element={<RalionGrowthProduct />} />
                 <Route path="/products/:slug" element={<ProductDetail />} />
                 <Route path="/about" element={<About />} />
                 <Route path="/request-demo" element={<RequestDemo />} />

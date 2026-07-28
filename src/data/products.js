@@ -1,7 +1,175 @@
 // Enterprise Product Architecture for Ras Ali Labs Ecosystem
-// Central repository for product metadata, features, industry solutions, pricing, and routing.
+// Central repository for Ralion OS, Ralion CRM, Ralion AI Growth Engine, Mari AI, TradeGrid Africa, and DFS Platform.
 
 export const productsData = [
+  {
+    id: 'ralion-crm',
+    slug: 'ralion-crm',
+    name: 'Ralion CRM',
+    tagline: 'AI Customer Intelligence & Automated Sales Assistant',
+    category: 'Customer Intelligence / Sales Automation',
+    status: 'Available',
+    statusBadge: 'Priority Core Product',
+    badgeColor: 'bg-brand-gold/10 text-brand-gold border-brand-gold/20',
+    philosophy: 'Ralion does not just manage your business activity. It understands your business, predicts opportunities, and helps you grow.',
+    description: 'Ralion CRM combines AI customer intelligence, smart pipeline management, and an automated AI sales assistant into one predictive workspace.',
+    longDescription: `Ralion CRM is an AI-powered sales & customer intelligence platform that builds contextual memory around every client interaction. Powered by Mari AI reasoning agents, Ralion CRM automatically scores deal opportunities, triggers hyper-personalized follow-ups, identifies high-value leads, and delivers real-time business insights to accelerate revenue.`,
+    icon: 'UserCheck',
+    appUrl: '/ralion/crm',
+    accentColor: '#D4AF37',
+    cta: {
+      primary: { text: 'Start Free', href: '/ralion/community' },
+      secondary: { text: 'Request Demo', href: '/request-demo' },
+      login: { text: 'Login', href: '#auth' },
+      launch: { text: 'Launch Ralion CRM', href: '/ralion/crm' }
+    },
+    seo: {
+      title: 'Ralion CRM — AI Customer Intelligence & Sales Assistant | Ras Ali Labs',
+      description: 'Accelerate deal closing with Ralion CRM. AI customer intelligence, smart pipeline management, customer memory, and opportunity scoring.'
+    },
+    hero: {
+      title: 'Ralion CRM — AI Customer Intelligence',
+      tagline: 'AI Customer Intelligence & Automated Sales Assistant',
+      subtitle: 'Predict opportunities, automate client follow-ups, and convert leads with an AI sales assistant that remembers every interaction.',
+      stats: [
+        { label: 'Pipeline Automation', value: 'Instant' },
+        { label: 'Deal Velocity Increase', value: '3.4x' },
+        { label: 'Customer Memory Context', value: 'Sub-second' },
+        { label: 'Opportunity Accuracy', value: '98.5%' }
+      ]
+    },
+    features: [
+      {
+        id: 'customer-intelligence',
+        title: 'AI Customer Intelligence',
+        description: 'Deep customer profiling with automated intent detection, behavioral history, and predictive buying signals.',
+        icon: 'UserCheck'
+      },
+      {
+        id: 'sales-assistant',
+        title: 'AI Sales Assistant',
+        description: 'Mari AI co-pilot that drafts tailored email responses, prepares meeting briefs, and recommends next sales actions.',
+        icon: 'Bot'
+      },
+      {
+        id: 'pipeline-management',
+        title: 'Smart Pipeline Management',
+        description: 'Dynamic Kanban and list views with automated stage progression, stale deal alerts, and bottleneck detection.',
+        icon: 'BarChart3'
+      },
+      {
+        id: 'customer-memory',
+        title: 'Contextual Customer Memory',
+        description: 'Sub-second RAG search across past emails, call logs, contracts, and support tickets for instant background memory.',
+        icon: 'Database'
+      },
+      {
+        id: 'automated-followups',
+        title: 'Automated Follow-ups',
+        description: 'Event-driven follow-up triggers ensuring zero leads are forgotten or dropped across long sales cycles.',
+        icon: 'Zap'
+      },
+      {
+        id: 'opportunity-scoring',
+        title: 'Predictive Opportunity Scoring',
+        description: 'Algorithmic lead scoring ranking high-probability revenue deals based on client engagement and budget markers.',
+        icon: 'TrendingUp'
+      },
+      {
+        id: 'business-insights',
+        title: 'Real-time Business Insights',
+        description: 'Executive revenue dashboards forecasting monthly MRR, conversion rates, and sales rep performance.',
+        icon: 'PieChart'
+      }
+    ]
+  },
+  {
+    id: 'ralion-growth',
+    slug: 'ralion-growth',
+    name: 'Ralion AI Growth Engine',
+    tagline: 'The AI Marketing Strategist & Brand Growth Platform',
+    category: 'AI Growth / Marketing Automation',
+    status: 'Available',
+    statusBadge: 'Priority Core Product',
+    badgeColor: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+    philosophy: 'Ralion does not just manage your business activity. It understands your business, predicts opportunities, and helps you grow.',
+    description: 'Ralion AI Growth Engine acts as your autonomous marketing strategist, generating brand strategy, listening to market signals, and executing CRM-connected campaigns.',
+    longDescription: `Positioned far beyond traditional social media schedulers, Ralion AI Growth Engine is an AI marketing strategist. It analyzes market trends, performs social listening, generates multi-platform content strategies, and launches automated growth campaigns linked directly to your CRM revenue pipeline.`,
+    icon: 'TrendingUp',
+    appUrl: '/ralion/growth',
+    accentColor: '#A855F7',
+    cta: {
+      primary: { text: 'Start Free', href: '/ralion/community' },
+      secondary: { text: 'Request Demo', href: '/request-demo' },
+      login: { text: 'Login', href: '#auth' },
+      launch: { text: 'Launch Growth Engine', href: '/ralion/growth' }
+    },
+    seo: {
+      title: 'Ralion AI Growth Engine — The AI Marketing Strategist | Ras Ali Labs',
+      description: 'Scale your enterprise with Ralion AI Growth Engine. AI campaign planning, brand intelligence, social listening, and CRM-connected campaigns.'
+    },
+    hero: {
+      title: 'Ralion AI Growth Engine',
+      tagline: 'The AI Marketing Strategist & Brand Growth Platform',
+      subtitle: 'Autonomous brand intelligence, social listening, content strategy generation, and CRM-connected marketing campaigns.',
+      stats: [
+        { label: 'Campaign Creation', value: '10x Faster' },
+        { label: 'Social Listening Coverage', value: 'Global' },
+        { label: 'Content Strategy RAG', value: 'Contextual' },
+        { label: 'CRM Pipeline Link', value: 'Direct' }
+      ]
+    },
+    features: [
+      {
+        id: 'campaign-planning',
+        title: 'AI Campaign Planning',
+        description: 'Strategic multi-channel campaign blueprints generated automatically from your product goals and target audience.',
+        icon: 'Sparkles'
+      },
+      {
+        id: 'brand-intelligence',
+        title: 'Brand Intelligence',
+        description: 'Continuous monitoring of your brand positioning, messaging consistency, and competitive market share.',
+        icon: 'ShieldCheck'
+      },
+      {
+        id: 'audience-analysis',
+        title: 'Audience Analysis',
+        description: 'Deep customer demographic & psychographic segmentation derived from real CRM client purchase data.',
+        icon: 'Users'
+      },
+      {
+        id: 'social-listening',
+        title: 'Social Listening',
+        description: 'Real-time sentiment monitoring across digital channels, tracking brand mentions, industry keywords, and buyer intent.',
+        icon: 'Activity'
+      },
+      {
+        id: 'content-strategy',
+        title: 'Content Strategy Generation',
+        description: 'Data-driven editorial calendars and topical clusters tailored to your enterprise brand tone of voice.',
+        icon: 'Layers'
+      },
+      {
+        id: 'content-creation',
+        title: 'Multi-Platform Content Creation',
+        description: 'Automated generation of long-form articles, executive social posts, press announcements, and visual media briefs.',
+        icon: 'Share2'
+      },
+      {
+        id: 'marketing-automation',
+        title: 'Marketing Automation',
+        description: 'Multi-step nurture workflows connecting ad clicks to sales demo bookings and customer onboarding.',
+        icon: 'Zap'
+      },
+      {
+        id: 'crm-campaigns',
+        title: 'CRM-Connected Campaigns',
+        description: 'Direct attribution linking marketing campaigns to closed-won deals in Ralion CRM.',
+        icon: 'Globe'
+      }
+    ]
+  },
   {
     id: 'ralion',
     slug: 'ralion',
@@ -11,13 +179,14 @@ export const productsData = [
     status: 'Available',
     statusBadge: 'Featured Enterprise OS',
     badgeColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+    philosophy: 'Ralion does not just manage your business activity. It understands your business, predicts opportunities, and helps you grow.',
     description: 'Ralion combines business operations, automation, and artificial intelligence into one platform.',
     longDescription: `Ralion OS is the AI-powered business operating system that helps organizations run, automate, and grow. Designed for modern enterprises, healthcare providers, logistics operators, and trade networks, Ralion unifies customer relationship management (CRM), tasks, document vaults, billing, analytics, and Mari AI intelligence into a single secure platform.`,
     icon: 'Cpu',
     appUrl: '/ralion',
-    accentColor: '#D4AF37', // Brand Gold
+    accentColor: '#D4AF37',
     cta: {
-      primary: { text: 'Request Demo', href: '/contact' },
+      primary: { text: 'Request Demo', href: '/request-demo' },
       secondary: { text: 'Explore Solutions', href: '/solutions' },
       login: { text: 'Login', href: '#auth' },
       launch: { text: 'Launch Ralion OS', href: '/ralion' }
@@ -121,33 +290,7 @@ export const productsData = [
         { title: 'Assist Employees', desc: 'Guide staff through standardized operational procedures, case files, and client requests.' },
         { title: 'Automate Repetitive Work', desc: 'Trigger document generation, email drafts, and database updates automatically.' }
       ]
-    },
-    solutions: [
-      {
-        id: 'small-business',
-        name: 'Small Business',
-        title: 'All-in-One Business OS for Growing Teams',
-        description: 'Consolidate CRM, invoicing, project tracking, and customer communication into a single affordable workspace.',
-        highlights: [
-          'Unified Customer & Contact Database',
-          'Automated Quotations & Invoice Tracking',
-          'Built-in Mari AI Assistant',
-          'Fast Onboarding Setup'
-        ]
-      },
-      {
-        id: 'enterprise',
-        name: 'Enterprise',
-        title: 'High-Throughput Operations for Scaled Organizations',
-        description: 'Multi-tenant infrastructure with custom RBAC roles, dedicated Supabase instances, and 24/7 priority support.',
-        highlights: [
-          'Dedicated PostgreSQL & pgvector Database',
-          'Unlimited Team Seats & Industry OS Modules',
-          'Custom USSD & API Gateway Integration',
-          'SLA Guarantee & Dedicated Support'
-        ]
-      }
-    ]
+    }
   },
   {
     id: 'mari-ai',
