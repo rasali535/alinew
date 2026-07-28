@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { navLinks } from '../../data/mock';
 import { useAuth } from '../../context/AuthContext';
-import { User, LogOut, ChevronDown, Sparkles, Building2, UserCheck } from 'lucide-react';
+import { User, LogOut, ChevronDown, Sparkles, Building2, UserCheck, ArrowRight } from 'lucide-react';
 
 const Header = () => {
   const [currentTime, setCurrentTime] = useState('');
@@ -34,14 +34,16 @@ const Header = () => {
           />
           <div className="hidden sm:flex flex-col border-l border-white/15 pl-3">
             <span className="text-white font-bold text-sm tracking-wider uppercase">Ras Ali Labs</span>
-            <span className="text-brand-gold text-[10px] tracking-widest uppercase font-medium">Empowered to Prosper</span>
+            <span className="text-brand-gold text-[10px] tracking-widest uppercase font-medium">Enterprise AI Systems</span>
           </div>
         </Link>
 
-        {/* Desktop Navigation */}
+        {/* Desktop Enterprise Navigation */}
         <div className="hidden lg:flex items-center gap-6 xl:gap-8">
           {navLinks.map((link) => {
             const isActive = location.pathname === link.href || (link.href !== '/' && location.pathname.startsWith(link.href));
+            const isDemo = link.href === '/request-demo';
+            if (isDemo) return null; // Render Demo button separately
             return (
               <Link
                 key={link.name}
@@ -58,7 +60,7 @@ const Header = () => {
           })}
         </div>
 
-        {/* Right Section: Auth & Live Time */}
+        {/* Right Section: Request Demo & Auth */}
         <div className="hidden lg:flex items-center gap-5">
           <div className="flex flex-col items-end text-right border-r border-white/10 pr-4">
             <div className="flex items-center gap-2">
@@ -68,7 +70,14 @@ const Header = () => {
             <span className="text-white/40 text-[10px]">Gaborone, Botswana</span>
           </div>
 
-          {/* User Account / Single Sign-On Button */}
+          <Link
+            to="/request-demo"
+            className="px-4 py-2 rounded-full bg-gradient-to-r from-brand-gold to-amber-500 text-black text-xs font-bold hover:shadow-lg hover:shadow-brand-gold/20 hover:scale-105 transition-all duration-300 flex items-center gap-1.5"
+          >
+            Request Demo <ArrowRight size={12} />
+          </Link>
+
+          {/* User Account Dropdown */}
           {user ? (
             <div className="relative">
               <button
@@ -86,7 +95,7 @@ const Header = () => {
                 <div className="absolute right-0 mt-2 w-52 bg-[#252525] border border-white/10 rounded-xl p-2 shadow-2xl z-50 animate-fadeIn">
                   <div className="px-3 py-2 border-b border-white/10 mb-1">
                     <p className="text-white font-medium text-xs truncate">{user.email}</p>
-                    <span className="text-[10px] text-brand-gold">Unified SSO Account</span>
+                    <span className="text-[10px] text-brand-gold">Enterprise SSO Account</span>
                   </div>
                   <Link
                     to="/ralion/dashboard"
@@ -100,7 +109,7 @@ const Header = () => {
                     onClick={() => setIsUserDropdownOpen(false)}
                     className="flex items-center gap-2 px-3 py-2 text-xs text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
                   >
-                    <Building2 size={14} className="text-purple-400" /> Organization Onboarding
+                    <Building2 size={14} className="text-purple-400" /> Organization Setup
                   </Link>
                   <Link
                     to="/account"
@@ -122,33 +131,23 @@ const Header = () => {
               )}
             </div>
           ) : (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => openAuthModal('login')}
-                className="px-4 py-2 rounded-full border border-brand-gold/40 text-brand-gold text-xs font-semibold hover:bg-brand-gold/10 transition-all duration-300"
-              >
-                Sign In
-              </button>
-              <button
-                onClick={() => openAuthModal('signup')}
-                className="px-4 py-2 rounded-full bg-gradient-to-r from-brand-gold to-amber-500 text-black text-xs font-bold hover:shadow-lg hover:shadow-brand-gold/20 hover:scale-105 transition-all duration-300"
-              >
-                Start Free
-              </button>
-            </div>
+            <button
+              onClick={() => openAuthModal('login')}
+              className="px-4 py-2 rounded-full border border-brand-gold/40 text-brand-gold text-xs font-semibold hover:bg-brand-gold/10 transition-all duration-300"
+            >
+              Sign In
+            </button>
           )}
         </div>
 
         {/* Mobile Menu Button */}
         <div className="flex items-center gap-3 lg:hidden">
-          {!user && (
-            <button
-              onClick={() => openAuthModal('login')}
-              className="px-3 py-1.5 rounded-lg border border-brand-gold/40 text-brand-gold text-xs font-medium"
-            >
-              Sign In
-            </button>
-          )}
+          <Link
+            to="/request-demo"
+            className="px-3 py-1.5 rounded-lg bg-brand-gold text-black text-xs font-bold"
+          >
+            Demo
+          </Link>
           <button
             className="text-white p-2"
             onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -166,7 +165,7 @@ const Header = () => {
         <div className="lg:hidden absolute top-full left-0 right-0 bg-[#1c1c1c] border-b border-white/10 py-6 px-6 shadow-2xl animate-fadeIn">
           <div className="flex items-center gap-2 pb-4 mb-4 border-b border-white/10">
             <span className="text-white font-bold text-sm">Ras Ali Labs</span>
-            <span className="text-brand-gold text-xs">— Empowered to Prosper</span>
+            <span className="text-brand-gold text-xs">— Enterprise AI Systems</span>
           </div>
 
           <div className="space-y-3">
@@ -180,58 +179,6 @@ const Header = () => {
                 {link.name}
               </Link>
             ))}
-          </div>
-
-          <div className="mt-6 pt-6 border-t border-white/10 flex flex-col gap-3">
-            {user ? (
-              <div className="space-y-3">
-                <div className="text-white/60 text-xs truncate">Logged in as: {user.email}</div>
-                <Link
-                  to="/ralion/dashboard"
-                  onClick={() => setIsMenuOpen(false)}
-                  className="w-full py-2.5 rounded-xl bg-brand-gold text-black font-bold text-center block text-sm"
-                >
-                  Launch Ralion OS
-                </Link>
-                <Link
-                  to="/account"
-                  onClick={() => setIsMenuOpen(false)}
-                  className="w-full py-2.5 rounded-xl bg-white/10 text-white font-semibold text-center block text-sm"
-                >
-                  Account Profile
-                </Link>
-                <button
-                  onClick={() => {
-                    signOut();
-                    setIsMenuOpen(false);
-                  }}
-                  className="w-full py-2.5 rounded-xl border border-red-500/40 text-red-400 font-medium text-center block text-sm"
-                >
-                  Sign Out
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    openAuthModal('login');
-                  }}
-                  className="w-full py-2.5 rounded-xl border border-brand-gold text-brand-gold font-medium text-xs text-center"
-                >
-                  Login
-                </button>
-                <button
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    openAuthModal('signup');
-                  }}
-                  className="w-full py-2.5 rounded-xl bg-brand-gold text-black font-bold text-xs text-center"
-                >
-                  Start Free
-                </button>
-              </div>
-            )}
           </div>
         </div>
       )}

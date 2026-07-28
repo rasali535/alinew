@@ -1,226 +1,90 @@
-// Mock data for Ras Ali
+// Enterprise Mock & Navigation Data for Ras Ali Labs
 export const navLinks = [
-  { name: 'Home', href: '/' },
-  { name: 'Products', href: '/products' },
   { name: 'Solutions', href: '/solutions' },
-  { name: 'Pricing', href: '/pricing' },
-  { name: 'Demo', href: '/demo' },
-  { name: 'Support', href: '/support' },
-  { name: 'Downloads', href: '/downloads' },
-  { name: 'About', href: '/about' },
-  { name: 'Contact', href: '/contact' },
+  { name: 'Industries', href: '/industries' },
+  { name: 'Products', href: '/products' },
+  { name: 'Company', href: '/about' },
+  { name: 'Request Demo', href: '/request-demo' }
 ];
 
-export const heroWords = ['BASSIST.', 'ENGINEER.', 'VISUALS.', 'DEVELOPER.'];
+export const heroWords = ['AUTOMATION.', 'INTELLIGENCE.', 'SYSTEMS.', 'ENTERPRISE.'];
 
-// SVG Logo Data URI for "Artist Portfolio"
-const logoImage = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MDAiIGhlaWdodD0iNjAwIiB2aWV3Qm94PSIwIDAgODAwIDYwMCIgc3R5bGU9ImJhY2tncm91bmQtY29sb3I6IzBhMGEwYSI+CiAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoNDAwIDMwMCkgc2NhbGUoNSkiPgogICAgPCEtLSBEb3RzIC0tPgogICAgPGNpcmNsZSBjeD0iLTI1IiBjeT0iLTMwIiByPSI4IiBmaWxsPSIjYTNlNjM1Ii8+CiAgICA8Y2lyY2xlIGN4PSIwIiBjeT0iLTMwIiByPSI4IiBmaWxsPSIjYTNlNjM1Ii8+CiAgICA8Y2lyY2xlIGN4PSIyNSIgY3k9Ii0zMCIgcj0iOCIgZmlsbD0id2hpdGUiIG9wYWNpdHk9IjAuMyIvPgogICAgPCEtLSBUZXh0IC0tPgogICAgPHRleHQgeD0iMCIgeT0iMjAiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSI0MCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGxldHRlci1zcGFjaW5nPSIycHgiPlJBUyBBTEk8L3RleHQ+CiAgPC9nPgo8L3N2Zz4=`;
+export const companyInfo = {
+  name: 'Ras Ali Labs',
+  tagline: 'Empowered to Prosper',
+  headline: 'AI-Powered Operating Systems for Modern Enterprises',
+  subheadline: 'Ras Ali Labs builds intelligent platforms that automate operations, connect teams, and help organisations make smarter decisions through AI.',
+  description: 'Ras Ali Labs is a premier enterprise AI technology company building intelligent operating systems, business automation platforms, and sovereign digital infrastructure.',
+  email: 'contact@rasalilabs.com',
+  location: 'Gaborone, Botswana'
+};
 
 export const featuredProjects = [
   {
-    id: 4,
-    title: 'Artist Portfolio',
-    subtitle: 'Web Development',
-    image: '/assets/images/logo.png', // Using high-res logo
-    category: 'Web',
-    roles: ['Full Stack Development', 'UI/UX Design', 'Brand Identity'],
-    date: '2024 - Present',
-    description: "Designed and developed a personal portfolio to showcase a multi-disciplinary skill set. Built with React and Tailwind CSS, focusing on performance, SEO, and a premium dark-mode aesthetic to reflect a tech-forward brand identity."
+    id: 1,
+    title: 'Ralion OS',
+    subtitle: 'AI Business Operating System',
+    image: '/assets/images/logo.png',
+    category: 'Enterprise OS',
+    roles: ['Enterprise Architecture', 'AI Automation', 'Supabase Integration'],
+    date: '2026',
+    description: "The AI Operating System for Business. Combines core business management, workflow automation, and Mari AI reasoning agents into a single unified platform."
   },
   {
-    id: 7,
-    title: 'Eagle Touch Tours',
-    subtitle: 'Tourism Website',
-    image: '/assets/images/eagle-touch-logo.png',
-    category: 'Web',
-    link: 'https://www.eagletouchtours.com',
-    roles: ['Frontend Development', 'UI Design', 'Content Management'],
-    date: '2023',
-    description: "Created a vibrant tourism website for Eagle Touch Tours. The project focused on showcasing tour packages with high-quality imagery and an intuitive booking inquiry system, helping to increase customer engagement and inquiries."
-  },
-  {
-    id: 8,
-    title: 'Peregrine Tours',
-    subtitle: 'Safari & Travel Website',
-    image: '/assets/images/peregrine-logo.png',
-    category: 'Web',
-    link: 'https://www.peregrinetoursandsafaris.com',
-    roles: ['Web Design', 'Responsive Development', 'SEO Optimization'],
-    date: '2023',
-    description: "Developed a safari and travel website for Peregrine Tours. The site features a responsive layout optimized for mobile devices, ensuring travelers can easily access safari details and itineraries on the go."
-  },
-  {
-    id: 9,
-    title: 'The Safari Butler',
-    subtitle: 'Luxury Travel Website',
-    image: '/assets/images/safari-butler-logo.jpg',
-    category: 'Web',
-    link: 'https://www.thesafaributler.com',
-    roles: ['Custom Development', 'Luxury Branding', 'User Experience'],
-    date: '2022',
-    description: "Crafted a high-end web experience for The Safari Butler, emphasizing luxury and exclusivity. The design uses elegant typography and spacious layouts to mirror the premium nature of their bespoke travel services."
-  },
-  {
-    id: 10,
-    title: 'Pameltex',
-    subtitle: 'Corporate Website',
-    image: '/assets/images/pameltex-logo.png',
-    category: 'Web',
-    link: 'https://www.pameltex.com',
-    roles: ['Corporate Web Development', 'Information Architecture', 'Performance Optimization'],
-    date: '2024',
-    description: "Built an efficient and comprehensive corporate website for Pameltex. The focus was on clear information architecture to present their diverse services professionally, ensuring fast load times and accessibility for corporate clients."
-  },
-  {
-    id: 11,
-    title: 'Lebville Boutique',
-    subtitle: 'E-commerce Website',
-    image: '/assets/images/lebville-logo.png',
-    category: 'Web',
-    link: 'https://www.lebvilleboutique.com',
-    roles: ['E-commerce Development', 'Payment Integration', 'Mobile Optimization'],
-    date: '2023',
-    description: "Built a stylish e-commerce platform for Lebville Boutique. Key features include a seamless shopping cart experience, secure payment gateway integration, and a mobile-first design to capture mobile shoppers."
-  },
-  {
-    id: 12,
-    title: 'BB Travel Tours',
-    subtitle: 'Travel Agency Website',
-    image: '/assets/images/bb-travel-logo.jpg',
-    category: 'Web',
-    link: 'https://www.bbtraveltours.com',
-    roles: ['Web Development', 'CMS Integration', 'SEO Strategy'],
-    date: '2022',
-    description: "Developed a travel agency website for BB Travel Tours with a focus on ease of content management. Integrated a CMS to allow the client to easily update packages and pricing, paired with a solid SEO strategy to boost visibility."
-  },
-  {
-    id: 13,
-    title: 'The Melody Gospel',
-    subtitle: 'TV Show Production',
-    image: '/assets/images/melody-logo.jpg',
-    category: 'TV Production',
-    roles: ['Music Director', 'Composer', 'Sound Engineer', 'Intro Composer', 'Show Director'],
-    date: '2014 - 2023',
-    description: "The Melody Gospel is a long-running TV production where I served in multiple key capacities. From directing the show to composing the intro music, engineering the sound, and directing the musical performances, this project highlights a comprehensive range of production skills over nearly a decade."
-  },
-  {
-    id: 14,
-    title: 'Pula Pitch',
-    subtitle: 'Business Reality TV Show',
-    image: '/assets/images/pula-pitch-logo.jpg',
-    category: 'TV Production',
-    roles: ['Videographer Main Camera', 'Props Set up', 'Pre-Production Planning'],
-    date: '2023',
-    description: "Pula Pitch is a business reality TV show where I was responsible for the main camera work, set design, and prop setup, as well as handling pre-production planning. This project demanded sharp visual storytelling and seamless technical execution during filming."
-  },
-  {
-    id: 15,
-    title: 'Dedications',
-    subtitle: 'Music Request Show',
-    image: '/assets/images/ras-ali-bass-2.png',
-    category: 'TV Production',
-    roles: ['Bassist', 'Artist Liaison', 'Arrangements & Composition'],
-    date: '2019 - 2020',
-    description: "For the 'Dedications' music request show, I served as the resident bassist, managed relationships as the artist liaison, and handled musical arrangements and composition. My role was central to ensuring the musical quality and smooth operation of the show's performances."
-  },
-  {
-    id: 16,
-    title: 'Bridging the USSD-Web Gap',
-    subtitle: 'Supabase & AI Case Study',
-    image: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop',
-    category: 'Case Study',
-    link: '/case-study/ussd-web-gap',
-    roles: ['System Architecture', 'Supabase Edge Functions', 'AI Integration', 'pgvector Implementation'],
-    date: '2024',
-    description: "A comprehensive case study demonstrating a scalable architecture designed to synchronize USSD interactions with modern web platforms using an AI-driven interface. Built with Supabase, Gemini API, and pgvector."
-  },
-  {
-    id: 17,
-    title: 'Talent Centre',
-    subtitle: 'Management and Training Consultants',
-    image: 'https://images.unsplash.com/photo-1552664730-d307ca884978?q=80&w=2070&auto=format&fit=crop',
-    category: 'Web',
-    link: 'https://talentcentre.co.za/',
-    roles: ['Web Development', 'UI/UX Design', 'Business Consulting'],
-    date: '2024',
-    description: "Developed an online presence for Talent Centre, an ideal business consulting agency. The website showcases their services in Business Advisory, Management Consultancy, Training, and Empowerment Programs."
-  },
-  {
-    id: 18,
-    title: 'Pula Trade Africa',
-    subtitle: 'Powering Enterprise Trade Across Africa',
+    id: 2,
+    title: 'TradeGrid Africa',
+    subtitle: 'Sovereign Trade Infrastructure',
     image: 'https://images.unsplash.com/photo-1586528116311-ad8ed7c508c0?q=80&w=2070&auto=format&fit=crop',
     category: 'Platform',
     link: 'https://grey-rabbit-363724.hostingersite.com/',
-    roles: ['Platform Development', 'AI Integration', 'B2B Infrastructure'],
+    roles: ['B2B Infrastructure', 'AI Telemetry', 'Logistics Orchestration'],
     date: '2026',
-    description: "A comprehensive cross-border B2B trade infrastructure platform connecting suppliers, buyers, and logistics providers across the SADC corridor. Features specialized AI agents for trade discovery, compliance, and logistics orchestration."
+    description: "Cross-border B2B trade infrastructure platform connecting suppliers, buyers, and logistics providers across the SADC corridor."
   },
   {
-    id: 19,
-    title: 'LearnFlow',
-    subtitle: 'AI-Powered Course Platform',
-    image: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=2070&auto=format&fit=crop',
-    category: 'Platform',
-    link: 'https://pohei.de/',
-    roles: ['Platform Development', 'AI Integration', 'EdTech'],
-    date: '2025',
-    description: "LearnFlow is an AI-powered course platform designed to help educators build school-ready materials, automate tasks, and create personalized learning experiences in minutes."
-  },
-  {
-    id: 20,
+    id: 3,
     title: 'Pameltech Labs',
     subtitle: 'Technology & Innovation Lab',
     image: 'https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=2070&auto=format&fit=crop',
     category: 'Platform',
     link: 'https://pameltechlabs.com',
-    roles: ['Software Architecture', 'Full Stack Development', 'AI Research & R&D'],
+    roles: ['Software Architecture', 'Full Stack Development', 'AI R&D'],
     date: '2026',
-    description: "Architected and developed Pameltech Labs, a modern tech innovation platform specializing in high-performance enterprise systems, hardware-software integration, and AI-driven automation."
+    description: "Enterprise technology innovation platform specializing in high-performance enterprise systems, hardware-software integration, and AI-driven automation."
   },
   {
-    id: 21,
+    id: 4,
     title: 'Academy Foundations',
-    subtitle: 'Educational Infrastructure & Foundation Platform',
+    subtitle: 'Educational Infrastructure Platform',
     image: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=2070&auto=format&fit=crop',
     category: 'Web',
     link: 'https://academyfoundations.com',
-    roles: ['Web Development', 'EdTech Systems', 'UI/UX Design', 'Platform Integration'],
+    roles: ['Web Development', 'EdTech Systems', 'UI/UX Design'],
     date: '2025',
-    description: "Built the online platform for Academy Foundations, focusing on educational empowerment, digital learning resources, and intuitive student-institution onboarding."
+    description: "Digital learning infrastructure platform focusing on educational empowerment, digital learning resources, and student onboarding."
   }
 ];
 
 export const services = [
   {
     id: 1,
-    title: 'Bassist',
-    items: ['Live Performance', 'Studio Recording', 'Session Musician', 'Groove Consultation']
+    title: 'Enterprise AI Solutions',
+    items: ['Custom LLM Reasoning Agents', 'Mari AI Integration', 'Vector Database Search', 'Contextual Document Intelligence']
   },
   {
     id: 2,
-    title: 'Sound Engineer',
-    items: ['Mixing', 'Mastering', 'Live Sound', 'Podcast Editing']
+    title: 'AI Automation',
+    items: ['Event-Driven Business Triggers', 'Automated Document Generation', 'Database Synchronization', 'USSD-to-Web Gateway']
   },
   {
     id: 3,
-    title: 'Videographer',
-    items: ['Music Videos', 'Event Coverage', 'Documentaries', 'Video Editing', 'Adverts', 'Pre & Post Production', 'Voice Overs']
+    title: 'Custom Software Development',
+    items: ['Sovereign Cloud Platforms', 'Micro-Frontend Systems', 'Supabase & PostgreSQL Security', 'Mobile & Desktop Shells']
   },
   {
     id: 4,
-    title: 'Developer',
-    items: ['Web Development', 'React Applications', 'UI/UX Implementation', 'Technical Consulting', 'App Development', 'USSD Solutions', 'Frontend & Backend', 'GitHub']
-  },
-  {
-    id: 5,
-    title: 'Media & Branding',
-    items: ['Logos', 'Motion Graphics', 'Company Profiles', 'Business Cards', 'Banners', 'Posters']
-  },
-  {
-    id: 6,
-    title: 'AI & Chatbots',
-    items: ['Custom AI Solutions', 'Intelligent Chatbots', 'Workflow Automation', 'Gemini AI Integration', 'Lead Generation Bots']
+    title: 'Ralion OS Implementation',
+    items: ['Funeral OS', 'Logistics OS', 'Health OS', 'Trade OS', 'Government Systems']
   }
 ];
 
@@ -234,66 +98,37 @@ export const aiPrototypes = [
   {
     title: 'Supplier Risk Monitor',
     image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=2015&auto=format&fit=crop',
-    status: 'Live on Vercel'
+    status: 'Live Enterprise OS'
   },
   {
-    title: 'Agent Workflow Viz',
+    title: 'Mari AI Reasoning Viz',
     image: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop',
-    status: 'R&D Prototype'
-  },
-  {
-    title: 'LearnFlow EdTech AI',
-    image: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=2070&auto=format&fit=crop',
-    status: 'Live on Vercel'
+    status: 'Core System'
   }
 ];
 
 export const clients = [
-  'Caroline Sithole (Jazz)',
-  'Channty Natural (Reggae)',
-  'The Space Live Band',
-  'Tlotlo Hotel & Conference Center',
-  'Masa Square Protea Hotel',
-  'Colmas Studios',
-  'Sound Hub Studios',
-  'Livewire Recording Studios'
+  'Enterprise Logistics Network',
+  'Healthcare Consultation System',
+  'Funeral Services Group',
+  'SADC B2B Trade Network'
 ];
 
 export const faqs = [
   {
-    question: 'Are you available for touring?',
-    answer: 'Yes, I am available for both local and international tours. Please contact me for scheduling.'
+    question: 'How does Ralion OS integrate with existing enterprise systems?',
+    answer: 'Ralion OS connects via secure REST APIs, PostgreSQL edge syncs, and USSD gateways to integrate with your existing databases.'
   },
   {
-    question: 'Do you provide mixing and mastering services online?',
-    answer: 'Absolutely. You can send me your tracks, and I will deliver professional mixes and masters remotely.'
-  },
-  {
-    question: 'What is your turnaround time for video editing?',
-    answer: 'It depends on the project length and complexity, but typically I deliver within 1-2 weeks.'
-  },
-  {
-    question: 'Can you build a website for my band?',
-    answer: 'Yes, I specialize in creating portfolios and websites for artists and musicians.'
+    question: 'What is Mari AI and how does it assist my organization?',
+    answer: 'Mari AI is your embedded reasoning engine that analyzes documents, generates operational insights, and automates repetitive business processes.'
   }
 ];
 
-export const companyInfo = {
-  name: 'Ras Ali',
-  tagline: 'Software Engineer, AI Integrator & Creative Technologist',
-  location: 'Gaborone, Botswana',
-  address: 'Plot 74212 G.North, Gaborone Botswana',
-  phone: '+267 77 150 423',
-  description: "I am the founder of Ras Ali Labs, a global software and innovation hub. While my roots are deeply planted in music, sound engineering, and creative media, my focus has evolved into architecting robust web applications, enterprise B2B platforms, and cutting-edge AI solutions.",
-  aiLabsDescription: 'Pioneering the intersection of artificial intelligence and enterprise software. At Ras Ali Labs, we build intelligent systems that drive global trade, education, and digital transformation.'
-};
-
 export const socialLinks = [
-  { name: 'Instagram', url: 'https://www.instagram.com/ali_chiwartze/', icon: 'Instagram' },
-  { name: 'Facebook', url: 'https://www.facebook.com/rasali2023/', icon: 'Facebook' },
-  { name: 'YouTube', url: 'https://youtube.com/@rasali2023?si=Q3W58-ZgWvFDrxN_', icon: 'Youtube' },
-  { name: 'GitHub', url: 'https://github.com/rasali535', icon: 'Github' },
-  { name: 'WhatsApp', url: 'https://wa.me/26777150423', icon: 'Phone' },
-  { name: 'Email', url: 'mailto:ali@rasalilabs.com', icon: 'Mail' }
+  { name: 'YouTube', url: 'https://youtube.com', icon: 'Youtube' },
+  { name: 'Facebook', url: 'https://facebook.com', icon: 'Facebook' },
+  { name: 'Instagram', url: 'https://instagram.com', icon: 'Instagram' },
+  { name: 'Phone', url: 'tel:+26770000000', icon: 'Phone' },
+  { name: 'Mail', url: 'mailto:contact@rasalilabs.com', icon: 'Mail' }
 ];
-

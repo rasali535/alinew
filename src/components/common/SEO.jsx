@@ -2,9 +2,9 @@ import React from 'react';
 import { Helmet } from 'react-helmet-async';
 
 const SEO = ({
-  title = 'Ras Ali Labs | Empowered to Prosper',
-  description = 'Ras Ali Labs is the central enterprise software, AI operating system, and sovereign trade platform hub. Powered by Ralion and Mari AI.',
-  keywords = 'Ralion, Ras Ali Labs, AI Business Operating System, Mari AI, TradeGrid Africa, DFS Platform, Enterprise Software, USSD Gateway',
+  title = 'Ras Ali Labs | AI Solutions & Business Operating Systems',
+  description = 'Building intelligent AI-powered platforms for enterprises, governments, and growing businesses.',
+  keywords = 'Ras Ali Labs, AI Solutions, Business Operating Systems, Ralion OS, Mari AI, Enterprise Automation, Trade OS, Logistics OS, Health OS, Funeral OS',
   canonical,
   ogImage = '/assets/images/logo.png',
   ogType = 'website'

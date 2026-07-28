@@ -18,6 +18,8 @@ import Pricing from './pages/Pricing';
 import Changelog from './pages/Changelog';
 import BetaProgram from './pages/BetaProgram';
 import Solutions from './pages/Solutions';
+import Industries from './pages/Industries';
+import RequestDemo from './pages/RequestDemo';
 import Downloads from './pages/Downloads';
 import RalionDownload from './pages/RalionDownload';
 import Releases from './pages/Releases';
@@ -58,9 +60,14 @@ function App() {
             <Header />
             <main>
               <Routes>
-                {/* Product Ecosystem Routes */}
+                {/* Enterprise Main Navigation */}
+                <Route path="/" element={<Home />} />
+                <Route path="/solutions" element={<Solutions />} />
+                <Route path="/industries" element={<Industries />} />
                 <Route path="/products" element={<Products />} />
                 <Route path="/products/:slug" element={<ProductDetail />} />
+                <Route path="/about" element={<About />} />
+                <Route path="/request-demo" element={<RequestDemo />} />
 
                 {/* Ralion Platform & Community Edition */}
                 <Route path="/ralion/community" element={<CommunityEdition />} />
@@ -85,14 +92,11 @@ function App() {
                 <Route path="/downloads/releases" element={<Releases />} />
                 <Route path="/admin/releases" element={<AdminReleases />} />
 
-                {/* Ecosystem Links */}
-                <Route path="/solutions" element={<Solutions />} />
+                {/* Redirects */}
                 <Route path="/developers" element={<Navigate to="/products/ralion" replace />} />
                 <Route path="/developer" element={<Navigate to="/products/ralion" replace />} />
 
-                {/* Main Company Pages */}
-                <Route path="/" element={<Home />} />
-                <Route path="/about" element={<About />} />
+                {/* Company Pages */}
                 <Route path="/services" element={<Services />} />
                 <Route path="/work" element={<Work />} />
                 <Route path="/work/:id" element={<ProjectDetails />} />

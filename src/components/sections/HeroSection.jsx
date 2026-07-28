@@ -1,109 +1,81 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
-import { heroWords, companyInfo } from '../../data/mock';
+import { ArrowRight, Sparkles, ShieldCheck, Cpu, Bot, CheckCircle2 } from 'lucide-react';
 
 const HeroSection = () => {
-  const [currentWordIndex, setCurrentWordIndex] = useState(0);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-
-  useEffect(() => {
-    const handleMouseMove = (e) => {
-      setMousePos({
-        x: (e.clientX / window.innerWidth) * 2 - 1,
-        y: (e.clientY / window.innerHeight) * 2 - 1
-      });
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, []);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentWordIndex((prev) => (prev + 1) % heroWords.length);
-    }, 2000);
-    return () => clearInterval(interval);
-  }, []);
-
   return (
-    <section className="relative min-h-screen bg-brand-dark pt-32 pb-20 px-6 lg:px-12 flex flex-col justify-between overflow-hidden">
-      {/* Background Moving Graphics */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div
-          className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-brand-gold/10 rounded-full blur-[120px] transition-transform duration-100 ease-out"
-          style={{
-            transform: `translate(${mousePos.x * -20}px, ${mousePos.y * 20}px)`
-          }}
-        />
-        <div
-          className="absolute bottom-[-10%] left-[-10%] w-[600px] h-[600px] bg-brand-blue/10 rounded-full blur-[120px] transition-transform duration-100 ease-out"
-          style={{
-            transform: `translate(${mousePos.x * 20}px, ${mousePos.y * -20}px)`
-          }}
-        />
-      </div>
+    <section className="relative pt-36 pb-24 px-6 lg:px-12 bg-gradient-to-b from-[#1c1c1c] via-[#181818] to-[#1c1c1c] overflow-hidden text-white">
+      {/* Background Glow Effect */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[800px] h-[450px] bg-gradient-to-r from-brand-gold/15 via-purple-500/10 to-emerald-500/10 rounded-full blur-[140px] pointer-events-none"></div>
 
-      {/* Hero Content */}
-      <div className="max-w-7xl mx-auto w-full relative z-10"
-        style={{
-          transform: `translate(${mousePos.x * -10}px, ${mousePos.y * -10}px)`,
-          transition: 'transform 0.1s ease-out'
-        }}>
-        <div className="mb-20">
-          <h1 className="text-white text-4xl md:text-5xl lg:text-6xl font-light italic tracking-tight leading-tight">
-            MULTI-DISCIPLINARY <br />
-            CREATIVE & <br />
-            TECHNOLOGIST.
-          </h1>
+      <div className="max-w-7xl mx-auto relative z-10 text-center">
+        {/* Badge */}
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-brand-gold text-xs font-semibold uppercase tracking-wider mb-6">
+          <Sparkles size={14} /> Enterprise AI Technology & Operating Systems
         </div>
-      </div>
 
-      {/* Animated Words Section */}
-      <div className="overflow-hidden py-8 relative z-10">
-        <div className="flex animate-marquee whitespace-nowrap">
-          {[...Array(8)].map((_, i) => (
-            <span
-              key={i}
-              className="text-white/10 text-6xl md:text-8xl lg:text-9xl font-light tracking-tight mx-8 transition-colors duration-300 hover:text-white/20"
-            >
-              {heroWords[i % heroWords.length]}
-            </span>
-          ))}
+        {/* Task 5 Headline */}
+        <h1 className="text-4xl md:text-6xl lg:text-7xl font-extrabold tracking-tight max-w-5xl mx-auto mb-6 leading-[1.1] bg-gradient-to-r from-white via-white/90 to-white/70 bg-clip-text text-transparent">
+          AI-Powered Operating Systems for Modern Enterprises
+        </h1>
+
+        {/* Task 5 Subheadline */}
+        <p className="text-white/70 text-lg md:text-xl max-w-3xl mx-auto leading-relaxed mb-10 font-normal">
+          Ras Ali Labs builds intelligent platforms that automate operations, connect teams, and help organisations make smarter decisions through AI.
+        </p>
+
+        {/* Task 5 CTAs */}
+        <div className="flex flex-wrap items-center justify-center gap-4 mb-16">
+          <Link
+            to="/request-demo"
+            className="px-8 py-4 rounded-xl bg-gradient-to-r from-brand-gold to-amber-500 text-black font-bold text-sm hover:scale-105 transition-all shadow-lg shadow-brand-gold/20 flex items-center gap-2"
+          >
+            Request Enterprise Demo <ArrowRight size={18} />
+          </Link>
+
+          <Link
+            to="/products/ralion"
+            className="px-8 py-4 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-sm transition-all border border-white/10 flex items-center gap-2"
+          >
+            Explore Ralion OS
+          </Link>
+
+          <Link
+            to="/solutions"
+            className="px-6 py-4 rounded-xl bg-purple-600/20 text-purple-300 font-bold text-sm hover:bg-purple-600/30 transition-all border border-purple-500/30 flex items-center gap-2"
+          >
+            Industry Solutions
+          </Link>
         </div>
-      </div>
 
-      {/* Large Brand Name */}
-      <div className="relative overflow-hidden z-10">
-        <h2
-          className="text-white text-[10vw] md:text-[12vw] lg:text-[14vw] font-light tracking-tighter leading-none transition-transform duration-100 ease-out"
-          style={{
-            transform: `translate(${mousePos.x * 30}px, ${mousePos.y * 10}px)`
-          }}
-        >
-          ras ali labs
-        </h2>
-      </div>
-
-      {/* Bottom Info */}
-      <div className="max-w-7xl mx-auto w-full mt-12 relative z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-end">
-          <div>
-            <p className="text-white/50 text-xs uppercase tracking-wider mb-2">
-              {companyInfo.tagline}
-            </p>
-            <p className="text-white/50 text-xs">{companyInfo.location}</p>
+        {/* Enterprise Highlights Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto pt-8 border-t border-white/10 text-left">
+          <div className="bg-black/30 p-4 rounded-2xl border border-white/5">
+            <div className="text-brand-gold font-bold text-sm mb-1 flex items-center gap-1.5">
+              <Cpu size={16} /> Ralion OS
+            </div>
+            <div className="text-white/60 text-xs">AI Business Operating System for unified enterprise management.</div>
           </div>
-          <div className="lg:col-span-2">
-            <p className="text-white/70 text-sm leading-relaxed max-w-2xl">
-              {companyInfo.description}
-            </p>
-            <Link
-              to="/about"
-              className="inline-flex items-center gap-2 text-white mt-4 text-sm hover:text-brand-gold transition-colors duration-300 group"
-            >
-              About ME
-              <span className="transform group-hover:translate-x-1 transition-transform duration-300">→</span>
-            </Link>
+
+          <div className="bg-black/30 p-4 rounded-2xl border border-white/5">
+            <div className="text-purple-400 font-bold text-sm mb-1 flex items-center gap-1.5">
+              <Bot size={16} /> Mari AI Engine
+            </div>
+            <div className="text-white/60 text-xs">Reasoning agents for document RAG & automated insights.</div>
+          </div>
+
+          <div className="bg-black/30 p-4 rounded-2xl border border-white/5">
+            <div className="text-emerald-400 font-bold text-sm mb-1 flex items-center gap-1.5">
+              <ShieldCheck size={16} /> Enterprise Security
+            </div>
+            <div className="text-white/60 text-xs">Bank-grade tenant isolation, row-level security & encrypted vaults.</div>
+          </div>
+
+          <div className="bg-black/30 p-4 rounded-2xl border border-white/5">
+            <div className="text-blue-400 font-bold text-sm mb-1 flex items-center gap-1.5">
+              <CheckCircle2 size={16} /> 4 Industry OS
+            </div>
+            <div className="text-white/60 text-xs">Tailored suites for Funeral, Logistics, Healthcare & Trade.</div>
           </div>
         </div>
       </div>
