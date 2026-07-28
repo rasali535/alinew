@@ -1,22 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getLatestRelease, getAllReleases } from '../data/releases';
+import { getAllReleases } from '../data/releases';
 import { triggerBinaryDownload } from '../lib/downloadValidator';
 import { analytics } from '../lib/analytics';
 import SEO from '../components/common/SEO';
 import {
   Download,
   Monitor,
-  Terminal,
-  Smartphone,
   ShieldCheck,
   Check,
   Laptop,
-  Cpu,
   Copy,
   ExternalLink,
-  AlertTriangle,
-  FileCheck
+  Cloud,
+  FileCheck,
+  RefreshCw
 } from 'lucide-react';
 
 const Downloads = () => {
@@ -44,52 +42,61 @@ const Downloads = () => {
   };
 
   const handleDownload = (rel) => {
-    analytics.trackDownload(rel.platform, rel.version, 'Ralion Desktop');
-
-    // Trigger direct site download without opening external GitHub tabs or redirecting
+    analytics.trackDownload(rel.platform, rel.version, rel.product || 'Ralion Desktop');
     triggerBinaryDownload(rel.downloadUrl, rel.filename);
   };
 
   return (
     <div className="min-h-screen bg-[#1c1c1c] text-white pt-28 pb-20 px-6 lg:px-12">
       <SEO
-        title="Download Ralion Desktop 2.4.1 | Windows x64, macOS, Linux | Ras Ali Labs"
-        description="Download official Ralion Desktop 2.4.1 installer for Windows 10/11 x64, macOS, and Linux. Verified SHA256 checksums and PE binary headers."
+        title="Download Ralion Desktop 2.4.1 | External CDN Verified Binary | Ras Ali Labs"
+        description="Download production Ralion Desktop 2.4.1 installers for Windows 10/11 x64, macOS, and Linux. Served via high-speed external cloud CDN."
       />
 
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="text-center max-w-3xl mx-auto mb-12">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-brand-gold text-xs font-semibold uppercase tracking-wider mb-4">
-            <Laptop size={14} /> Official Download Center • Version 2.4.1
+            <Cloud size={14} /> Production Storage CDN • Version 2.4.1
           </div>
           <h1 className="text-4xl md:text-5xl font-extrabold mb-4">
             Ralion Desktop App
           </h1>
           <p className="text-brand-gold font-bold text-sm uppercase tracking-widest mb-4">
-            Empowered to Prosper — PE Binary Validated for Windows 11 x64
+            Empowered to Prosper — External Cloud Storage & Auto-Update Engine Active
           </p>
           <p className="text-white/60 text-lg leading-relaxed mb-6">
-            Native desktop shell for high-throughput operational workflows, offline local caching, and low-latency Mari AI reasoning.
+            High-throughput desktop shell for business operations, Mari AI reasoning, and local workspace caching.
           </p>
 
-          <Link
-            to="/downloads/releases"
-            className="inline-flex items-center gap-2 text-brand-gold text-xs font-bold hover:underline"
-          >
-            View All Version Releases & System Requirements <ExternalLink size={14} />
-          </Link>
+          <div className="flex flex-wrap items-center justify-center gap-4 text-xs font-bold">
+            <Link
+              to="/downloads/releases"
+              className="inline-flex items-center gap-1.5 text-brand-gold hover:underline"
+            >
+              <ExternalLink size={14} /> View All Version Releases
+            </Link>
+            <span className="text-white/30">•</span>
+            <a
+              href="/latest.json"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-purple-400 hover:underline font-mono"
+            >
+              <RefreshCw size={14} /> Desktop Auto-Update Manifest (latest.json)
+            </a>
+          </div>
         </div>
 
         {/* OS Auto-Detected Banner */}
         <div className="bg-brand-gold/10 border border-brand-gold/30 rounded-2xl p-4 mb-8 flex items-center justify-between gap-4 max-w-3xl mx-auto text-xs">
           <div className="flex items-center gap-3 text-brand-gold">
             <ShieldCheck size={20} className="shrink-0" />
-            <span>Detected OS: <strong className="text-white">{userOS}</strong>. 1-Click direct site download for Windows x64.</span>
+            <span>Detected OS: <strong className="text-white">{userOS}</strong>. Serving verified 64-bit installer via external high-speed cloud CDN.</span>
           </div>
         </div>
 
-        {/* Desktop Installers Grid (Windows x64, macOS, Linux) */}
+        {/* Dynamic Desktop Installers Grid (Windows x64, macOS, Linux) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
           {releases.map((rel) => {
             const isDetected = userOS.toLowerCase() === rel.platform.toLowerCase();
@@ -113,8 +120,16 @@ const Downloads = () => {
                     <Monitor size={24} />
                   </div>
 
-                  <h3 className="text-2xl font-bold text-white mb-1">{rel.platform} Download</h3>
-                  <span className="inline-block px-2.5 py-0.5 rounded bg-white/10 text-brand-gold font-mono text-[10px] font-bold mb-4">
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className="text-2xl font-bold text-white">{rel.platform}</h3>
+                    <span className="px-2.5 py-0.5 rounded bg-brand-gold/20 text-brand-gold text-[10px] font-bold">
+                      v{rel.version}
+                    </span>
+                  </div>
+
+                  <p className="text-white/50 text-xs mb-3">{rel.product || 'Ralion Desktop'}</p>
+
+                  <span className="inline-block px-2.5 py-0.5 rounded bg-white/10 text-white/80 font-mono text-[10px] font-bold mb-4">
                     {rel.filename}
                   </span>
 
@@ -128,8 +143,12 @@ const Downloads = () => {
                       <span className="text-white font-medium">{rel.filesizeFormatted}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Release Version:</span>
-                      <span className="text-brand-gold font-medium">v{rel.version} Stable</span>
+                      <span>Release Date:</span>
+                      <span className="text-brand-gold font-medium">{rel.releaseDate}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Storage Provider:</span>
+                      <span className="text-emerald-400 font-medium">External Cloud CDN</span>
                     </div>
                   </div>
 
@@ -170,7 +189,7 @@ const Downloads = () => {
         {/* Release Notes Overview */}
         <div className="bg-[#252525] border border-white/10 rounded-3xl p-8 shadow-2xl mb-12">
           <div className="flex items-center gap-2 text-brand-gold font-bold text-sm mb-4">
-            <FileCheck size={18} /> Ralion v2.4.1 Release Notes
+            <FileCheck size={18} /> Ralion v2.4.1 Release Notes & Production Verification
           </div>
           <ul className="space-y-2 text-xs text-white/80 list-disc list-inside leading-relaxed">
             {releases[0]?.releaseNotes.map((note, idx) => (
