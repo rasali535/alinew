@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Youtube, Facebook, Instagram, Phone, Mail, Github } from 'lucide-react';
+import { Youtube, Facebook, Instagram, Phone, Mail, Github, Sparkles } from 'lucide-react';
 import { socialLinks, navLinks } from '../../data/mock';
 
 const Footer = () => {
@@ -18,7 +18,7 @@ const Footer = () => {
       <div className="max-w-7xl mx-auto">
         {/* Top Section */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-16">
-          {/* Logo & Description */}
+          {/* Logo & Tagline */}
           <div className="lg:col-span-2">
             <Link to="/" className="flex items-center gap-3 mb-4 group">
               <img
@@ -30,14 +30,28 @@ const Footer = () => {
             <p className="text-brand-gold font-semibold text-xs tracking-widest uppercase mb-3">
               Empowered to Prosper
             </p>
-            <p className="text-white/60 text-sm max-w-md leading-relaxed">
-              Ras Ali Labs is the central enterprise software & AI innovation platform. Architecting intelligent systems, high-speed data pipelines, and cross-border trade platforms.
+            <p className="text-white/60 text-sm max-w-md leading-relaxed mb-6">
+              Ras Ali Labs is the central enterprise software & AI innovation platform. Architecting intelligent systems, high-speed data pipelines, and sovereign trade platforms.
             </p>
+            <div className="flex items-center gap-3">
+              <Link
+                to="/ralion/community"
+                className="px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold hover:bg-emerald-500/20 transition-all flex items-center gap-1.5"
+              >
+                <Sparkles size={12} /> Community Edition Free
+              </Link>
+              <Link
+                to="/beta"
+                className="px-3.5 py-1.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400 text-xs font-semibold hover:bg-purple-500/20 transition-all"
+              >
+                Join Beta Program
+              </Link>
+            </div>
           </div>
 
-          {/* Ecosystem Links */}
+          {/* Ecosystem Products */}
           <div>
-            <h4 className="text-white/40 text-xs font-semibold uppercase tracking-wider mb-4">Ecosystem</h4>
+            <h4 className="text-white/40 text-xs font-semibold uppercase tracking-wider mb-4">Products</h4>
             <div className="flex flex-col gap-2.5">
               <Link to="/products/ralion" className="text-white/70 hover:text-brand-gold text-sm transition-colors">
                 Ralion OS
@@ -51,25 +65,31 @@ const Footer = () => {
               <Link to="/products/dfs-platform" className="text-white/70 hover:text-brand-gold text-sm transition-colors">
                 DFS Platform
               </Link>
-              <Link to="/developers" className="text-white/70 hover:text-brand-gold text-sm transition-colors">
-                Developer Portal
+              <Link to="/changelog" className="text-white/70 hover:text-brand-gold text-sm transition-colors">
+                Changelog (v1.0.0)
               </Link>
             </div>
           </div>
 
-          {/* Navigation Links */}
+          {/* SaaS Navigation */}
           <div>
-            <h4 className="text-white/40 text-xs font-semibold uppercase tracking-wider mb-4">Navigation</h4>
+            <h4 className="text-white/40 text-xs font-semibold uppercase tracking-wider mb-4">Resources</h4>
             <div className="flex flex-col gap-2.5">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.name}
-                  to={link.href}
-                  className="text-white/70 hover:text-brand-gold text-sm transition-colors"
-                >
-                  {link.name}
-                </Link>
-              ))}
+              <Link to="/pricing" className="text-white/70 hover:text-brand-gold text-sm transition-colors">
+                Pricing & Plans
+              </Link>
+              <Link to="/demo" className="text-white/70 hover:text-brand-gold text-sm transition-colors">
+                Interactive Demo
+              </Link>
+              <Link to="/docs" className="text-white/70 hover:text-brand-gold text-sm transition-colors">
+                Documentation Portal
+              </Link>
+              <Link to="/support" className="text-white/70 hover:text-brand-gold text-sm transition-colors">
+                Support & Ticket Portal
+              </Link>
+              <Link to="/developers" className="text-white/70 hover:text-brand-gold text-sm transition-colors">
+                Developer Portal
+              </Link>
             </div>
           </div>
         </div>

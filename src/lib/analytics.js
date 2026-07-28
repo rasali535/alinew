@@ -1,5 +1,5 @@
 // Lightweight, Privacy-Focused Analytics Tracker for Ras Ali Labs Ecosystem
-// Tracks product visits, signups, Ralion launches, downloads, and conversions.
+// Tracks product visits, signups, Ralion launches, downloads, conversions, and product_events.
 
 class AnalyticsTracker {
   constructor() {
@@ -11,7 +11,7 @@ class AnalyticsTracker {
     const payload = {
       event: eventName,
       data: eventData,
-      path: window.location.pathname,
+      path: typeof window !== 'undefined' ? window.location.pathname : '/',
       timestamp: new Date().toISOString()
     };
 
@@ -21,12 +21,13 @@ class AnalyticsTracker {
       console.log('[Ras Ali Analytics]', payload);
     }
 
-    // Dispatch custom DOM event for listening components or telemetry integrations
-    window.dispatchEvent(new CustomEvent('rasali_analytics', { detail: payload }));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('rasali_analytics', { detail: payload }));
+    }
   }
 
   trackPageView(pageName) {
-    this.logEvent('page_view', { page: pageName || window.location.pathname });
+    this.logEvent('page_view', { page: pageName || (typeof window !== 'undefined' ? window.location.pathname : '/') });
   }
 
   trackProductVisit(productSlug) {
@@ -47,6 +48,12 @@ class AnalyticsTracker {
 
   trackConversion(type, metadata = {}) {
     this.logEvent('conversion', { type, ...metadata });
+  }
+
+  // Product Events Tracking
+  trackProductEvent(eventType, metadata = {}) {
+    // Examples: user_created_customer, user_created_project, user_used_mari_ai, user_invited_team, user_upgraded_plan
+    this.logEvent('product_event', { eventType, ...metadata });
   }
 }
 
