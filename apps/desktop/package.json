@@ -1,0 +1,37 @@
+{
+  "name": "@ralion/desktop",
+  "version": "2.4.2",
+  "description": "Ralion Platform Desktop Application by Ras Ali Labs",
+  "author": {
+    "name": "Ras Ali Labs",
+    "email": "support@rasalilabs.com",
+    "url": "https://rasalilabs.com"
+  },
+  "private": true,
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "tsc && electron dist/main.js",
+    "build": "tsc && node scripts/build-renderer.js",
+    "copy:renderer": "node scripts/copy-renderer.js",
+    "pack": "node scripts/copy-renderer.js && electron-builder --dir --x64 --config electron-builder.yml",
+    "dist:win": "node scripts/copy-renderer.js && electron-builder --win nsis --x64 --config electron-builder.yml",
+    "dist:mac": "electron-builder --mac --config electron-builder.yml",
+    "dist:linux": "electron-builder --linux --config electron-builder.yml",
+    "dist:all": "electron-builder --win --mac --linux --config electron-builder.yml",
+    "validate": "node scripts/validate-installer.js"
+  },
+  "dependencies": {
+    "electron-store": "^8.2.0",
+    "electron-updater": "^6.1.8",
+    "electron-log": "^5.1.2",
+    "fs-extra": "^11.2.0",
+    "node-machine-id": "^1.1.12"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "electron": "30.5.1",
+    "electron-builder": "24.13.3",
+    "typescript": "^5.4.5",
+    "@types/node": "^20.14.2"
+  }
+}

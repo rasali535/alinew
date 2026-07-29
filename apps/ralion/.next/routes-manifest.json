@@ -1,0 +1,248 @@
+{
+  "version": 3,
+  "pages404": true,
+  "caseSensitive": false,
+  "basePath": "/ralion",
+  "redirects": [
+    {
+      "source": "/ralion",
+      "destination": "/ralion/",
+      "basePath": false,
+      "internal": true,
+      "statusCode": 308,
+      "regex": "^/ralion$"
+    },
+    {
+      "source": "/:file((?!\\.well-known(?:/.*)?)(?:[^/]+/)*[^/]+\\.\\w+)/",
+      "destination": "/:file",
+      "internal": true,
+      "missing": [
+        {
+          "type": "header",
+          "key": "x-nextjs-data"
+        }
+      ],
+      "statusCode": 308,
+      "regex": "^(?:/((?!\\.well-known(?:/.*)?)(?:[^/]+/)*[^/]+\\.\\w+))/$"
+    },
+    {
+      "source": "/:notfile((?!\\.well-known(?:/.*)?)(?:[^/]+/)*[^/\\.]+)",
+      "destination": "/:notfile/",
+      "internal": true,
+      "statusCode": 308,
+      "regex": "^(?:/((?!\\.well-known(?:/.*)?)(?:[^/]+/)*[^/\\.]+))$"
+    }
+  ],
+  "headers": [],
+  "rewrites": {
+    "beforeFiles": [],
+    "afterFiles": [],
+    "fallback": []
+  },
+  "dynamicRoutes": [],
+  "staticRoutes": [
+    {
+      "page": "/_not-found",
+      "regex": "^/_not\\-found(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/_not\\-found(?:/)?$"
+    },
+    {
+      "page": "/forgot-password",
+      "regex": "^/forgot\\-password(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/forgot\\-password(?:/)?$"
+    },
+    {
+      "page": "/login",
+      "regex": "^/login(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/login(?:/)?$"
+    },
+    {
+      "page": "/portal",
+      "regex": "^/portal(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/portal(?:/)?$"
+    },
+    {
+      "page": "/products/ralion",
+      "regex": "^/products/ralion(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/products/ralion(?:/)?$"
+    },
+    {
+      "page": "/ralion",
+      "regex": "^/ralion(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ralion(?:/)?$"
+    },
+    {
+      "page": "/ralion/billing",
+      "regex": "^/ralion/billing(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ralion/billing(?:/)?$"
+    },
+    {
+      "page": "/ralion/calendar",
+      "regex": "^/ralion/calendar(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ralion/calendar(?:/)?$"
+    },
+    {
+      "page": "/ralion/crm",
+      "regex": "^/ralion/crm(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ralion/crm(?:/)?$"
+    },
+    {
+      "page": "/ralion/customers",
+      "regex": "^/ralion/customers(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ralion/customers(?:/)?$"
+    },
+    {
+      "page": "/ralion/dashboard",
+      "regex": "^/ralion/dashboard(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ralion/dashboard(?:/)?$"
+    },
+    {
+      "page": "/ralion/demos",
+      "regex": "^/ralion/demos(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ralion/demos(?:/)?$"
+    },
+    {
+      "page": "/ralion/developer",
+      "regex": "^/ralion/developer(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ralion/developer(?:/)?$"
+    },
+    {
+      "page": "/ralion/documents",
+      "regex": "^/ralion/documents(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ralion/documents(?:/)?$"
+    },
+    {
+      "page": "/ralion/enterprise",
+      "regex": "^/ralion/enterprise(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ralion/enterprise(?:/)?$"
+    },
+    {
+      "page": "/ralion/government",
+      "regex": "^/ralion/government(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ralion/government(?:/)?$"
+    },
+    {
+      "page": "/ralion/growth",
+      "regex": "^/ralion/growth(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ralion/growth(?:/)?$"
+    },
+    {
+      "page": "/ralion/industry/funeral",
+      "regex": "^/ralion/industry/funeral(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ralion/industry/funeral(?:/)?$"
+    },
+    {
+      "page": "/ralion/industry/health",
+      "regex": "^/ralion/industry/health(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ralion/industry/health(?:/)?$"
+    },
+    {
+      "page": "/ralion/industry/logistics",
+      "regex": "^/ralion/industry/logistics(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ralion/industry/logistics(?:/)?$"
+    },
+    {
+      "page": "/ralion/industry/trade",
+      "regex": "^/ralion/industry/trade(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ralion/industry/trade(?:/)?$"
+    },
+    {
+      "page": "/ralion/leads",
+      "regex": "^/ralion/leads(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ralion/leads(?:/)?$"
+    },
+    {
+      "page": "/ralion/mari-ai",
+      "regex": "^/ralion/mari\\-ai(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ralion/mari\\-ai(?:/)?$"
+    },
+    {
+      "page": "/ralion/marketplace",
+      "regex": "^/ralion/marketplace(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ralion/marketplace(?:/)?$"
+    },
+    {
+      "page": "/ralion/onboarding",
+      "regex": "^/ralion/onboarding(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ralion/onboarding(?:/)?$"
+    },
+    {
+      "page": "/ralion/reports",
+      "regex": "^/ralion/reports(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ralion/reports(?:/)?$"
+    },
+    {
+      "page": "/ralion/settings",
+      "regex": "^/ralion/settings(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ralion/settings(?:/)?$"
+    },
+    {
+      "page": "/ralion/tasks",
+      "regex": "^/ralion/tasks(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ralion/tasks(?:/)?$"
+    },
+    {
+      "page": "/ralion/workflows",
+      "regex": "^/ralion/workflows(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ralion/workflows(?:/)?$"
+    },
+    {
+      "page": "/ralion/workspace",
+      "regex": "^/ralion/workspace(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ralion/workspace(?:/)?$"
+    },
+    {
+      "page": "/register",
+      "regex": "^/register(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/register(?:/)?$"
+    }
+  ],
+  "dataRoutes": [],
+  "rsc": {
+    "header": "rsc",
+    "varyHeader": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "prefetchHeader": "next-router-prefetch",
+    "didPostponeHeader": "x-nextjs-postponed",
+    "contentTypeHeader": "text/x-component",
+    "suffix": ".rsc",
+    "prefetchSuffix": ".prefetch.rsc",
+    "prefetchSegmentHeader": "next-router-segment-prefetch",
+    "prefetchSegmentSuffix": ".segment.rsc",
+    "prefetchSegmentDirSuffix": ".segments"
+  },
+  "rewriteHeaders": {
+    "pathHeader": "x-nextjs-rewritten-path",
+    "queryHeader": "x-nextjs-rewritten-query"
+  }
+}

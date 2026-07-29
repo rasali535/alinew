@@ -1,0 +1,14 @@
+{
+  "name": "@ralion/database",
+  "version": "1.0.0",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@dataconnect/generated": "file:src/dataconnect-generated",
+    "@ralion/auth": "1.0.0",
+    "firebase": "^10.12.0"
+  }
+}

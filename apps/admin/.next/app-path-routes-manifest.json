@@ -1,0 +1,15 @@
+{
+  "/_not-found/page": "/_not-found",
+  "/api/license/check/route": "/api/license/check",
+  "/api/license/deactivate/route": "/api/license/deactivate",
+  "/api/license/activate/route": "/api/license/activate",
+  "/api/releases/[platform]/route": "/api/releases/[platform]",
+  "/api/releases/latest/route": "/api/releases/latest",
+  "/api/releases/upload/route": "/api/releases/upload",
+  "/api/version/latest/route": "/api/version/latest",
+  "/admin/releases/page": "/admin/releases",
+  "/admin/analytics/page": "/admin/analytics",
+  "/admin/billing/page": "/admin/billing",
+  "/portal/page": "/portal",
+  "/products/ralion/page": "/products/ralion"
+}

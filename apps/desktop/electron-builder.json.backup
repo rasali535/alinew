@@ -1,0 +1,19 @@
+{
+  "appId": "com.rasalilabs.ralion",
+  "productName": "Ralion Platform",
+  "directories": {
+    "output": "release"
+  },
+  "files": [
+    "dist/**/*"
+  ],
+  "win": {
+    "target": ["nsis", "msi"]
+  },
+  "mac": {
+    "target": ["dmg"]
+  },
+  "linux": {
+    "target": ["AppImage"]
+  }
+}

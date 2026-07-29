@@ -1,0 +1,13 @@
+{
+  "name": "@ralion/core",
+  "version": "1.0.0",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@ralion/auth": "1.0.0",
+    "@ralion/database": "1.0.0"
+  }
+}

@@ -1,0 +1,66 @@
+appId: com.rasalilabs.ralion
+productName: Ralion
+copyright: Copyright © 2026 Ras Ali Labs
+
+directories:
+  output: release
+  buildResources: assets
+
+files:
+  - dist/**/*
+  - dist/renderer/**/*
+  - node_modules/**/*
+  - package.json
+
+# ── Windows x64 NSIS Installer ────────────────────────────────────────────────
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: assets/icon.ico
+  publisherName: Ras Ali Labs
+  verifyUpdateCodeSignature: false
+  artifactName: "ralion-desktop-${version}-setup.${ext}"
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  installerIcon: assets/icon.ico
+  uninstallerIcon: assets/icon.ico
+  installerHeaderIcon: assets/icon.ico
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Ralion
+  artifactName: "ralion-desktop-${version}-setup.${ext}"
+
+# ── macOS ─────────────────────────────────────────────────────────────────────
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  icon: assets/icon.icns
+  category: public.app-category.business
+
+dmg:
+  title: Ralion ${version}
+  icon: assets/icon.icns
+
+# ── Linux ─────────────────────────────────────────────────────────────────────
+linux:
+  target:
+    - AppImage
+  icon: assets/icon.png
+  category: Office
+  maintainer: Ras Ali Labs <support@rasalilabs.com>
+
+# ── Auto Update ───────────────────────────────────────────────────────────────
+publish:
+  provider: generic
+  url: https://ralion.rasalilabs.com/api/version/releases
+
+extraMetadata:
+  main: dist/main.js

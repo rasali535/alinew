@@ -1,0 +1,41 @@
+{
+  "name": "@ralion/admin",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 6510",
+    "build": "next build",
+    "start": "next start -p 6510",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@ralion/ai": "1.0.0",
+    "@ralion/auth": "1.0.0",
+    "@ralion/core": "1.0.0",
+    "@ralion/database": "1.0.0",
+    "@ralion/modules": "1.0.0",
+    "@ralion/ui": "1.0.0",
+    "@supabase/ssr": "^0.12.3",
+    "@supabase/supabase-js": "^2.110.9",
+    "@tanstack/react-query": "^5.40.0",
+    "clsx": "^2.1.1",
+    "firebase": "^10.12.0",
+    "framer-motion": "^11.2.10",
+    "lucide-react": "^0.395.0",
+    "next": "^15.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "recharts": "^2.12.7",
+    "tailwind-merge": "^2.3.0",
+    "zustand": "^4.5.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.2",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.4",
+    "typescript": "^5.4.5"
+  }
+}

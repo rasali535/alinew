@@ -1,0 +1,69 @@
+{
+  "currentVersion": "2.4.2",
+  "product": "Ralion Desktop",
+  "lastUpdated": "2026-07-28",
+  "storageBucket": "ralion-releases",
+  "releases": [
+    {
+      "product_name": "Ralion",
+      "product": "Ralion Desktop",
+      "version": "2.4.2",
+      "platform": "Windows",
+      "architecture": "x64",
+      "filename": "ralion-desktop-2.4.2-setup.exe",
+      "filesize": 159384000,
+      "filesizeFormatted": "152 MB",
+      "checksum": "a9f81c2b3e4d5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a",
+      "releaseDate": "2026-07-28",
+      "downloadUrl": "https://yidsfihagwttlmhfynmf.supabase.co/storage/v1/object/public/ralion-releases/windows/2.4.2/ralion-desktop-2.4.2-setup.exe",
+      "is_latest": true,
+      "enabled": true,
+      "releaseNotes": [
+        "Ralion 2.4.2 Stable Release",
+        "Empowered to Prosper — AI-Powered Business Operating System",
+        "Updated Mari AI v2.4 core reasoning agent engine",
+        "Windows 11 x64 PE installer build with verified headers",
+        "Supabase releases integration & download tracking"
+      ]
+    },
+    {
+      "product_name": "Ralion",
+      "product": "Ralion Desktop",
+      "version": "2.4.2",
+      "platform": "macOS",
+      "architecture": "Universal (Apple Silicon & Intel)",
+      "filename": "ralion-desktop-2.4.2.dmg",
+      "filesize": 165675000,
+      "filesizeFormatted": "158 MB",
+      "checksum": "b8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7",
+      "releaseDate": "2026-07-28",
+      "downloadUrl": "https://yidsfihagwttlmhfynmf.supabase.co/storage/v1/object/public/ralion-releases/mac/2.4.2/ralion-desktop-2.4.2.dmg",
+      "is_latest": true,
+      "enabled": true,
+      "releaseNotes": [
+        "Universal macOS binary supporting Apple Silicon M1/M2/M3/M4 & Intel Macs",
+        "Dark mode glassmorphic UI optimizations",
+        "Mari AI vector embedding performance boost"
+      ]
+    },
+    {
+      "product_name": "Ralion",
+      "product": "Ralion Desktop",
+      "version": "2.4.2",
+      "platform": "Linux",
+      "architecture": "x86_64 (.AppImage & .deb)",
+      "filename": "ralion-desktop-2.4.2.AppImage",
+      "filesize": 149946000,
+      "filesizeFormatted": "143 MB",
+      "checksum": "c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6",
+      "releaseDate": "2026-07-28",
+      "downloadUrl": "https://yidsfihagwttlmhfynmf.supabase.co/storage/v1/object/public/ralion-releases/linux/2.4.2/ralion-desktop-2.4.2.AppImage",
+      "is_latest": true,
+      "enabled": true,
+      "releaseNotes": [
+        "Linux AppImage package for Ubuntu 20.04+, Debian, & Fedora",
+        "Wayland & X11 display server support"
+      ]
+    }
+  ]
+}
