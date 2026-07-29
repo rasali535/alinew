@@ -10,7 +10,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
-        sync: false
+        value: postgresql://postgres.yidsfihagwttlmhfynmf:wkE1E3Be1G7UYUXT@aws-0-eu-west-1.pooler.supabase.com:6543/postgres
       - key: GOOGLE_CLOUD_PROJECT
         value: gen-lang-client-0940432200
       - key: VERTEX_AI_LOCATION
@@ -20,9 +20,9 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: SUPABASE_URL
-        value: https://wctqmtwaoaugxlqkslhn.supabase.co
+        value: https://yidsfihagwttlmhfynmf.supabase.co
       - key: SUPABASE_KEY
-        value: sb_publishable_1-8pEZLl81uyXPIWeUuZuw_-N5QP4U6
+        value: sb_publishable_4QwqM-obElPsgghW6r06ag_yfuIibbt
       - key: DATABASE_SSL
         value: "true"
       - key: RUN_MIGRATIONS
