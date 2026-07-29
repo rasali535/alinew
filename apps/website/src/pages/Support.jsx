@@ -28,7 +28,7 @@ const Support = () => {
   const faqs = [
     {
       q: 'How does Supabase Single Sign-On (SSO) work across Ras Ali Labs products?',
-      a: 'Your account credentials work seamlessly across Ralion OS, Mari AI, TradeGrid, and DFS Platform. Row-Level Security (RLS) ensures your organization data is isolated and encrypted.'
+      a: 'Your account credentials work seamlessly across Ralion OS, Mari AI, and Ralion Trade. Row-Level Security (RLS) ensures your organization data is isolated and encrypted.'
     },
     {
       q: 'Can I upgrade or downgrade my Ralion subscription anytime?',

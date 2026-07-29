@@ -52,36 +52,36 @@ const chatAxios = axios.create({
 const MASCOT_IMAGE = '/assets/images/ziggie-mascot.jpeg';
 
 const QUICK_REPLIES = {
-    '🎹 Services': "I can hook you up with Ras Ali's expert services:\n\n1. Bass Performance (Session/Live)\n2. Sound Engineering (Mixing/Mastering)\n3. Videography & Media\n4. Software Development (USSD/Web/AI)\n\nWhich one are you interested in?",
-    '📅 Book Session': "Let's sync! ⚡ I can help you book a session with Ras Ali. \n\nPlease tell me what you specifically need (e.g., 'I need a bassist for a gig' or 'I want an AI chatbot'), and share your email/phone so we can confirm the slot.",
-    '📍 Location': "Ras Ali is based in the heart of Gaborone, Botswana. 🇧🇼 He works globally but loves the local vibe!",
-    '🤖 Who is Ziggy?': "Yo! I'm Ziggy, Ras Ali's digital right hand. I'm a blend of artistic soul and technical logic, just like my creator. I handle the sync between his creative work and your vision."
+    '🚀 Enterprise Solutions': "Ras Ali Labs provides advanced Enterprise AI technology. Here are our core offerings:\n\n1. Ralion OS (Business Operating System)\n2. Custom LLM & Mari AI Agents\n3. Sovereign Cloud & Database Architecture\n4. USSD-to-Web Infrastructure\n\nWhich area are you looking to explore?",
+    '📅 Request Demo': "Let's innovate together! ⚡ I can help you schedule a demo or consultation with the Ras Ali Labs team.\n\nPlease tell me what you specifically need (e.g., 'I want to see Ralion CRM in action' or 'We need a custom AI agent'), and share your email/phone so we can confirm the slot.",
+    '📍 Location': "Ras Ali Labs is headquartered in Gaborone, Botswana. 🇧🇼 We build sovereign digital infrastructure for enterprises globally.",
+    '🤖 Who is Ziggy?': "Greetings! I'm Ziggy, the primary AI assistant for Ras Ali Labs. I'm powered by the Mari AI reasoning engine. I'm here to guide you through our enterprise systems, documentation, and help connect you with our engineering team."
 };
 
 const LOCAL_KNOWLEDGBASE = [
     {
         patterns: [/service/i, /what.*do/i, /offer/i, /help.*with/i],
-        response: "Ras Ali offers a elite range of creative and technical services:\n\n• **Bass Performance**: Session work & live performances (Ras has been grooving since 2003).\n• **Sound Engineering**: Professional Mixing & Mastering to give your audio that logic-driven precision.\n• **Videography**: High-quality Music Videos and Documentaries.\n• **Software Development**: Specialized in React, USSD, and AI integrations.\n\nWhich of these would you like to explore?"
+        response: "Ras Ali Labs offers premium Enterprise AI and Software solutions:\n\n• **Enterprise AI**: Custom LLMs, Mari AI Reasoning Agents, and Vector Database Search.\n• **Business Operating Systems**: Implementation of Ralion OS tailored for Funeral, Logistics, and Health sectors.\n• **Software Architecture**: Micro-frontends, Supabase integrations, and high-performance React applications.\n• **Automation**: Event-driven business triggers and USSD-to-Web gateways.\n\nWhich of these solutions are you looking for?"
     },
     {
-        patterns: [/book/i, /hire/i, /schedule/i, /appointment/i, /session/i],
-        response: "Ready to sync? 🚀 To book a session or hire Ras Ali, just drop your details (Name, Email/Phone) and tell me a bit about your project. I'll make sure he gets the message and gets back to you ASAP!"
+        patterns: [/demo/i, /book/i, /hire/i, /schedule/i, /consultation/i, /meeting/i],
+        response: "Ready to transform your enterprise? 🚀 To schedule a demo or consultation with Ras Ali Labs, just drop your details (Name, Email/Phone) and tell me a bit about your organization's needs. I'll make sure our engineering team connects with you ASAP!"
     },
     {
-        patterns: [/who.*ras/i, /about.*ras/i, /who.*ali/i, /creative/i],
-        response: "Ras Ali is a Multi-Disciplinary Creative & Technologist based in Gaborone, Botswana. 🇧🇼\n\nHe lives at the intersection of **Artistic Soul** (Music/Visuals) and **Technical Logic** (Code/Engineering). Whether he's laying down a bass line or architecting a software solution, he brings 20+ years of creative precision to the table."
+        patterns: [/who.*ras/i, /about.*ras/i, /company/i, /labs/i],
+        response: "Ras Ali Labs is a premier enterprise AI technology company based in Gaborone, Botswana. 🇧🇼\n\nWe build intelligent operating systems, business automation platforms, and sovereign digital infrastructure designed to help organizations automate operations and make smarter decisions."
     },
     {
-        patterns: [/work/i, /portfolio/i, /project/i, /example/i, /show.*me/i],
-        response: "Ras Ali's portfolio is a vibe! 🎬\n\n• **Music**: Over two decades of bass performance for various artists.\n• **Visuals**: Directed and edited numerous music videos and documentary shorts.\n• **Tech**: Built complex USSD bridges, React applications, and AI-powered tools (like me!).\n\nYou can see the 'Featured Projects' section on this site for a deeper look."
+        patterns: [/work/i, /portfolio/i, /project/i, /example/i, /product/i, /system/i],
+        response: "Our ecosystem includes several flagship products and platforms! 🚀\n\n• **Ralion OS**: The comprehensive AI business operating system.\n• **Mari AI Engine**: Embedded reasoning and document intelligence.\n• **TradeGrid Africa**: Sovereign B2B trade infrastructure.\n• **Custom Platforms**: Various high-performance digital platforms across logistics, education, and finance.\n\nYou can explore our 'Products' or 'Works' sections for a deeper look."
     },
     {
-        patterns: [/price/i, /cost/i, /how.*much/i, /rate/i],
-        response: "Rates vary depending on the precision and scale of the project. 💎 To give you an accurate quote, Ras Ali would need a few details about your needs. Shall we get your contact info so he can send you a breakdown?"
+        patterns: [/price/i, /cost/i, /how.*much/i, /rate/i, /pricing/i],
+        response: "Enterprise pricing varies depending on the scale of the implementation, required AI reasoning capabilities, and infrastructure demands. 💎 To give you an accurate quote for Ralion OS or a custom build, we'll need a few details about your enterprise. Shall we get your contact info so our team can send you a breakdown?"
     },
     {
         patterns: [/hello/i, /hi /i, /yo/i, /hey/i],
-        response: "Yo! Ziggy here. Status: Ready to sync. How can I help you vibe with Ras Ali's work today?"
+        response: "Greetings! Ziggy here. Systems online. How can I assist you with Ras Ali Labs' enterprise solutions today?"
     }
 ];
 
@@ -125,11 +125,11 @@ export default function Chatbot() {
 
             localStorage.setItem('chat_lead_info', JSON.stringify(leadFormData));
             setShowLeadForm(false);
-            setMessages(prev => [...prev, { role: 'assistant', content: `Dope! Nice to meet you, ${leadFormData.name}. 🚀 How can I help you vibe with Ras Ali's world today?` }]);
+            setMessages(prev => [...prev, { role: 'assistant', content: `Excellent! Nice to meet you, ${leadFormData.name}. 🚀 How can I help you explore Ras Ali Labs' ecosystem today?` }]);
         } catch (error) {
             console.error('Failed to save lead info:', error);
             setShowLeadForm(false);
-            setMessages(prev => [...prev, { role: 'assistant', content: "Thanks for the info! How can I help you today?" }]);
+            setMessages(prev => [...prev, { role: 'assistant', content: "Thanks for the info! How can I help you with our enterprise solutions today?" }]);
         } finally {
             setIsLoading(false);
         }
@@ -144,7 +144,7 @@ export default function Chatbot() {
             setMessages([
                 {
                     role: 'assistant',
-                    content: "Yo! I'm Ziggy, Ras Ali's digital right hand. 🎸 I'm here to help you navigate his world of music, code, and visuals.\n\nI can get you sorted with bookings, portfolios, or technical consultation.\n\nBefore we dive in, what's your name?"
+                    content: "Greetings! I'm Ziggy, the AI assistant for Ras Ali Labs. ⚡ I'm here to help you navigate our enterprise systems, Ralion OS, and AI automation solutions.\n\nI can assist you with product demos, documentation, or technical consultations.\n\nBefore we dive in, what's your name?"
                 }
             ]);
         } else {
@@ -152,7 +152,7 @@ export default function Chatbot() {
             setMessages([
                 {
                     role: 'assistant',
-                    content: `Welcome back, ${leadInfo.name}! 🚀 Ziggy here. How can I help you today?`
+                    content: `Welcome back, ${leadInfo.name}! 🚀 Ziggy here. How can I assist you with our enterprise solutions today?`
                 }
             ]);
         }
@@ -371,7 +371,7 @@ export default function Chatbot() {
                                 </div>
                                 <div>
                                     <CardTitle className="text-base font-bold bg-clip-text text-transparent bg-gradient-to-r from-green-500 to-emerald-400">Ziggy</CardTitle>
-                                    <p className="text-xs text-muted-foreground">Ras Ali's Personal Assistant</p>
+                                    <p className="text-xs text-muted-foreground">Ras Ali Labs AI Assistant</p>
                                 </div>
                             </div>
                             <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-green-500/20" onClick={() => setIsOpen(false)}>

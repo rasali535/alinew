@@ -171,27 +171,12 @@ const Account = () => {
                   <Globe size={20} />
                 </div>
                 <div>
-                  <h4 className="text-white font-bold text-sm">TradeGrid Africa</h4>
+                  <h4 className="text-white font-bold text-sm">Ralion Trade</h4>
                   <p className="text-white/50 text-xs">SADC B2B Trade Protocol</p>
                 </div>
               </div>
               <span className="px-2.5 py-1 rounded bg-white/10 text-white/60 text-[10px] font-bold">
                 Pre-Registered
-              </span>
-            </div>
-
-            <div className="bg-black/40 border border-white/10 p-4 rounded-2xl flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
-                  <CreditCard size={20} />
-                </div>
-                <div>
-                  <h4 className="text-white font-bold text-sm">DFS USSD Gateway</h4>
-                  <p className="text-white/50 text-xs">Fintech & Telecom Protocol</p>
-                </div>
-              </div>
-              <span className="px-2.5 py-1 rounded bg-white/10 text-white/60 text-[10px] font-bold">
-                Sandbox Mode
               </span>
             </div>
           </div>

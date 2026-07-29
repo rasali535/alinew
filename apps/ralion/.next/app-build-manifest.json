@@ -15,53 +15,53 @@
       "static/css/0f68c4c6e0b858ca.css",
       "static/chunks/app/layout-28231baebd31e193.js"
     ],
-    "/(auth)/login/page": [
-      "static/chunks/webpack-6fe58a00ebc25db0.js",
-      "static/chunks/87c73c54-09e1ba5c70e60a51.js",
-      "static/chunks/18-2af0f91754511790.js",
-      "static/chunks/main-app-a168e15b55e1dd94.js",
-      "static/chunks/997-0c94043bded6be16.js",
-      "static/chunks/664-0d0d4be48b91dce8.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/(auth)/login/page-d5ea432abec508bd.js"
-    ],
-    "/portal/page": [
-      "static/chunks/webpack-6fe58a00ebc25db0.js",
-      "static/chunks/87c73c54-09e1ba5c70e60a51.js",
-      "static/chunks/18-2af0f91754511790.js",
-      "static/chunks/main-app-a168e15b55e1dd94.js",
-      "static/chunks/997-0c94043bded6be16.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/portal/page-7162236b0edcc4c4.js"
-    ],
     "/(auth)/forgot-password/page": [
       "static/chunks/webpack-6fe58a00ebc25db0.js",
       "static/chunks/87c73c54-09e1ba5c70e60a51.js",
       "static/chunks/18-2af0f91754511790.js",
       "static/chunks/main-app-a168e15b55e1dd94.js",
-      "static/chunks/997-0c94043bded6be16.js",
+      "static/chunks/910-03cf421baaa957a6.js",
       "static/chunks/664-0d0d4be48b91dce8.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/(auth)/forgot-password/page-fcf0f59f2d5c34bb.js"
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/(auth)/forgot-password/page-ed259bbafd81c65a.js"
     ],
     "/(auth)/register/page": [
       "static/chunks/webpack-6fe58a00ebc25db0.js",
       "static/chunks/87c73c54-09e1ba5c70e60a51.js",
       "static/chunks/18-2af0f91754511790.js",
       "static/chunks/main-app-a168e15b55e1dd94.js",
-      "static/chunks/997-0c94043bded6be16.js",
+      "static/chunks/910-03cf421baaa957a6.js",
       "static/chunks/664-0d0d4be48b91dce8.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/(auth)/register/page-470426f55956f597.js"
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/(auth)/register/page-5370c90da92acb95.js"
+    ],
+    "/portal/page": [
+      "static/chunks/webpack-6fe58a00ebc25db0.js",
+      "static/chunks/87c73c54-09e1ba5c70e60a51.js",
+      "static/chunks/18-2af0f91754511790.js",
+      "static/chunks/main-app-a168e15b55e1dd94.js",
+      "static/chunks/910-03cf421baaa957a6.js",
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/portal/page-58d2854a0aeba561.js"
+    ],
+    "/(auth)/login/page": [
+      "static/chunks/webpack-6fe58a00ebc25db0.js",
+      "static/chunks/87c73c54-09e1ba5c70e60a51.js",
+      "static/chunks/18-2af0f91754511790.js",
+      "static/chunks/main-app-a168e15b55e1dd94.js",
+      "static/chunks/910-03cf421baaa957a6.js",
+      "static/chunks/664-0d0d4be48b91dce8.js",
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/(auth)/login/page-f16dd45c79baf2c6.js"
     ],
     "/products/ralion/page": [
       "static/chunks/webpack-6fe58a00ebc25db0.js",
       "static/chunks/87c73c54-09e1ba5c70e60a51.js",
       "static/chunks/18-2af0f91754511790.js",
       "static/chunks/main-app-a168e15b55e1dd94.js",
-      "static/chunks/997-0c94043bded6be16.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/products/ralion/page-9f26e61a5b1c88f6.js"
+      "static/chunks/910-03cf421baaa957a6.js",
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/products/ralion/page-a8641dca9ac20ef1.js"
     ],
     "/ralion/layout": [
       "static/chunks/webpack-6fe58a00ebc25db0.js",
@@ -69,137 +69,192 @@
       "static/chunks/18-2af0f91754511790.js",
       "static/chunks/main-app-a168e15b55e1dd94.js",
       "static/chunks/75504863-bacbd66346839e6c.js",
-      "static/chunks/997-0c94043bded6be16.js",
-      "static/chunks/30-59aa7a3539b2debe.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/ralion/layout-e3dc9bc29b925993.js"
+      "static/chunks/910-03cf421baaa957a6.js",
+      "static/chunks/75-67f09b31abfbe038.js",
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/ralion/layout-24b52f32af260df7.js"
     ],
     "/ralion/calendar/page": [
       "static/chunks/webpack-6fe58a00ebc25db0.js",
       "static/chunks/87c73c54-09e1ba5c70e60a51.js",
       "static/chunks/18-2af0f91754511790.js",
       "static/chunks/main-app-a168e15b55e1dd94.js",
-      "static/chunks/997-0c94043bded6be16.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/ralion/calendar/page-a266e5f138c6d9c1.js"
+      "static/chunks/910-03cf421baaa957a6.js",
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/ralion/calendar/page-c7ea731d0533d80c.js"
     ],
     "/ralion/billing/page": [
       "static/chunks/webpack-6fe58a00ebc25db0.js",
       "static/chunks/87c73c54-09e1ba5c70e60a51.js",
       "static/chunks/18-2af0f91754511790.js",
       "static/chunks/main-app-a168e15b55e1dd94.js",
-      "static/chunks/997-0c94043bded6be16.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/ralion/billing/page-2a121f9fd3a6517a.js"
-    ],
-    "/ralion/dashboard/page": [
-      "static/chunks/webpack-6fe58a00ebc25db0.js",
-      "static/chunks/87c73c54-09e1ba5c70e60a51.js",
-      "static/chunks/18-2af0f91754511790.js",
-      "static/chunks/main-app-a168e15b55e1dd94.js",
-      "static/chunks/997-0c94043bded6be16.js",
-      "static/chunks/279-a54b2cce894b5c75.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/ralion/dashboard/page-90d3d295158d1cf8.js"
-    ],
-    "/ralion/customers/page": [
-      "static/chunks/webpack-6fe58a00ebc25db0.js",
-      "static/chunks/87c73c54-09e1ba5c70e60a51.js",
-      "static/chunks/18-2af0f91754511790.js",
-      "static/chunks/main-app-a168e15b55e1dd94.js",
-      "static/chunks/997-0c94043bded6be16.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/ralion/customers/page-99cb0898330b891f.js"
-    ],
-    "/ralion/developer/page": [
-      "static/chunks/webpack-6fe58a00ebc25db0.js",
-      "static/chunks/87c73c54-09e1ba5c70e60a51.js",
-      "static/chunks/18-2af0f91754511790.js",
-      "static/chunks/main-app-a168e15b55e1dd94.js",
-      "static/chunks/997-0c94043bded6be16.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/ralion/developer/page-58a9d64b065c6327.js"
-    ],
-    "/ralion/demos/page": [
-      "static/chunks/webpack-6fe58a00ebc25db0.js",
-      "static/chunks/87c73c54-09e1ba5c70e60a51.js",
-      "static/chunks/18-2af0f91754511790.js",
-      "static/chunks/main-app-a168e15b55e1dd94.js",
-      "static/chunks/997-0c94043bded6be16.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/ralion/demos/page-5aec5436da36a805.js"
-    ],
-    "/ralion/government/page": [
-      "static/chunks/webpack-6fe58a00ebc25db0.js",
-      "static/chunks/87c73c54-09e1ba5c70e60a51.js",
-      "static/chunks/18-2af0f91754511790.js",
-      "static/chunks/main-app-a168e15b55e1dd94.js",
-      "static/chunks/997-0c94043bded6be16.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/ralion/government/page-c2fefed603232d76.js"
+      "static/chunks/910-03cf421baaa957a6.js",
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/ralion/billing/page-3c78c2a018ae5fec.js"
     ],
     "/ralion/crm/page": [
       "static/chunks/webpack-6fe58a00ebc25db0.js",
       "static/chunks/87c73c54-09e1ba5c70e60a51.js",
       "static/chunks/18-2af0f91754511790.js",
       "static/chunks/main-app-a168e15b55e1dd94.js",
-      "static/chunks/997-0c94043bded6be16.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/ralion/crm/page-95572a95e535f6eb.js"
+      "static/chunks/910-03cf421baaa957a6.js",
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/ralion/crm/page-5864254aa4c77c64.js"
     ],
-    "/ralion/growth/page": [
+    "/ralion/dashboard/page": [
       "static/chunks/webpack-6fe58a00ebc25db0.js",
       "static/chunks/87c73c54-09e1ba5c70e60a51.js",
       "static/chunks/18-2af0f91754511790.js",
       "static/chunks/main-app-a168e15b55e1dd94.js",
-      "static/chunks/997-0c94043bded6be16.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/ralion/growth/page-c0175ffac609b21e.js"
+      "static/chunks/910-03cf421baaa957a6.js",
+      "static/chunks/520-522f1863bf005552.js",
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/ralion/dashboard/page-5153426dc712423a.js"
     ],
-    "/ralion/documents/page": [
+    "/ralion/developer/page": [
       "static/chunks/webpack-6fe58a00ebc25db0.js",
       "static/chunks/87c73c54-09e1ba5c70e60a51.js",
       "static/chunks/18-2af0f91754511790.js",
       "static/chunks/main-app-a168e15b55e1dd94.js",
-      "static/chunks/997-0c94043bded6be16.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/ralion/documents/page-52b6bfc728eef526.js"
-    ],
-    "/ralion/leads/page": [
-      "static/chunks/webpack-6fe58a00ebc25db0.js",
-      "static/chunks/87c73c54-09e1ba5c70e60a51.js",
-      "static/chunks/18-2af0f91754511790.js",
-      "static/chunks/main-app-a168e15b55e1dd94.js",
-      "static/chunks/997-0c94043bded6be16.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/ralion/leads/page-f5910a6af9920d8f.js"
+      "static/chunks/910-03cf421baaa957a6.js",
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/ralion/developer/page-afdc50a157d968ba.js"
     ],
     "/ralion/enterprise/page": [
       "static/chunks/webpack-6fe58a00ebc25db0.js",
       "static/chunks/87c73c54-09e1ba5c70e60a51.js",
       "static/chunks/18-2af0f91754511790.js",
       "static/chunks/main-app-a168e15b55e1dd94.js",
-      "static/chunks/997-0c94043bded6be16.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/ralion/enterprise/page-17cbcbe05c483867.js"
+      "static/chunks/910-03cf421baaa957a6.js",
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/ralion/enterprise/page-a1c5fa27def05ed8.js"
+    ],
+    "/ralion/demos/page": [
+      "static/chunks/webpack-6fe58a00ebc25db0.js",
+      "static/chunks/87c73c54-09e1ba5c70e60a51.js",
+      "static/chunks/18-2af0f91754511790.js",
+      "static/chunks/main-app-a168e15b55e1dd94.js",
+      "static/chunks/910-03cf421baaa957a6.js",
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/ralion/demos/page-69c2cc40f75d12b6.js"
+    ],
+    "/ralion/customers/page": [
+      "static/chunks/webpack-6fe58a00ebc25db0.js",
+      "static/chunks/87c73c54-09e1ba5c70e60a51.js",
+      "static/chunks/18-2af0f91754511790.js",
+      "static/chunks/main-app-a168e15b55e1dd94.js",
+      "static/chunks/910-03cf421baaa957a6.js",
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/ralion/customers/page-bb24778015a0b60a.js"
+    ],
+    "/ralion/growth/page": [
+      "static/chunks/webpack-6fe58a00ebc25db0.js",
+      "static/chunks/87c73c54-09e1ba5c70e60a51.js",
+      "static/chunks/18-2af0f91754511790.js",
+      "static/chunks/main-app-a168e15b55e1dd94.js",
+      "static/chunks/910-03cf421baaa957a6.js",
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/ralion/growth/page-482af18e82b41999.js"
+    ],
+    "/ralion/documents/page": [
+      "static/chunks/webpack-6fe58a00ebc25db0.js",
+      "static/chunks/87c73c54-09e1ba5c70e60a51.js",
+      "static/chunks/18-2af0f91754511790.js",
+      "static/chunks/main-app-a168e15b55e1dd94.js",
+      "static/chunks/910-03cf421baaa957a6.js",
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/ralion/documents/page-bfa61a937807f41e.js"
+    ],
+    "/ralion/government/page": [
+      "static/chunks/webpack-6fe58a00ebc25db0.js",
+      "static/chunks/87c73c54-09e1ba5c70e60a51.js",
+      "static/chunks/18-2af0f91754511790.js",
+      "static/chunks/main-app-a168e15b55e1dd94.js",
+      "static/chunks/910-03cf421baaa957a6.js",
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/ralion/government/page-1b9aea1c86b277e5.js"
     ],
     "/ralion/industry/health/page": [
       "static/chunks/webpack-6fe58a00ebc25db0.js",
       "static/chunks/87c73c54-09e1ba5c70e60a51.js",
       "static/chunks/18-2af0f91754511790.js",
       "static/chunks/main-app-a168e15b55e1dd94.js",
-      "static/chunks/997-0c94043bded6be16.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/ralion/industry/health/page-0742e6585966e366.js"
+      "static/chunks/910-03cf421baaa957a6.js",
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/ralion/industry/health/page-5a40ec5d863542e4.js"
     ],
     "/ralion/industry/funeral/page": [
       "static/chunks/webpack-6fe58a00ebc25db0.js",
       "static/chunks/87c73c54-09e1ba5c70e60a51.js",
       "static/chunks/18-2af0f91754511790.js",
       "static/chunks/main-app-a168e15b55e1dd94.js",
-      "static/chunks/997-0c94043bded6be16.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/ralion/industry/funeral/page-606d0d9bc80e7c81.js"
+      "static/chunks/910-03cf421baaa957a6.js",
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/ralion/industry/funeral/page-d384004f9b9b58a8.js"
+    ],
+    "/ralion/marketplace/page": [
+      "static/chunks/webpack-6fe58a00ebc25db0.js",
+      "static/chunks/87c73c54-09e1ba5c70e60a51.js",
+      "static/chunks/18-2af0f91754511790.js",
+      "static/chunks/main-app-a168e15b55e1dd94.js",
+      "static/chunks/910-03cf421baaa957a6.js",
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/ralion/marketplace/page-ff0dd089e571ab93.js"
+    ],
+    "/ralion/leads/page": [
+      "static/chunks/webpack-6fe58a00ebc25db0.js",
+      "static/chunks/87c73c54-09e1ba5c70e60a51.js",
+      "static/chunks/18-2af0f91754511790.js",
+      "static/chunks/main-app-a168e15b55e1dd94.js",
+      "static/chunks/910-03cf421baaa957a6.js",
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/ralion/leads/page-d5123de780313e59.js"
+    ],
+    "/ralion/onboarding/page": [
+      "static/chunks/webpack-6fe58a00ebc25db0.js",
+      "static/chunks/87c73c54-09e1ba5c70e60a51.js",
+      "static/chunks/18-2af0f91754511790.js",
+      "static/chunks/main-app-a168e15b55e1dd94.js",
+      "static/chunks/910-03cf421baaa957a6.js",
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/ralion/onboarding/page-cb8882de18fba81e.js"
+    ],
+    "/ralion/settings/page": [
+      "static/chunks/webpack-6fe58a00ebc25db0.js",
+      "static/chunks/87c73c54-09e1ba5c70e60a51.js",
+      "static/chunks/18-2af0f91754511790.js",
+      "static/chunks/main-app-a168e15b55e1dd94.js",
+      "static/chunks/910-03cf421baaa957a6.js",
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/ralion/settings/page-266c1e48154977c6.js"
+    ],
+    "/ralion/industry/trade/page": [
+      "static/chunks/webpack-6fe58a00ebc25db0.js",
+      "static/chunks/87c73c54-09e1ba5c70e60a51.js",
+      "static/chunks/18-2af0f91754511790.js",
+      "static/chunks/main-app-a168e15b55e1dd94.js",
+      "static/chunks/910-03cf421baaa957a6.js",
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/ralion/industry/trade/page-e1f503b0f47b02e2.js"
+    ],
+    "/ralion/reports/page": [
+      "static/chunks/webpack-6fe58a00ebc25db0.js",
+      "static/chunks/87c73c54-09e1ba5c70e60a51.js",
+      "static/chunks/18-2af0f91754511790.js",
+      "static/chunks/main-app-a168e15b55e1dd94.js",
+      "static/chunks/910-03cf421baaa957a6.js",
+      "static/chunks/520-522f1863bf005552.js",
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/ralion/reports/page-98b1c23a0ad55dbe.js"
+    ],
+    "/ralion/tasks/page": [
+      "static/chunks/webpack-6fe58a00ebc25db0.js",
+      "static/chunks/87c73c54-09e1ba5c70e60a51.js",
+      "static/chunks/18-2af0f91754511790.js",
+      "static/chunks/main-app-a168e15b55e1dd94.js",
+      "static/chunks/910-03cf421baaa957a6.js",
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/ralion/tasks/page-92c053e157efb60d.js"
     ],
     "/ralion/page": [
       "static/chunks/webpack-6fe58a00ebc25db0.js",
@@ -208,97 +263,42 @@
       "static/chunks/main-app-a168e15b55e1dd94.js",
       "static/chunks/app/ralion/page-03294d7a8297875e.js"
     ],
-    "/ralion/industry/logistics/page": [
+    "/ralion/workspace/page": [
       "static/chunks/webpack-6fe58a00ebc25db0.js",
       "static/chunks/87c73c54-09e1ba5c70e60a51.js",
       "static/chunks/18-2af0f91754511790.js",
       "static/chunks/main-app-a168e15b55e1dd94.js",
-      "static/chunks/997-0c94043bded6be16.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/ralion/industry/logistics/page-e61654a8cba8a979.js"
-    ],
-    "/ralion/settings/page": [
-      "static/chunks/webpack-6fe58a00ebc25db0.js",
-      "static/chunks/87c73c54-09e1ba5c70e60a51.js",
-      "static/chunks/18-2af0f91754511790.js",
-      "static/chunks/main-app-a168e15b55e1dd94.js",
-      "static/chunks/997-0c94043bded6be16.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/ralion/settings/page-60dbb60f1c3447c0.js"
-    ],
-    "/ralion/mari-ai/page": [
-      "static/chunks/webpack-6fe58a00ebc25db0.js",
-      "static/chunks/87c73c54-09e1ba5c70e60a51.js",
-      "static/chunks/18-2af0f91754511790.js",
-      "static/chunks/main-app-a168e15b55e1dd94.js",
-      "static/chunks/997-0c94043bded6be16.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/ralion/mari-ai/page-1846d70517d682c3.js"
-    ],
-    "/ralion/reports/page": [
-      "static/chunks/webpack-6fe58a00ebc25db0.js",
-      "static/chunks/87c73c54-09e1ba5c70e60a51.js",
-      "static/chunks/18-2af0f91754511790.js",
-      "static/chunks/main-app-a168e15b55e1dd94.js",
-      "static/chunks/997-0c94043bded6be16.js",
-      "static/chunks/279-a54b2cce894b5c75.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/ralion/reports/page-cb8be4014a7c6421.js"
-    ],
-    "/ralion/marketplace/page": [
-      "static/chunks/webpack-6fe58a00ebc25db0.js",
-      "static/chunks/87c73c54-09e1ba5c70e60a51.js",
-      "static/chunks/18-2af0f91754511790.js",
-      "static/chunks/main-app-a168e15b55e1dd94.js",
-      "static/chunks/997-0c94043bded6be16.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/ralion/marketplace/page-139c783686adda17.js"
-    ],
-    "/ralion/onboarding/page": [
-      "static/chunks/webpack-6fe58a00ebc25db0.js",
-      "static/chunks/87c73c54-09e1ba5c70e60a51.js",
-      "static/chunks/18-2af0f91754511790.js",
-      "static/chunks/main-app-a168e15b55e1dd94.js",
-      "static/chunks/997-0c94043bded6be16.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/ralion/onboarding/page-14b38588458456f8.js"
-    ],
-    "/ralion/industry/trade/page": [
-      "static/chunks/webpack-6fe58a00ebc25db0.js",
-      "static/chunks/87c73c54-09e1ba5c70e60a51.js",
-      "static/chunks/18-2af0f91754511790.js",
-      "static/chunks/main-app-a168e15b55e1dd94.js",
-      "static/chunks/997-0c94043bded6be16.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/ralion/industry/trade/page-18cdbddf11fb06e6.js"
+      "static/chunks/910-03cf421baaa957a6.js",
+      "static/chunks/664-0d0d4be48b91dce8.js",
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/ralion/workspace/page-d4c5915f335e923f.js"
     ],
     "/ralion/workflows/page": [
       "static/chunks/webpack-6fe58a00ebc25db0.js",
       "static/chunks/87c73c54-09e1ba5c70e60a51.js",
       "static/chunks/18-2af0f91754511790.js",
       "static/chunks/main-app-a168e15b55e1dd94.js",
-      "static/chunks/997-0c94043bded6be16.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/ralion/workflows/page-b64a6c0c84380dd1.js"
+      "static/chunks/910-03cf421baaa957a6.js",
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/ralion/workflows/page-dba0b3029499d018.js"
     ],
-    "/ralion/workspace/page": [
+    "/ralion/mari-ai/page": [
       "static/chunks/webpack-6fe58a00ebc25db0.js",
       "static/chunks/87c73c54-09e1ba5c70e60a51.js",
       "static/chunks/18-2af0f91754511790.js",
       "static/chunks/main-app-a168e15b55e1dd94.js",
-      "static/chunks/997-0c94043bded6be16.js",
-      "static/chunks/664-0d0d4be48b91dce8.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/ralion/workspace/page-b24f53660a7ad330.js"
+      "static/chunks/910-03cf421baaa957a6.js",
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/ralion/mari-ai/page-d9fe1bb1d78245a6.js"
     ],
-    "/ralion/tasks/page": [
+    "/ralion/industry/logistics/page": [
       "static/chunks/webpack-6fe58a00ebc25db0.js",
       "static/chunks/87c73c54-09e1ba5c70e60a51.js",
       "static/chunks/18-2af0f91754511790.js",
       "static/chunks/main-app-a168e15b55e1dd94.js",
-      "static/chunks/997-0c94043bded6be16.js",
-      "static/chunks/908-07ffe1cd6c882ab7.js",
-      "static/chunks/app/ralion/tasks/page-857bebf3074adddb.js"
+      "static/chunks/910-03cf421baaa957a6.js",
+      "static/chunks/908-8616a403a8b46aae.js",
+      "static/chunks/app/ralion/industry/logistics/page-279015de9d5c5e4f.js"
     ]
   }
 }

@@ -61,9 +61,9 @@ const ProductDetail = () => {
     analytics.trackProductVisit(product.slug);
   }, [product.slug]);
 
-  const handleDownloadRelease = (rel) => {
-    analytics.trackDownload(rel.platform, '2.4.2', 'Ralion OS');
-    triggerBinaryDownload(rel.downloadUrl, rel.filename || `ralion-desktop-2.4.2-setup.exe`);
+  const handleDownload = (rel) => {
+    analytics.trackDownload(rel.platform, rel.version || '2.4.1', 'Ralion OS');
+    triggerBinaryDownload(rel.downloadUrl, rel.filename);
   };
 
   return (

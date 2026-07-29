@@ -17,5 +17,10 @@
     "ralion:build": "npm run build --workspace=@ralion/web",
     "desktop:build": "npm run build --workspace=@ralion/desktop",
     "desktop:dist:win": "npm run desktop:dist:win --workspace=@ralion/desktop"
+  },
+  "overrides": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "lucide-react": "^0.507.0"
   }
 }

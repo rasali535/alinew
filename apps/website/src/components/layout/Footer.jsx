@@ -80,6 +80,9 @@ const Footer = () => {
               <Link to="/industries" className="text-white/70 hover:text-brand-gold transition-colors">
                 Industries
               </Link>
+              <Link to="/work" className="text-white/70 hover:text-brand-gold transition-colors">
+                Works & Projects
+              </Link>
               <Link to="/request-demo" className="text-brand-gold font-semibold hover:underline transition-colors">
                 Request Demo
               </Link>

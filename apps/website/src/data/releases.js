@@ -1,5 +1,5 @@
 // Versioned Release Management & Supabase Integration Data Layer for Ralion
-import releasesData from '../../public/ralion-releases.json';
+import releasesData from './ralion-releases.json';
 import { supabase } from '../lib/supabase';
 
 export const getLatestRelease = (platform = 'Windows') => {
@@ -35,13 +35,13 @@ export const fetchLatestReleaseFromSupabase = async (productName = 'Ralion', pla
 
     return {
       product_name: data.product_name || 'Ralion',
-      version: data.version || '2.4.2',
+      version: data.version || '2.4.1',
       platform: data.platform || platform,
       architecture: data.architecture || 'x64',
       download_url: data.file_url || data.download_url,
       filesizeFormatted: data.file_size || '152 MB',
       checksum: data.checksum || '',
-      release_notes: data.release_notes || ['Ralion v2.4.2 Release']
+      release_notes: data.release_notes || ['Ralion v2.4.1 Release']
     };
   } catch (err) {
     return getLatestRelease(platform);

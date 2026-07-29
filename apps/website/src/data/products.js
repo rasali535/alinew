@@ -1,5 +1,5 @@
 // Enterprise Product Architecture for Ras Ali Labs Ecosystem
-// Central repository for Ralion OS, Ralion CRM, Ralion AI Growth Engine, Mari AI, TradeGrid Africa, and DFS Platform.
+// Central repository for Ralion OS, Ralion CRM, Ralion AI Growth Engine, Mari AI, and Ralion Trade.
 
 export const productsData = [
   {
@@ -294,9 +294,9 @@ export const productsData = [
     accentColor: '#A855F7'
   },
   {
-    id: 'tradegrid-africa',
-    slug: 'tradegrid-africa',
-    name: 'TradeGrid Africa',
+    id: 'ralion-trade',
+    slug: 'ralion-trade',
+    name: 'Ralion Trade',
     tagline: 'Sovereign B2B Trade & Logistics Infrastructure',
     category: 'Supply Chain / B2B Trade',
     status: 'Live',
@@ -305,19 +305,6 @@ export const productsData = [
     description: 'Cross-border B2B trade infrastructure connecting buyers, sellers, customs brokers, and transport fleets across Africa.',
     icon: 'Globe',
     accentColor: '#10B981'
-  },
-  {
-    id: 'dfs-platform',
-    slug: 'dfs-platform',
-    name: 'DFS Platform',
-    tagline: 'Digital Financial Services & Payment Gateway',
-    category: 'Fintech / Payment Gateway',
-    status: 'Available',
-    statusBadge: 'Fintech Core',
-    badgeColor: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-    description: 'Secure digital financial services platform for mobile money routing, USSD transaction sync, and enterprise billing.',
-    icon: 'CreditCard',
-    accentColor: '#3B82F6'
   }
 ];
 

@@ -30,7 +30,7 @@ const Products = () => {
     <div className="min-h-screen bg-[#1c1c1c] text-white pt-28 pb-20 px-6 lg:px-12">
       <SEO
         title="Products & Enterprise Systems | Ras Ali Labs"
-        description="Explore Ralion CRM, Ralion AI Growth Engine, Ralion OS, Mari AI Engine, TradeGrid Africa, and DFS Platform."
+        description="Explore Ralion CRM, Ralion AI Growth Engine, Ralion OS, Mari AI Engine, and Ralion Trade."
       />
 
       <div className="max-w-7xl mx-auto">
@@ -94,7 +94,7 @@ const Products = () => {
           })}
         </div>
 
-        {/* Other Platform Products (Ralion OS, Mari AI, TradeGrid Africa, DFS) */}
+        {/* Other Platform Products (Ralion OS, Mari AI, Ralion Trade) */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {productsData.slice(2).map((product) => {
             const IconComponent = iconMap[product.icon] || Cpu;

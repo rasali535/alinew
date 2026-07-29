@@ -50,7 +50,7 @@ const AuthModal = () => {
             {authMode === 'login' ? 'Ras Ali Labs Account' : 'Join Ras Ali Labs Ecosystem'}
           </h3>
           <p className="text-white/60 text-xs mt-1">
-            One account for Ralion, Mari AI, TradeGrid & DFS Platform
+            One account for Ralion, Mari AI, and Ralion Trade
           </p>
         </div>
 

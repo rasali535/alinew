@@ -3,6 +3,7 @@ export const navLinks = [
   { name: 'Solutions', href: '/solutions' },
   { name: 'Industries', href: '/industries' },
   { name: 'Products', href: '/products' },
+  { name: 'Works', href: '/work' },
   { name: 'Company', href: '/about' },
   { name: 'Request Demo', href: '/request-demo' }
 ];
@@ -32,9 +33,9 @@ export const featuredProjects = [
   },
   {
     id: 2,
-    title: 'TradeGrid Africa',
+    title: 'Ralion Trade',
     subtitle: 'Sovereign Trade Infrastructure',
-    image: 'https://images.unsplash.com/photo-1586528116311-ad8ed7c508c0?q=80&w=2070&auto=format&fit=crop',
+    image: 'https://icon.horse/icon/grey-rabbit-363724.hostingersite.com',
     category: 'Platform',
     link: 'https://grey-rabbit-363724.hostingersite.com/',
     roles: ['B2B Infrastructure', 'AI Telemetry', 'Logistics Orchestration'],
@@ -45,7 +46,7 @@ export const featuredProjects = [
     id: 3,
     title: 'Pameltech Labs',
     subtitle: 'Technology & Innovation Lab',
-    image: 'https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=2070&auto=format&fit=crop',
+    image: 'https://icon.horse/icon/pameltechlabs.com',
     category: 'Platform',
     link: 'https://pameltechlabs.com',
     roles: ['Software Architecture', 'Full Stack Development', 'AI R&D'],
@@ -56,12 +57,89 @@ export const featuredProjects = [
     id: 4,
     title: 'Academy Foundations',
     subtitle: 'Educational Infrastructure Platform',
-    image: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=2070&auto=format&fit=crop',
+    image: 'https://icon.horse/icon/academyfoundations.com',
     category: 'Web',
     link: 'https://academyfoundations.com',
     roles: ['Web Development', 'EdTech Systems', 'UI/UX Design'],
     date: '2025',
     description: "Digital learning infrastructure platform focusing on educational empowerment, digital learning resources, and student onboarding."
+  },
+  {
+    id: 5,
+    title: 'Eagle Touch Tours',
+    subtitle: 'Travel & Tourism Platform',
+    image: 'https://icon.horse/icon/eagletouchtours.com',
+    category: 'Web',
+    link: 'https://eagletouchtours.com',
+    roles: ['Web Development', 'UI/UX Design', 'Booking Integration'],
+    date: '2024',
+    description: "A premium travel and tourism platform designed to showcase bespoke safari experiences and streamline customer bookings."
+  },
+  {
+    id: 6,
+    title: 'Peregrine Tours & Safaris',
+    subtitle: 'Safari Expedition Portal',
+    image: 'https://icon.horse/icon/peregrinetoursandsafaris.com',
+    category: 'Web',
+    link: 'https://peregrinetoursandsafaris.com',
+    roles: ['Web Design', 'Digital Experience', 'Content Strategy'],
+    date: '2024',
+    description: "An immersive digital portal for authentic African safari expeditions, offering interactive itineraries and seamless inquiries."
+  },
+  {
+    id: 7,
+    title: 'Talent Centre',
+    subtitle: 'Professional Recruitment Platform',
+    image: 'https://icon.horse/icon/talentcentre.co.za',
+    category: 'Platform',
+    link: 'https://talentcentre.co.za',
+    roles: ['Platform Development', 'User Portal', 'Database Management'],
+    date: '2025',
+    description: "A robust recruitment and talent management platform connecting top professionals with leading enterprises across South Africa."
+  },
+  {
+    id: 8,
+    title: 'Pameltex',
+    subtitle: 'Corporate Digital Presence',
+    image: 'https://icon.horse/icon/pameltex.com',
+    category: 'Web',
+    link: 'https://pameltex.com',
+    roles: ['Corporate Web Design', 'Brand Identity', 'Frontend Development'],
+    date: '2023',
+    description: "A modern corporate website establishing a strong digital footprint with a focus on professional brand identity and clear communication."
+  },
+  {
+    id: 9,
+    title: 'Lebville Boutique',
+    subtitle: 'E-Commerce Fashion Platform',
+    image: 'https://icon.horse/icon/lebvilleboutique.com',
+    category: 'E-Commerce',
+    link: 'https://lebvilleboutique.com',
+    roles: ['E-Commerce Development', 'Payment Integration', 'UI/UX Design'],
+    date: '2024',
+    description: "An elegant e-commerce platform for a boutique fashion brand, featuring intuitive shopping workflows and secure checkout integration."
+  },
+  {
+    id: 10,
+    title: 'BB Travel Tours',
+    subtitle: 'Travel Agency Website',
+    image: 'https://icon.horse/icon/bbtraveltours.com',
+    category: 'Web',
+    link: 'https://bbtraveltours.com',
+    roles: ['Web Development', 'Digital Marketing', 'SEO Optimization'],
+    date: '2023',
+    description: "A vibrant travel agency website focused on global tour packages, destination guides, and seamless customer engagement."
+  },
+  {
+    id: 11,
+    title: 'The Maplin',
+    subtitle: 'Premium Digital Platform',
+    image: 'https://icon.horse/icon/themaplin.com',
+    category: 'Web',
+    link: 'https://themaplin.com',
+    roles: ['Web Development', 'Digital Strategy', 'UI/UX Design'],
+    date: '2025',
+    description: "A premium digital platform tailored for business excellence, providing a sleek interface and robust content delivery."
   }
 ];
 

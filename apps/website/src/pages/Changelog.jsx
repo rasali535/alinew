@@ -13,7 +13,7 @@ const Changelog = () => {
           type: 'New Feature',
           tagColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
           title: 'Full Product Ecosystem & Single Sign-On (SSO)',
-          desc: 'Unified authentication across Ralion OS, Mari AI, TradeGrid Africa, and DFS Platform powered by Supabase.'
+          desc: 'Unified authentication across Ralion OS, Mari AI, and Ralion Trade powered by Supabase.'
         },
         {
           type: 'New Feature',

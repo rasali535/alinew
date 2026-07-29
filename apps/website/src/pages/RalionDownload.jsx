@@ -47,8 +47,8 @@ const RalionDownload = () => {
   };
 
   const handleDownload = (rel) => {
-    analytics.trackDownload(rel.platform, '2.4.2', 'Ralion');
-    triggerBinaryDownload(rel.downloadUrl, rel.filename || `ralion-desktop-2.4.2-setup.exe`);
+    analytics.trackDownload(rel.platform, rel.version || '2.4.1', 'Ralion');
+    triggerBinaryDownload(rel.downloadUrl, rel.filename);
   };
 
   const detectedRelease = releases.find(
@@ -58,8 +58,8 @@ const RalionDownload = () => {
   return (
     <div className="min-h-screen bg-[#1c1c1c] text-white pt-28 pb-20 px-6 lg:px-12">
       <SEO
-        title="Ralion Downloads — AI Business Operating System v2.4.2 | Ras Ali Labs"
-        description="Download official Ralion Desktop 2.4.2 Community Edition for Windows 10/11 x64, macOS, and Linux. Empowered to Prosper."
+        title="Ralion Downloads — AI Business Operating System v2.4.1 | Ras Ali Labs"
+        description="Download official Ralion Desktop 2.4.1 Community Edition for Windows 10/11 x64, macOS, and Linux. Empowered to Prosper."
       />
 
       <div className="max-w-6xl mx-auto">
@@ -71,13 +71,13 @@ const RalionDownload = () => {
           <ChevronRight size={12} />
           <Link to="/products/ralion" className="hover:text-white transition-colors">Ralion</Link>
           <ChevronRight size={12} />
-          <span className="text-brand-gold font-medium">Download v2.4.2</span>
+          <span className="text-brand-gold font-medium">Download v2.4.1</span>
         </div>
 
         {/* Header */}
         <div className="text-center max-w-3xl mx-auto mb-12">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-brand-gold text-xs font-semibold uppercase tracking-wider mb-4">
-            <Sparkles size={14} /> Official Download Center • Version 2.4.2
+            <Sparkles size={14} /> Official Download Center • Version 2.4.1
           </div>
           <h1 className="text-4xl md:text-5xl font-extrabold mb-3">
             Ralion Downloads
@@ -107,7 +107,7 @@ const RalionDownload = () => {
               </h2>
 
               <p className="text-white/70 text-xs font-mono">
-                Package: {detectedRelease.filename} • Version 2.4.2 • Size: {detectedRelease.filesizeFormatted || '152 MB'}
+                Package: {detectedRelease.filename} • Version {detectedRelease.version || '2.4.1'} • Size: {detectedRelease.filesizeFormatted || '152 MB'}
               </p>
 
               <p className="text-white/50 text-xs max-w-xl">
@@ -119,7 +119,7 @@ const RalionDownload = () => {
               onClick={() => handleDownload(detectedRelease)}
               className="py-5 px-9 rounded-2xl bg-gradient-to-r from-brand-gold to-amber-500 text-black font-extrabold text-sm hover:scale-105 transition-all shadow-xl shadow-brand-gold/20 flex items-center gap-3 shrink-0"
             >
-              <Download size={20} /> Download Ralion for {userOS} (v2.4.2)
+              <Download size={20} /> Download Ralion for {userOS} (v{detectedRelease.version || '2.4.1'})
             </button>
           </div>
         </div>
@@ -149,7 +149,7 @@ const RalionDownload = () => {
                     <div className="flex items-center justify-between mb-1">
                       <h4 className="text-xl font-bold text-white">{rel.platform}</h4>
                       <span className="px-2.5 py-0.5 rounded bg-white/10 text-brand-gold text-[10px] font-bold">
-                        v2.4.2
+                        v{rel.version || '2.4.1'}
                       </span>
                     </div>
 
