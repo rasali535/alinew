@@ -7,13 +7,17 @@ const { execSync } = require('child_process');
 const fs = require('fs-extra');
 const path = require('path');
 
-const webDir = path.join(__dirname, '..', '..', 'web');
+const webDir = path.join(__dirname, '..', '..', 'ralion');
 const webOutDir = path.join(webDir, 'out');
 const desktopDistRenderer = path.join(__dirname, '..', 'dist', 'renderer');
 
 console.log('🚀 [Build Renderer] Step 1: Building apps/web static export...');
 try {
-  execSync('npm run build', { cwd: webDir, stdio: 'inherit' });
+  if (fs.existsSync(path.join(webDir, 'package.json'))) {
+    execSync('npm run build', { cwd: webDir, stdio: 'inherit' });
+  } else {
+    console.warn(`⚠️ [Build Renderer] No package.json found in ${webDir}, skipping build to prevent monorepo infinite recursion.`);
+  }
 } catch (err) {
   console.warn('⚠️ [Build Renderer] Next.js export warning, ensuring fallback index.html');
 }
