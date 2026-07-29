@@ -20,8 +20,12 @@ export const ProductAccessGuard: React.FC<ProductAccessGuardProps> = ({ children
       const platformUrl = process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com';
 
       if (!session) {
-        // Redirect to Ras Ali Labs platform login if no session exists
-        window.location.href = `${platformUrl}/login?redirect=${encodeURIComponent(window.location.href)}`;
+        if (typeof window !== 'undefined' && window.location.protocol === 'file:') {
+          window.location.href = '/ralion/login';
+        } else {
+          // Redirect to Ras Ali Labs platform login if no session exists
+          window.location.href = `${platformUrl}/login?redirect=${encodeURIComponent(window.location.href)}`;
+        }
         return;
       }
 

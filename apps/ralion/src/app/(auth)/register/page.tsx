@@ -27,7 +27,7 @@ export default function RegisterPage() {
       setIsLoading(true);
       setTimeout(() => {
         setIsLoading(false);
-        router.push('/');
+        window.location.href = '/ralion/ralion/dashboard';
       }, 700);
     }
   };

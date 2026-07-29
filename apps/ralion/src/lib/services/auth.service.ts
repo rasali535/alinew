@@ -11,6 +11,37 @@ export class AuthService {
   private static supabase = createClient();
 
   /**
+   * Login with email and password
+   */
+  static async login(email: string, password: string) {
+    const { data, error } = await this.supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (error) {
+      throw error;
+    }
+    return data;
+  }
+
+  /**
+   * Login with Google OAuth
+   */
+  static async loginWithGoogle() {
+    const { data, error } = await this.supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        // Redirect back to the Ralion dashboard (or current domain)
+        redirectTo: `${window.location.origin}/ralion`,
+      },
+    });
+    if (error) {
+      throw error;
+    }
+    return data;
+  }
+
+  /**
    * Get current authenticated user session
    */
   static async getSession() {
@@ -49,6 +80,10 @@ export class AuthService {
   static async logout() {
     await this.supabase.auth.signOut();
     const platformUrl = process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com';
-    window.location.href = `${platformUrl}/login`;
+    if (typeof window !== 'undefined' && window.location.protocol === 'file:') {
+      window.location.href = '/ralion/login';
+    } else {
+      window.location.href = `${platformUrl}/login`;
+    }
   }
 }

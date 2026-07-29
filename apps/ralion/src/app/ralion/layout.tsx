@@ -23,7 +23,9 @@ export default function DashboardLayout({
         <Sidebar
           currentPath={pathname}
           orgName="Ras Ali Enterprises"
-          onNavigate={(href) => router.push(href)}
+          onNavigate={(href) => {
+            window.location.href = '/ralion' + href;
+          }}
           onOpenMariAI={() => setIsMariDrawerOpen(true)}
         />
 

@@ -126,7 +126,7 @@ function createWindow() {
     },
   });
 
-  const isDev = !app.isPackaged;
+  const isDev = !app.isPackaged && process.env.NODE_ENV !== 'production';
 
   if (isDev) {
     const devUrl = process.env.ELECTRON_START_URL || 'http://localhost:6509';
@@ -144,22 +144,33 @@ function createWindow() {
       }
       urlPath = decodeURIComponent(urlPath);
       
-      // If the app is requesting an absolute path from the root drive (e.g. C:/ralion/... or C:/assets/...)
-      const driveRootRegex = process.platform === 'win32' ? /^[a-zA-Z]:\\(ralion|assets)\\/i : /^\/(ralion|assets)\//i;
+      // Next.js basePath is '/ralion', so all absolute paths start with C:/ralion/
+      const driveRootRegex = process.platform === 'win32' ? /^[a-zA-Z]:[\\/]ralion[\\/]/i : /^\/ralion\//i;
       
       if (driveRootRegex.test(urlPath)) {
-        // Map it to the local renderer folder
-        const parts = urlPath.split(path.sep);
-        const folderIndex = parts.findIndex((p: any) => p.toLowerCase() === 'ralion' || p.toLowerCase() === 'assets');
-        const relativePath = parts.slice(folderIndex).join(path.sep);
-        return callback({ path: path.join(__dirname, 'renderer', relativePath) });
+        // Map it to the local renderer folder by stripping the basePath 'ralion'
+        const parts = urlPath.split(/[\\/]/);
+        const folderIndex = parts.findIndex((p: any) => p.toLowerCase() === 'ralion');
+        // Take everything after the first 'ralion'
+        const relativePath = parts.slice(folderIndex + 1).join(path.sep);
+        let targetPath = path.join(__dirname, 'renderer', relativePath);
+        
+        // Fallback to check if it's inside the ralion/ subfolder
+        if (!fs.existsSync(targetPath)) {
+            const fallbackPath = path.join(__dirname, 'renderer', 'ralion', relativePath);
+            if (fs.existsSync(fallbackPath)) {
+                targetPath = fallbackPath;
+            }
+        }
+        
+        return callback({ path: targetPath });
       }
       
       callback({ path: urlPath });
     });
 
     // Load local bundled static Next.js export (Ralion App) instead of website homepage
-    const rendererPath = path.join(__dirname, 'renderer', 'ralion', 'login', 'index.html');
+    const rendererPath = path.join(__dirname, 'renderer', 'login', 'index.html');
     log.info('[Renderer] Loading Production:', rendererPath);
     mainWindow.loadFile(rendererPath).catch(err => {
       log.error('[Renderer Load Failure] Local index.html missing or unreadable:', rendererPath, err);
@@ -174,14 +185,27 @@ function createWindow() {
         let pathname = parsedUrl.pathname;
         if (!pathname.includes('renderer')) {
           event.preventDefault();
-          const cleanPath = pathname.replace(/^\/[A-Z]:/i, '').replace(/^\//, '');
-          const targetHtml = path.join(__dirname, 'renderer', cleanPath, 'index.html');
+          let cleanPath = pathname.replace(/^\/[A-Z]:/i, '').replace(/^\//, '');
+          if (cleanPath.toLowerCase().startsWith('ralion/')) {
+            cleanPath = cleanPath.substring(7);
+          } else if (cleanPath.toLowerCase() === 'ralion') {
+            cleanPath = '';
+          }
+          let targetHtml = path.join(__dirname, 'renderer', cleanPath, 'index.html');
+          
+          if (!fs.existsSync(targetHtml)) {
+            const fallbackHtml = path.join(__dirname, 'renderer', 'ralion', cleanPath, 'index.html');
+            if (fs.existsSync(fallbackHtml)) {
+              targetHtml = fallbackHtml;
+            }
+          }
+
           if (fs.existsSync(targetHtml)) {
             log.info('[Renderer Navigation] Redirecting file:// route to static HTML:', targetHtml);
             mainWindow?.loadFile(targetHtml);
           } else {
-            log.warn('[Renderer Navigation] Subfolder index.html not found, falling back to login index.html');
-            mainWindow?.loadFile(path.join(__dirname, 'renderer', 'ralion', 'login', 'index.html'));
+            log.warn(`[Renderer Navigation] Subfolder index.html not found for ${cleanPath}, falling back to login index.html`);
+            mainWindow?.loadFile(path.join(__dirname, 'renderer', 'login', 'index.html'));
           }
         }
       } catch (e: any) {
