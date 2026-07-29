@@ -17,13 +17,10 @@ const getApiUrl = () => {
 
     // Fallback for local development or missing production env
     if (!url) {
-        // If we are on the live site, try the primary Render backend URL
-        if (typeof window !== 'undefined' && (window.location.hostname.includes('themaplin.com') || window.location.hostname.includes('onrender.com'))) {
-            // Priority 1: Newly named service from render.yaml
-            // Priority 2: Original service name
-            url = 'https://alinew.onrender.com';
-        } else {
+        if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
             url = 'http://localhost:9090';
+        } else {
+            url = 'https://alinew.onrender.com';
         }
     }
 

@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { createClient } = require('@supabase/supabase-js');
 
 const websiteDist = path.join(__dirname, '..', 'apps', 'website', 'dist');
 const ralionOut = path.join(__dirname, '..', 'apps', 'ralion', 'out');
@@ -20,10 +21,8 @@ try {
     process.exit(1);
   }
 
-  // Next.js with basePath '/ralion' outputs to 'out/ralion' inside 'apps/ralion/out'.
-  // Let's verify if the basePath 'ralion' exists inside 'out'.
-  const ralionInnerPath = path.join(ralionOut, 'ralion');
-  const sourcePath = fs.existsSync(ralionInnerPath) ? ralionInnerPath : ralionOut;
+  // Copy the entire Next.js export (out folder) into websiteDist/ralion
+  const sourcePath = ralionOut;
 
   // Copy to websiteDist/ralion
   if (!fs.existsSync(ralionDest)) {

@@ -135,8 +135,31 @@ function createWindow() {
       log.error('[Renderer Load Failure]', err);
     });
   } else {
-    // Load local bundled static Next.js export in dist/renderer/index.html
-    const rendererPath = path.join(__dirname, 'renderer', 'index.html');
+    // Intercept file protocol to fix absolute paths for Next.js and Vite static exports
+    const { protocol } = require('electron');
+    protocol.interceptFileProtocol('file', (request: any, callback: any) => {
+      let urlPath = request.url.replace(/^file:\/\//i, '');
+      if (process.platform === 'win32' && urlPath.match(/^\/[a-zA-Z]:\//)) {
+        urlPath = urlPath.substring(1);
+      }
+      urlPath = decodeURIComponent(urlPath);
+      
+      // If the app is requesting an absolute path from the root drive (e.g. C:/ralion/... or C:/assets/...)
+      const driveRootRegex = process.platform === 'win32' ? /^[a-zA-Z]:\\(ralion|assets)\\/i : /^\/(ralion|assets)\//i;
+      
+      if (driveRootRegex.test(urlPath)) {
+        // Map it to the local renderer folder
+        const parts = urlPath.split(path.sep);
+        const folderIndex = parts.findIndex((p: any) => p.toLowerCase() === 'ralion' || p.toLowerCase() === 'assets');
+        const relativePath = parts.slice(folderIndex).join(path.sep);
+        return callback({ path: path.join(__dirname, 'renderer', relativePath) });
+      }
+      
+      callback({ path: urlPath });
+    });
+
+    // Load local bundled static Next.js export (Ralion App) instead of website homepage
+    const rendererPath = path.join(__dirname, 'renderer', 'ralion', 'login', 'index.html');
     log.info('[Renderer] Loading Production:', rendererPath);
     mainWindow.loadFile(rendererPath).catch(err => {
       log.error('[Renderer Load Failure] Local index.html missing or unreadable:', rendererPath, err);
@@ -157,8 +180,8 @@ function createWindow() {
             log.info('[Renderer Navigation] Redirecting file:// route to static HTML:', targetHtml);
             mainWindow?.loadFile(targetHtml);
           } else {
-            log.warn('[Renderer Navigation] Subfolder index.html not found, falling back to root index.html');
-            mainWindow?.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+            log.warn('[Renderer Navigation] Subfolder index.html not found, falling back to login index.html');
+            mainWindow?.loadFile(path.join(__dirname, 'renderer', 'ralion', 'login', 'index.html'));
           }
         }
       } catch (e: any) {

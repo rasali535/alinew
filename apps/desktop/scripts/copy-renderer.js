@@ -11,6 +11,15 @@ fs.ensureDirSync(desktopDistRenderer);
 if (fs.existsSync(webOutDir)) {
   console.log('📂 [Copy Renderer] Copying static export from:', webOutDir);
   fs.copySync(webOutDir, desktopDistRenderer, { overwrite: true });
+
+  // Fix absolute paths for Electron
+  const indexPath = path.join(desktopDistRenderer, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    let indexHtml = fs.readFileSync(indexPath, 'utf8');
+    indexHtml = indexHtml.replace(/(href|src)="\/([^"]+)"/g, '$1="./$2"');
+    fs.writeFileSync(indexPath, indexHtml, 'utf8');
+    console.log('📂 [Copy Renderer] Converted absolute paths to relative in index.html');
+  }
 }
 
 const indexHtmlPath = path.join(desktopDistRenderer, 'index.html');
