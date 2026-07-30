@@ -38,7 +38,7 @@ services:
     name: alinew-chatbot-frontend
     runtime: static
     buildCommand: npm install && npm run build
-    staticPublishPath: dist
+    staticPublishPath: build
     envVars:
       - key: VITE_API_URL
         fromService:

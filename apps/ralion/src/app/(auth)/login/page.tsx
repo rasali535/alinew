@@ -20,7 +20,7 @@ export default function LoginPage() {
     setError(null);
     try {
       await AuthService.login(email, password);
-      window.location.href = '/ralion/ralion/dashboard';
+      window.location.href = '/ralion/dashboard';
     } catch (err: any) {
       setError(err.message || 'Invalid login credentials');
       setIsLoading(false);
