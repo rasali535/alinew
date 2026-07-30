@@ -1,4 +1,6 @@
+// @ts-ignore: Optional dependency, may be absent during web deployment
 import Database from 'better-sqlite3';
+// @ts-ignore: Optional dependency, may be absent during web deployment
 import * as sqliteVec from 'sqlite-vec';
 import path from 'path';
 import fs from 'fs';
@@ -12,7 +14,8 @@ export interface DocumentMeta {
 }
 
 export class VectorDB {
-  private static db: Database.Database;
+  // @ts-ignore
+  private static db: any;
 
   static initialize(): void {
     try {
