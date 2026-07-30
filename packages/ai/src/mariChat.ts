@@ -11,7 +11,9 @@ export interface MariQueryResponse {
 }
 
 const AIML_API_KEY = process.env.NEXT_PUBLIC_AIML_API_KEY || process.env.AIML_API_KEY || "37d9bb3553feb58ff0ec6ed0b8e86975";
-const AIML_BASE_URL = process.env.NEXT_PUBLIC_AIML_API_BASE_URL || "https://api.aimlapi.com";
+// Base URL must include /v1 — the API gateway routes under that version prefix.
+const AIML_BASE_URL = process.env.NEXT_PUBLIC_AIML_API_BASE_URL || "https://api.aimlapi.com/v1";
+
 
 export async function callMariAiApi(prompt: string, systemPrompt?: string): Promise<string | null> {
   try {

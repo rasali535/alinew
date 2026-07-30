@@ -29,15 +29,27 @@ export const ProductAccessGuard: React.FC<ProductAccessGuardProps> = ({ children
         return;
       }
 
-      // Verify product access for default or active org
-      // Using a zero UUID instead of 'default-org' to prevent PostgREST 400 cast errors
-      const result = await ProductService.verifyProductAccess('00000000-0000-0000-0000-000000000000');
-      setAccess(result);
+      // Resolve the real organization ID from the session's user metadata.
+      // If no org ID is available yet (e.g. during initial setup), skip the
+      // Supabase subscription lookup to avoid RLS 403 errors from a placeholder UUID.
+      const orgId: string | undefined =
+        session.user?.user_metadata?.organization_id ||
+        session.user?.user_metadata?.org_id;
+
+      if (orgId) {
+        const result = await ProductService.verifyProductAccess(orgId);
+        setAccess(result);
+      } else {
+        // No org yet — grant community-tier access without hitting the DB
+        setAccess({ hasAccess: true, edition: 'community', status: 'active' });
+      }
+
       setLoading(false);
     }
 
     checkAccess();
   }, []);
+
 
   if (loading) {
     return (
