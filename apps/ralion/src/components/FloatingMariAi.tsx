@@ -88,7 +88,27 @@ export const FloatingMariAi: React.FC = () => {
                     m.sender === 'USER' ? 'bg-blue-600 text-white font-medium' : 'bg-zinc-800 border border-zinc-700/60 text-zinc-100'
                   }`}
                 >
-                  <p className="whitespace-pre-wrap text-[11px]">{m.text}</p>
+                  {(() => {
+                    const text = m.text;
+                    const imgRegex = /!\[([^\]]*)\]\((.*?)\)/g;
+                    if (!text.includes('![')) {
+                      return <p className="whitespace-pre-wrap text-[11px]">{text}</p>;
+                    }
+                    const parts = [];
+                    let lastIndex = 0;
+                    let match;
+                    while ((match = imgRegex.exec(text)) !== null) {
+                      if (match.index > lastIndex) {
+                        parts.push(<span key={lastIndex} className="whitespace-pre-wrap">{text.substring(lastIndex, match.index)}</span>);
+                      }
+                      parts.push(<img key={match.index} src={match[2]} alt={match[1]} className="w-full h-auto rounded-lg my-2 shadow-md border border-zinc-700" loading="lazy" />);
+                      lastIndex = match.index + match[0].length;
+                    }
+                    if (lastIndex < text.length) {
+                      parts.push(<span key={lastIndex} className="whitespace-pre-wrap">{text.substring(lastIndex)}</span>);
+                    }
+                    return <div className="text-[11px]">{parts}</div>;
+                  })()}
                 </div>
               </div>
             ))}

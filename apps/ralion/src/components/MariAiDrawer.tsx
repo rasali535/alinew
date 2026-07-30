@@ -116,7 +116,27 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
                   <Bot className="w-3 h-3" /> Mari AI Response
                 </div>
               )}
-              {msg.text}
+              {(() => {
+                const text = msg.text;
+                const imgRegex = /!\[([^\]]*)\]\((.*?)\)/g;
+                if (!text.includes('![')) {
+                  return <p className="whitespace-pre-wrap">{text}</p>;
+                }
+                const parts = [];
+                let lastIndex = 0;
+                let match;
+                while ((match = imgRegex.exec(text)) !== null) {
+                  if (match.index > lastIndex) {
+                    parts.push(<span key={lastIndex} className="whitespace-pre-wrap">{text.substring(lastIndex, match.index)}</span>);
+                  }
+                  parts.push(<img key={match.index} src={match[2]} alt={match[1]} className="w-full h-auto rounded-lg my-3 shadow-md border border-zinc-700" loading="lazy" />);
+                  lastIndex = match.index + match[0].length;
+                }
+                if (lastIndex < text.length) {
+                  parts.push(<span key={lastIndex} className="whitespace-pre-wrap">{text.substring(lastIndex)}</span>);
+                }
+                return <div>{parts}</div>;
+              })()}
             </div>
 
             {/* Suggested Actions */}
