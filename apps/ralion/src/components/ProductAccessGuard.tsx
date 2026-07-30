@@ -30,7 +30,8 @@ export const ProductAccessGuard: React.FC<ProductAccessGuardProps> = ({ children
       }
 
       // Verify product access for default or active org
-      const result = await ProductService.verifyProductAccess('default-org');
+      // Using a zero UUID instead of 'default-org' to prevent PostgREST 400 cast errors
+      const result = await ProductService.verifyProductAccess('00000000-0000-0000-0000-000000000000');
       setAccess(result);
       setLoading(false);
     }
