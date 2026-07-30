@@ -15,6 +15,18 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const router = useRouter();
   const [isMariDrawerOpen, setIsMariDrawerOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState<{
+    fullName: string | null;
+    email: string | null;
+  } | null>(null);
+
+  React.useEffect(() => {
+    import('@/lib/services/auth.service').then(({ AuthService }) => {
+      AuthService.getCurrentUser().then((user) => {
+        if (user) setCurrentUser(user);
+      });
+    });
+  }, []);
 
   return (
     <ProductAccessGuard>
@@ -24,7 +36,10 @@ export default function DashboardLayout({
           currentPath={pathname}
           orgName="Ras Ali Enterprises"
           onNavigate={(href) => {
-            window.location.href = '/ralion' + href;
+            // Sidebar hrefs are absolute like '/ralion/dashboard'
+            // Since next.config.js has basePath: '/ralion', we strip the prefix for Next.js router
+            const route = href.startsWith('/ralion') ? href.replace('/ralion', '') : href;
+            router.push(route || '/');
           }}
           onOpenMariAI={() => setIsMariDrawerOpen(true)}
         />
@@ -33,13 +48,13 @@ export default function DashboardLayout({
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <Header
             user={{
-              name: 'Ras Ali Admin',
+              name: currentUser?.fullName || 'User',
               role: 'ORGANIZATION_OWNER',
-              email: 'admin@rasalilabs.com'
+              email: currentUser?.email || 'user@example.com'
             }}
             orgName="Ras Ali Enterprises"
             activeBranch="Gaborone Main Branch"
-            unreadNotifications={3}
+            unreadNotifications={0}
             onOpenMariAI={() => setIsMariDrawerOpen(true)}
           />
 
