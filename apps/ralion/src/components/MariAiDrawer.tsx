@@ -35,18 +35,42 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
     setInputQuery('');
     setIsProcessing(true);
 
-    setTimeout(() => {
-      const response = processMariQuery(userText);
-      setMessages(prev => [
-        ...prev,
-        {
-          sender: 'MARI',
-          text: response.answer,
-          actions: response.suggestedActions
+    const fetchResponse = async () => {
+      try {
+        const { callMariAiApi, processMariQuery } = await import('@ralion/ai');
+        
+        // Let's try the real API first
+        const apiResponse = await callMariAiApi(userText);
+        
+        if (apiResponse) {
+          setMessages(prev => [
+            ...prev,
+            {
+              sender: 'MARI',
+              text: apiResponse,
+              actions: []
+            }
+          ]);
+        } else {
+          // Fallback to local rules
+          const response = processMariQuery(userText);
+          setMessages(prev => [
+            ...prev,
+            {
+              sender: 'MARI',
+              text: response.answer,
+              actions: response.suggestedActions
+            }
+          ]);
         }
-      ]);
-      setIsProcessing(false);
-    }, 600);
+      } catch (err) {
+        setMessages(prev => [...prev, { sender: 'MARI', text: "I'm having trouble connecting to my neural core right now." }]);
+      } finally {
+        setIsProcessing(false);
+      }
+    };
+    
+    fetchResponse();
   };
 
   return (

@@ -14,5 +14,17 @@
   "app\\(dashboard)\\layout.tsx -> @/lib/services/auth.service": {
     "id": 10576,
     "files": []
+  },
+  "components\\FloatingMariAi.tsx -> @ralion/ai": {
+    "id": 64768,
+    "files": [
+      "static/chunks/4768.66f4a114dd92f4f9.js"
+    ]
+  },
+  "components\\MariAiDrawer.tsx -> @ralion/ai": {
+    "id": 64768,
+    "files": [
+      "static/chunks/4768.66f4a114dd92f4f9.js"
+    ]
   }
 }

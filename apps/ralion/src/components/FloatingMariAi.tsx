@@ -24,15 +24,31 @@ export const FloatingMariAi: React.FC = () => {
     setMessages(prev => [...prev, { sender: 'USER', text }]);
     setInput('');
 
-    setTimeout(() => {
-      if (text.toLowerCase().includes('business performance') || text.toLowerCase().includes('performance')) {
-        const perfSummary = `Business Performance Summary\n\nCustomers:\n+18%\n\nTasks completed:\n92%\n\nRevenue:\n+12%\n\nRecommendation:\nFocus on following up with 5 inactive customers.`;
-        setMessages(prev => [...prev, { sender: 'MARI', text: perfSummary }]);
-      } else {
-        const res = processMariQuery(text);
-        setMessages(prev => [...prev, { sender: 'MARI', text: res.answer }]);
+    const fetchResponse = async () => {
+      try {
+        const { callMariAiApi, processMariQuery } = await import('@ralion/ai');
+        
+        // Let's try the real API first
+        const apiResponse = await callMariAiApi(text);
+        
+        if (apiResponse) {
+          setMessages(prev => [...prev, { sender: 'MARI', text: apiResponse }]);
+        } else {
+          // Fallback to local rules or quick answers
+          if (text.toLowerCase().includes('business performance') || text.toLowerCase().includes('performance')) {
+            const perfSummary = `Business Performance Summary\n\nCustomers:\n+18%\n\nTasks completed:\n92%\n\nRevenue:\n+12%\n\nRecommendation:\nFocus on following up with 5 inactive customers.`;
+            setMessages(prev => [...prev, { sender: 'MARI', text: perfSummary }]);
+          } else {
+            const res = processMariQuery(text);
+            setMessages(prev => [...prev, { sender: 'MARI', text: res.answer }]);
+          }
+        }
+      } catch (err) {
+        setMessages(prev => [...prev, { sender: 'MARI', text: "I'm having trouble connecting to my neural core right now." }]);
       }
-    }, 400);
+    };
+    
+    fetchResponse();
   };
 
   return (

@@ -10,11 +10,12 @@ export interface MariQueryResponse {
   relatedData?: any;
 }
 
-const AIML_API_KEY = process.env.AIML_API_KEY || "37d9bb3553feb58ff0ec6ed0b8e86975";
+const AIML_API_KEY = process.env.NEXT_PUBLIC_AIML_API_KEY || process.env.AIML_API_KEY || "37d9bb3553feb58ff0ec6ed0b8e86975";
+const AIML_BASE_URL = process.env.NEXT_PUBLIC_AIML_API_BASE_URL || "https://api.aimlapi.com/v1";
 
 export async function callMariAiApi(prompt: string, systemPrompt?: string): Promise<string | null> {
   try {
-    const response = await fetch("https://api.aimlapi.com/chat/completions", {
+    const response = await fetch(`${AIML_BASE_URL}/chat/completions`, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${AIML_API_KEY}`,
