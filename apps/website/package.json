@@ -7,7 +7,7 @@
     "dev": "vite",
     "start": "vite preview",
     "build": "vite build",
-    "postbuild": "node -e \"const fs=require('fs'); if(fs.existsSync('dist')){ fs.cpSync('dist', 'build', {recursive: true}); console.log('Successfully copied dist to build for deployment compatibility.'); }\"",
+    "postbuild": "node -e \"const fs=require('fs'); if(fs.existsSync('dist')){ fs.cpSync('dist', 'build', {recursive: true}); console.log('Copied dist to build.'); } if(fs.existsSync('../ralion/out')){ fs.cpSync('../ralion/out', 'build/ralion', {recursive: true}); console.log('Successfully copied Next.js dashboard to build/ralion'); }\"",
     "test": "echo \"No tests specified\" && exit 0",
     "preview": "vite preview"
   },

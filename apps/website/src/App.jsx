@@ -47,6 +47,15 @@ import AuthModal from './components/auth/AuthModal';
 
 import Checkout from './pages/Checkout';
 
+// Helper component to force hard reload for static Next.js apps
+const ExternalRedirect = ({ to }) => {
+  const location = useLocation();
+  useEffect(() => {
+    window.location.href = to || location.pathname;
+  }, [to, location]);
+  return null;
+};
+
 // Helper component to scroll to top on route change
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -84,8 +93,8 @@ function App() {
 
                 {/* Ralion Platform & Community Edition */}
                 <Route path="/ralion/community" element={<CommunityEdition />} />
-                <Route path="/ralion" element={<RalionApp />} />
-                <Route path="/ralion/*" element={<RalionApp />} />
+                <Route path="/ralion" element={<ExternalRedirect to="/ralion/dashboard" />} />
+                <Route path="/ralion/*" element={<ExternalRedirect />} />
 
                 {/* SaaS Onboarding & Customer Portal */}
                 <Route path="/checkout" element={<Checkout />} />

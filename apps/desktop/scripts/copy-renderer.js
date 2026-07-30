@@ -1,7 +1,7 @@
 const fs = require('fs-extra');
 const path = require('path');
 
-const webOutDir = path.join(__dirname, '..', '..', 'build');
+const webOutDir = path.join(__dirname, '..', '..', 'ralion', 'out');
 const desktopDistRenderer = path.join(__dirname, '..', 'dist', 'renderer');
 
 console.log('📂 [Copy Renderer] Target directory:', desktopDistRenderer);
@@ -43,8 +43,8 @@ if (!fs.existsSync(indexHtmlPath)) {
 </head>
 <body>
   <div class="card">
-    <div class="logo">R</div>
-    <h1>Ralion Platform Desktop</h1>
+    <div class="logo"><img src="./logo.png" alt="Ralion OS" style="width: 100%; height: 100%; object-fit: cover; border-radius: 0.75rem;"></div>
+    <h1>Ralion Operating System</h1>
     <p>"Empowered to Prosper" — Ralion AI-Powered Business Operating System by Ras Ali Labs.</p>
     <a href="#" onclick="window.location.href='/ralion'" class="btn">Connect to Workspace</a>
   </div>

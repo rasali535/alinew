@@ -129,8 +129,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Brand Header */}
       <div className="p-4 border-b border-zinc-800/80 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center font-black text-white text-sm shadow-md shadow-blue-500/20">
-            R
+          <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center shadow-md shadow-blue-500/20">
+            <img src="/logo.png" alt="Ralion OS Logo" className="w-full h-full object-cover" />
           </div>
           <div className="flex flex-col">
             <span className="font-extrabold text-sm text-white tracking-tight leading-none">Ralion Platform</span>
