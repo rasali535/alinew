@@ -57,31 +57,8 @@ class AnalyticsTracker {
     const anonymousSessionId = getAnonymousSessionId();
     this.logEvent('download', { platform, version, product, anonymousSessionId });
 
-    try {
-      // 1. Insert into 'downloads' table (Phase 3 requirement)
-      const { error: downloadsError } = await supabase.from('downloads').insert([
-        {
-          release_id: releaseId || `ralion_v${version}_${platform.toLowerCase()}`,
-          platform: platform.toLowerCase(),
-          anonymous_session_id: anonymousSessionId,
-          created_at: new Date().toISOString()
-        }
-      ]);
-
-      if (downloadsError) {
-        // Fallback insert into 'download_events'
-        await supabase.from('download_events').insert([
-          {
-            product,
-            version,
-            platform,
-            created_at: new Date().toISOString()
-          }
-        ]);
-      }
-    } catch (err) {
-      console.warn('Download tracking note:', err.message);
-    }
+    // Temporary: Disabled Supabase tracking while files are hosted on Hostinger
+    console.log('[Analytics] Download tracked locally. Supabase tracking disabled.');
   }
 
   trackConversion(type, metadata = {}) {

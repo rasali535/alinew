@@ -25,6 +25,7 @@ import BetaProgram from './pages/BetaProgram';
 import Solutions from './pages/Solutions';
 import Industries from './pages/Industries';
 import RequestDemo from './pages/RequestDemo';
+import Careers from './pages/Careers';
 import Downloads from './pages/Downloads';
 import RalionDownload from './pages/RalionDownload';
 import Releases from './pages/Releases';
@@ -94,6 +95,7 @@ function App() {
                 <Route path="/support" element={<Support />} />
                 <Route path="/pricing" element={<Pricing />} />
                 <Route path="/changelog" element={<Changelog />} />
+                <Route path="/careers" element={<Careers />} />
                 <Route path="/beta" element={<BetaProgram />} />
 
                 {/* Versioned Downloads & Release Management */}
