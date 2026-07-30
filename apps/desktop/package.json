@@ -18,6 +18,8 @@
     "dist:mac": "electron-builder --mac --config electron-builder.yml",
     "dist:linux": "electron-builder --linux --config electron-builder.yml",
     "dist:all": "electron-builder --win --mac --linux --config electron-builder.yml",
+    "publish:win": "node scripts/copy-renderer.js && electron-builder --win nsis --x64 --config electron-builder.yml -p always",
+    "publish:all": "node scripts/copy-renderer.js && electron-builder --win --mac --linux --config electron-builder.yml -p always",
     "validate": "node scripts/validate-installer.js"
   },
   "dependencies": {
