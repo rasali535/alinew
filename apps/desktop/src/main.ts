@@ -41,8 +41,17 @@ process.on('unhandledRejection', (reason) => {
 });
 
 // Enforce NODE_ENV=production when packaged
+
 if (app.isPackaged) {
   process.env.NODE_ENV = 'production';
+}
+
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient('ralion', process.execPath, [path.resolve(process.argv[1])]);
+  }
+} else {
+  app.setAsDefaultProtocolClient('ralion');
 }
 
 // ─── Globals ───────────────────────────────────────────────────────────────────
@@ -54,6 +63,7 @@ const store = new Store<{
   lastLicenseCheck: number;
   session: { token: string; userId: string; orgId: string } | null;
   offlinePendingActions: any[];
+  pendingOAuthTokens?: { access_token: string; refresh_token: string; provider_token: string | null };
 }>();
 
 const RALION_API = process.env.RALION_API_URL || process.env.NEXT_PUBLIC_API_URL || 'https://rasalilabs.com';
@@ -112,6 +122,36 @@ async function validateLicense(key: string): Promise<{ valid: boolean; edition?:
   }
 }
 
+
+
+// ─── Deep Link Handling ────────────────────────────────────────────────────────
+function handleDeepLink(url: string) {
+  try {
+    if (log.info) log.info('[DeepLink] Received URL:', url);
+    
+    // Example URL: ralion://oauth-callback#access_token=...&refresh_token=...
+    const hashMatches = url.match(/#(.+)/);
+    if (!hashMatches) return;
+
+    const hashParams = new URLSearchParams(hashMatches[1]);
+    const access_token = hashParams.get('access_token');
+    const refresh_token = hashParams.get('refresh_token');
+    const provider_token = hashParams.get('provider_token'); // optional
+
+    if (access_token && refresh_token) {
+      if (log.info) log.info('[DeepLink] Parsed OAuth tokens successfully. Sending to renderer...');
+      if (mainWindow) {
+        mainWindow.webContents.send('oauth-callback', { access_token, refresh_token, provider_token });
+      } else {
+        // If window isn't ready yet, store it temporarily and send when ready
+        store.set('pendingOAuthTokens', { access_token, refresh_token, provider_token });
+      }
+    }
+  } catch (error) {
+    if (log.error) log.error('[DeepLink] Error handling deep link:', error);
+  }
+}
+
 // ─── Window Creation ────────────────────────────────────────────────────────────
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -130,6 +170,16 @@ function createWindow() {
       sandbox: true,
       webSecurity: false,
     },
+  });
+
+  // Check for any pending tokens from before window was created
+  mainWindow.webContents.on('did-finish-load', () => {
+    const pendingTokens = store.get('pendingOAuthTokens');
+    if (pendingTokens) {
+      log.info('[DeepLink] Sending pending OAuth tokens to renderer...');
+      mainWindow?.webContents.send('oauth-callback', pendingTokens);
+      store.delete('pendingOAuthTokens');
+    }
   });
 
   const isDev = !app.isPackaged && process.env.NODE_ENV !== 'production';
@@ -580,11 +630,27 @@ if (!gotLock) {
   log.info('[App] Second instance attempt. Quitting...');
   app.quit();
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (event, commandLine, workingDirectory) => {
+    if (log.info) log.info('[App] second-instance triggered. args:', commandLine);
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
     }
+    const url = commandLine.find(arg => arg.startsWith('ralion://'));
+    if (url) {
+      handleDeepLink(url);
+    }
+  });
+
+  // macOS specific deep-link handling
+  app.on('open-url', (event, url) => {
+    event.preventDefault();
+    if (log.info) log.info('[App] open-url triggered:', url);
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+    handleDeepLink(url);
   });
 
   app.whenReady().then(async () => {

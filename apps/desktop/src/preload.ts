@@ -41,6 +41,11 @@ contextBridge.exposeInMainWorld('ralionDesktop', {
   windowMaximize: () => ipcRenderer.invoke('window-maximize'),
   windowClose: () => ipcRenderer.invoke('window-close'),
 
+  // Deep Linking / OAuth
+  onOAuthCallback: (callback: (data: { access_token: string; refresh_token: string; provider_token?: string }) => void) => {
+    ipcRenderer.on('oauth-callback', (_, data) => callback(data));
+  },
+
   // AI Commands
   aiGetHardwareProfile: () => ipcRenderer.invoke('ai-get-hardware-profile'),
   aiCheckStatus: () => ipcRenderer.invoke('ai-check-status'),

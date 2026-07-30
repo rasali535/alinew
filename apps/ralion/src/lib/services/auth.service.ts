@@ -28,16 +28,23 @@ export class AuthService {
    * Login with Google OAuth
    */
   static async loginWithGoogle() {
+    const isDesktop = typeof window !== 'undefined' && (window as any).__RALION_DESKTOP__;
+    
     const { data, error } = await this.supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        // Redirect back to the Ralion dashboard (or current domain)
-        redirectTo: `${window.location.origin}/ralion`,
+        redirectTo: isDesktop ? 'ralion://oauth-callback' : `${window.location.origin}/ralion/dashboard`,
+        skipBrowserRedirect: isDesktop,
       },
     });
-    if (error) {
-      throw error;
+    
+    if (error) throw error;
+
+    if (isDesktop && data?.url) {
+      // Open the OAuth flow in the user's default system browser
+      await (window as any).ralionDesktop?.openExternal(data.url);
     }
+    
     return data;
   }
 
@@ -45,16 +52,23 @@ export class AuthService {
    * Link a social account (OAuth) for Growth OS
    */
   static async linkSocialAccount(provider: any) {
+    const isDesktop = typeof window !== 'undefined' && (window as any).__RALION_DESKTOP__;
+
     const { data, error } = await this.supabase.auth.signInWithOAuth({
       provider: provider,
       options: {
-        redirectTo: `${window.location.origin}/ralion/growth`,
+        redirectTo: isDesktop ? 'ralion://oauth-callback' : `${window.location.origin}/ralion/growth`,
         scopes: 'email,profile',
+        skipBrowserRedirect: isDesktop,
       },
     });
-    if (error) {
-      throw error;
+    
+    if (error) throw error;
+
+    if (isDesktop && data?.url) {
+      await (window as any).ralionDesktop?.openExternal(data.url);
     }
+    
     return data;
   }
 

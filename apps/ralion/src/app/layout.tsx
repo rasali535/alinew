@@ -1,5 +1,6 @@
 import React from 'react';
 import { DesktopTitleBar } from '@ralion/ui';
+import { DesktopOAuthListener } from '@/components/DesktopOAuthListener';
 import './globals.css';
 
 export const metadata = {
@@ -16,6 +17,7 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className="bg-zinc-950 text-zinc-100 font-sans antialiased flex flex-col h-screen overflow-hidden">
         <DesktopTitleBar />
+        <DesktopOAuthListener />
         <div className="flex-1 overflow-auto">
           {children}
         </div>
