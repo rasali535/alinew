@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@paypal/react-paypal-js": "^10.2.1",
     "@ralion/ai": "1.0.0",
     "@ralion/auth": "1.0.0",
     "@ralion/core": "1.0.0",

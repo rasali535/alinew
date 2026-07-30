@@ -67,10 +67,14 @@ const Pricing = () => {
 
   const handleSelectPlan = (planId) => {
     analytics.trackConversion('pricing_plan_click', { planId, billingCycle });
+    
     if (planId === 'community') {
       user ? navigate('/ralion/dashboard') : navigate('/ralion/community');
+    } else if (planId === 'enterprise') {
+      navigate('/contact');
     } else {
-      user ? navigate('/onboarding') : openAuthModal('signup');
+      // Professional Plan
+      user ? navigate(`/checkout?plan=${planId}`) : openAuthModal('signup');
     }
   };
 

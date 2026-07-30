@@ -45,6 +45,8 @@ import Chatbot from '@/components/common/Chatbot';
 import { AuthProvider } from './context/AuthContext';
 import AuthModal from './components/auth/AuthModal';
 
+import Checkout from './pages/Checkout';
+
 // Helper component to scroll to top on route change
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -86,6 +88,7 @@ function App() {
                 <Route path="/ralion/*" element={<RalionApp />} />
 
                 {/* SaaS Onboarding & Customer Portal */}
+                <Route path="/checkout" element={<Checkout />} />
                 <Route path="/onboarding" element={<Onboarding />} />
                 <Route path="/account" element={<Account />} />
 

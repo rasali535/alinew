@@ -4,6 +4,9 @@ import React, { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, Button, Badge } from '@ralion/ui';
 import { CreditCard, Check, Plus, DollarSign, Download, ShieldCheck, Zap } from 'lucide-react';
 import { LicenseTier } from '@ralion/auth';
+import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
+
+const PAYPAL_CLIENT_ID = "BAAGH9vviiSc0ZUHX1Zp1QX-VKI9-CLsGBCiZKif6Aj-jXwyraUkDeQVgf6ntdbN2dYgywFor7M0K5LxYQ";
 
 interface InvoiceRow {
   id: string;
@@ -83,9 +86,40 @@ export default function BillingPage() {
             <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> Industry Module Plugins Access</li>
           </ul>
 
-          <Button variant="primary" className="w-full mt-6" disabled={currentTier === 'PROFESSIONAL'}>
-            {currentTier === 'PROFESSIONAL' ? 'Active Subscription' : 'Upgrade Plan'}
-          </Button>
+          {currentTier === 'PROFESSIONAL' ? (
+            <Button variant="primary" className="w-full mt-6" disabled>
+              Active Subscription
+            </Button>
+          ) : (
+            <div className="mt-6 z-0 relative">
+              <PayPalScriptProvider options={{ clientId: PAYPAL_CLIENT_ID, components: "buttons", currency: "USD" }}>
+                <PayPalButtons
+                  style={{ layout: "horizontal", height: 40, color: "gold", shape: "rect" }}
+                  createOrder={(data, actions) => {
+                    return actions.order.create({
+                      intent: 'CAPTURE',
+                      purchase_units: [
+                        {
+                          description: 'Professional Plan Upgrade',
+                          amount: {
+                            currency_code: 'USD',
+                            value: '149.00',
+                          },
+                        },
+                      ],
+                    });
+                  }}
+                  onApprove={(data, actions) => {
+                    if (!actions.order) return Promise.reject();
+                    return actions.order.capture().then((details) => {
+                      setCurrentTier('PROFESSIONAL');
+                      alert(`Thank you, ${details.payer?.name?.given_name}! Upgrade successful.`);
+                    });
+                  }}
+                />
+              </PayPalScriptProvider>
+            </div>
+          )}
         </Card>
 
         {/* Enterprise */}
