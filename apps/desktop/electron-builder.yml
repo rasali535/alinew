@@ -59,9 +59,8 @@ linux:
 
 # ── Auto Update ───────────────────────────────────────────────────────────────
 publish:
-  provider: github
-  owner: rasali535
-  repo: alinew
+  provider: generic
+  url: https://ralion.rasalilabs.com/api/version/releases
 
 extraMetadata:
   main: dist/main.js
