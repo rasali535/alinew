@@ -270,6 +270,15 @@ type LayoutConfig<Route extends LayoutRoutes = LayoutRoutes> = {
   type __Unused = __Check
 }
 
+// Validate ../../src/app/ralion/settings/ai-privacy/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/ralion/settings/ai-privacy">> = Specific
+  const handler = {} as typeof import("../../src/app/ralion/settings/ai-privacy/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../src/app/ralion/settings/page.tsx
 {
   type __IsExpected<Specific extends AppPageConfig<"/ralion/settings">> = Specific

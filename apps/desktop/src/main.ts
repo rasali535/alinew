@@ -15,6 +15,12 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import Store from 'electron-store';
 
+import { OllamaManager } from './ai/ollama-manager';
+import { ModelManager } from './ai/model-manager';
+import { HardwareDetector } from './ai/hardware-detect';
+import { AiRouter } from './ai/ai-router';
+import { VectorDB } from './ai/vector-db';
+
 // Safely attempt electron-log require
 let log: any = console;
 try {
@@ -115,14 +121,14 @@ function createWindow() {
     minHeight: 700,
     title: 'Ralion — Empowered to Prosper',
     backgroundColor: '#09090b',
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    frame: process.platform !== 'win32',
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
+    titleBarOverlay: process.platform === 'win32' ? { color: '#09090b', symbolColor: '#ffffff', height: 32 } : undefined,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
-      webSecurity: true,
+      webSecurity: false,
     },
   });
 
@@ -461,6 +467,89 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle('open-external', (_, url: string) => shell.openExternal(url));
+
+  // --- AI Architecture IPC Handlers ---
+  ipcMain.handle('ai-get-hardware-profile', async () => {
+    return await HardwareDetector.getProfile();
+  });
+
+  ipcMain.handle('ai-check-status', async () => {
+    const isInstalled = await OllamaManager.checkInstallation();
+    if (isInstalled) {
+      await OllamaManager.startDaemon();
+    }
+    return { isInstalled };
+  });
+
+  ipcMain.handle('ai-install-engine', async (event) => {
+    try {
+      await OllamaManager.install((msg) => {
+        event.sender.send('ai-install-progress', msg);
+      });
+      await OllamaManager.startDaemon();
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('ai-list-models', async () => {
+    try {
+      return await ModelManager.listModels();
+    } catch (error) {
+      return [];
+    }
+  });
+
+  ipcMain.handle('ai-pull-model', async (event, modelName: string) => {
+    try {
+      await ModelManager.pullModel(modelName, (msg) => {
+        event.sender.send('ai-pull-progress', { model: modelName, msg });
+      });
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('ai-remove-model', async (_, modelName: string) => {
+    try {
+      await ModelManager.removeModel(modelName);
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('ai-query', async (_, { prompt, localModel, cloudApiKey, offlineMode }) => {
+    try {
+      const response = await AiRouter.query(prompt, localModel, cloudApiKey, offlineMode);
+      return { success: true, response };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // --- Ralion Knowledge Memory IPC ---
+  ipcMain.handle('ai-memory-add', async (_, { content, metadata }) => {
+    try {
+      const id = await VectorDB.addDocument(content, metadata);
+      return { success: true, id };
+    } catch (error: any) {
+      log.error('[VectorDB IPC Add Error]', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('ai-memory-search', async (_, { query, limit }) => {
+    try {
+      const results = await VectorDB.search(query, limit);
+      return { success: true, results };
+    } catch (error: any) {
+      log.error('[VectorDB IPC Search Error]', error);
+      return { success: false, error: error.message };
+    }
+  });
 }
 
 // ─── Single Instance & Lifecycle ───────────────────────────────────────────────
@@ -476,8 +565,23 @@ if (!gotLock) {
     }
   });
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     log.info('[App] Ralion Desktop app ready. Initializing window & IPC...');
+    
+    // Check and start AI Engine silently in background if installed
+    try {
+      const installed = await OllamaManager.checkInstallation();
+      if (installed) {
+        log.info('[AI] Ollama installed. Starting daemon...');
+        await OllamaManager.startDaemon();
+      }
+    } catch (e) {
+      log.warn('[AI] Failed to check Ollama on boot:', e);
+    }
+
+    // Initialize Ralion Knowledge Memory (Vector DB)
+    VectorDB.initialize();
+
     registerIpcHandlers();
     buildAppMenu();
     createTray();

@@ -16,12 +16,12 @@ import { DollarSign, Users, CheckSquare, Sparkles, TrendingUp, Activity, ArrowUp
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar } from 'recharts';
 
 const sampleSalesData = [
-  { month: 'Jan', revenue: 24000, leads: 40 },
-  { month: 'Feb', revenue: 32000, leads: 55 },
-  { month: 'Mar', revenue: 28000, leads: 48 },
-  { month: 'Apr', revenue: 45000, leads: 70 },
-  { month: 'May', revenue: 52000, leads: 85 },
-  { month: 'Jun', revenue: 68000, leads: 110 },
+  { month: 'Jan', revenue: 0, leads: 0 },
+  { month: 'Feb', revenue: 0, leads: 0 },
+  { month: 'Mar', revenue: 0, leads: 0 },
+  { month: 'Apr', revenue: 0, leads: 0 },
+  { month: 'May', revenue: 0, leads: 0 },
+  { month: 'Jun', revenue: 0, leads: 0 },
 ];
 
 export default function DashboardPage() {
@@ -70,26 +70,26 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatsCard
           title="Monthly Revenue"
-          value="$68,450"
-          change="+18.4%"
+          value="$0"
+          change="0%"
           trend="up"
-          description="vs last month ($57,800)"
+          description="Awaiting data"
           icon={<DollarSign className="w-4 h-4" />}
         />
         <StatsCard
           title="Active Customers"
-          value="428"
-          change="+12"
+          value="0"
+          change="0"
           trend="up"
-          description="18 new leads in pipeline"
+          description="No new leads"
           icon={<Users className="w-4 h-4" />}
         />
         <StatsCard
           title="Operations Pending"
-          value="24 Tasks"
-          change="-4"
+          value="0 Tasks"
+          change="0"
           trend="up"
-          description="5 urgent tasks due today"
+          description="0 tasks due today"
           icon={<CheckSquare className="w-4 h-4" />}
         />
         <Card className="bg-gradient-to-br from-blue-900/30 via-zinc-900 to-purple-900/30 border-blue-500/30">
@@ -101,7 +101,7 @@ export default function DashboardPage() {
               <Badge variant="purple">Live</Badge>
             </div>
             <p className="text-xs text-zinc-200 mt-2 font-medium">
-              "Revenue growth is pacing +18%. High conversion observed in Professional SaaS tiers."
+              "Mari AI is ready. Awaiting operational data to generate live insights."
             </p>
             <span className="text-[10px] text-zinc-400 mt-3 flex items-center gap-1">
               Updated 5 mins ago by Mari AI
@@ -121,7 +121,7 @@ export default function DashboardPage() {
                 <CardDescription>Monthly performance analytics across branches</CardDescription>
               </div>
               <Badge variant="success" className="gap-1">
-                <TrendingUp className="w-3 h-3" /> +24% YoY
+                <TrendingUp className="w-3 h-3" /> Live
               </Badge>
             </div>
           </CardHeader>
@@ -159,10 +159,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             {[
-              { title: 'New Customer Intake', desc: 'Apex Logistics added by CRM Workflow', time: '10m ago', type: 'WORKFLOW' },
-              { title: 'Invoice Paid', desc: 'Inv #1042 ($4,500) received via Botswana Gateway', time: '25m ago', type: 'BILLING' },
-              { title: 'Mari AI Social Post Scheduled', desc: 'LinkedIn post queued for 4:00 PM', time: '1h ago', type: 'GROWTH' },
-              { title: 'Logistics Customs Cleared', desc: 'Shipment #LOG-882 cleared Gaborone border', time: '2h ago', type: 'LOGISTICS' },
+              { title: 'System Initialized', desc: 'Ralion Platform ready for operations', time: 'Just now', type: 'WORKFLOW' },
             ].map((item, idx) => (
               <div key={idx} className="flex items-start gap-3 border-b border-zinc-800/50 pb-3 last:border-0 last:pb-0">
                 <div className="p-1.5 rounded-lg bg-zinc-800 text-blue-400 mt-0.5">

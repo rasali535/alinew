@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, Button, Badge } from '@ralion/ui';
-import { Settings, Building2, Shield, Users, MapPin, Key, Laptop, Check, RefreshCw, HardDrive } from 'lucide-react';
+import { Settings, Building2, Shield, Users, MapPin, Key, Laptop, Check, RefreshCw, HardDrive, BrainCircuit } from 'lucide-react';
 import { REGISTERED_MODULES } from '@ralion/modules';
+import Link from 'next/link';
 
 export default function SettingsPage() {
   const [enabledPlugins, setEnabledPlugins] = useState<string[]>(['health', 'funeral', 'logistics', 'trade']);
@@ -186,6 +187,20 @@ export default function SettingsPage() {
                 <Button variant="outline" size="sm" className="gap-1">
                   <RefreshCw className="w-3.5 h-3.5" /> Force Sync Now
                 </Button>
+              </div>
+
+              <div className="p-4 rounded-xl bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-blue-500/30 flex items-center justify-between">
+                <div>
+                  <h4 className="font-bold text-white flex items-center gap-1.5">
+                    <BrainCircuit className="w-4 h-4 text-blue-400" /> Ralion AI Engine & Privacy
+                  </h4>
+                  <p className="text-zinc-400 text-[11px] mt-0.5 max-w-md">
+                    Configure the Local AI Runtime, download offline models, and manage data privacy settings.
+                  </p>
+                </div>
+                <Link href="/ralion/settings/ai-privacy">
+                  <Button variant="primary" size="sm">Configure AI Runtime</Button>
+                </Link>
               </div>
             </CardContent>
           </Card>

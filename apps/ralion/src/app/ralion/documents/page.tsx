@@ -2,8 +2,8 @@
 
 import React, { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, Button, Badge, Modal } from '@ralion/ui';
-import { Folder, FileText, Upload, Sparkles, Download, Eye, Lock, Share2, Plus, FileCheck } from 'lucide-react';
 import { generateEnterpriseDocument, GeneratedDocumentResult } from '@ralion/core';
+import { Database, Search, Cpu, Folder, FileText, Upload, Sparkles, Download, Eye, Lock, Share2, Plus, FileCheck } from 'lucide-react';
 
 interface DocItem {
   id: string;
@@ -32,6 +32,53 @@ export default function DocumentsPage() {
     itemPrice: '45000'
   });
   const [generatedDoc, setGeneratedDoc] = useState<GeneratedDocumentResult | null>(null);
+
+  // Vector DB State
+  const [memoryInput, setMemoryInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const handleAddMemory = async () => {
+    if (!memoryInput.trim()) return;
+    setIsProcessing(true);
+    const ipc = (window as any).electron?.ipcRenderer;
+    if (ipc) {
+      const res = await ipc.invoke('ai-memory-add', {
+        content: memoryInput,
+        metadata: { source: 'User Note', date: new Date().toISOString() }
+      });
+      if (res.success) {
+        setMemoryInput('');
+        alert('Added to local Ralion Memory successfully!');
+      } else {
+        alert('Failed to add memory: ' + res.error);
+      }
+    } else {
+      alert('Local Vector DB is only available in the Ralion Desktop Application.');
+    }
+    setIsProcessing(false);
+  };
+
+  const handleSearchMemory = async () => {
+    if (!searchQuery.trim()) return;
+    setIsProcessing(true);
+    const ipc = (window as any).electron?.ipcRenderer;
+    if (ipc) {
+      const res = await ipc.invoke('ai-memory-search', {
+        query: searchQuery,
+        limit: 3
+      });
+      if (res.success) {
+        setSearchResults(res.results);
+      } else {
+        alert('Search failed: ' + res.error);
+      }
+    } else {
+      alert('Local Vector DB is only available in the Ralion Desktop Application.');
+    }
+    setIsProcessing(false);
+  };
 
   const handleGenerateDoc = () => {
     const res = generateEnterpriseDocument({
@@ -151,6 +198,68 @@ export default function DocumentsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Ralion Knowledge Memory Section */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+        <Card className="border-purple-500/30">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Database className="w-5 h-5 text-purple-400" /> Ralion Knowledge Memory
+            </CardTitle>
+            <CardDescription>Add unstructured data to your offline vector database.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <textarea
+              className="w-full h-32 px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-white"
+              placeholder="Paste any company knowledge, policies, or notes here. Mari AI will vectorize it locally."
+              value={memoryInput}
+              onChange={(e) => setMemoryInput(e.target.value)}
+            />
+            <Button variant="primary" onClick={handleAddMemory} disabled={isProcessing} className="w-full bg-purple-600 hover:bg-purple-700">
+              {isProcessing ? 'Processing...' : 'Store in Local Vector DB'}
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="border-blue-500/30">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Search className="w-5 h-5 text-blue-400" /> Vector Semantic Search
+            </CardTitle>
+            <CardDescription>Search offline data using semantic meaning instead of keywords.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                className="flex-1 px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-white"
+                placeholder="Ask a question or search semantic context..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <Button variant="primary" onClick={handleSearchMemory} disabled={isProcessing}>
+                Search
+              </Button>
+            </div>
+            
+            <div className="space-y-2 mt-4 max-h-48 overflow-y-auto pr-2">
+              {searchResults.length === 0 ? (
+                <p className="text-xs text-zinc-500 text-center py-4">No results yet.</p>
+              ) : (
+                searchResults.map((res: any, idx: number) => (
+                  <div key={idx} className="p-3 bg-zinc-900 rounded-lg border border-zinc-800">
+                    <p className="text-[11px] text-white font-medium mb-1 line-clamp-3">{res.content}</p>
+                    <div className="flex justify-between items-center text-[9px] font-mono text-zinc-500">
+                      <span>Source: {res.metadata?.source || 'Note'}</span>
+                      <span className="text-emerald-400">Similarity: {(1 - res.distance).toFixed(4)}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Document Generator Modal */}
       <Modal isOpen={isGenModalOpen} onClose={() => setIsGenModalOpen(false)} title="Enterprise PDF Document Generator">

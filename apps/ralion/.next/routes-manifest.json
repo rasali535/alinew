@@ -204,6 +204,12 @@
       "namedRegex": "^/ralion/settings(?:/)?$"
     },
     {
+      "page": "/ralion/settings/ai-privacy",
+      "regex": "^/ralion/settings/ai\\-privacy(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ralion/settings/ai\\-privacy(?:/)?$"
+    },
+    {
       "page": "/ralion/tasks",
       "regex": "^/ralion/tasks(?:/)?$",
       "routeKeys": {},

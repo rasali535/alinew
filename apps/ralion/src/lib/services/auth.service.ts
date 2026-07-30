@@ -42,6 +42,23 @@ export class AuthService {
   }
 
   /**
+   * Link a social account (OAuth) for Growth OS
+   */
+  static async linkSocialAccount(provider: any) {
+    const { data, error } = await this.supabase.auth.signInWithOAuth({
+      provider: provider,
+      options: {
+        redirectTo: `${window.location.origin}/ralion/growth`,
+        scopes: 'email,profile',
+      },
+    });
+    if (error) {
+      throw error;
+    }
+    return data;
+  }
+
+  /**
    * Get current authenticated user session
    */
   static async getSession() {

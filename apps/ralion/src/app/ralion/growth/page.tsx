@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, Button, Badge, Modal } from '@ralion/ui';
-import { TrendingUp, Sparkles, Calendar, Share2, Plus, BarChart2, Send, Copy, Check, Megaphone, Globe } from 'lucide-react';
+import { TrendingUp, Sparkles, Calendar, Share2, Plus, BarChart2, Send, Copy, Check, Megaphone, Globe, Video, Image, Wand2, LayoutTemplate } from 'lucide-react';
+import { AuthService } from '@/lib/services/auth.service';
 
 interface ContentPost {
   id: string;
@@ -25,39 +26,9 @@ interface Campaign {
   postsCount: number;
 }
 
-const samplePosts: ContentPost[] = [
-  {
-    id: 'p1',
-    title: 'Empowered to Prosper — Ralion Launch',
-    body: '🚀 Introducing Ralion, the AI-powered Business Operating System by Ras Ali Labs. Manage your customers, tasks, and operations from one intelligent platform. Empowered to Prosper. #Ralion #RasAliLabs #BusinessAI',
-    platform: 'linkedin',
-    hashtags: ['#Ralion', '#RasAliLabs', '#BusinessAI', '#Botswana'],
-    status: 'published',
-    engagement: { likes: 142, shares: 38, reach: 4200 }
-  },
-  {
-    id: 'p2',
-    title: 'Mari AI Feature Spotlight',
-    body: '🤖 Meet Mari AI — your intelligent business consultant. Ask her anything: "How many customers did we gain this month?" "What tasks are overdue?" "Create my monthly report." — She handles it all. #MariAI #ArtificialIntelligence',
-    platform: 'instagram',
-    hashtags: ['#MariAI', '#AI', '#SmallBusiness'],
-    status: 'scheduled',
-    scheduledAt: '2026-07-30 09:00'
-  },
-  {
-    id: 'p3',
-    title: 'Logistics Module Preview',
-    body: 'Track your fleet, manage shipments, and verify customs documents — all in one place with Ralion Logistics. 🚛 Built for transport companies across Southern Africa.',
-    platform: 'facebook',
-    hashtags: ['#Logistics', '#Botswana', '#Fleet'],
-    status: 'draft'
-  },
-];
+const samplePosts: ContentPost[] = [];
 
-const sampleCampaigns: Campaign[] = [
-  { id: 'c1', name: 'Ralion Product Launch 2026', platforms: ['linkedin', 'facebook', 'instagram'], startDate: 'Jul 1', endDate: 'Jul 31', status: 'active', postsCount: 12 },
-  { id: 'c2', name: 'Mari AI Awareness Drive', platforms: ['linkedin', 'twitter'], startDate: 'Aug 1', endDate: 'Aug 14', status: 'planning', postsCount: 6 },
-];
+const sampleCampaigns: Campaign[] = [];
 
 const platformConfig: Record<string, { label: string; color: string }> = {
   linkedin: { label: 'LinkedIn', color: 'blue' },
@@ -71,21 +42,80 @@ const platformConfig: Record<string, { label: string; color: string }> = {
 export default function GrowthPage() {
   const [posts, setPosts] = useState(samplePosts);
   const [campaigns] = useState(sampleCampaigns);
-  const [activeTab, setActiveTab] = useState<'CONTENT' | 'CAMPAIGNS' | 'AI_STUDIO' | 'ANALYTICS'>('CONTENT');
+  const [activeTab, setActiveTab] = useState<'CONTENT' | 'CAMPAIGNS' | 'AI_STUDIO' | 'CREATIVES' | 'ANALYTICS' | 'ACCOUNTS'>('CONTENT');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiResult, setAiResult] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [connectedAccounts, setConnectedAccounts] = useState<string[]>([]);
   const [copied, setCopied] = useState(false);
   const [newPost, setNewPost] = useState({ title: '', body: '', platform: 'linkedin', hashtags: '' });
 
   const handleAiGenerate = async () => {
     if (!aiPrompt.trim()) return;
     setIsGenerating(true);
-    setTimeout(() => {
-      setAiResult(`🎯 Campaign Strategy: "${aiPrompt}"\n\n📅 30-Day Content Calendar:\n\nWeek 1 — Awareness\n• LinkedIn: "Introducing our [service] — Built for the people of Botswana"\n• Instagram: Behind-the-scenes setup photos + team intro\n• Facebook: Boost post with BWP 150 targeting Gaborone businesses\n\nWeek 2 — Education\n• "5 Ways [service] saves your business time"\n• Client testimonial video (60s)\n• Mari AI tip: "Ask Mari to summarize your reports"\n\nWeek 3 — Proof\n• Case study: Show real results\n• "We served 50 clients this month — here's what they said"\n• Run LinkedIn poll: "What's your biggest business challenge?"\n\nWeek 4 — Conversion\n• "Limited spots available — Book your Ralion demo"\n• Special offer post with countdown\n• Direct CTA: "Start your free trial today"\n\n#Hashtags: #Ralion #RasAliLabs #Botswana #BusinessGrowth #EmpoweredToProsper #SME #MariAI`);
+    try {
+      const isDesktop = (window as any).__RALION_DESKTOP__;
+      const apiKey = process.env.NEXT_PUBLIC_AIML_API_KEY;
+
+      if (isDesktop) {
+        // Use Local AI Router (Hybrid Mode)
+        const ipc = (window as any).electron?.ipcRenderer;
+        if (ipc) {
+          const res = await ipc.invoke('ai-query', {
+            prompt: aiPrompt,
+            localModel: 'phi3', // Default local fallback model
+            cloudApiKey: apiKey,
+            offlineMode: false // Could be linked to settings
+          });
+          
+          if (res.success) {
+            setAiResult(res.response);
+          } else {
+            throw new Error(res.error);
+          }
+        }
+      } else {
+        // Standard Web Mode (Cloud Only)
+        const baseUrl = process.env.NEXT_PUBLIC_AIML_API_BASE_URL || 'https://api.aimlapi.com/v1';
+        
+        if (!apiKey) {
+          setAiResult(`Error: Mari AI API Key is not configured. Please add NEXT_PUBLIC_AIML_API_KEY to your environment variables.`);
+          setIsGenerating(false);
+          return;
+        }
+
+        const res = await fetch(`${baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: 'mistralai/Mistral-7B-Instruct-v0.2',
+            messages: [
+              { role: 'system', content: 'You are Mari AI, a highly advanced marketing intelligence system designed for African businesses. Generate creative, platform-specific marketing campaigns based on the user prompt.' },
+              { role: 'user', content: aiPrompt }
+            ],
+            max_tokens: 600,
+            temperature: 0.7
+          })
+        });
+
+        if (!res.ok) throw new Error('Failed to generate from Mari AI.');
+        
+        const data = await res.json();
+        if (data.choices && data.choices.length > 0) {
+          setAiResult(data.choices[0].message.content);
+        } else {
+          setAiResult('Mari AI could not generate a response. Please try again.');
+        }
+      }
+    } catch (error: any) {
+      setAiResult(`Mari AI generation failed: ${error.message}`);
+    } finally {
       setIsGenerating(false);
-    }, 1200);
+    }
   };
 
   const handleCopy = () => {
@@ -120,7 +150,7 @@ export default function GrowthPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-zinc-900 p-1 rounded-xl border border-zinc-800 w-fit">
-        {(['CONTENT', 'CAMPAIGNS', 'AI_STUDIO', 'ANALYTICS'] as const).map(tab => (
+        {(['CONTENT', 'CAMPAIGNS', 'AI_STUDIO', 'CREATIVES', 'ANALYTICS', 'ACCOUNTS'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -259,16 +289,95 @@ export default function GrowthPage() {
         </div>
       )}
 
+      {/* Creatives Tab */}
+      {activeTab === 'CREATIVES' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* AI Poster Generator */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-gradient-to-tr from-pink-600 to-purple-600 text-white">
+                  <Image className="w-5 h-5" />
+                </div>
+                <div>
+                  <CardTitle>AI Poster Generator</CardTitle>
+                  <CardDescription>Generate high-converting posters for social media and ads.</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <textarea
+                rows={3}
+                placeholder="Describe the poster... (e.g. A bold, modern promotional poster for a tech conference in Gaborone featuring neon colors)"
+                className="w-full p-3 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500 resize-none"
+              />
+              <div className="flex gap-2">
+                <select className="px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 outline-none flex-1">
+                  <option>Format: Instagram Square (1:1)</option>
+                  <option>Format: Story / Reel (9:16)</option>
+                  <option>Format: LinkedIn / Twitter (16:9)</option>
+                </select>
+                <select className="px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 outline-none flex-1">
+                  <option>Style: Modern Minimalist</option>
+                  <option>Style: Bold & Vibrant</option>
+                  <option>Style: Corporate Professional</option>
+                </select>
+              </div>
+              <Button variant="primary" className="w-full justify-center bg-purple-600 hover:bg-purple-700">
+                <Wand2 className="w-4 h-4 mr-2" /> Generate Poster
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* AI Video Generator */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-gradient-to-tr from-blue-600 to-cyan-600 text-white">
+                  <Video className="w-5 h-5" />
+                </div>
+                <div>
+                  <CardTitle>AI Video Creator</CardTitle>
+                  <CardDescription>Create short-form marketing videos from text prompts.</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <textarea
+                rows={3}
+                placeholder="Describe the video... (e.g. A 15-second promotional video showing a bustling cafe with a text overlay 'Morning Coffee Runs Just Got Better')"
+                className="w-full p-3 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 resize-none"
+              />
+              <div className="flex gap-2">
+                <select className="px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 outline-none flex-1">
+                  <option>Length: 15 Seconds (Shorts/Reels)</option>
+                  <option>Length: 30 Seconds (Ad)</option>
+                  <option>Length: 60 Seconds (Full Promo)</option>
+                </select>
+                <select className="px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 outline-none flex-1">
+                  <option>Voiceover: AI Female (Professional)</option>
+                  <option>Voiceover: AI Male (Energetic)</option>
+                  <option>Voiceover: None (Text Only)</option>
+                </select>
+              </div>
+              <Button variant="primary" className="w-full justify-center bg-blue-600 hover:bg-blue-700">
+                <Wand2 className="w-4 h-4 mr-2" /> Generate Video
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Analytics Tab */}
       {activeTab === 'ANALYTICS' && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {[
-            { label: 'Total Reach', value: '42,800', change: '+18%', icon: '👁️' },
-            { label: 'Engagements', value: '3,240', change: '+24%', icon: '❤️' },
-            { label: 'Published Posts', value: '28', change: '+12', icon: '📝' },
-            { label: 'Active Campaigns', value: '2', change: 'Running', icon: '🚀' },
-            { label: 'Top Platform', value: 'LinkedIn', change: '62% of reach', icon: '💼' },
-            { label: 'AI Posts Generated', value: '14', change: 'This month', icon: '✨' },
+            { label: 'Total Reach', value: '0', change: '0%', icon: '👁️' },
+            { label: 'Engagements', value: '0', change: '0%', icon: '❤️' },
+            { label: 'Published Posts', value: '0', change: '0', icon: '📝' },
+            { label: 'Active Campaigns', value: '0', change: 'None', icon: '🚀' },
+            { label: 'Top Platform', value: 'N/A', change: 'No data', icon: '💼' },
+            { label: 'AI Posts Generated', value: '0', change: 'This month', icon: '✨' },
           ].map((m, i) => (
             <Card key={i} className="p-5">
               <div className="text-2xl mb-1">{m.icon}</div>
@@ -277,6 +386,55 @@ export default function GrowthPage() {
               <div className="text-[11px] text-emerald-400 font-semibold mt-0.5">{m.change}</div>
             </Card>
           ))}
+        </div>
+      )}
+
+      {/* Accounts / Social Login Tab */}
+      {activeTab === 'ACCOUNTS' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Object.entries(platformConfig).map(([key, config]) => {
+            const isConnected = connectedAccounts.includes(key);
+            // Simulate OAuth social login flow
+            const handleSocialLogin = async () => {
+              if (isConnected) {
+                setConnectedAccounts(prev => prev.filter(a => a !== key));
+              } else {
+                try {
+                  // In a real Desktop app, this opens the system browser to auth, then redirects via deep link
+                  // For web, it redirects directly. We call the real AuthService.
+                  await AuthService.linkSocialAccount(key);
+                } catch (error) {
+                  console.error('OAuth Link Error:', error);
+                  // For demo purposes if OAuth is not configured on Supabase, just set it
+                  setConnectedAccounts(prev => [...prev, key]);
+                  alert(`OAuth for ${config.label} is triggered. Ensure Supabase is configured for this provider.`);
+                }
+              }
+            };
+
+            return (
+              <Card key={key} className="p-5 flex flex-col justify-between hover:border-zinc-700 transition-all">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center font-bold text-lg" style={{ color: config.color === 'blue' ? '#3b82f6' : config.color === 'danger' ? '#ef4444' : '#a855f7' }}>
+                    {config.label.charAt(0)}
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-white text-sm">{config.label}</h3>
+                    <p className="text-[11px] text-zinc-500">{isConnected ? 'Authenticated & Connected' : 'Not Connected'}</p>
+                  </div>
+                </div>
+                {isConnected ? (
+                  <Button variant="outline" size="sm" onClick={handleSocialLogin} className="w-full text-red-400 border-red-900/50 hover:bg-red-950">
+                    Disconnect {config.label}
+                  </Button>
+                ) : (
+                  <Button variant="primary" size="sm" onClick={handleSocialLogin} className="w-full">
+                    <Globe className="w-4 h-4 mr-2" /> Connect {config.label}
+                  </Button>
+                )}
+              </Card>
+            );
+          })}
         </div>
       )}
 

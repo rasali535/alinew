@@ -1,7 +1,7 @@
 const fs = require('fs-extra');
 const path = require('path');
 
-const webOutDir = path.join(__dirname, '..', '..', 'website', 'dist');
+const webOutDir = path.join(__dirname, '..', '..', 'build');
 const desktopDistRenderer = path.join(__dirname, '..', 'dist', 'renderer');
 
 console.log('📂 [Copy Renderer] Target directory:', desktopDistRenderer);
