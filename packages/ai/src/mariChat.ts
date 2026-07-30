@@ -15,6 +15,35 @@ const AIML_BASE_URL = process.env.NEXT_PUBLIC_AIML_API_BASE_URL || "https://api.
 
 export async function callMariAiApi(prompt: string, systemPrompt?: string): Promise<string | null> {
   try {
+    const isImageRequest = /^(generate|create|make|draw|show) (an?|some) (image|picture|photo|drawing|illustration)/i.test(prompt) || 
+                           /(image|picture|photo|drawing) of /i.test(prompt);
+
+    if (isImageRequest) {
+      const response = await fetch(`${AIML_BASE_URL}/images/generations`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${AIML_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "flux/schnell",
+          prompt: prompt
+        })
+      });
+
+      if (!response.ok) {
+        console.warn("AIML Image API response error:", response.status);
+        return null;
+      }
+
+      const data = await response.json();
+      const imageUrl = data.data?.[0]?.url;
+      if (imageUrl) {
+        return `Here is your generated image:\n\n![Generated Image](${imageUrl})`;
+      }
+      return null;
+    }
+
     const response = await fetch(`${AIML_BASE_URL}/chat/completions`, {
       method: "POST",
       headers: {
@@ -33,7 +62,7 @@ export async function callMariAiApi(prompt: string, systemPrompt?: string): Prom
     });
 
     if (!response.ok) {
-      console.warn("AIML API response error:", response.status);
+      console.warn("AIML Chat API response error:", response.status);
       return null;
     }
 
