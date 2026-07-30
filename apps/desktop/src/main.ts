@@ -468,6 +468,28 @@ function registerIpcHandlers() {
 
   ipcMain.handle('open-external', (_, url: string) => shell.openExternal(url));
 
+  // --- Window Controls IPC ---
+  ipcMain.handle('window-minimize', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    win?.minimize();
+  });
+
+  ipcMain.handle('window-maximize', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win) {
+      if (win.isMaximized()) {
+        win.unmaximize();
+      } else {
+        win.maximize();
+      }
+    }
+  });
+
+  ipcMain.handle('window-close', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    win?.close();
+  });
+
   // --- AI Architecture IPC Handlers ---
   ipcMain.handle('ai-get-hardware-profile', async () => {
     return await HardwareDetector.getProfile();

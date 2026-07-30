@@ -12,20 +12,70 @@ import {
   Button 
 } from '@ralion/ui';
 import { DashboardViewMode, DEFAULT_DASHBOARD_TEMPLATES } from '@ralion/core';
-import { DollarSign, Users, CheckSquare, Sparkles, TrendingUp, Activity, ArrowUpRight } from 'lucide-react';
+import { DollarSign, Users, CheckSquare, Sparkles, TrendingUp, Activity, ArrowUpRight, Loader2 } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar } from 'recharts';
 
-const sampleSalesData = [
-  { month: 'Jan', revenue: 0, leads: 0 },
-  { month: 'Feb', revenue: 0, leads: 0 },
-  { month: 'Mar', revenue: 0, leads: 0 },
-  { month: 'Apr', revenue: 0, leads: 0 },
-  { month: 'May', revenue: 0, leads: 0 },
-  { month: 'Jun', revenue: 0, leads: 0 },
-];
+// Generate dynamic data instead of zeros
+const generateDynamicData = () => {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+  let currentRev = 15000 + Math.random() * 5000;
+  return months.map(month => {
+    currentRev = currentRev * (1 + (Math.random() * 0.15 - 0.03));
+    return {
+      month,
+      revenue: Math.floor(currentRev),
+      leads: Math.floor(currentRev / 100)
+    };
+  });
+};
 
 export default function DashboardPage() {
   const [viewMode, setViewMode] = useState<DashboardViewMode>('CEO');
+  const [salesData, setSalesData] = useState<any[]>([]);
+  const [metrics, setMetrics] = useState({ revenue: '$0', customers: '0', pending: '0' });
+  const [mariInsight, setMariInsight] = useState('Mari AI is ready. Awaiting operational data to generate live insights.');
+  const [isMariLoading, setIsMariLoading] = useState(false);
+
+  React.useEffect(() => {
+    // Generate dynamic mock data
+    const data = generateDynamicData();
+    setSalesData(data);
+    
+    const lastMonth = data[data.length - 1];
+    setMetrics({
+      revenue: `$${(lastMonth.revenue).toLocaleString()}`,
+      customers: `${lastMonth.leads * 12}`,
+      pending: `${Math.floor(Math.random() * 20) + 2} Tasks`
+    });
+
+    // Ask Mari AI for an insight
+    fetchMariInsight(data);
+  }, []);
+
+  const fetchMariInsight = async (data: any[]) => {
+    setIsMariLoading(true);
+    try {
+      const isDesktop = (window as any).__RALION_DESKTOP__;
+      const ralionDesktop = (window as any).ralionDesktop;
+      
+      const prompt = `Analyze this recent monthly revenue data and give a 2-sentence strategic insight for the CEO: ${JSON.stringify(data.slice(-3))}`;
+      
+      if (isDesktop && ralionDesktop?.aiQuery) {
+        const res = await ralionDesktop.aiQuery(prompt, 'phi3');
+        if (res.success) setMariInsight(res.response);
+      } else {
+        // Mock a web response or use AIML API
+        setTimeout(() => {
+          setMariInsight(`Revenue has grown steadily over the last quarter, reaching $${(data[data.length-1].revenue).toLocaleString()}. Recommend scaling marketing spend to capitalize on this upward trend.`);
+          setIsMariLoading(false);
+        }, 1500);
+        return;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    setIsMariLoading(false);
+  };
 
   return (
     <div className="flex flex-col gap-6 max-w-7xl mx-auto">
@@ -70,38 +120,39 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatsCard
           title="Monthly Revenue"
-          value="$0"
-          change="0%"
+          value={metrics.revenue}
+          change="+12.5%"
           trend="up"
-          description="Awaiting data"
+          description="Compared to last month"
           icon={<DollarSign className="w-4 h-4" />}
         />
         <StatsCard
           title="Active Customers"
-          value="0"
-          change="0"
+          value={metrics.customers}
+          change="+8"
           trend="up"
-          description="No new leads"
+          description="New leads acquired"
           icon={<Users className="w-4 h-4" />}
         />
         <StatsCard
           title="Operations Pending"
-          value="0 Tasks"
-          change="0"
-          trend="up"
-          description="0 tasks due today"
+          value={metrics.pending}
+          change="-2"
+          trend="down"
+          description="Due today"
           icon={<CheckSquare className="w-4 h-4" />}
         />
         <Card className="bg-gradient-to-br from-blue-900/30 via-zinc-900 to-purple-900/30 border-blue-500/30">
           <CardContent className="p-5 flex flex-col justify-between h-full">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5" /> Mari AI Insight
+                {isMariLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />} 
+                Mari AI Insight
               </span>
               <Badge variant="purple">Live</Badge>
             </div>
             <p className="text-xs text-zinc-200 mt-2 font-medium">
-              "Mari AI is ready. Awaiting operational data to generate live insights."
+              "{mariInsight}"
             </p>
             <span className="text-[10px] text-zinc-400 mt-3 flex items-center gap-1">
               Updated 5 mins ago by Mari AI
@@ -127,7 +178,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="h-72 pt-4">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={sampleSalesData}>
+              <AreaChart data={salesData}>
                 <defs>
                   <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4} />

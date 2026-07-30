@@ -6,3 +6,4 @@ export * from './StatsCard';
 export * from './Sidebar';
 export * from './Header';
 export * from './Modal';
+export * from './DesktopTitleBar';
