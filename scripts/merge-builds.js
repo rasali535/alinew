@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const rootDir = path.join(__dirname, '..');
-const outputDir = path.join(rootDir, '.builds', 'output');
+const outputDir = path.join(rootDir, 'build');
 
 console.log('Merging workspace builds into single output directory:', outputDir);
 
