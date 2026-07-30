@@ -1,43 +1,66 @@
 const fs = require('fs');
 const path = require('path');
-const { createClient } = require('@supabase/supabase-js');
 
-const websiteDist = path.join(__dirname, '..', 'apps', 'website', 'dist');
-const ralionOut = path.join(__dirname, '..', 'apps', 'ralion', 'out');
-const ralionDest = path.join(websiteDist, 'ralion');
+const rootDir = path.join(__dirname, '..');
+const outputDir = path.join(rootDir, '.builds', 'output');
 
-console.log('Merging Ralion Web into Website Dist...');
+console.log('Merging workspace builds into single output directory:', outputDir);
 
 try {
-  // Check if website dist exists
-  if (!fs.existsSync(websiteDist)) {
-    console.error('Website dist directory not found!');
-    process.exit(1);
+  // 1. Create fresh output directory
+  if (fs.existsSync(outputDir)) {
+    fs.rmSync(outputDir, { recursive: true, force: true });
+  }
+  fs.mkdirSync(outputDir, { recursive: true });
+
+  // 2. Define the main website which goes to the root of outputDir
+  const websitePaths = [
+    path.join(rootDir, 'apps', 'website', 'dist'),
+    path.join(rootDir, 'apps', 'website', 'build')
+  ];
+  let websiteFound = false;
+  for (const src of websitePaths) {
+    if (fs.existsSync(src)) {
+      console.log(`Copying main website from ${src} to ${outputDir}`);
+      fs.cpSync(src, outputDir, { recursive: true });
+      websiteFound = true;
+      break;
+    }
+  }
+  if (!websiteFound) {
+    console.warn('Warning: Main website build not found.');
   }
 
-  // Check if ralion out exists
-  if (!fs.existsSync(ralionOut)) {
-    console.error('Ralion out directory not found!');
-    process.exit(1);
-  }
+  // 3. Define other apps to merge into subdirectories
+  const apps = [
+    // Ralion Web
+    { name: 'ralion', src: path.join(rootDir, 'apps', 'ralion', 'out'), dest: path.join(outputDir, 'ralion') },
+    { name: 'ralion (dist)', src: path.join(rootDir, 'apps', 'ralion', 'dist'), dest: path.join(outputDir, 'ralion') },
+    { name: 'ralion (build)', src: path.join(rootDir, 'apps', 'ralion', 'build'), dest: path.join(outputDir, 'ralion') },
+    // Admin
+    { name: 'admin (.next)', src: path.join(rootDir, 'apps', 'admin', '.next'), dest: path.join(outputDir, 'admin', '.next') },
+    { name: 'admin (out)', src: path.join(rootDir, 'apps', 'admin', 'out'), dest: path.join(outputDir, 'admin', 'out') },
+    // Web
+    { name: 'web (.next)', src: path.join(rootDir, 'apps', 'web', '.next'), dest: path.join(outputDir, 'web', '.next') },
+    { name: 'web (out)', src: path.join(rootDir, 'apps', 'web', 'out'), dest: path.join(outputDir, 'web', 'out') },
+    // Desktop
+    { name: 'desktop', src: path.join(rootDir, 'apps', 'desktop', 'dist'), dest: path.join(outputDir, 'desktop') }
+  ];
 
-  // Copy the entire Next.js export (out folder) into websiteDist/ralion
-  const sourcePath = ralionOut;
+  // Merge loop
+  apps.forEach(app => {
+    if (fs.existsSync(app.src)) {
+      console.log(`Copying ${app.name} from ${app.src} to ${app.dest}`);
+      if (!fs.existsSync(app.dest)) {
+        fs.mkdirSync(app.dest, { recursive: true });
+      }
+      fs.cpSync(app.src, app.dest, { recursive: true });
+    } else {
+      console.log(`Skipping ${app.name} - build output not found at ${app.src}`);
+    }
+  });
 
-  // Copy to websiteDist/ralion
-  if (!fs.existsSync(ralionDest)) {
-    fs.mkdirSync(ralionDest, { recursive: true });
-  }
-
-  fs.cpSync(sourcePath, ralionDest, { recursive: true });
-  console.log('Successfully merged Ralion web into Website dist.');
-  
-  // Update website build folder for Hostinger compatibility
-  const websiteBuild = path.join(__dirname, '..', 'apps', 'website', 'build');
-  if (fs.existsSync(websiteBuild)) {
-    fs.cpSync(websiteDist, websiteBuild, { recursive: true });
-    console.log('Successfully updated website build directory with merged Ralion OS.');
-  }
+  console.log('Successfully merged all available builds into', outputDir);
 
 } catch (error) {
   console.error('Failed to merge builds:', error);

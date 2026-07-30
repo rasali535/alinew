@@ -11,8 +11,8 @@ const Home = () => {
     return (
         <>
             <SEO
-                title="Ras Ali - Multi-Disciplinary Creative & Technologist"
-                description="Ras Ali is a multi-disciplinary creative and technologist based in Gaborone, specializing in premium web design, development, and digital experiences."
+                title="Ras Ali Labs | AI Business Operating Systems"
+                description="Building intelligent AI platforms, automation systems, and industry-specific business operating systems."
                 url="/"
             />
             <HeroSection />

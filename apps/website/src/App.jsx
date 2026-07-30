@@ -8,7 +8,10 @@ import Home from './pages/Home';
 import Products from './pages/Products';
 import ProductDetail from './pages/ProductDetail';
 import RalionCRMProduct from './pages/RalionCRMProduct';
-import RalionSocialIntelligenceProduct from './pages/RalionSocialIntelligenceProduct';
+import RalionGrowthIntelligenceProduct from './pages/RalionGrowthIntelligenceProduct';
+import RalionMariAIProduct from './pages/RalionMariAIProduct';
+import RalionAutomationProduct from './pages/RalionAutomationProduct';
+import RalionAnalyticsProduct from './pages/RalionAnalyticsProduct';
 import RalionApp from './pages/RalionApp';
 import CommunityEdition from './pages/CommunityEdition';
 import Onboarding from './pages/Onboarding';
@@ -68,7 +71,10 @@ function App() {
                 <Route path="/industries" element={<Industries />} />
                 <Route path="/products" element={<Products />} />
                 <Route path="/products/ralion-crm" element={<RalionCRMProduct />} />
-                <Route path="/products/ralion-social-intelligence" element={<RalionSocialIntelligenceProduct />} />
+                <Route path="/products/ralion-growth-intelligence" element={<RalionGrowthIntelligenceProduct />} />
+                <Route path="/products/ralion-mari-ai" element={<RalionMariAIProduct />} />
+                <Route path="/products/ralion-automation" element={<RalionAutomationProduct />} />
+                <Route path="/products/ralion-analytics" element={<RalionAnalyticsProduct />} />
                 <Route path="/products/:slug" element={<ProductDetail />} />
                 <Route path="/about" element={<About />} />
                 <Route path="/request-demo" element={<RequestDemo />} />
@@ -99,6 +105,7 @@ function App() {
                 {/* Redirects */}
                 <Route path="/developers" element={<Navigate to="/products/ralion" replace />} />
                 <Route path="/developer" element={<Navigate to="/products/ralion" replace />} />
+                <Route path="/products/ralion-social-intelligence" element={<Navigate to="/products/ralion-growth-intelligence" replace />} />
 
                 {/* Company Pages */}
                 <Route path="/services" element={<Services />} />

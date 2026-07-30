@@ -16,35 +16,28 @@ const HeroSection = () => {
 
         {/* Task 5 Headline */}
         <h1 className="text-4xl md:text-6xl lg:text-7xl font-extrabold tracking-tight max-w-5xl mx-auto mb-6 leading-[1.1] bg-gradient-to-r from-white via-white/90 to-white/70 bg-clip-text text-transparent">
-          AI-Powered Operating Systems for Modern Enterprises
+          AI Business Operating Systems for the Next Generation of Companies
         </h1>
 
         {/* Task 5 Subheadline */}
         <p className="text-white/70 text-lg md:text-xl max-w-3xl mx-auto leading-relaxed mb-10 font-normal">
-          Ras Ali Labs builds intelligent platforms that automate operations, connect teams, and help organisations make smarter decisions through AI.
+          Ras Ali Labs builds intelligent platforms that combine AI, automation, data, and industry expertise to help businesses operate smarter and grow faster.
         </p>
 
         {/* Task 5 CTAs */}
         <div className="flex flex-wrap items-center justify-center gap-4 mb-16">
           <Link
-            to="/request-demo"
+            to="/products/ralion"
             className="px-8 py-4 rounded-xl bg-gradient-to-r from-brand-gold to-amber-500 text-black font-bold text-sm hover:scale-105 transition-all shadow-lg shadow-brand-gold/20 flex items-center gap-2"
           >
-            Request Enterprise Demo <ArrowRight size={18} />
+            Explore Ralion <ArrowRight size={18} />
           </Link>
 
           <Link
-            to="/products/ralion"
+            to="/request-demo"
             className="px-8 py-4 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-sm transition-all border border-white/10 flex items-center gap-2"
           >
-            Explore Ralion OS
-          </Link>
-
-          <Link
-            to="/solutions"
-            className="px-6 py-4 rounded-xl bg-purple-600/20 text-purple-300 font-bold text-sm hover:bg-purple-600/30 transition-all border border-purple-500/30 flex items-center gap-2"
-          >
-            Industry Solutions
+            Build Your AI Solution
           </Link>
         </div>
 

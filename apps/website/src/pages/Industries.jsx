@@ -7,10 +7,10 @@ const Industries = () => {
   const industryList = [
     {
       id: 'funeral',
-      name: 'Funeral Management',
+      name: 'Ralion Funeral OS',
       badge: 'Funeral OS',
       subtitle: 'For Funeral Homes & Mortuary Services',
-      description: 'Streamline deceased case tracking, family management, funeral package selection, coffin inventory control, and payment processing.',
+      description: 'An AI-powered operating system designed for funeral service providers. Streamline deceased case tracking, family management, and package selection.',
       icon: Building2,
       features: [
         'Case Management & Deceased Records',
@@ -22,10 +22,10 @@ const Industries = () => {
     },
     {
       id: 'logistics',
-      name: 'Logistics & Fleet Transport',
+      name: 'Ralion Logistics OS',
       badge: 'Logistics OS',
       subtitle: 'For Cargo Transport & Logistics Operators',
-      description: 'Cross-border fleet management, real-time vehicle telemetry, digital waybills, customs clearance, and SADC corridor tracking.',
+      description: 'An AI-powered operating system designed for logistics providers. Cross-border fleet management, real-time vehicle telemetry, and SADC corridor tracking.',
       icon: Truck,
       features: [
         'Fleet Management & Telemetry',
@@ -36,10 +36,10 @@ const Industries = () => {
     },
     {
       id: 'healthcare',
-      name: 'Healthcare & Medical Services',
-      badge: 'Health OS',
+      name: 'Ralion Healthcare OS',
+      badge: 'Healthcare OS',
       subtitle: 'For Medical Clinics, Hospitals & Healthcare Providers',
-      description: 'Manage patient case records, doctor appointments, consultation histories, electronic prescriptions, and medical aid billing.',
+      description: 'An AI-powered operating system designed for healthcare providers. Manage patient case records, doctor appointments, and medical aid billing.',
       icon: Activity,
       features: [
         'Patient Case Records & History',
@@ -64,10 +64,10 @@ const Industries = () => {
     },
     {
       id: 'trade',
-      name: 'Trade & Commerce Networks',
+      name: 'Ralion Trade OS',
       badge: 'Trade OS',
       subtitle: 'For B2B Commerce, Distributors & Exporters',
-      description: 'B2B procurement, supplier directory, customer order fulfillment, commodity pricing, and SADC trade analytics.',
+      description: 'An AI-powered operating system designed for commerce. B2B procurement, supplier directory, customer order fulfillment, and trade analytics.',
       icon: Globe,
       features: [
         'Procurement & Purchase Orders',

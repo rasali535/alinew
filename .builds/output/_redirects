@@ -1,0 +1,8 @@
+# Exclude versioned release config & installer binaries from SPA fallback rewrites
+/ralion-releases.json                 /ralion-releases.json                 200!
+/downloads/*.exe                      /downloads/:splat.exe                 200!
+/downloads/*.dmg                      /downloads/:splat.dmg                 200!
+/downloads/*.AppImage                 /downloads/:splat.AppImage            200!
+
+# SPA Default Route Fallback
+/*    /index.html   200

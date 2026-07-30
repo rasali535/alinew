@@ -1,0 +1,25 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Exclude executable installers and binary assets from SPA index.html rewrites
+  RewriteCond %{REQUEST_URI} \.(exe|dmg|AppImage|deb|zip|tar\.gz)$ [NC]
+  RewriteRule ^ - [L]
+
+  # Standard SPA Rewrite Rules
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_FILENAME} !-l
+  RewriteRule . /index.html [L]
+</IfModule>
+
+# Enforce Binary Download Headers for Installer Files
+<IfModule mod_headers.c>
+  <FilesMatch "\.(exe|dmg|AppImage|deb|zip)$">
+    Header set Content-Type "application/octet-stream"
+    Header set Content-Disposition "attachment"
+    Header set Cache-Control "public, max-age=31536000, immutable"
+    SetEnv no-gzip 1
+  </FilesMatch>
+</IfModule>

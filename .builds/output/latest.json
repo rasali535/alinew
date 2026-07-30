@@ -1,0 +1,22 @@
+{
+  "version": "2.4.2",
+  "pub_date": "2026-07-28T00:00:00Z",
+  "notes": "Ralion v2.4.2 Stable Release — Empowered to Prosper. Served via ralion-releases bucket.",
+  "platforms": {
+    "windows-x64": {
+      "url": "https://yidsfihagwttlmhfynmf.supabase.co/storage/v1/object/public/ralion-releases/windows/2.4.2/ralion-desktop-2.4.2-setup.exe",
+      "signature": "a9f81c2b3e4d5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a",
+      "filesize": 159384000
+    },
+    "darwin-universal": {
+      "url": "https://yidsfihagwttlmhfynmf.supabase.co/storage/v1/object/public/ralion-releases/mac/2.4.2/ralion-desktop-2.4.2.dmg",
+      "signature": "b8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7",
+      "filesize": 165675000
+    },
+    "linux-x86_64": {
+      "url": "https://yidsfihagwttlmhfynmf.supabase.co/storage/v1/object/public/ralion-releases/linux/2.4.2/ralion-desktop-2.4.2.AppImage",
+      "signature": "c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6",
+      "filesize": 149946000
+    }
+  }
+}

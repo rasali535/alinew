@@ -52,13 +52,13 @@ const RalionCRMProduct = () => {
             <UserCheck size={14} /> Priority Core Product • Ralion CRM
           </div>
           <h1 className="text-4xl md:text-6xl font-extrabold mb-4 bg-gradient-to-r from-white via-white/90 to-white/70 bg-clip-text text-transparent">
-            Ralion CRM — AI Customer Intelligence
+            Turn every customer interaction into business intelligence.
           </h1>
           <p className="text-brand-gold font-bold text-lg mb-6">
-            "Ralion does not just manage your business activity. It understands your business, predicts opportunities, and helps you grow."
+            "Ralion does not just manage contacts. It understands your business, predicts opportunities, and helps you grow."
           </p>
           <p className="text-white/70 text-lg max-w-3xl mx-auto leading-relaxed mb-8">
-            Predict opportunities, automate client follow-ups, and convert leads with an AI sales assistant that remembers every interaction across your sales pipeline.
+            Access deep customer profiles, manage your sales pipeline, track customer history, receive AI recommendations, and execute automated follow-ups—all in one place.
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-4">

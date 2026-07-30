@@ -42,15 +42,43 @@ const Header = () => {
         <div className="hidden lg:flex items-center gap-6 xl:gap-8">
           {navLinks.map((link) => {
             const isActive = location.pathname === link.href || (link.href !== '/' && location.pathname.startsWith(link.href));
-            const isDemo = link.href === '/request-demo';
-            if (isDemo) return null; // Render Demo button separately
+            
+            if (link.dropdown) {
+              return (
+                <div key={link.name} className="relative group">
+                  <button className={`flex items-center gap-1 text-xs uppercase tracking-wider font-medium transition-all duration-300 py-4 ${isActive ? 'text-brand-gold font-semibold' : 'text-white/70 group-hover:text-white'}`}>
+                    {link.name}
+                    <ChevronDown size={12} className="transition-transform group-hover:rotate-180" />
+                  </button>
+                  <div className="absolute top-full left-0 w-64 bg-[#1c1c1c]/95 backdrop-blur-xl border border-white/10 rounded-xl p-4 shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 translate-y-2 group-hover:translate-y-0 z-50">
+                    {link.dropdown.map((section, idx) => (
+                      <div key={idx} className={idx > 0 ? "mt-4 pt-4 border-t border-white/5" : ""}>
+                        <div className="text-[10px] text-brand-gold uppercase tracking-widest font-bold mb-2 px-2">{section.title}</div>
+                        <div className="flex flex-col space-y-1">
+                          {section.items.map(item => (
+                            <Link
+                              key={item.name}
+                              to={item.href}
+                              className="px-2 py-1.5 text-xs text-white/70 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                            >
+                              {item.name}
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
+
             return (
               <Link
                 key={link.name}
                 to={link.href}
-                className={`text-xs uppercase tracking-wider font-medium transition-all duration-300 ${
+                className={`text-xs uppercase tracking-wider font-medium transition-all duration-300 py-4 ${
                   isActive
-                    ? 'text-brand-gold font-semibold border-b-2 border-brand-gold pb-1'
+                    ? 'text-brand-gold font-semibold border-b-2 border-brand-gold'
                     : 'text-white/70 hover:text-white hover:text-brand-gold/90'
                 }`}
               >
@@ -168,16 +196,42 @@ const Header = () => {
             <span className="text-brand-gold text-xs">— Enterprise AI Systems</span>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-4 overflow-y-auto max-h-[70vh] pb-10">
             {navLinks.map((link) => (
-              <Link
-                key={link.name}
-                to={link.href}
-                className="block text-white/80 hover:text-brand-gold py-2 text-base font-medium transition-colors"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                {link.name}
-              </Link>
+              <div key={link.name}>
+                {link.dropdown ? (
+                  <div className="space-y-3">
+                    <div className="text-white font-bold text-lg">{link.name}</div>
+                    <div className="pl-4 space-y-4 border-l border-white/10">
+                      {link.dropdown.map((section, idx) => (
+                        <div key={idx}>
+                          <div className="text-[10px] text-brand-gold uppercase tracking-widest font-bold mb-2">{section.title}</div>
+                          <div className="flex flex-col space-y-2">
+                            {section.items.map(item => (
+                              <Link
+                                key={item.name}
+                                to={item.href}
+                                className="text-white/70 hover:text-white text-sm transition-colors block"
+                                onClick={() => setIsMenuOpen(false)}
+                              >
+                                {item.name}
+                              </Link>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <Link
+                    to={link.href}
+                    className="block text-white font-bold text-lg hover:text-brand-gold transition-colors"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    {link.name}
+                  </Link>
+                )}
+              </div>
             ))}
           </div>
         </div>

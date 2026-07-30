@@ -1,20 +1,69 @@
 // Enterprise Mock & Navigation Data for Ras Ali Labs
 export const navLinks = [
-  { name: 'Solutions', href: '/solutions' },
-  { name: 'Industries', href: '/industries' },
-  { name: 'Products', href: '/products' },
-  { name: 'Works', href: '/work' },
-  { name: 'Company', href: '/about' },
-  { name: 'Request Demo', href: '/request-demo' }
+  { name: 'Home', href: '/' },
+  {
+    name: 'Products',
+    href: '/products',
+    dropdown: [
+      {
+        title: 'Ralion AI Business OS',
+        items: [
+          { name: 'Overview', href: '/products/ralion' },
+          { name: 'CRM', href: '/products/ralion-crm' },
+          { name: 'Growth Intelligence', href: '/products/ralion-growth-intelligence' },
+          { name: 'Mari AI', href: '/products/ralion-mari-ai' },
+          { name: 'Automation', href: '/products/ralion-automation' },
+          { name: 'Analytics', href: '/products/ralion-analytics' },
+          { name: 'Industry Solutions', href: '/solutions' }
+        ]
+      },
+      {
+        title: 'Services',
+        items: [
+          { name: 'AI Solutions', href: '/ai-labs' },
+          { name: 'Custom Software', href: '/services' }
+        ]
+      }
+    ]
+  },
+  {
+    name: 'Industries',
+    href: '/industries',
+    dropdown: [
+      {
+        title: 'Industry Solutions',
+        items: [
+          { name: 'Funeral', href: '/industries#funeral' },
+          { name: 'Logistics', href: '/industries#logistics' },
+          { name: 'Healthcare', href: '/industries#healthcare' },
+          { name: 'Trade', href: '/industries#trade' }
+        ]
+      }
+    ]
+  },
+  {
+    name: 'Company',
+    href: '/about',
+    dropdown: [
+      {
+        title: 'Company',
+        items: [
+          { name: 'About', href: '/about' },
+          { name: 'Careers', href: '/careers' },
+          { name: 'Contact', href: '/contact' }
+        ]
+      }
+    ]
+  }
 ];
 
 export const heroWords = ['AUTOMATION.', 'INTELLIGENCE.', 'SYSTEMS.', 'ENTERPRISE.'];
 
 export const companyInfo = {
   name: 'Ras Ali Labs',
-  tagline: 'Empowered to Prosper',
-  headline: 'AI-Powered Operating Systems for Modern Enterprises',
-  subheadline: 'Ras Ali Labs builds intelligent platforms that automate operations, connect teams, and help organisations make smarter decisions through AI.',
+  tagline: 'An AI Business Operating Systems company',
+  headline: 'AI Business Operating Systems for the Next Generation of Companies',
+  subheadline: 'Ras Ali Labs builds intelligent platforms that combine AI, automation, data, and industry expertise to help businesses operate smarter and grow faster.',
   description: 'Ras Ali Labs is a premier enterprise AI technology company building intelligent operating systems, business automation platforms, and sovereign digital infrastructure.',
   email: 'contact@rasalilabs.com',
   location: 'Gaborone, Botswana'
