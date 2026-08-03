@@ -15,12 +15,7 @@ interface TaskItem {
   dueDate: string;
 }
 
-const initialTasks: TaskItem[] = [
-  { id: 't1', title: 'Deploy Mari AI RAG Vector pipeline to Firebase Functions', project: 'Mari Platform', status: 'IN_PROGRESS', priority: 'URGENT', assignedTo: 'Ras Ali AI Engineer', dueDate: 'Today' },
-  { id: 't2', title: 'Finalize Botswana Billing Provider Gateway integration', project: 'Billing Core', status: 'TODO', priority: 'HIGH', assignedTo: 'Finance Lead', dueDate: 'Tomorrow' },
-  { id: 't3', title: 'Setup Ralion Funeral Hearse Fleet dispatch schedule', project: 'Industry Funeral', status: 'IN_REVIEW', priority: 'MEDIUM', assignedTo: 'Ops Manager', dueDate: 'Jul 26' },
-  { id: 't4', title: 'Configure Ralion Health client intake assessment forms', project: 'Industry Health', status: 'COMPLETED', priority: 'LOW', assignedTo: 'Clinical Admin', dueDate: 'Jul 22' },
-];
+const initialTasks: TaskItem[] = [];
 
 export default function TasksPage() {
   const [tasks, setTasks] = useState<TaskItem[]>(initialTasks);

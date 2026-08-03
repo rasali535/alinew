@@ -15,61 +15,47 @@ import { DashboardViewMode, DEFAULT_DASHBOARD_TEMPLATES } from '@ralion/core';
 import { DollarSign, Users, CheckSquare, Sparkles, TrendingUp, Activity, ArrowUpRight, Loader2 } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar } from 'recharts';
 
-// Generate dynamic data instead of zeros
-const generateDynamicData = () => {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-  let currentRev = 15000 + Math.random() * 5000;
-  return months.map(month => {
-    currentRev = currentRev * (1 + (Math.random() * 0.15 - 0.03));
-    return {
-      month,
-      revenue: Math.floor(currentRev),
-      leads: Math.floor(currentRev / 100)
-    };
-  });
-};
-
 export default function DashboardPage() {
   const [viewMode, setViewMode] = useState<DashboardViewMode>('CEO');
   const [salesData, setSalesData] = useState<any[]>([]);
-  const [metrics, setMetrics] = useState({ revenue: '$0', customers: '0', pending: '0' });
-  const [mariInsight, setMariInsight] = useState('Mari AI is ready. Awaiting operational data to generate live insights.');
+  const [metrics, setMetrics] = useState({ revenue: '$0', customers: '0', pending: '0 Tasks' });
+  const [mariInsight, setMariInsight] = useState('Mari AI Command Center is active. Add operational leads or tasks to receive real-time strategic recommendations.');
   const [isMariLoading, setIsMariLoading] = useState(false);
 
   React.useEffect(() => {
-    // Generate dynamic mock data
-    const data = generateDynamicData();
-    setSalesData(data);
-    
-    const lastMonth = data[data.length - 1];
+    // Read user created items if available, or present clean zero-state
+    const savedContacts = typeof window !== 'undefined' ? localStorage.getItem('ralion_contacts') : null;
+    const contactsList = savedContacts ? JSON.parse(savedContacts) : [];
+
+    const totalRev = contactsList.reduce((acc: number, item: any) => acc + (item.dealValue || 0), 0);
+    const activeCusts = contactsList.filter((c: any) => c.type === 'CUSTOMER').length;
+
     setMetrics({
-      revenue: `$${(lastMonth.revenue).toLocaleString()}`,
-      customers: `${lastMonth.leads * 12}`,
-      pending: `${Math.floor(Math.random() * 20) + 2} Tasks`
+      revenue: `$${totalRev.toLocaleString()}`,
+      customers: `${activeCusts}`,
+      pending: `0 Tasks`
     });
 
-    // Ask Mari AI for an insight
-    fetchMariInsight(data);
+    if (contactsList.length > 0) {
+      fetchMariInsight(contactsList);
+    }
   }, []);
 
   const fetchMariInsight = async (data: any[]) => {
     setIsMariLoading(true);
     try {
-      const isDesktop = (window as any).__RALION_DESKTOP__;
+      const isDesktop = typeof window !== 'undefined' && ((window as any).__RALION_DESKTOP__ || window.location.protocol === 'file:');
       const ralionDesktop = (window as any).ralionDesktop;
       
-      const prompt = `Analyze this recent monthly revenue data and give a 2-sentence strategic insight for the CEO: ${JSON.stringify(data.slice(-3))}`;
+      const prompt = `Analyze this organizational sales and CRM data and provide a 2-sentence executive summary: ${JSON.stringify(data.slice(0, 5))}`;
       
       if (isDesktop && ralionDesktop?.aiQuery) {
         const res = await ralionDesktop.aiQuery(prompt, 'phi3');
         if (res.success) setMariInsight(res.response);
       } else {
-        // Mock a web response or use AIML API
-        setTimeout(() => {
-          setMariInsight(`Revenue has grown steadily over the last quarter, reaching $${(data[data.length-1].revenue).toLocaleString()}. Recommend scaling marketing spend to capitalize on this upward trend.`);
-          setIsMariLoading(false);
-        }, 1500);
-        return;
+        const { callMariAiApi } = await import('@ralion/ai');
+        const apiRes = await callMariAiApi(prompt);
+        if (apiRes) setMariInsight(apiRes.text);
       }
     } catch (e) {
       console.error(e);
