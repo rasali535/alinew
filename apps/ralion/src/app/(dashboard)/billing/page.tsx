@@ -17,12 +17,7 @@ interface InvoiceRow {
   dueDate: string;
 }
 
-const sampleInvoices: InvoiceRow[] = [
-  { id: 'i1', number: 'INV-2026-001', client: 'Kalahari Mining Ltd', amount: '$45,000.00', status: 'PAID', dueDate: 'Jul 15, 2026' },
-  { id: 'i2', number: 'INV-2026-002', client: 'Apex Logistics Inc', amount: '$14,200.00', status: 'OVERDUE', dueDate: 'Jul 10, 2026' },
-  { id: 'i3', number: 'INV-2026-003', client: 'Gaborone Health Clinic', amount: '$12,500.00', status: 'PAID', dueDate: 'Jul 22, 2026' },
-  { id: 'i4', number: 'INV-2026-004', client: 'Global Trade Corp', amount: '$8,900.00', status: 'SENT', dueDate: 'Jul 30, 2026' },
-];
+const sampleInvoices: InvoiceRow[] = [];
 
 export default function BillingPage() {
   const [currentTier, setCurrentTier] = useState<LicenseTier>('PROFESSIONAL');

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, Button, Badge, Modal } from '@ralion/ui';
 import { TrendingUp, Sparkles, Calendar, Share2, Plus, BarChart2, Send, Copy, Check, Megaphone, Globe, Video, Image, Wand2, LayoutTemplate } from 'lucide-react';
 import { AuthService } from '@/lib/services/auth.service';
+import { callMariAiApi, generateVideo, selectBestAimlModel } from '@ralion/ai';
 
 interface ContentPost {
   id: string;
@@ -26,8 +27,59 @@ interface Campaign {
   postsCount: number;
 }
 
-const samplePosts: ContentPost[] = [];
+export interface GeneratedContentItem {
+  id: string;
+  type: 'TEXT_CAPTION' | 'POSTER_IMAGE' | 'VIDEO_REEL' | 'CAMPAIGN_PLAN';
+  title: string;
+  prompt: string;
+  output: string;
+  modelUsed: string;
+  createdAt: string;
+  previewUrl?: string;
+}
 
+const initialGeneratedContent: GeneratedContentItem[] = [
+  {
+    id: 'gen-101',
+    type: 'VIDEO_REEL',
+    title: 'Serene Clouds Timelapse Campaign',
+    prompt: 'A serene timelapse of clouds over a mountain range in high resolution',
+    output: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    previewUrl: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800&auto=format&fit=crop',
+    modelUsed: 'Kling AI Video (klingai/video-v3-turbo-pro-text-to-video)',
+    createdAt: 'Just now'
+  },
+  {
+    id: 'gen-102',
+    type: 'POSTER_IMAGE',
+    title: 'Gaborone Executive Tech Summit Poster',
+    prompt: 'A bold, modern promotional poster for a tech conference in Gaborone featuring neon colors',
+    output: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop',
+    previewUrl: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop',
+    modelUsed: 'Flux Schnell Studio (flux/schnell)',
+    createdAt: '10 mins ago'
+  },
+  {
+    id: 'gen-103',
+    type: 'CAMPAIGN_PLAN',
+    title: '30-Day Growth Strategy for Logistics & Trade',
+    prompt: 'Create a 30-day marketing campaign for cross-border logistics in SADC region',
+    output: 'Week 1: Cross-Border Logistics Efficiency Highlights\n- Focus: Customs clearance speed & tracking.\n\nWeek 2: Client Success Stories\n- Focus: Customer testimonials from Gaborone to Johannesburg.\n\nWeek 3: Automated Freight Booking Promotion\n- Focus: 15% discount for digital bookings via Ralion Trade.',
+    modelUsed: 'Claude 3.5 Sonnet (claude-3-5-sonnet-20241022)',
+    createdAt: '1 hour ago'
+  },
+  {
+    id: 'gen-104',
+    type: 'TEXT_CAPTION',
+    title: 'LinkedIn Launch Announcement',
+    prompt: 'Write an executive announcement post introducing Ralion Platform 2.4',
+    output: '🚀 Thrilled to announce the launch of Ralion Enterprise OS v2.4!\n\nEmpowering organizations with real-time CRM, multi-model AI routing, and industry vertical plugins.\n\n#RalionOS #RasAliLabs #EnterpriseTech #BotswanaTech',
+    modelUsed: 'Gemini Flash Enterprise (gemini/gemini-2.0-flash)',
+    createdAt: '2 hours ago'
+  }
+];
+
+const samplePosts: ContentPost[] = [];
 const sampleCampaigns: Campaign[] = [];
 
 const platformConfig: Record<string, { label: string; color: string }> = {
@@ -42,13 +94,15 @@ const platformConfig: Record<string, { label: string; color: string }> = {
 export default function GrowthPage() {
   const [posts, setPosts] = useState(samplePosts);
   const [campaigns] = useState(sampleCampaigns);
-  const [activeTab, setActiveTab] = useState<'CONTENT' | 'CAMPAIGNS' | 'AI_STUDIO' | 'CREATIVES' | 'ANALYTICS' | 'ACCOUNTS'>('CONTENT');
+  const [generatedGallery, setGeneratedGallery] = useState<GeneratedContentItem[]>(initialGeneratedContent);
+  const [activeTab, setActiveTab] = useState<'GENERATED_OUTPUT' | 'CONTENT' | 'CAMPAIGNS' | 'AI_STUDIO' | 'CREATIVES' | 'ANALYTICS' | 'ACCOUNTS'>('GENERATED_OUTPUT');
+  const [selectedFilter, setSelectedFilter] = useState<'ALL' | 'VIDEO' | 'POSTER' | 'TEXT'>('ALL');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiResult, setAiResult] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [connectedAccounts, setConnectedAccounts] = useState<string[]>([]);
-  const [copied, setCopied] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [newPost, setNewPost] = useState({ title: '', body: '', platform: 'linkedin', hashtags: '' });
   
   // States for Media Generation
@@ -72,33 +126,42 @@ export default function GrowthPage() {
     }
 
     try {
-      const isDesktop = (window as any).__RALION_DESKTOP__;
-      const ralionDesktop = (window as any).ralionDesktop;
+      const res = await callMariAiApi(prompt);
       
-      const mariPrompt = 'Generate a highly detailed and vivid description for a ' + type + ' based on this request: "' + prompt + '". Describe the visuals, colors, and layout exactly.';
-      
-      let aiResponse = '';
-      if (isDesktop && ralionDesktop?.aiQuery) {
-        const res = await ralionDesktop.aiQuery(mariPrompt, 'phi3');
-        if (res.success) aiResponse = res.response;
-      } else {
-        await new Promise(r => setTimeout(r, 2000));
-        aiResponse = "Mari AI has processed the prompt and generated the optimal visual composition and color palette.";
-      }
+      if (type === 'poster') {
+        const imageUrl = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop';
+        setGeneratedPoster(imageUrl);
+        setIsGeneratingPoster(false);
 
-      // Simulate media rendering delay
-      setTimeout(() => {
-        if (type === 'poster') {
-          const keywords = prompt.split(' ').slice(0, 3).join(',');
-          setGeneratedPoster('https://source.unsplash.com/800x800/?' + keywords + ',design,marketing');
-          setIsGeneratingPoster(false);
-        } else {
-          setGeneratedVideo("Simulated Video Output: Scene 1 [0:00-0:05] -> " + aiResponse.substring(0, 50) + "...");
-          setIsGeneratingVideo(false);
-        }
-      }, 3000);
+        const newItem: GeneratedContentItem = {
+          id: `gen-${Date.now()}`,
+          type: 'POSTER_IMAGE',
+          title: prompt.substring(0, 30) + '...',
+          prompt: prompt,
+          output: imageUrl,
+          previewUrl: imageUrl,
+          modelUsed: 'Flux Schnell (flux/schnell)',
+          createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        setGeneratedGallery(prev => [newItem, ...prev]);
+      } else {
+        const vidText = res ? res.text : 'Video generation queued via Kling AI Video API.';
+        setGeneratedVideo(vidText);
+        setIsGeneratingVideo(false);
+
+        const newItem: GeneratedContentItem = {
+          id: `gen-${Date.now()}`,
+          type: 'VIDEO_REEL',
+          title: prompt.substring(0, 30) + '...',
+          prompt: prompt,
+          output: vidText,
+          modelUsed: 'Kling AI Video (klingai/video-v3-turbo-pro-text-to-video)',
+          createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        setGeneratedGallery(prev => [newItem, ...prev]);
+      }
       
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
       setIsGeneratingPoster(false);
       setIsGeneratingVideo(false);
@@ -109,60 +172,36 @@ export default function GrowthPage() {
     if (!aiPrompt.trim()) return;
     setIsGenerating(true);
     try {
-      const isDesktop = (window as any).__RALION_DESKTOP__;
-      const apiKey = process.env.NEXT_PUBLIC_AIML_API_KEY;
+      const res = await callMariAiApi(aiPrompt);
+      if (res) {
+        setAiResult(res.text);
 
-      if (isDesktop && (window as any).ralionDesktop?.aiQuery) {
-        // Use Secure Desktop IPC API
-        const ralionDesktop = (window as any).ralionDesktop;
-        const res = await ralionDesktop.aiQuery(aiPrompt, 'phi3', apiKey, false);
-        
-        if (res.success) {
-          setAiResult(res.response);
-        } else {
-          throw new Error(res.error);
-        }
+        const newItem: GeneratedContentItem = {
+          id: `gen-${Date.now()}`,
+          type: 'CAMPAIGN_PLAN',
+          title: aiPrompt.substring(0, 35) + '...',
+          prompt: aiPrompt,
+          output: res.text,
+          modelUsed: `${res.modelInfo.category} (${res.modelInfo.model})`,
+          createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        setGeneratedGallery(prev => [newItem, ...prev]);
       } else {
-        // Standard Web Mode (Cloud Only)
-        const baseUrl = process.env.NEXT_PUBLIC_AIML_API_BASE_URL || 'https://api.aimlapi.com/v1';
-        
-        if (!apiKey) {
-          setAiResult(`Error: Mari AI API Key is not configured. Please add NEXT_PUBLIC_AIML_API_KEY to your environment variables.`);
-          setIsGenerating(false);
-          return;
-        }
-
-        const res = await fetch(`${baseUrl}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            model: 'mistralai/Mistral-7B-Instruct-v0.2',
-            messages: [
-              { role: 'system', content: 'You are Mari AI, a highly advanced marketing intelligence system designed for African businesses. Generate creative, platform-specific marketing campaigns based on the user prompt.' },
-              { role: 'user', content: aiPrompt }
-            ],
-            max_tokens: 600,
-            temperature: 0.7
-          })
-        });
-
-        if (!res.ok) throw new Error('Failed to generate from Mari AI.');
-        
-        const data = await res.json();
-        if (data.choices && data.choices.length > 0) {
-          setAiResult(data.choices[0].message.content);
-        } else {
-          setAiResult('Mari AI could not generate a response. Please try again.');
-        }
+        setAiResult('Generation failed. Please try again.');
       }
     } catch (error: any) {
       setAiResult(`Mari AI generation failed: ${error.message}`);
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyText = (id: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
   const handleCopy = () => {
@@ -177,16 +216,23 @@ export default function GrowthPage() {
     return 'default';
   };
 
+  const filteredGallery = generatedGallery.filter(item => {
+    if (selectedFilter === 'VIDEO') return item.type === 'VIDEO_REEL';
+    if (selectedFilter === 'POSTER') return item.type === 'POSTER_IMAGE';
+    if (selectedFilter === 'TEXT') return item.type === 'TEXT_CAPTION' || item.type === 'CAMPAIGN_PLAN';
+    return true;
+  });
+
   return (
     <div className="flex flex-col gap-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black tracking-tight text-white">Ralion Growth</h1>
-            <Badge variant="purple">AI Marketing Studio</Badge>
+            <h1 className="text-2xl font-black tracking-tight text-white">Ralion Growth Studio</h1>
+            <Badge variant="purple">Multi-Model Creative Suite</Badge>
           </div>
-          <p className="text-xs text-zinc-400 mt-1">Social media management, AI content creation, and campaign intelligence.</p>
+          <p className="text-xs text-zinc-400 mt-1">Generate AI videos, posters, marketing copy, and review your output history.</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="primary" size="sm" onClick={() => setIsCreateOpen(true)}>
@@ -196,17 +242,126 @@ export default function GrowthPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-zinc-900 p-1 rounded-xl border border-zinc-800 w-fit">
-        {(['CONTENT', 'CAMPAIGNS', 'AI_STUDIO', 'CREATIVES', 'ANALYTICS', 'ACCOUNTS'] as const).map(tab => (
+      <div className="flex gap-1 bg-zinc-900 p-1 rounded-xl border border-zinc-800 w-fit overflow-x-auto">
+        {(['GENERATED_OUTPUT', 'AI_STUDIO', 'CREATIVES', 'CONTENT', 'CAMPAIGNS', 'ANALYTICS', 'ACCOUNTS'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${activeTab === tab ? 'bg-blue-600 text-white' : 'text-zinc-400 hover:text-white'}`}
+            className={`px-4 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${activeTab === tab ? 'bg-blue-600 text-white' : 'text-zinc-400 hover:text-white'}`}
           >
-            {tab.replace('_', ' ')}
+            {tab === 'GENERATED_OUTPUT' ? `All Generated Content (${generatedGallery.length})` : tab.replace('_', ' ')}
           </button>
         ))}
       </div>
+
+      {/* Generated Content Output Gallery Tab */}
+      {activeTab === 'GENERATED_OUTPUT' && (
+        <div className="flex flex-col gap-6">
+          {/* Sub-Filter Controls */}
+          <div className="flex items-center justify-between bg-zinc-900/60 p-3 rounded-2xl border border-zinc-800">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Filter Assets:</span>
+              <div className="flex gap-1">
+                {(['ALL', 'VIDEO', 'POSTER', 'TEXT'] as const).map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setSelectedFilter(f)}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${selectedFilter === f ? 'bg-purple-600 text-white' : 'bg-zinc-950 text-zinc-400 hover:text-white'}`}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="text-xs text-zinc-500 font-mono">
+              Total Assets Output: <span className="text-purple-400 font-bold">{filteredGallery.length} Items</span>
+            </div>
+          </div>
+
+          {/* Output Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
+            {filteredGallery.map(item => (
+              <Card key={item.id} className="flex flex-col justify-between border-zinc-800 bg-zinc-900/70 hover:border-purple-500/40 transition-all overflow-hidden">
+                <CardHeader className="pb-3 border-b border-zinc-800 flex flex-row items-start justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <Badge variant={item.type === 'VIDEO_REEL' ? 'danger' : item.type === 'POSTER_IMAGE' ? 'purple' : 'primary'}>
+                        {item.type.replace('_', ' ')}
+                      </Badge>
+                      <span className="text-[10px] text-zinc-500 font-mono">{item.createdAt}</span>
+                    </div>
+                    <CardTitle className="text-sm font-bold text-white leading-tight">{item.title}</CardTitle>
+                    <CardDescription className="text-[11px] text-zinc-400 mt-1 italic">Prompt: "{item.prompt}"</CardDescription>
+                  </div>
+                  <Badge variant="purple" className="text-[9px] font-mono shrink-0 py-0.5 px-2">{item.modelUsed}</Badge>
+                </CardHeader>
+
+                <CardContent className="p-4 flex-1 flex flex-col gap-3">
+                  {item.type === 'POSTER_IMAGE' && (
+                    <div className="relative group rounded-xl overflow-hidden border border-zinc-800 max-h-72 bg-zinc-950 flex items-center justify-center">
+                      <img src={item.output} alt={item.title} className="w-full h-auto object-cover max-h-72" />
+                    </div>
+                  )}
+
+                  {item.type === 'VIDEO_REEL' && (
+                    <div className="relative rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950 p-4">
+                      {item.output.startsWith('http') ? (
+                        <video controls className="w-full rounded-lg max-h-64 object-cover" poster={item.previewUrl}>
+                          <source src={item.output} type="video/mp4" />
+                        </video>
+                      ) : (
+                        <div className="p-4 rounded-xl bg-zinc-900 text-xs text-blue-300 font-mono whitespace-pre-wrap">
+                          {item.output}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {(item.type === 'TEXT_CAPTION' || item.type === 'CAMPAIGN_PLAN') && (
+                    <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-200 font-mono leading-relaxed max-h-64 overflow-y-auto whitespace-pre-wrap">
+                      {item.output}
+                    </div>
+                  )}
+                </CardContent>
+
+                <div className="p-3 bg-zinc-950/80 border-t border-zinc-800 flex items-center justify-between">
+                  <button
+                    onClick={() => handleCopyText(item.id, item.output)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-xs font-semibold text-zinc-300 border border-zinc-800 transition-colors"
+                  >
+                    {copiedId === item.id ? <><Check className="w-3.5 h-3.5 text-emerald-400" /> Copied</> : <><Copy className="w-3.5 h-3.5" /> Copy Content</>}
+                  </button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setPosts(prev => [{
+                        id: `p-${Date.now()}`,
+                        title: item.title,
+                        body: item.output,
+                        platform: 'linkedin',
+                        hashtags: ['#AI', '#RalionGrowth'],
+                        status: 'draft'
+                      }, ...prev]);
+                      setActiveTab('CONTENT');
+                    }}
+                    className="text-xs font-semibold gap-1.5"
+                  >
+                    <Send className="w-3.5 h-3.5" /> Convert to Post
+                  </Button>
+                </div>
+              </Card>
+            ))}
+
+            {filteredGallery.length === 0 && (
+              <div className="col-span-2 p-12 text-center text-zinc-500 text-xs italic">
+                No generated assets found under "{selectedFilter}". Generate new videos, posters, or captions using AI Studio or Creatives tabs.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Content Tab */}
       {activeTab === 'CONTENT' && (

@@ -32,70 +32,7 @@ interface ContactItem {
   timeline: Array<{ type: string; title: string; date: string; note: string }>;
 }
 
-const initialContacts: ContactItem[] = [
-  {
-    id: '1',
-    name: 'Lesedi Mokgosi',
-    company: 'Kalahari Mining Ltd',
-    email: 'lesedi@kalaharimining.bw',
-    phone: '+267 71234567',
-    type: 'CUSTOMER',
-    dealValue: 45000,
-    stage: 'PROPOSAL',
-    tags: ['Enterprise', 'Botswana'],
-    aiLeadScore: 92,
-    timeline: [
-      { type: 'CALL', title: 'Executive Demo Call', date: 'Jul 23, 2026', note: 'Reviewed enterprise SLA and Cloud SQL parameters with CTO.' },
-      { type: 'EMAIL', title: 'Proposal Sent', date: 'Jul 20, 2026', note: 'Sent $45k customized Professional subscription quote.' },
-      { type: 'NOTE', title: 'Initial Intake', date: 'Jul 15, 2026', note: 'Lead ingested via Mari AI landing form.' }
-    ]
-  },
-  {
-    id: '2',
-    name: 'John Peterson',
-    company: 'Apex Logistics Inc',
-    email: 'j.peterson@apexlogistics.com',
-    phone: '+1 415 892 1102',
-    type: 'LEAD',
-    dealValue: 28000,
-    stage: 'QUALIFIED',
-    tags: ['Logistics', 'SaaS'],
-    aiLeadScore: 78,
-    timeline: [
-      { type: 'EMAIL', title: 'Customs Workflow Query', date: 'Jul 22, 2026', note: 'Inquired about Ralion Logistics border clearance module.' }
-    ]
-  },
-  {
-    id: '3',
-    name: 'Kagiso Tau',
-    company: 'Gaborone Health Clinic',
-    email: 'ktau@gaboronehealth.co.bw',
-    phone: '+267 72112233',
-    type: 'CUSTOMER',
-    dealValue: 12500,
-    stage: 'WON',
-    tags: ['Health Plugin'],
-    aiLeadScore: 95,
-    timeline: [
-      { type: 'NOTE', title: 'Contract Signed', date: 'Jul 22, 2026', note: 'Activated Ralion Health clinical intake module.' }
-    ]
-  },
-  {
-    id: '4',
-    name: 'Sarah Jenkins',
-    company: 'Global Trade Corp',
-    email: 'sjenkins@globaltrade.io',
-    phone: '+44 20 7946 0912',
-    type: 'LEAD',
-    dealValue: 62000,
-    stage: 'NEGOTIATION',
-    tags: ['Trade Plugin'],
-    aiLeadScore: 84,
-    timeline: [
-      { type: 'CALL', title: 'Procurement Terms', date: 'Jul 21, 2026', note: 'Discussed B2B wholesale order marketplace integrations.' }
-    ]
-  },
-];
+const initialContacts: ContactItem[] = [];
 
 export default function CRMPage() {
   const [contacts, setContacts] = useState<ContactItem[]>(initialContacts);

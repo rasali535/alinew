@@ -16,14 +16,7 @@ interface LeadItem {
   aiScore: number;
 }
 
-const initialLeadsList: LeadItem[] = [
-  { id: 'ld-1', title: 'Enterprise SLA Contract', contactName: 'Lesedi Mokgosi', company: 'Kalahari Mining Ltd', email: 'lesedi@kalaharimining.bw', dealValue: 45000, stage: 'PROPOSAL', aiScore: 92 },
-  { id: 'ld-2', title: 'Logistics Customs Automation', contactName: 'John Peterson', company: 'Apex Logistics Inc', email: 'j.peterson@apexlogistics.com', dealValue: 28000, stage: 'QUALIFIED', aiScore: 78 },
-  { id: 'ld-3', title: 'Clinical Intake Rollout', contactName: 'Dr. Kagiso Tau', company: 'Gaborone Health Clinic', email: 'ktau@gaboronehealth.co.bw', dealValue: 12500, stage: 'WON', aiScore: 95 },
-  { id: 'ld-4', title: 'Wholesale B2B Integration', contactName: 'Sarah Jenkins', company: 'Global Trade Corp', email: 'sjenkins@globaltrade.io', dealValue: 62000, stage: 'NEGOTIATION', aiScore: 84 },
-  { id: 'ld-5', title: 'Fleet Logistics Setup', contactName: 'Emanuel Ndlovu', company: 'TransAfrica Freight', email: 'endlovu@transafrica.co.bw', dealValue: 34000, stage: 'CONTACTED', aiScore: 71 },
-  { id: 'ld-6', title: 'Funeral Parlour Management', contactName: 'Neo Sechele', company: 'Sechele Funeral Services', email: 'neo@sechelefuneral.bw', dealValue: 18000, stage: 'NEW_LEAD' as any, aiScore: 68 },
-];
+const initialLeadsList: LeadItem[] = [];
 
 export default function LeadsPage() {
   const [leads, setLeads] = useState<LeadItem[]>(initialLeadsList);
