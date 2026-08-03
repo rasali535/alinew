@@ -36,10 +36,13 @@ export default function DashboardLayout({
           currentPath={pathname}
           orgName="Ras Ali Enterprises"
           onNavigate={(href) => {
-            // Sidebar hrefs are absolute like '/ralion/dashboard'
-            // Since next.config.js has basePath: '/ralion', we strip the prefix for Next.js router
-            const route = href.startsWith('/ralion') ? href.replace('/ralion', '') : href;
-            router.push(route || '/');
+            const isDesktop = typeof window !== 'undefined' && ((window as any).__RALION_DESKTOP__ || window.location.protocol === 'file:');
+            if (isDesktop) {
+              window.location.href = href;
+            } else {
+              const route = href.startsWith('/ralion') ? href.replace('/ralion', '') : href;
+              router.push(route || '/');
+            }
           }}
           onOpenMariAI={() => setIsMariDrawerOpen(true)}
         />
