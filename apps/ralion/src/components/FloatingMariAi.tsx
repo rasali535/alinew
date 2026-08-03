@@ -32,7 +32,8 @@ export const FloatingMariAi: React.FC = () => {
         const apiResponse = await callMariAiApi(text);
         
         if (apiResponse) {
-          setMessages(prev => [...prev, { sender: 'MARI', text: apiResponse }]);
+          const respText = typeof apiResponse === 'string' ? apiResponse : apiResponse.text;
+          setMessages(prev => [...prev, { sender: 'MARI', text: respText }]);
         } else {
           // Fallback to local rules or quick answers
           if (text.toLowerCase().includes('business performance') || text.toLowerCase().includes('performance')) {

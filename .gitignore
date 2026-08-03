@@ -57,3 +57,10 @@ apps/desktop/release/
 dist_20260729_170700/
 zip_test/
 *.zip
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/

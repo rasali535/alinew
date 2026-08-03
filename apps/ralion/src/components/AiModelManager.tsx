@@ -9,6 +9,7 @@ export function AiModelManager() {
   const [installing, setInstalling] = useState(false);
   const [installProgress, setInstallProgress] = useState('');
   const [models, setModels] = useState<any[]>([]);
+  const [availableModels, setAvailableModels] = useState<any[]>([]);
   const [hardware, setHardware] = useState<any>(null);
   const [downloadingModel, setDownloadingModel] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState('');
@@ -19,7 +20,10 @@ export function AiModelManager() {
       const ipc = (window as any).electron?.ipcRenderer;
       if (ipc) {
         ipc.invoke('ai-check-status').then((res: any) => setIsInstalled(res.isInstalled));
-        ipc.invoke('ai-get-hardware-profile').then(setHardware);
+        ipc.invoke('ai-get-hardware-profile').then((data: any) => {
+          setHardware(data);
+          setAvailableModels(data.availableModels || []);
+        });
         
         ipc.on('ai-install-progress', (_: any, msg: string) => setInstallProgress(msg));
         ipc.on('ai-pull-progress', (_: any, data: any) => {
@@ -86,12 +90,6 @@ export function AiModelManager() {
       </Card>
     );
   }
-
-  const availableModels = [
-    { name: 'phi3', desc: 'Lightweight & Fast (Recommended for Basic PCs)' },
-    { name: 'llama3.1', desc: 'Powerful Assistant (Recommended for Business Laptops)' },
-    { name: 'qwen2.5-coder', desc: 'Specialized for Code & Logic' }
-  ];
 
   return (
     <div className="space-y-6">

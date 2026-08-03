@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, Button, Badge, Modal } from '@ralion/ui';
 import { Sparkles, Send, Bot, User, Zap, Database, FileText, CheckCircle2, ArrowRight, CornerDownLeft, RefreshCw, Upload, Search, Plus } from 'lucide-react';
-import { processMariQuery, executeMariAction, mariKnowledgeManager, MariActionPayload, KnowledgeDocument } from '@ralion/ai';
+import { processMariQuery, callMariAiApi, executeMariAction, mariKnowledgeManager, MariActionPayload, KnowledgeDocument } from '@ralion/ai';
 
 interface ChatMessage {
   id: string;
@@ -13,6 +13,7 @@ interface ChatMessage {
   actionsSuggested?: MariActionPayload[];
   ragContext?: string;
   timestamp: string;
+  modelUsed?: string;
 }
 
 export default function MariAiPage() {
@@ -21,7 +22,7 @@ export default function MariAiPage() {
     {
       id: 'm-1',
       sender: 'MARI',
-      text: 'Welcome to the Mari AI Intelligence Command Center by Ras Ali Labs. I am continuously monitoring your CRM sales pipeline, overdue invoices, operational tasks, and uploaded organizational SOP knowledge base.',
+      text: 'Welcome to the Mari AI Intelligence Command Center by Ras Ali Labs. Powered by multi-model AI/ML API routing (DeepSeek R1, Claude 3.5 Sonnet, Qwen Coder, Gemini Flash, Flux & Kling AI Video).',
       timestamp: '12:00 PM'
     }
   ]);
@@ -38,14 +39,14 @@ export default function MariAiPage() {
   const [searchResults, setSearchResults] = useState<string>('');
 
   const promptSuggestions = [
-    'Show me sales this month',
-    'Who has overdue payments?',
-    'Create a customer report',
-    'Summarize SLA policy',
-    'Draft a promotional social post'
+    'Analyze CRM deals and sales performance',
+    'Write a promotional social campaign draft',
+    'Fix SQL query for customer order summary',
+    'Generate an image of a modern executive dashboard',
+    'Create a video of clouds over a mountain'
   ];
 
-  const handleSendQuery = (queryText: string) => {
+  const handleSendQuery = async (queryText: string) => {
     if (!queryText.trim()) return;
 
     const userMsg: ChatMessage = {
@@ -59,22 +60,32 @@ export default function MariAiPage() {
     setInputQuery('');
     setIsProcessing(true);
 
-    setTimeout(() => {
-      const response = processMariQuery(queryText);
-      const ragSearch = mariKnowledgeManager.searchKnowledgeBase(queryText);
+    const ragSearch = mariKnowledgeManager.searchKnowledgeBase(queryText);
+    const ruleResponse = processMariQuery(queryText);
+    const apiResult = await callMariAiApi(queryText);
 
-      const mariMsg: ChatMessage = {
-        id: `mari-${Date.now()}`,
-        sender: 'MARI',
-        text: response.answer,
-        actionsSuggested: response.suggestedActions as MariActionPayload[],
-        ragContext: ragSearch.includes('No matching') ? undefined : ragSearch,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
+    let answerText = '';
+    let modelUsedStr = '';
 
-      setMessages(prev => [...prev, mariMsg]);
-      setIsProcessing(false);
-    }, 500);
+    if (apiResult) {
+      answerText = apiResult.text;
+      modelUsedStr = `${apiResult.modelInfo.category} (${apiResult.modelInfo.model})`;
+    } else {
+      answerText = ruleResponse.answer;
+    }
+
+    const mariMsg: ChatMessage = {
+      id: `mari-${Date.now()}`,
+      sender: 'MARI',
+      text: answerText,
+      actionsSuggested: ruleResponse.suggestedActions as MariActionPayload[],
+      ragContext: ragSearch.includes('No matching') ? undefined : ragSearch,
+      modelUsed: modelUsedStr,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    setMessages(prev => [...prev, mariMsg]);
+    setIsProcessing(false);
   };
 
   const handleActionExecute = async (action: MariActionPayload) => {
@@ -172,6 +183,7 @@ export default function MariAiPage() {
                       <span className="font-bold text-blue-400 flex items-center gap-1">
                         {msg.sender === 'USER' ? <User className="w-3 h-3 text-white" /> : <Bot className="w-3 h-3 text-blue-400" />}
                         {msg.sender === 'USER' ? 'Enterprise User' : 'Mari AI Assistant'}
+                        {msg.modelUsed && <Badge variant="purple" className="text-[9px] py-0 px-1.5 ml-1">{msg.modelUsed}</Badge>}
                       </span>
                       <span>{msg.timestamp}</span>
                     </div>

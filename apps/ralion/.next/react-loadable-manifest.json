@@ -16,15 +16,15 @@
     "files": []
   },
   "components\\FloatingMariAi.tsx -> @ralion/ai": {
-    "id": 64768,
+    "id": 11427,
     "files": [
-      "static/chunks/4768.fe3af4750cdc562b.js"
+      "static/chunks/1427-96c3b95f86f4d580.js"
     ]
   },
   "components\\MariAiDrawer.tsx -> @ralion/ai": {
-    "id": 64768,
+    "id": 11427,
     "files": [
-      "static/chunks/4768.fe3af4750cdc562b.js"
+      "static/chunks/1427-96c3b95f86f4d580.js"
     ]
   }
 }

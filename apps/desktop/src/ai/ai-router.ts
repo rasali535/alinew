@@ -75,7 +75,7 @@ export class AiRouter {
   private static queryCloud(prompt: string, apiKey: string): Promise<string> {
     return new Promise((resolve, reject) => {
       const data = JSON.stringify({
-        model: 'mistralai/Mistral-7B-Instruct-v0.2',
+        model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: 'You are Mari AI, an advanced business assistant.' },
           { role: 'user', content: prompt }
@@ -86,7 +86,7 @@ export class AiRouter {
 
       const options = {
         hostname: 'api.aimlapi.com',
-        path: '/v1/chat/completions',
+        path: '/chat/completions',
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

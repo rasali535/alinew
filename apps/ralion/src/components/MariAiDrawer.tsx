@@ -43,11 +43,12 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
         const apiResponse = await callMariAiApi(userText);
         
         if (apiResponse) {
+          const respText = typeof apiResponse === 'string' ? apiResponse : apiResponse.text;
           setMessages(prev => [
             ...prev,
             {
               sender: 'MARI',
-              text: apiResponse,
+              text: respText,
               actions: []
             }
           ]);

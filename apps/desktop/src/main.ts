@@ -182,55 +182,75 @@ function createWindow() {
     }
   });
 
-  const isDev = !app.isPackaged && process.env.NODE_ENV !== 'production';
+  const loadStaticRenderer = () => {
+    try {
+      const { protocol } = require('electron');
+      if (typeof protocol.interceptFileProtocol === 'function') {
+        protocol.interceptFileProtocol('file', (request: any, callback: any) => {
+          let urlPath = request.url.replace(/^file:\/\//i, '');
+          if (process.platform === 'win32' && urlPath.match(/^\/[a-zA-Z]:\//)) {
+            urlPath = urlPath.substring(1);
+          }
+          urlPath = decodeURIComponent(urlPath);
+          
+          const driveRootRegex = process.platform === 'win32' ? /^[a-zA-Z]:[\\/]ralion[\\/]/i : /^\/ralion\//i;
+          
+          if (driveRootRegex.test(urlPath)) {
+            const parts = urlPath.split(/[\\/]/);
+            const folderIndex = parts.findIndex((p: any) => p.toLowerCase() === 'ralion');
+            const relativePath = parts.slice(folderIndex + 1).join(path.sep);
+            let targetPath = path.join(__dirname, 'renderer', relativePath);
+            
+            if (fs.existsSync(targetPath)) {
+              try {
+                if (fs.statSync(targetPath).isDirectory()) {
+                  targetPath = path.join(targetPath, 'index.html');
+                }
+              } catch (e) {}
+            } else {
+              const fallbackPath = path.join(__dirname, 'renderer', 'ralion', relativePath);
+              if (fs.existsSync(fallbackPath)) {
+                targetPath = fallbackPath;
+                try {
+                  if (fs.statSync(targetPath).isDirectory()) {
+                    targetPath = path.join(targetPath, 'index.html');
+                  }
+                } catch (e) {}
+              }
+            }
+            return callback({ path: targetPath });
+          }
+          callback({ path: urlPath });
+        });
+      }
+    } catch (e) {
+      log.warn('[Protocol Intercept Warning]', e);
+    }
+
+    let rendererPath = path.join(__dirname, 'renderer', 'dashboard', 'index.html');
+    if (!fs.existsSync(rendererPath)) {
+      rendererPath = path.join(__dirname, 'renderer', 'index.html');
+    }
+    if (!fs.existsSync(rendererPath)) {
+      rendererPath = path.join(__dirname, 'renderer', 'login', 'index.html');
+    }
+    log.info('[Renderer] Loading Production Static HTML:', rendererPath);
+    mainWindow?.loadFile(rendererPath).catch(err => {
+      log.error('[Renderer Load Failure] Local index.html missing or unreadable:', rendererPath, err);
+    });
+  };
+
+  const isDev = process.env.NODE_ENV === 'development' || Boolean(process.env.ELECTRON_START_URL);
 
   if (isDev) {
     const devUrl = process.env.ELECTRON_START_URL || 'http://localhost:6509';
-    log.info('[Renderer] Loading Development:', devUrl);
+    log.info('[Renderer] Loading Development URL:', devUrl);
     mainWindow.loadURL(devUrl).catch(err => {
-      log.error('[Renderer Load Failure]', err);
+      log.warn('[Renderer Dev Server Unreachable, falling back to static renderer]:', err?.message || err);
+      loadStaticRenderer();
     });
   } else {
-    // Intercept file protocol to fix absolute paths for Next.js and Vite static exports
-    const { protocol } = require('electron');
-    protocol.interceptFileProtocol('file', (request: any, callback: any) => {
-      let urlPath = request.url.replace(/^file:\/\//i, '');
-      if (process.platform === 'win32' && urlPath.match(/^\/[a-zA-Z]:\//)) {
-        urlPath = urlPath.substring(1);
-      }
-      urlPath = decodeURIComponent(urlPath);
-      
-      // Next.js basePath is '/ralion', so all absolute paths start with C:/ralion/
-      const driveRootRegex = process.platform === 'win32' ? /^[a-zA-Z]:[\\/]ralion[\\/]/i : /^\/ralion\//i;
-      
-      if (driveRootRegex.test(urlPath)) {
-        // Map it to the local renderer folder by stripping the basePath 'ralion'
-        const parts = urlPath.split(/[\\/]/);
-        const folderIndex = parts.findIndex((p: any) => p.toLowerCase() === 'ralion');
-        // Take everything after the first 'ralion'
-        const relativePath = parts.slice(folderIndex + 1).join(path.sep);
-        let targetPath = path.join(__dirname, 'renderer', relativePath);
-        
-        // Fallback to check if it's inside the ralion/ subfolder
-        if (!fs.existsSync(targetPath)) {
-            const fallbackPath = path.join(__dirname, 'renderer', 'ralion', relativePath);
-            if (fs.existsSync(fallbackPath)) {
-                targetPath = fallbackPath;
-            }
-        }
-        
-        return callback({ path: targetPath });
-      }
-      
-      callback({ path: urlPath });
-    });
-
-    // Load local bundled static Next.js export (Ralion App) instead of website homepage
-    const rendererPath = path.join(__dirname, 'renderer', 'login', 'index.html');
-    log.info('[Renderer] Loading Production:', rendererPath);
-    mainWindow.loadFile(rendererPath).catch(err => {
-      log.error('[Renderer Load Failure] Local index.html missing or unreadable:', rendererPath, err);
-    });
+    loadStaticRenderer();
   }
 
   // Intercept navigation to load local subfolder index.html for Next static export routes
@@ -270,6 +290,10 @@ function createWindow() {
     }
   });
 
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    console.log(`[Renderer Console L${level}] ${message} (${sourceId}:${line})`);
+  });
+
   // Diagnostics: fail load logging
   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
     const failLog = `[Renderer Did Fail Load] Attempted URL: ${validatedURL}, Error Code: ${errorCode}, Description: ${errorDescription}`;
@@ -304,21 +328,40 @@ function createWindow() {
 
 // ─── System Tray ───────────────────────────────────────────────────────────────
 function createTray() {
-  const icon = nativeImage.createEmpty();
-  tray = new Tray(icon);
+  try {
+    let icon = nativeImage.createEmpty();
+    const iconPath = path.join(__dirname, '..', 'assets', 'icon.ico');
+    if (fs.existsSync(iconPath)) {
+      icon = nativeImage.createFromPath(iconPath);
+    } else {
+      const pngPath = path.join(__dirname, '..', 'assets', 'icon.png');
+      if (fs.existsSync(pngPath)) {
+        icon = nativeImage.createFromPath(pngPath);
+      }
+    }
 
-  const contextMenu = Menu.buildFromTemplate([
-    { label: 'Ralion — Empowered to Prosper', enabled: false },
-    { type: 'separator' },
-    { label: 'Open Ralion', click: () => { mainWindow?.show(); mainWindow?.focus(); } },
-    { label: 'Check for Updates', click: () => { if (autoUpdater) autoUpdater.checkForUpdatesAndNotify(); } },
-    { type: 'separator' },
-    { label: 'Quit', click: () => app.quit() },
-  ]);
+    if (icon.isEmpty()) {
+      if (log.warn) log.warn('[Tray] Icon empty, skipping system tray creation');
+      return;
+    }
 
-  tray.setToolTip('Ralion Platform by Ras Ali Labs');
-  tray.setContextMenu(contextMenu);
-  tray.on('double-click', () => { mainWindow?.show(); mainWindow?.focus(); });
+    tray = new Tray(icon);
+
+    const contextMenu = Menu.buildFromTemplate([
+      { label: 'Ralion — Empowered to Prosper', enabled: false },
+      { type: 'separator' },
+      { label: 'Open Ralion', click: () => { mainWindow?.show(); mainWindow?.focus(); } },
+      { label: 'Check for Updates', click: () => { if (autoUpdater) autoUpdater.checkForUpdatesAndNotify(); } },
+      { type: 'separator' },
+      { label: 'Quit', click: () => app.quit() },
+    ]);
+
+    tray.setToolTip('Ralion Platform by Ras Ali Labs');
+    tray.setContextMenu(contextMenu);
+    tray.on('double-click', () => { mainWindow?.show(); mainWindow?.focus(); });
+  } catch (err) {
+    if (log.error) log.error('[Tray Creation Warning]', err);
+  }
 }
 
 // ─── Auto Updater ─────────────────────────────────────────────────────────────
@@ -654,26 +697,58 @@ if (!gotLock) {
   });
 
   app.whenReady().then(async () => {
-    log.info('[App] Ralion Desktop app ready. Initializing window & IPC...');
+    console.log('[BOOT LOG 0] App ready callback started');
     
-    // Check and start AI Engine silently in background if installed
     try {
+      console.log('[BOOT LOG 1] Ollama check starting');
       const installed = await OllamaManager.checkInstallation();
+      console.log('[BOOT LOG 1] Ollama installed status:', installed);
       if (installed) {
-        log.info('[AI] Ollama installed. Starting daemon...');
         await OllamaManager.startDaemon();
       }
     } catch (e) {
-      log.warn('[AI] Failed to check Ollama on boot:', e);
+      console.log('[BOOT LOG 1 Error]', e);
     }
 
-    // Initialize Ralion Knowledge Memory (Vector DB)
-    VectorDB.initialize();
+    try {
+      console.log('[BOOT LOG 2] VectorDB initialize starting');
+      VectorDB.initialize();
+      console.log('[BOOT LOG 2] VectorDB initialize completed');
+    } catch (e) {
+      console.log('[BOOT LOG 2 Error]', e);
+    }
 
-    registerIpcHandlers();
-    buildAppMenu();
-    createTray();
-    createWindow();
+    try {
+      console.log('[BOOT LOG 3] registerIpcHandlers starting');
+      registerIpcHandlers();
+      console.log('[BOOT LOG 3] registerIpcHandlers completed');
+    } catch (e) {
+      console.log('[BOOT LOG 3 Error]', e);
+    }
+
+    try {
+      console.log('[BOOT LOG 4] buildAppMenu starting');
+      buildAppMenu();
+      console.log('[BOOT LOG 4] buildAppMenu completed');
+    } catch (e) {
+      console.log('[BOOT LOG 4 Error]', e);
+    }
+
+    try {
+      console.log('[BOOT LOG 5] createTray starting');
+      createTray();
+      console.log('[BOOT LOG 5] createTray completed');
+    } catch (e) {
+      console.log('[BOOT LOG 5 Error]', e);
+    }
+
+    try {
+      console.log('[BOOT LOG 6] createWindow starting');
+      createWindow();
+      console.log('[BOOT LOG 6] createWindow completed');
+    } catch (e) {
+      console.log('[BOOT LOG 6 Error]', e);
+    }
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();

@@ -16,22 +16,24 @@ export const ProductAccessGuard: React.FC<ProductAccessGuardProps> = ({ children
 
   useEffect(() => {
     async function checkAccess() {
+      const isDesktop = typeof window !== 'undefined' && ((window as any).__RALION_DESKTOP__ || window.location.protocol === 'file:');
       const session = await AuthService.getSession();
       const platformUrl = process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com';
 
       if (!session) {
-        if (typeof window !== 'undefined' && window.location.protocol === 'file:') {
-          window.location.href = '/ralion/login';
+        if (isDesktop) {
+          // On Desktop app, grant desktop workspace access without forcing redirect to web login
+          setAccess({ hasAccess: true, edition: 'desktop_enterprise', status: 'active' });
+          setLoading(false);
+          return;
         } else {
-          // Redirect to Ras Ali Labs platform login if no session exists
+          // Redirect to Ras Ali Labs platform login if no session exists on web
           window.location.href = `${platformUrl}/login?redirect=${encodeURIComponent(window.location.href)}`;
+          return;
         }
-        return;
       }
 
       // Resolve the real organization ID from the session's user metadata.
-      // If no org ID is available yet (e.g. during initial setup), skip the
-      // Supabase subscription lookup to avoid RLS 403 errors from a placeholder UUID.
       const orgId: string | undefined =
         session.user?.user_metadata?.organization_id ||
         session.user?.user_metadata?.org_id;
@@ -40,8 +42,8 @@ export const ProductAccessGuard: React.FC<ProductAccessGuardProps> = ({ children
         const result = await ProductService.verifyProductAccess(orgId);
         setAccess(result);
       } else {
-        // No org yet — grant community-tier access without hitting the DB
-        setAccess({ hasAccess: true, edition: 'community', status: 'active' });
+        // No org yet — grant community/desktop access without hitting the DB
+        setAccess({ hasAccess: true, edition: isDesktop ? 'desktop_enterprise' : 'community', status: 'active' });
       }
 
       setLoading(false);

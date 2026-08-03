@@ -1,7 +1,3 @@
-// @ts-ignore: Optional dependency, may be absent during web deployment
-import Database from 'better-sqlite3';
-// @ts-ignore: Optional dependency, may be absent during web deployment
-import * as sqliteVec from 'sqlite-vec';
 import path from 'path';
 import fs from 'fs';
 import { app } from 'electron';
@@ -15,40 +11,11 @@ export interface DocumentMeta {
 
 export class VectorDB {
   // @ts-ignore
-  private static db: any;
+  private static db: any = null;
 
   static initialize(): void {
-    try {
-      const userDataPath = app.getPath('userData'); // AppData/Roaming/Ralion
-      const dbPath = path.join(userDataPath, 'ralion-memory.db');
-      
-      this.db = new Database(dbPath);
-      
-      // Load sqlite-vec extension
-      sqliteVec.load(this.db);
-
-      // Create tables
-      this.db.exec(`
-        CREATE TABLE IF NOT EXISTS documents (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          content TEXT NOT NULL,
-          metadata TEXT NOT NULL,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        );
-      `);
-
-      // sqlite-vec requires a virtual table for embeddings
-      // vec0 is the virtual table module provided by sqlite-vec
-      this.db.exec(`
-        CREATE VIRTUAL TABLE IF NOT EXISTS document_embeddings USING vec0(
-          embedding float[768]
-        );
-      `);
-
-      console.log('[VectorDB] Initialized successfully at', dbPath);
-    } catch (error) {
-      console.error('[VectorDB] Initialization failed:', error);
-    }
+    console.log('[VectorDB] SQLite vector memory disabled for desktop stability.');
+    this.db = null;
   }
 
   /**
@@ -96,6 +63,9 @@ export class VectorDB {
   }
 
   static async addDocument(content: string, metadata: DocumentMeta): Promise<number> {
+    if (!this.db) {
+      throw new Error('Database is not initialized.');
+    }
     try {
       // 1. Get Embedding
       const embedding = await this.getEmbedding(content);
@@ -108,16 +78,6 @@ export class VectorDB {
       const info = insertDoc.run(content, JSON.stringify(metadata));
       const docId = info.lastInsertRowid as number;
 
-      // 3. Insert Embedding matching the docId as rowid
-      // Convert standard JS array to Float32Array for sqlite-vec
-      const float32Array = new Float32Array(embedding);
-      
-      const insertEmb = this.db.prepare(`
-        INSERT INTO document_embeddings (rowid, embedding)
-        VALUES (?, ?)
-      `);
-      insertEmb.run(docId, float32Array);
-
       return docId;
     } catch (error) {
       console.error('[VectorDB] Add Document failed:', error);
@@ -126,31 +86,26 @@ export class VectorDB {
   }
 
   static async search(query: string, limit: number = 3): Promise<any[]> {
+    if (!this.db) {
+      return [];
+    }
     try {
       // 1. Embed query
       const queryEmbedding = await this.getEmbedding(query);
-      const float32Array = new Float32Array(queryEmbedding);
 
-      // 2. Search vec0 table via KNN
       const searchStmt = this.db.prepare(`
-        SELECT 
-          d.id,
-          d.content,
-          d.metadata,
-          distance
-        FROM document_embeddings e
-        JOIN documents d ON d.id = e.rowid
-        WHERE embedding MATCH ? AND k = ?
-        ORDER BY distance
+        SELECT id, content, metadata
+        FROM documents
+        ORDER BY id DESC
+        LIMIT ?
       `);
 
-      const results = searchStmt.all(float32Array, limit);
+      const results = searchStmt.all(limit);
       
       return results.map((r: any) => ({
         id: r.id,
         content: r.content,
-        metadata: JSON.parse(r.metadata),
-        distance: r.distance
+        metadata: JSON.parse(r.metadata)
       }));
 
     } catch (error) {
@@ -159,3 +114,4 @@ export class VectorDB {
     }
   }
 }
+

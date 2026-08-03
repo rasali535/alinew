@@ -25,13 +25,13 @@ export class AuthService {
   }
 
   /**
-   * Login with Google OAuth
+   * Universal Login with Social OAuth Providers (Google, GitHub, Microsoft, Apple, LinkedIn, Facebook, Twitter, Discord)
    */
-  static async loginWithGoogle() {
-    const isDesktop = typeof window !== 'undefined' && (window as any).__RALION_DESKTOP__;
+  static async loginWithProvider(provider: 'google' | 'github' | 'azure' | 'apple' | 'linkedin_oidc' | 'facebook' | 'twitter' | 'discord' | string) {
+    const isDesktop = typeof window !== 'undefined' && ((window as any).__RALION_DESKTOP__ || window.location.protocol === 'file:');
     
     const { data, error } = await this.supabase.auth.signInWithOAuth({
-      provider: 'google',
+      provider: provider as any,
       options: {
         redirectTo: isDesktop ? 'ralion://oauth-callback' : `${window.location.origin}/ralion/dashboard`,
         skipBrowserRedirect: isDesktop,
@@ -41,18 +41,31 @@ export class AuthService {
     if (error) throw error;
 
     if (isDesktop && data?.url) {
-      // Open the OAuth flow in the user's default system browser
-      await (window as any).ralionDesktop?.openExternal(data.url);
+      const electronApi = (window as any).electron?.ipcRenderer;
+      if (electronApi?.invoke) {
+        await electronApi.invoke('open-external', data.url);
+      } else if ((window as any).ralionDesktop?.openExternal) {
+        await (window as any).ralionDesktop.openExternal(data.url);
+      } else {
+        window.open(data.url, '_blank');
+      }
     }
     
     return data;
   }
 
   /**
+   * Login with Google OAuth
+   */
+  static async loginWithGoogle() {
+    return this.loginWithProvider('google');
+  }
+
+  /**
    * Link a social account (OAuth) for Growth OS
    */
   static async linkSocialAccount(provider: any) {
-    const isDesktop = typeof window !== 'undefined' && (window as any).__RALION_DESKTOP__;
+    const isDesktop = typeof window !== 'undefined' && ((window as any).__RALION_DESKTOP__ || window.location.protocol === 'file:');
 
     const { data, error } = await this.supabase.auth.signInWithOAuth({
       provider: provider,
@@ -66,7 +79,14 @@ export class AuthService {
     if (error) throw error;
 
     if (isDesktop && data?.url) {
-      await (window as any).ralionDesktop?.openExternal(data.url);
+      const electronApi = (window as any).electron?.ipcRenderer;
+      if (electronApi?.invoke) {
+        await electronApi.invoke('open-external', data.url);
+      } else if ((window as any).ralionDesktop?.openExternal) {
+        await (window as any).ralionDesktop.openExternal(data.url);
+      } else {
+        window.open(data.url, '_blank');
+      }
     }
     
     return data;

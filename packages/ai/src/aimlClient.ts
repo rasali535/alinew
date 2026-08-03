@@ -100,3 +100,83 @@ Rules:
 5. Format numbers cleanly (e.g., "42 customers", "BWP 12,500")
 6. Never make up specific data you weren't given`;
 }
+
+export interface VideoGenerationOptions {
+  prompt: string;
+  model?: string;
+  apiKey?: string;
+  pollIntervalMs?: number;
+}
+
+export interface VideoGenerationResult {
+  success: boolean;
+  videoUrl?: string;
+  id?: string;
+  status?: string;
+  error?: string;
+}
+
+/**
+ * Generate AI video using AIML API v2 video generation service.
+ * Default model: klingai/video-v3-turbo-pro-text-to-video
+ */
+export async function generateVideo(
+  options: VideoGenerationOptions
+): Promise<VideoGenerationResult> {
+  const apiKey = options.apiKey || AIML_API_KEY;
+  if (!apiKey) {
+    return { success: false, error: 'No AIML_API_KEY provided' };
+  }
+
+  const model = options.model || 'klingai/video-v3-turbo-pro-text-to-video';
+  const headers = {
+    'Authorization': `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+  };
+
+  try {
+    const startRes = await fetch('https://api.aimlapi.com/v2/video/generations', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model,
+        prompt: options.prompt,
+      }),
+    });
+
+    if (!startRes.ok) {
+      const errText = await startRes.text();
+      return { success: false, error: `API error ${startRes.status}: ${errText}` };
+    }
+
+    const job = await startRes.json();
+    const generationId = job.id;
+    if (!generationId) {
+      return { success: false, error: 'No generation ID returned by API' };
+    }
+
+    const pollInterval = options.pollIntervalMs || 5000;
+    while (true) {
+      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+
+      const statusRes = await fetch(
+        `https://api.aimlapi.com/v2/video/generations?generation_id=${generationId}`,
+        { headers }
+      );
+
+      if (!statusRes.ok) continue;
+
+      const res = await statusRes.json();
+      const status = res.status;
+
+      if (status === 'completed') {
+        const videoUrl = res.video?.url || res.url || res.output?.url;
+        return { success: true, videoUrl, id: generationId, status };
+      } else if (status === 'error' || status === 'failed') {
+        return { success: false, error: res.error || 'Video generation failed', id: generationId, status };
+      }
+    }
+  } catch (err: any) {
+    return { success: false, error: err?.message || String(err) };
+  }
+}
