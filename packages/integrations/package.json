@@ -1,0 +1,15 @@
+{
+  "name": "@ralion/integrations",
+  "version": "1.0.0",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@ralion/ai": "1.0.0",
+    "@ralion/auth": "1.0.0",
+    "@ralion/core": "1.0.0",
+    "@ralion/database": "1.0.0"
+  }
+}

@@ -118,7 +118,17 @@ export async function callMariAiApi(prompt: string, systemPrompt?: string): Prom
     }
 
     // Chat / Text Completions with optimal model
-    const defaultSysPrompt = "You are Mari AI, the enterprise business assistant for Ralion OS developed by Ras Ali Labs. You analyze CRM pipeline data, billing, tasks, marketing, and industry workflows. Provide clear, grounded, actionable insights.";
+    let graphContext = '';
+    try {
+      const { MariMemoryGraph } = await import('@ralion/integrations');
+      graphContext = MariMemoryGraph.generateContextPrompt('ras-ali-labs');
+    } catch {
+      // Graceful fallback if graph not initialized
+    }
+
+    const defaultSysPrompt = `You are Mari AI, the enterprise business assistant for Ralion OS developed by Ras Ali Labs. You analyze CRM pipeline data, billing, tasks, marketing, and industry workflows. Provide clear, grounded, actionable insights.
+
+${graphContext}`;
     
     const response = await fetch(`${AIML_BASE_URL}/chat/completions`, {
       method: "POST",

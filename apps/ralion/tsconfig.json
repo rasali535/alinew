@@ -26,6 +26,8 @@
       "@ralion/auth": ["../../packages/auth/src"],
       "@ralion/database": ["../../packages/database/src"],
       "@ralion/ai": ["../../packages/ai/src"],
+      "@ralion/integrations": ["../../packages/integrations/src"],
+      "@ralion/integrations/*": ["../../packages/integrations/src/*"],
       "@ralion/modules": ["../../packages/modules/src"]
     }
   },

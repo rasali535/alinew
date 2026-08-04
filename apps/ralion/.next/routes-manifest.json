@@ -39,7 +39,56 @@
     "afterFiles": [],
     "fallback": []
   },
-  "dynamicRoutes": [],
+  "dynamicRoutes": [
+    {
+      "page": "/api/oauth/[provider]/callback",
+      "regex": "^/api/oauth/([^/]+?)/callback(?:/)?$",
+      "routeKeys": {
+        "nxtPprovider": "nxtPprovider"
+      },
+      "namedRegex": "^/api/oauth/(?<nxtPprovider>[^/]+?)/callback(?:/)?$"
+    },
+    {
+      "page": "/api/oauth/[provider]/connect",
+      "regex": "^/api/oauth/([^/]+?)/connect(?:/)?$",
+      "routeKeys": {
+        "nxtPprovider": "nxtPprovider"
+      },
+      "namedRegex": "^/api/oauth/(?<nxtPprovider>[^/]+?)/connect(?:/)?$"
+    },
+    {
+      "page": "/api/oauth/[provider]/disconnect",
+      "regex": "^/api/oauth/([^/]+?)/disconnect(?:/)?$",
+      "routeKeys": {
+        "nxtPprovider": "nxtPprovider"
+      },
+      "namedRegex": "^/api/oauth/(?<nxtPprovider>[^/]+?)/disconnect(?:/)?$"
+    },
+    {
+      "page": "/api/oauth/[provider]/refresh",
+      "regex": "^/api/oauth/([^/]+?)/refresh(?:/)?$",
+      "routeKeys": {
+        "nxtPprovider": "nxtPprovider"
+      },
+      "namedRegex": "^/api/oauth/(?<nxtPprovider>[^/]+?)/refresh(?:/)?$"
+    },
+    {
+      "page": "/api/oauth/[provider]/status",
+      "regex": "^/api/oauth/([^/]+?)/status(?:/)?$",
+      "routeKeys": {
+        "nxtPprovider": "nxtPprovider"
+      },
+      "namedRegex": "^/api/oauth/(?<nxtPprovider>[^/]+?)/status(?:/)?$"
+    },
+    {
+      "page": "/api/oauth/[provider]/sync",
+      "regex": "^/api/oauth/([^/]+?)/sync(?:/)?$",
+      "routeKeys": {
+        "nxtPprovider": "nxtPprovider"
+      },
+      "namedRegex": "^/api/oauth/(?<nxtPprovider>[^/]+?)/sync(?:/)?$"
+    }
+  ],
   "staticRoutes": [
     {
       "page": "/",
@@ -214,6 +263,12 @@
       "regex": "^/settings/ai\\-privacy(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/settings/ai\\-privacy(?:/)?$"
+    },
+    {
+      "page": "/settings/integrations",
+      "regex": "^/settings/integrations(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/settings/integrations(?:/)?$"
     },
     {
       "page": "/tasks",

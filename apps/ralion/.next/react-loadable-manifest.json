@@ -11,10 +11,17 @@
       "static/chunks/3826.2147eea9ddc83239.js"
     ]
   },
+  "..\\..\\..\\packages\\ai\\src\\mariChat.ts -> @ralion/integrations": {
+    "id": 50155,
+    "files": [
+      "static/chunks/3063-168b702622647a8f.js",
+      "static/chunks/155-3638cfdf15111414.js"
+    ]
+  },
   "app\\(dashboard)\\dashboard\\page.tsx -> @ralion/ai": {
     "id": 11427,
     "files": [
-      "static/chunks/1427-c0416af81ecb6278.js"
+      "static/chunks/1427-6c90f5cc8bc3462d.js"
     ]
   },
   "app\\(dashboard)\\layout.tsx -> @/lib/services/auth.service": {
@@ -24,13 +31,13 @@
   "components\\FloatingMariAi.tsx -> @ralion/ai": {
     "id": 11427,
     "files": [
-      "static/chunks/1427-c0416af81ecb6278.js"
+      "static/chunks/1427-6c90f5cc8bc3462d.js"
     ]
   },
   "components\\MariAiDrawer.tsx -> @ralion/ai": {
     "id": 11427,
     "files": [
-      "static/chunks/1427-c0416af81ecb6278.js"
+      "static/chunks/1427-6c90f5cc8bc3462d.js"
     ]
   }
 }

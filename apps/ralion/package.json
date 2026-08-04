@@ -14,6 +14,7 @@
     "@ralion/auth": "1.0.0",
     "@ralion/core": "1.0.0",
     "@ralion/database": "1.0.0",
+    "@ralion/integrations": "1.0.0",
     "@ralion/modules": "1.0.0",
     "@ralion/ui": "1.0.0",
     "@supabase/ssr": "^0.12.3",

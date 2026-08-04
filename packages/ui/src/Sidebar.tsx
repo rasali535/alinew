@@ -86,6 +86,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const ecosystemNav: SidebarItem[] = [
+    { id: 'integrations', label: 'Integration Hub', href: '/ralion/settings/integrations', icon: <Globe className="w-4 h-4 text-purple-400" />, badge: 'OAuth' },
     { id: 'marketplace', label: 'Marketplace', href: '/ralion/marketplace', icon: <Store className="w-4 h-4 text-purple-400" /> },
     { id: 'developer', label: 'Developer Platform', href: '/ralion/developer', icon: <Code className="w-4 h-4 text-blue-400" /> },
     { id: 'enterprise', label: 'Enterprise SSO', href: '/ralion/enterprise', icon: <Shield className="w-4 h-4 text-emerald-400" /> },
