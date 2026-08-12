@@ -1,0 +1,35 @@
+# =====================================================================
+# Dockerfile.backend — Chatbot API Backend (Node.js/Express)
+# Multi-stage: deps → build → production
+# =====================================================================
+
+# Stage 1: Install deps
+FROM node:20-alpine AS deps
+WORKDIR /app/server
+
+COPY server/package.json server/package-lock.json* ./
+RUN npm install
+
+# Stage 2: Compile TypeScript
+FROM node:20-alpine AS builder
+WORKDIR /app/server
+
+COPY --from=deps /app/server/node_modules ./node_modules
+COPY server/. .
+
+RUN npm run build
+
+# Stage 3: Minimal production runtime
+FROM node:20-alpine AS runner
+WORKDIR /app/server
+
+ENV NODE_ENV=production
+ENV PORT=4000
+
+COPY --from=builder /app/server/dist ./dist
+COPY --from=deps /app/server/node_modules ./node_modules
+COPY server/package.json ./
+
+EXPOSE 4000
+
+CMD ["node", "dist/server.js"]

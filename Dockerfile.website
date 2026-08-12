@@ -1,0 +1,39 @@
+# =====================================================================
+# Dockerfile.website — Rasali Labs Marketing Website (Vite + nginx)
+# Multi-stage: deps → build → nginx serve
+# =====================================================================
+
+# Stage 1: Build the Vite website
+FROM node:20-alpine AS builder
+WORKDIR /app
+
+# Copy workspace manifests (use globs so missing optional files don't fail)
+COPY package*.json .npmrc* ./
+COPY apps/website/package*.json ./apps/website/
+
+RUN npm install --workspace=apps/website --ignore-scripts || npm install --workspace=apps/website
+
+COPY apps/website ./apps/website
+
+WORKDIR /app/apps/website
+
+ARG VITE_API_URL
+ENV VITE_API_URL=$VITE_API_URL
+
+RUN npm run build
+
+# Stage 2: Serve with nginx
+FROM nginx:1.25-alpine AS runner
+
+# Remove default nginx config
+RUN rm -f /etc/nginx/conf.d/default.conf
+
+# Copy built assets
+COPY --from=builder /app/apps/website/dist /usr/share/nginx/html
+
+# Nginx config for SPA routing (React Router)
+COPY nginx/website.conf /etc/nginx/conf.d/website.conf
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

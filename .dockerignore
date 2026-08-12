@@ -1,0 +1,59 @@
+# Dependencies - reinstalled inside container
+node_modules
+**/node_modules
+
+# Next.js build artifacts - built inside container
+**/.next
+**/out
+
+# Large build outputs
+build/
+dist/
+dist_20260729_170700/
+zip_test/
+website_update/
+
+# Desktop app
+apps/desktop/release/
+apps/desktop/dist/
+*.exe
+*.zip
+
+# Logs & debug
+*.log
+render_errors.txt
+screenshot.png
+screenshot.js
+vite.log
+vite_final.log
+
+# Git
+.git
+.gitconfig
+.github
+
+# Test artifacts
+playwright-report/
+coverage/
+
+# Environment files - injected via docker-compose / VPS secrets
+.env
+.env.*
+!.env.example
+server/.env
+
+# TypeScript build info
+*.tsbuildinfo
+
+# IDE
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# macOS
+.DS_Store

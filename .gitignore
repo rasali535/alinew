@@ -21,6 +21,7 @@ node_modules/
 # Next.js
 .next/
 out/
+apps/ralion/out/
 next-env.d.ts
 *.tsbuildinfo
 
@@ -49,6 +50,7 @@ venv/
 .env
 .env.*
 !.env.example
+!.env.production.example
 server/.env
 
 # Ignore large build artifacts
