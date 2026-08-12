@@ -2,13 +2,15 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, Button, Badge } from '@ralion/ui';
 import { Sparkles, Mail, Lock, ArrowRight, ShieldCheck, Building2, AlertCircle } from 'lucide-react';
 import { AuthService } from '@/lib/services/auth.service';
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTarget = searchParams.get('redirect') || '/ralion/dashboard';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -20,7 +22,7 @@ export default function LoginPage() {
     setError(null);
     try {
       await AuthService.login(email, password);
-      window.location.href = '/ralion/dashboard';
+      window.location.href = redirectTarget;
     } catch (err: any) {
       setError(err.message || 'Invalid login credentials');
       setIsLoading(false);

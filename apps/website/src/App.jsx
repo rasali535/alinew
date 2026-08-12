@@ -51,7 +51,8 @@ import Checkout from './pages/Checkout';
 const ExternalRedirect = ({ to }) => {
   const location = useLocation();
   useEffect(() => {
-    window.location.href = to || location.pathname;
+    const basePath = to || location.pathname;
+    window.location.href = `${basePath}${location.search}`;
   }, [to, location]);
   return null;
 };
@@ -100,6 +101,9 @@ function App() {
                 <Route path="/checkout" element={<Checkout />} />
                 <Route path="/onboarding" element={<Onboarding />} />
                 <Route path="/account" element={<Account />} />
+                <Route path="/login" element={<ExternalRedirect to="/ralion/login" />} />
+                <Route path="/register" element={<ExternalRedirect to="/ralion/register" />} />
+                <Route path="/signup" element={<ExternalRedirect to="/ralion/register" />} />
 
                 {/* SaaS Public Platform Systems */}
                 <Route path="/demo" element={<Demo />} />
