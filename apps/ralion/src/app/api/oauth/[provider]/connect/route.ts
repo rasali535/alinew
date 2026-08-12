@@ -41,25 +41,40 @@ export async function GET(
     // Generate CSRF state token embedding userId + provider
     const stateToken = generateOAuthState(userId, provider);
 
-    // Build provider-specific authorization URL
+    // Build provider-specific authorization URL with credential checks
     let authorizationUrl: string;
     switch (provider) {
       case 'linkedin':
+        if (!linkedinAdapter.clientId()) {
+          return NextResponse.json({ success: false, error: 'LinkedIn is not configured. Please add LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET to .env.local' }, { status: 400 });
+        }
         authorizationUrl = linkedinAdapter.getAuthUrl(stateToken);
         break;
       case 'facebook':
       case 'instagram':
+        if (!metaAdapter.clientId()) {
+          return NextResponse.json({ success: false, error: 'Meta (Facebook/Instagram) is not configured. Please add FACEBOOK_APP_ID and FACEBOOK_APP_SECRET to .env.local' }, { status: 400 });
+        }
         authorizationUrl = metaAdapter.getAuthUrl(stateToken, provider as 'facebook' | 'instagram');
         break;
       case 'x':
       case 'twitter':
+        if (!xAdapter.clientId()) {
+          return NextResponse.json({ success: false, error: 'X (Twitter) is not configured. Please add TWITTER_CLIENT_ID and TWITTER_CLIENT_SECRET to .env.local' }, { status: 400 });
+        }
         authorizationUrl = xAdapter.getAuthUrl(stateToken, codeChallenge);
         break;
       case 'tiktok':
+        if (!tiktokAdapter.clientKey()) {
+          return NextResponse.json({ success: false, error: 'TikTok is not configured. Please add TIKTOK_CLIENT_KEY and TIKTOK_CLIENT_SECRET to .env.local' }, { status: 400 });
+        }
         authorizationUrl = tiktokAdapter.getAuthUrl(stateToken, codeChallenge);
         break;
       case 'youtube':
       case 'google':
+        if (!youtubeAdapter.clientId()) {
+          return NextResponse.json({ success: false, error: 'Google/YouTube is not configured. Please add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env.local' }, { status: 400 });
+        }
         authorizationUrl = youtubeAdapter.getAuthUrl(stateToken, provider as 'youtube' | 'google');
         break;
       default:

@@ -311,7 +311,7 @@ export default function GrowthPage() {
   const loadConnectedAccounts = useCallback(async () => {
     setIsLoadingAccounts(true);
     try {
-      const res = await fetch('/api/oauth/all/status', { credentials: 'include' });
+      const res = await fetch('/ralion/api/oauth/all/status/', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         if (data.success && Array.isArray(data.accounts)) {
@@ -363,7 +363,7 @@ export default function GrowthPage() {
   const handleConnectSocialAccount = async (providerKey: string) => {
     setIsConnecting(true);
     try {
-      const res = await fetch(`/api/oauth/${providerKey}/connect`, { credentials: 'include' });
+      const res = await fetch(`/ralion/api/oauth/${providerKey}/connect/`, { credentials: 'include' });
       const data = await res.json();
       if (data.success && data.authorizationUrl) {
         setIsConnectModalOpen(false);
@@ -382,7 +382,7 @@ export default function GrowthPage() {
   // ── Disconnect account (remove from Supabase) ─────────────────────────────
   const handleDisconnectAccount = async (providerKey: string) => {
     try {
-      await fetch(`/api/oauth/${providerKey}/disconnect`, { method: 'DELETE', credentials: 'include' });
+      await fetch(`/ralion/api/oauth/${providerKey}/disconnect/`, { method: 'DELETE', credentials: 'include' });
     } catch (e) {
       console.warn('[Growth] Disconnect API call failed, removing locally:', e);
     }
@@ -393,7 +393,7 @@ export default function GrowthPage() {
   const handleSyncAccount = async (providerKey: string) => {
     setIsSyncing(providerKey);
     try {
-      const res = await fetch(`/api/oauth/${providerKey}/sync`, { method: 'POST', credentials: 'include' });
+      const res = await fetch(`/ralion/api/oauth/${providerKey}/sync/`, { method: 'POST', credentials: 'include' });
       const data = await res.json();
       if (data.success && Array.isArray(data.posts) && data.posts.length > 0) {
         // Merge real posts into the posts list (avoid duplicates)
@@ -545,7 +545,7 @@ export default function GrowthPage() {
 
     setPublishingPostId(postId);
     try {
-      const res = await fetch(`/api/oauth/${post.platform}/publish`, {
+      const res = await fetch(`/ralion/api/oauth/${post.platform}/publish/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

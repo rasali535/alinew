@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { loadAllUserAccounts, loadOAuthTokens } from '@/lib/services/social.service';
 
 const PROVIDERS = [
+  'all',
   'google', 'meta', 'facebook', 'instagram', 'whatsapp', 'microsoft', 'linkedin', 'tiktok',
   'x', 'youtube', 'pinterest', 'reddit', 'github', 'slack', 'discord', 'notion', 'dropbox',
   'onedrive', 'shopify', 'woocommerce', 'stripe', 'paypal', 'quickbooks', 'xero', 'sage',
