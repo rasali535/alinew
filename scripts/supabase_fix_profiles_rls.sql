@@ -5,12 +5,14 @@
 
 -- 1. Ensure public.profiles table exists with proper schema
 CREATE TABLE IF NOT EXISTS public.profiles (
-  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  full_name TEXT,
-  avatar_url TEXT,
-  email TEXT,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE
 );
+
+-- Ensure all required columns exist even if profiles table was previously created
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS full_name TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now());
 
 -- Enable RLS
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
@@ -78,21 +80,34 @@ ON CONFLICT (id) DO NOTHING;
 CREATE TABLE IF NOT EXISTS public.social_account_tokens (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  provider TEXT NOT NULL,
-  account_id TEXT,
-  account_label TEXT,
-  account_handle TEXT,
-  avatar_url TEXT,
-  followers_count INTEGER DEFAULT 0,
-  access_token TEXT NOT NULL,
-  refresh_token TEXT,
-  token_expires_at TIMESTAMP WITH TIME ZONE,
-  scopes TEXT[] DEFAULT '{}',
-  metadata JSONB DEFAULT '{}'::jsonb,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-  UNIQUE(user_id, provider)
+  provider TEXT NOT NULL
 );
+
+-- Ensure all required columns exist on social_account_tokens
+ALTER TABLE public.social_account_tokens ADD COLUMN IF NOT EXISTS account_id TEXT;
+ALTER TABLE public.social_account_tokens ADD COLUMN IF NOT EXISTS account_label TEXT;
+ALTER TABLE public.social_account_tokens ADD COLUMN IF NOT EXISTS account_handle TEXT;
+ALTER TABLE public.social_account_tokens ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE public.social_account_tokens ADD COLUMN IF NOT EXISTS followers_count INTEGER DEFAULT 0;
+ALTER TABLE public.social_account_tokens ADD COLUMN IF NOT EXISTS access_token TEXT;
+ALTER TABLE public.social_account_tokens ADD COLUMN IF NOT EXISTS refresh_token TEXT;
+ALTER TABLE public.social_account_tokens ADD COLUMN IF NOT EXISTS token_expires_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE public.social_account_tokens ADD COLUMN IF NOT EXISTS scopes TEXT[] DEFAULT '{}';
+ALTER TABLE public.social_account_tokens ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE public.social_account_tokens ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL;
+ALTER TABLE public.social_account_tokens ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL;
+
+-- Ensure unique constraint exists on user_id and provider
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'social_account_tokens_user_id_provider_key'
+  ) THEN
+    ALTER TABLE public.social_account_tokens ADD CONSTRAINT social_account_tokens_user_id_provider_key UNIQUE (user_id, provider);
+  END IF;
+EXCEPTION
+  WHEN OTHERS THEN NULL;
+END $$;
 
 ALTER TABLE public.social_account_tokens ENABLE ROW LEVEL SECURITY;
 
