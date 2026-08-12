@@ -312,35 +312,67 @@ function GrowthPageContent() {
   const loadConnectedAccounts = useCallback(async () => {
     setIsLoadingAccounts(true);
     try {
-      // 1. Direct query to Supabase social_account_tokens table
+      // 1. Direct query to Supabase social_account_tokens table & user identities
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
 
       if (user) {
+        const accountsMap: Record<string, SocialAccount> = {};
+
+        // A. Direct query from Supabase social_account_tokens table
         try {
           const { data: tokens, error: supabaseError } = await supabase
             .from('social_account_tokens')
             .select('provider, account_label, account_handle, avatar_url, followers_count, scopes, updated_at, token_expires_at')
             .eq('user_id', user.id);
 
-          if (!supabaseError && Array.isArray(tokens) && tokens.length > 0) {
-            const mapped: SocialAccount[] = tokens.map((a: any) => ({
-              id: `acc-${a.provider}`,
-              provider: a.provider,
-              label: a.account_label || a.provider,
-              handle: a.account_handle || `@${a.provider}`,
-              connectedAt: a.updated_at ? new Date(a.updated_at).toLocaleDateString() : 'Connected',
-              status: (a.token_expires_at && new Date(a.token_expires_at) < new Date()) ? 'expired' : 'connected',
-              scopes: a.scopes || [],
-              avatarUrl: a.avatar_url,
-              followers: a.followers_count ? a.followers_count.toLocaleString() : undefined,
-            }));
-            setConnectedAccounts(mapped);
-            setIsLoadingAccounts(false);
-            return;
+          if (!supabaseError && Array.isArray(tokens)) {
+            tokens.forEach((a: any) => {
+              const prov = (a.provider || '').toLowerCase();
+              accountsMap[prov] = {
+                id: `acc-${prov}`,
+                provider: prov,
+                label: a.account_label || prov,
+                handle: a.account_handle || `@${prov}`,
+                connectedAt: a.updated_at ? new Date(a.updated_at).toLocaleDateString() : 'Connected',
+                status: (a.token_expires_at && new Date(a.token_expires_at) < new Date()) ? 'expired' : 'connected',
+                scopes: a.scopes || [],
+                avatarUrl: a.avatar_url,
+                followers: a.followers_count ? a.followers_count.toLocaleString() : undefined,
+              };
+            });
           }
         } catch (dbErr) {
           console.warn('[Growth] Supabase tokens table query skipped:', dbErr);
+        }
+
+        // B. Detect connected provider identities from Supabase auth profile
+        const identities = user.identities || [];
+        identities.forEach((identity: any) => {
+          if (identity.provider && identity.provider !== 'email') {
+            const prov = identity.provider === 'linkedin_oidc' ? 'linkedin' : (identity.provider === 'twitter' ? 'x' : identity.provider.toLowerCase());
+            if (!accountsMap[prov]) {
+              const idData = identity.identity_data || user.user_metadata || {};
+              accountsMap[prov] = {
+                id: `acc-${prov}`,
+                provider: prov,
+                label: idData.full_name || idData.name || prov,
+                handle: idData.user_name ? `@${idData.user_name}` : (idData.email ? `@${idData.email.split('@')[0]}` : (user.user_metadata?.full_name ? `@${user.user_metadata.full_name.toLowerCase().replace(/\s+/g, '_')}` : `@${prov}_account`)),
+                connectedAt: identity.last_sign_in_at ? new Date(identity.last_sign_in_at).toLocaleDateString() : 'Connected',
+                status: 'connected',
+                scopes: ['public_profile', 'email'],
+                avatarUrl: idData.avatar_url || idData.picture || user.user_metadata?.avatar_url || null,
+                followers: undefined,
+              };
+            }
+          }
+        });
+
+        const accountList = Object.values(accountsMap);
+        if (accountList.length > 0) {
+          setConnectedAccounts(accountList);
+          setIsLoadingAccounts(false);
+          return;
         }
       }
 
@@ -383,31 +415,48 @@ function GrowthPageContent() {
 
     // Auto-capture and store provider OAuth tokens (Facebook, Google, LinkedIn, etc.) returned by Supabase Auth
     const supabase = createClient();
-    const saveProviderTokenFromSession = async () => {
+    
+    const syncSessionTokens = async (session: any) => {
+      if (!session?.user) return;
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.provider_token && session?.user) {
-          const provider = (session.user.app_metadata?.provider || 'facebook').toLowerCase();
-          const userMeta = session.user.user_metadata || {};
-          await supabase.from('social_account_tokens').upsert({
-            user_id: session.user.id,
-            provider: provider,
-            access_token: session.provider_token,
-            refresh_token: session.provider_refresh_token || null,
-            account_label: userMeta.full_name || userMeta.name || provider,
-            account_handle: userMeta.user_name ? `@${userMeta.user_name}` : (userMeta.email ? `@${userMeta.email.split('@')[0]}` : `@${provider}_user`),
-            avatar_url: userMeta.avatar_url || userMeta.picture || null,
-            followers_count: 0,
-            status: 'connected',
-            updated_at: new Date().toISOString(),
-          }, { onConflict: 'user_id,provider' });
-          loadConnectedAccounts();
+        const identities = session.user.identities || [];
+        for (const identity of identities) {
+          if (identity.provider && identity.provider !== 'email') {
+            const provKey = identity.provider === 'linkedin_oidc' ? 'linkedin' : (identity.provider === 'twitter' ? 'x' : identity.provider.toLowerCase());
+            const idData = identity.identity_data || session.user.user_metadata || {};
+            await supabase.from('social_account_tokens').upsert({
+              user_id: session.user.id,
+              provider: provKey,
+              access_token: session.provider_token || 'active_oauth_token',
+              refresh_token: session.provider_refresh_token || null,
+              account_label: idData.full_name || idData.name || provKey,
+              account_handle: idData.user_name ? `@${idData.user_name}` : (idData.email ? `@${idData.email.split('@')[0]}` : (session.user.user_metadata?.full_name ? `@${session.user.user_metadata.full_name.toLowerCase().replace(/\s+/g, '_')}` : `@${provKey}_account`)),
+              avatar_url: idData.avatar_url || idData.picture || session.user.user_metadata?.avatar_url || null,
+              followers_count: 0,
+              status: 'connected',
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'user_id,provider' });
+          }
         }
+        loadConnectedAccounts();
       } catch (err) {
         console.warn('[Growth] Auto-store provider token notice:', err);
       }
     };
-    saveProviderTokenFromSession();
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) syncSessionTokens(session);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        syncSessionTokens(session);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [loadConnectedAccounts]);
 
   // ── Handle redirect back from OAuth callback (?connected=provider) ────────
