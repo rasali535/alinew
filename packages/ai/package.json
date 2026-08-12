@@ -10,6 +10,7 @@
     "@ralion/auth": "1.0.0",
     "@ralion/core": "1.0.0",
     "@ralion/database": "1.0.0",
+    "@ralion/integrations": "1.0.0",
     "openai": "^7.0.0"
   }
 }

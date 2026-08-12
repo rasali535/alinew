@@ -5,7 +5,8 @@
   "description": "Ras Ali Labs Unified Ecosystem",
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "packages/*",
+    "server"
   ],
   "scripts": {
     "install:all": "npm install",
