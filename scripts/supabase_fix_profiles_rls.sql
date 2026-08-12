@@ -105,5 +105,15 @@ DROP POLICY IF EXISTS "Users can delete own tokens" ON public.social_account_tok
 CREATE POLICY "Users can manage own tokens"
   ON public.social_account_tokens
   FOR ALL
+  TO authenticated
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
+
+CREATE INDEX IF NOT EXISTS idx_social_tokens_user_id ON public.social_account_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_social_tokens_user_provider ON public.social_account_tokens(user_id, provider);
+
+-- 3. Grant PostgREST schema permissions
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.profiles TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.social_account_tokens TO authenticated, service_role;
+
