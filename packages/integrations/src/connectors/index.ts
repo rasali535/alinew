@@ -10,7 +10,7 @@ export const INTEGRATION_SERVICES_REGISTRY: IntegrationServiceMeta[] = [
     category: 'MARKETING_SOCIAL',
     description: 'Connect Facebook Pages, Instagram Professional Accounts, and Ad Catalogs for MARI AI content creation & insights.',
     officialOAuthUrl: 'https://www.facebook.com/v18.0/dialog/oauth',
-    defaultScopes: ['pages_show_list', 'instagram_basic', 'instagram_content_publish', 'pages_read_engagement'],
+    defaultScopes: ['public_profile', 'email'],
     supportsOfflineMode: true
   },
   {
