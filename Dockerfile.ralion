@@ -8,26 +8,26 @@ FROM node:20-alpine AS deps
 WORKDIR /app
 
 # Copy workspace manifests only (for layer caching)
-COPY package.json package-lock.json* .npmrc* ./
-COPY apps/ralion/package.json ./apps/ralion/
+COPY package*.json .npmrc* ./
+COPY apps/ralion/package*.json ./apps/ralion/
 
 # Copy internal packages used by Ralion
-COPY packages/ai/package.json ./packages/ai/
-COPY packages/auth/package.json ./packages/auth/
-COPY packages/core/package.json ./packages/core/
-COPY packages/database/package.json ./packages/database/
-COPY packages/integrations/package.json ./packages/integrations/
-COPY packages/modules/package.json ./packages/modules/
-COPY packages/ui/package.json ./packages/ui/
+COPY packages/ai/package*.json ./packages/ai/
+COPY packages/auth/package*.json ./packages/auth/
+COPY packages/core/package*.json ./packages/core/
+COPY packages/database/package*.json ./packages/database/
+COPY packages/integrations/package*.json ./packages/integrations/
+COPY packages/modules/package*.json ./packages/modules/
+COPY packages/ui/package*.json ./packages/ui/
 
-RUN npm install --legacy-peer-deps --omit=dev 2>/dev/null || npm install --legacy-peer-deps
+RUN npm install --legacy-peer-deps 2>/dev/null || npm install --legacy-peer-deps
 
 # Stage 2: Build Next.js in standalone mode
 FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/ralion/node_modules ./apps/ralion/node_modules 2>/dev/null || true
+COPY --from=deps /app/apps/ralion/node_modules ./apps/ralion/node_modules
 
 # Copy source
 COPY apps/ralion ./apps/ralion
@@ -46,8 +46,7 @@ ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 ENV NEXT_PUBLIC_RASALI_PLATFORM_URL=$NEXT_PUBLIC_RASALI_PLATFORM_URL
 
 # Use standalone (server) mode — NOT static export
-# next.config.js reads NEXT_STATIC_EXPORT=1 to switch to export mode
-# We leave it unset here so output: 'standalone' is used
+ENV NEXT_STANDALONE=1
 WORKDIR /app/apps/ralion
 RUN npm run build
 
@@ -59,12 +58,15 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Standalone output includes a self-contained node_modules
+# Copy standalone build & node_modules
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/ralion/node_modules ./apps/ralion/node_modules
 COPY --from=builder /app/apps/ralion/.next/standalone ./
 COPY --from=builder /app/apps/ralion/.next/static ./apps/ralion/.next/static
+COPY --from=builder /app/apps/ralion/.next/static ./.next/static
 COPY --from=builder /app/apps/ralion/public ./apps/ralion/public
 
 EXPOSE 3000
 
-# Next.js standalone creates this server.js at the workspace root
-CMD ["node", "apps/ralion/server.js"]
+# Start Next.js standalone server
+CMD ["sh", "-c", "if [ -f apps/ralion/server.js ]; then node apps/ralion/server.js; elif [ -f server.js ]; then node server.js; else node $(find . -name server.js | head -n 1); fi"]
