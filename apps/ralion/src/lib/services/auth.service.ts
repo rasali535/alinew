@@ -64,14 +64,41 @@ export class AuthService {
   /**
    * Link a social account (OAuth) for Growth OS
    */
-  static async linkSocialAccount(provider: any) {
+  static async linkSocialAccount(provider: string, customScopes?: string) {
     const isDesktop = typeof window !== 'undefined' && ((window as any).__RALION_DESKTOP__ || window.location.protocol === 'file:');
 
+    // Map common provider aliases to Supabase provider names
+    const providerMap: Record<string, string> = {
+      linkedin: 'linkedin_oidc',
+      x: 'twitter',
+      facebook: 'facebook',
+      instagram: 'facebook',
+      google: 'google',
+      github: 'github',
+      azure: 'azure',
+      apple: 'apple',
+      tiktok: 'tiktok',
+      youtube: 'google',
+      discord: 'discord'
+    };
+
+    const targetProvider = providerMap[provider.toLowerCase()] || provider;
+
+    const defaultScopes: Record<string, string> = {
+      linkedin_oidc: 'openid profile email w_member_social',
+      facebook: 'public_profile,email,pages_show_list,pages_read_engagement',
+      google: 'email profile https://www.googleapis.com/auth/youtube.readonly',
+      twitter: 'tweet.read tweet.write users.read offline.access',
+      github: 'read:user user:email'
+    };
+
+    const scopes = customScopes || defaultScopes[targetProvider] || 'email,profile';
+
     const { data, error } = await this.supabase.auth.signInWithOAuth({
-      provider: provider,
+      provider: targetProvider as any,
       options: {
         redirectTo: isDesktop ? 'ralion://oauth-callback' : `${window.location.origin}/ralion/growth`,
-        scopes: 'email,profile',
+        scopes,
         skipBrowserRedirect: isDesktop,
       },
     });
