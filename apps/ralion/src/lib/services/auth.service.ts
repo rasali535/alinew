@@ -135,21 +135,33 @@ export class AuthService {
    * Get authenticated user profile details
    */
   static async getCurrentUser(): Promise<UserProfile | null> {
-    const { data: { user } } = await this.supabase.auth.getUser();
-    if (!user) return null;
+    try {
+      const { data: { user }, error: userError } = await this.supabase.auth.getUser();
+      if (userError || !user) return null;
 
-    const { data: profile } = await this.supabase
-      .from('profiles')
-      .select('full_name, avatar_url')
-      .eq('id', user.id)
-      .single();
+      let profile: { full_name?: string | null; avatar_url?: string | null } | null = null;
+      try {
+        const { data, error } = await this.supabase
+          .from('profiles')
+          .select('full_name, avatar_url')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (!error && data) {
+          profile = data;
+        }
+      } catch (err) {
+        console.warn('[AuthService] Profiles table query skipped:', err);
+      }
 
-    return {
-      id: user.id,
-      fullName: profile?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
-      avatarUrl: profile?.avatar_url || user.user_metadata?.avatar_url || null,
-      email: user.email || null,
-    };
+      return {
+        id: user.id,
+        fullName: profile?.full_name || user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'User',
+        avatarUrl: profile?.avatar_url || user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
+        email: user.email || null,
+      };
+    } catch {
+      return null;
+    }
   }
 
   /**
