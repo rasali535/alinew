@@ -7,7 +7,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, Button, Badg
 import { Sparkles, Mail, Lock, ArrowRight, ShieldCheck, Building2, AlertCircle } from 'lucide-react';
 import { AuthService } from '@/lib/services/auth.service';
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTarget = searchParams.get('redirect') || '/ralion/dashboard';
@@ -174,5 +174,17 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <React.Suspense fallback={
+      <div className="min-h-screen w-full bg-zinc-950 flex flex-col items-center justify-center p-4">
+        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <LoginForm />
+    </React.Suspense>
   );
 }

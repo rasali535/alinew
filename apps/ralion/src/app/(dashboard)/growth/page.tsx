@@ -233,7 +233,7 @@ const platformConfig: Record<string, { label: string; color: string; bg: string;
   pinterest: { label: 'Pinterest Catalog', color: '#e60023', bg: 'bg-red-700/10 border-red-600/30 text-red-300', iconChar: 'pin', providerKey: 'pinterest' },
 };
 
-export default function GrowthPage() {
+function GrowthPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -1848,5 +1848,17 @@ export default function GrowthPage() {
         </Modal>
       )}
     </div>
+  );
+}
+
+export default function GrowthPage() {
+  return (
+    <React.Suspense fallback={
+      <div className="min-h-screen w-full flex items-center justify-center p-8">
+        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <GrowthPageContent />
+    </React.Suspense>
   );
 }
