@@ -380,6 +380,34 @@ function GrowthPageContent() {
 
   useEffect(() => {
     loadConnectedAccounts();
+
+    // Auto-capture and store provider OAuth tokens (Facebook, Google, LinkedIn, etc.) returned by Supabase Auth
+    const supabase = createClient();
+    const saveProviderTokenFromSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.provider_token && session?.user) {
+          const provider = (session.user.app_metadata?.provider || 'facebook').toLowerCase();
+          const userMeta = session.user.user_metadata || {};
+          await supabase.from('social_account_tokens').upsert({
+            user_id: session.user.id,
+            provider: provider,
+            access_token: session.provider_token,
+            refresh_token: session.provider_refresh_token || null,
+            account_label: userMeta.full_name || userMeta.name || provider,
+            account_handle: userMeta.user_name ? `@${userMeta.user_name}` : (userMeta.email ? `@${userMeta.email.split('@')[0]}` : `@${provider}_user`),
+            avatar_url: userMeta.avatar_url || userMeta.picture || null,
+            followers_count: 0,
+            status: 'connected',
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'user_id,provider' });
+          loadConnectedAccounts();
+        }
+      } catch (err) {
+        console.warn('[Growth] Auto-store provider token notice:', err);
+      }
+    };
+    saveProviderTokenFromSession();
   }, [loadConnectedAccounts]);
 
   // ── Handle redirect back from OAuth callback (?connected=provider) ────────
