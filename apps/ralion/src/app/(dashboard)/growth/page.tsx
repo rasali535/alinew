@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, Button, Badge, Modal } from '@ralion/ui';
 import { 
   TrendingUp, Sparkles, Calendar, Share2, Plus, BarChart2, Send, Copy, Check, Megaphone, 
@@ -233,10 +234,18 @@ const platformConfig: Record<string, { label: string; color: string; bg: string;
 };
 
 export default function GrowthPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  // Start with no mock data — real data loaded from API
   const [posts, setPosts] = useState<ContentPost[]>(initialSamplePosts);
   const [campaigns, setCampaigns] = useState<Campaign[]>(initialSampleCampaigns);
   const [generatedGallery, setGeneratedGallery] = useState<GeneratedContentItem[]>(initialGeneratedContent);
-  const [connectedAccounts, setConnectedAccounts] = useState<SocialAccount[]>(initialSocialAccounts);
+  const [connectedAccounts, setConnectedAccounts] = useState<SocialAccount[]>([]);
+  const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
+  const [isSyncing, setIsSyncing] = useState<string | null>(null); // provider being synced
+  const [publishingPostId, setPublishingPostId] = useState<string | null>(null);
+  const [oauthAlert, setOauthAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const [activeTab, setActiveTab] = useState<'GENERATED_OUTPUT' | 'CONTENT' | 'CAMPAIGNS' | 'AI_STUDIO' | 'CREATIVES' | 'ANALYTICS' | 'ACCOUNTS'>('GENERATED_OUTPUT');
   const [selectedFilter, setSelectedFilter] = useState<'ALL' | 'VIDEO' | 'POSTER' | 'TEXT'>('ALL');
@@ -298,77 +307,121 @@ export default function GrowthPage() {
     scheduledAt: ''
   });
 
-  // Load persistent connected accounts on client side
-  useEffect(() => {
+  // ── Load real connected accounts from Supabase on mount ──────────────────
+  const loadConnectedAccounts = useCallback(async () => {
+    setIsLoadingAccounts(true);
     try {
-      const saved = localStorage.getItem('ralion_growth_social_accounts_v1');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setConnectedAccounts(parsed);
+      const res = await fetch('/api/oauth/all/status', { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.accounts)) {
+          const mapped: SocialAccount[] = data.accounts.map((a: any) => ({
+            id: `acc-${a.provider}`,
+            provider: a.provider,
+            label: a.account_label || a.provider,
+            handle: a.account_handle || `@${a.provider}`,
+            connectedAt: a.connected_at ? new Date(a.connected_at).toLocaleDateString() : 'Connected',
+            status: a.status as 'connected' | 'expired' | 'pending',
+            scopes: a.scopes || [],
+            avatarUrl: a.avatar_url,
+            followers: a.followers_count ? a.followers_count.toLocaleString() : undefined,
+          }));
+          setConnectedAccounts(mapped);
         }
       }
-    } catch (e) {
-      console.error('Failed to load saved social accounts', e);
+    } catch (err) {
+      console.error('[Growth] Failed to load social accounts:', err);
+    } finally {
+      setIsLoadingAccounts(false);
     }
   }, []);
 
-  // Save connected accounts when updated
-  const saveSocialAccounts = (accounts: SocialAccount[]) => {
-    setConnectedAccounts(accounts);
-    try {
-      localStorage.setItem('ralion_growth_social_accounts_v1', JSON.stringify(accounts));
-    } catch (e) {
-      console.error('Failed to save social accounts', e);
-    }
-  };
+  useEffect(() => {
+    loadConnectedAccounts();
+  }, [loadConnectedAccounts]);
 
-  // Execute Social OAuth Login / Connection
+  // ── Handle redirect back from OAuth callback (?connected=provider) ────────
+  useEffect(() => {
+    const connected = searchParams.get('connected');
+    const handle = searchParams.get('handle');
+    const oauthError = searchParams.get('oauth_error');
+
+    if (connected) {
+      setOauthAlert({ type: 'success', message: `✅ ${connected.charAt(0).toUpperCase() + connected.slice(1)} connected successfully! Account: ${handle || ''}` });
+      loadConnectedAccounts();
+      // Clean URL
+      router.replace('/ralion/growth', { scroll: false });
+      setTimeout(() => setOauthAlert(null), 6000);
+    } else if (oauthError) {
+      setOauthAlert({ type: 'error', message: `❌ OAuth failed: ${decodeURIComponent(oauthError)}` });
+      router.replace('/ralion/growth', { scroll: false });
+      setTimeout(() => setOauthAlert(null), 8000);
+    }
+  }, [searchParams]);
+
+  // ── Real OAuth Connect: fetch auth URL → redirect browser ─────────────────
   const handleConnectSocialAccount = async (providerKey: string) => {
     setIsConnecting(true);
-    const config = platformConfig[providerKey] || { label: providerKey.toUpperCase(), providerKey };
-
     try {
-      await AuthService.linkSocialAccount(config.providerKey);
-    } catch (error: any) {
-      console.log(`[OAuth Flow] Handled link for ${providerKey}:`, error?.message || error);
-    }
-
-    // Add / Update connected account state
-    const existingIndex = connectedAccounts.findIndex(a => a.provider === providerKey);
-    const updatedAccount: SocialAccount = {
-      id: `acc-${providerKey}`,
-      provider: providerKey,
-      label: config.label,
-      handle: manualAccountHandle || `@${providerKey}_official`,
-      connectedAt: 'Just now',
-      status: 'connected',
-      scopes: ['read', 'write', 'publish_content'],
-      followers: '10,000+'
-    };
-
-    let updated: SocialAccount[];
-    if (existingIndex >= 0) {
-      updated = [...connectedAccounts];
-      updated[existingIndex] = updatedAccount;
-    } else {
-      updated = [...connectedAccounts, updatedAccount];
-    }
-
-    saveSocialAccounts(updated);
-    setIsConnecting(false);
-    setIsConnectModalOpen(false);
-    setManualAccountHandle('');
-    setManualAccessToken('');
-
-    if (typeof window !== 'undefined' && (window as any).ralionDesktop?.showNotification) {
-      (window as any).ralionDesktop.showNotification('Social Account Connected', `Successfully authenticated ${config.label} account!`);
+      const res = await fetch(`/api/oauth/${providerKey}/connect`, { credentials: 'include' });
+      const data = await res.json();
+      if (data.success && data.authorizationUrl) {
+        setIsConnectModalOpen(false);
+        // Redirect to real OAuth consent page
+        window.location.href = data.authorizationUrl;
+      } else {
+        alert(`Connection failed: ${data.error || 'Unknown error'}`);
+        setIsConnecting(false);
+      }
+    } catch (err: any) {
+      alert(`Failed to initiate OAuth: ${err.message}`);
+      setIsConnecting(false);
     }
   };
 
-  const handleDisconnectAccount = (providerKey: string) => {
-    const updated = connectedAccounts.filter(a => a.provider !== providerKey);
-    saveSocialAccounts(updated);
+  // ── Disconnect account (remove from Supabase) ─────────────────────────────
+  const handleDisconnectAccount = async (providerKey: string) => {
+    try {
+      await fetch(`/api/oauth/${providerKey}/disconnect`, { method: 'DELETE', credentials: 'include' });
+    } catch (e) {
+      console.warn('[Growth] Disconnect API call failed, removing locally:', e);
+    }
+    setConnectedAccounts(prev => prev.filter(a => a.provider !== providerKey));
+  };
+
+  // ── Sync analytics from real platform APIs ────────────────────────────────
+  const handleSyncAccount = async (providerKey: string) => {
+    setIsSyncing(providerKey);
+    try {
+      const res = await fetch(`/api/oauth/${providerKey}/sync`, { method: 'POST', credentials: 'include' });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.posts) && data.posts.length > 0) {
+        // Merge real posts into the posts list (avoid duplicates)
+        setPosts(prev => {
+          const existingIds = new Set(prev.map(p => p.id));
+          const newPosts: ContentPost[] = data.posts
+            .filter((p: any) => !existingIds.has(p.id))
+            .map((p: any) => ({
+              id: p.id,
+              title: p.title,
+              body: p.body,
+              platform: providerKey as ContentPost['platform'],
+              hashtags: [],
+              status: 'published' as const,
+              publishedAt: p.publishedAt,
+              engagement: p.engagement || { likes: 0, shares: 0, reach: 0, comments: 0 },
+              mediaUrl: undefined,
+            }));
+          return [...newPosts, ...prev];
+        });
+        setOauthAlert({ type: 'success', message: `✅ Synced ${data.posts.length} posts from ${providerKey}` });
+        setTimeout(() => setOauthAlert(null), 5000);
+      }
+    } catch (err: any) {
+      console.error('[Growth] Sync failed:', err);
+    } finally {
+      setIsSyncing(null);
+    }
   };
 
   const handleCopyText = (id: string, text: string) => {
@@ -485,24 +538,46 @@ export default function GrowthPage() {
     setActiveTab('CONTENT');
   };
 
-  // Publish Post immediately to connected accounts
-  const publishPostNow = (postId: string) => {
-    setPosts(prev => prev.map(p => {
-      if (p.id === postId) {
-        return {
-          ...p,
-          status: 'published',
-          publishedAt: new Date().toLocaleString(),
-          engagement: {
-            likes: Math.floor(Math.random() * 50) + 15,
-            shares: Math.floor(Math.random() * 20) + 5,
-            reach: Math.floor(Math.random() * 1200) + 300,
-            comments: Math.floor(Math.random() * 10) + 2
-          }
-        };
+  // ── Real Publish: POST to platform API ───────────────────────────────────
+  const publishPostNow = async (postId: string) => {
+    const post = posts.find(p => p.id === postId);
+    if (!post) return;
+
+    setPublishingPostId(postId);
+    try {
+      const res = await fetch(`/api/oauth/${post.platform}/publish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          content: `${post.body}\n\n${post.hashtags?.join(' ') || ''}`.trim(),
+          imageUrl: post.mediaType === 'image' ? post.mediaUrl : undefined,
+        }),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        setPosts(prev => prev.map(p =>
+          p.id === postId
+            ? { ...p, status: 'published', publishedAt: data.publishedAt || new Date().toLocaleString() }
+            : p
+        ));
+        setOauthAlert({ type: 'success', message: `✅ Published to ${post.platform}! ${data.postUrl ? `View: ${data.postUrl}` : ''}` });
+        setTimeout(() => setOauthAlert(null), 8000);
+      } else if (data.tokenExpired) {
+        setOauthAlert({ type: 'error', message: `❌ ${post.platform} token expired. Please reconnect your account.` });
+        setTimeout(() => setOauthAlert(null), 8000);
+        loadConnectedAccounts();
+      } else {
+        setOauthAlert({ type: 'error', message: `❌ Publish failed: ${data.error}` });
+        setTimeout(() => setOauthAlert(null), 8000);
       }
-      return p;
-    }));
+    } catch (err: any) {
+      setOauthAlert({ type: 'error', message: `❌ Publish error: ${err.message}` });
+      setTimeout(() => setOauthAlert(null), 6000);
+    } finally {
+      setPublishingPostId(null);
+    }
   };
 
   // Create Campaign
@@ -572,6 +647,18 @@ export default function GrowthPage() {
 
   return (
     <div className="flex flex-col gap-6 max-w-7xl mx-auto pb-12">
+      {/* OAuth Alert Banner */}
+      {oauthAlert && (
+        <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border text-xs font-semibold animate-in slide-in-from-top-2 ${
+          oauthAlert.type === 'success'
+            ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
+            : 'bg-red-950/60 border-red-500/40 text-red-300'
+        }`}>
+          {oauthAlert.message}
+          <button onClick={() => setOauthAlert(null)} className="ml-auto text-zinc-400 hover:text-white">✕</button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-5">
         <div>
@@ -588,7 +675,8 @@ export default function GrowthPage() {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setIsConnectModalOpen(true)} className="gap-1.5 border-zinc-700 text-xs">
-            <Globe className="w-3.5 h-3.5 text-blue-400" /> Connected Accounts ({connectedAccounts.length})
+            <Globe className="w-3.5 h-3.5 text-blue-400" />
+            {isLoadingAccounts ? 'Loading...' : `Connected Accounts (${connectedAccounts.length})`}
           </Button>
           <Button variant="primary" size="sm" onClick={() => setIsCreateOpen(true)} className="gap-1.5 text-xs font-bold bg-blue-600 hover:bg-blue-700">
             <Plus className="w-4 h-4" /> Create Post
@@ -617,6 +705,7 @@ export default function GrowthPage() {
           </button>
         ))}
       </div>
+
 
       {/* ==================================== */}
       {/* 1. GENERATED CONTENT OUTPUT GALLERY TAB */}
