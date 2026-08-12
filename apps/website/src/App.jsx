@@ -38,6 +38,9 @@ import AILabs from './pages/AILabs';
 import Booking from './pages/Booking';
 import Contact from './pages/Contact';
 import USSDCaseStudy from './pages/USSDCaseStudy';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import DataProtection from './pages/DataProtection';
+import TermsOfService from './pages/TermsOfService';
 import Cursor from './components/ui/Cursor';
 import Preloader from './components/ui/Preloader';
 import Chatbot from '@/components/common/Chatbot';
@@ -131,9 +134,17 @@ function App() {
                 <Route path="/work/:id" element={<ProjectDetails />} />
                 <Route path="/ai-labs" element={<AILabs />} />
                 <Route path="/booking" element={<Booking />} />
-                <Route path="/booking/:serviceId" element={<Booking />} />
                 <Route path="/contact" element={<Contact />} />
                 <Route path="/case-study/ussd-web-gap" element={<USSDCaseStudy />} />
+
+                {/* Legal & Regulatory Compliance (BOCRA & Botswana DPA) */}
+                <Route path="/privacy" element={<PrivacyPolicy />} />
+                <Route path="/privacy-policy" element={<Navigate to="/privacy" replace />} />
+                <Route path="/data-protection" element={<DataProtection />} />
+                <Route path="/bocra" element={<Navigate to="/data-protection" replace />} />
+                <Route path="/bocra-compliance" element={<Navigate to="/data-protection" replace />} />
+                <Route path="/terms" element={<TermsOfService />} />
+                <Route path="/terms-of-service" element={<Navigate to="/terms" replace />} />
               </Routes>
             </main>
             <Footer />

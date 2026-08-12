@@ -93,9 +93,31 @@ const Footer = () => {
           </div>
         </div>
 
+        {/* Legal & Regulatory Compliance Strip */}
+        <div className="pt-6 pb-4 border-t border-white/10 flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
+          <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 text-white/70">
+            <Link to="/privacy" className="hover:text-emerald-400 transition-colors font-medium flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+              Privacy Policy (BOCRA Compliant)
+            </Link>
+            <span className="text-white/20">•</span>
+            <Link to="/data-protection" className="hover:text-emerald-400 transition-colors font-medium flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+              Botswana Data Protection Act (Act 32)
+            </Link>
+            <span className="text-white/20">•</span>
+            <Link to="/terms" className="hover:text-emerald-400 transition-colors font-medium">
+              Terms of Service
+            </Link>
+          </div>
+          <div className="text-[11px] text-white/40 font-mono text-center md:text-right">
+            Regulated under the Laws of Botswana • BOCRA ICT Compliant
+          </div>
+        </div>
+
         {/* Bottom Strip */}
-        <div className="flex flex-col sm:flex-row items-center justify-between pt-6 border-t border-white/10 gap-4 text-xs text-white/50">
-          <div>© 2014 - 2026 Ras Ali Labs. All rights reserved. Gaborone, Botswana.</div>
+        <div className="flex flex-col sm:flex-row items-center justify-between pt-4 border-t border-white/5 gap-4 text-xs text-white/50">
+          <div>© 2014 - 2026 Ras Ali Labs (Pty) Ltd. All rights reserved. Gaborone, Botswana.</div>
           <div className="flex gap-3">
             {socialLinks.map((social) => {
               const Icon = iconMap[social.icon] || Mail;

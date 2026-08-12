@@ -61,6 +61,64 @@ export default function AiPrivacySettings() {
 
         </CardContent>
       </Card>
+
+      {/* Botswana DPA & BOCRA Compliance Banner */}
+      <Card className="border-emerald-500/30 bg-emerald-950/10">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-white">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+              Botswana Data Protection Act & BOCRA Governance
+            </CardTitle>
+            <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold font-mono uppercase tracking-wider border border-emerald-500/30">
+              Act 32 (2018) Compliant
+            </span>
+          </div>
+          <CardDescription>
+            Ras Ali Labs and Ralion operate under the regulatory oversight of the Botswana Communications Regulatory Authority (BOCRA) and the Botswana Data Protection Act (Act No. 32 of 2018).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-zinc-300">
+            <div className="p-3.5 rounded-xl bg-zinc-900/80 border border-zinc-800">
+              <h5 className="font-bold text-white mb-1">Local Data Residency</h5>
+              <p className="text-[11px] text-zinc-400">Zero foreign cloud telemetry when running in offline on-premises desktop mode.</p>
+            </div>
+            <div className="p-3.5 rounded-xl bg-zinc-900/80 border border-zinc-800">
+              <h5 className="font-bold text-white mb-1">Statutory DPA Rights</h5>
+              <p className="text-[11px] text-zinc-400">Instant data access, rectification, export, and right-to-be-forgotten erasure.</p>
+            </div>
+            <div className="p-3.5 rounded-xl bg-zinc-900/80 border border-zinc-800">
+              <h5 className="font-bold text-white mb-1">Telecom Standards</h5>
+              <p className="text-[11px] text-zinc-400">Strict anti-spam and verified electronic communications gateway routing.</p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-zinc-800/80">
+            <span className="text-xs text-zinc-500">
+              Data Protection Officer: <a href="mailto:privacy@rasalilabs.com" className="text-emerald-400 hover:underline">privacy@rasalilabs.com</a>
+            </span>
+            <div className="flex items-center gap-3">
+              <a
+                href="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-semibold text-zinc-300 hover:text-emerald-400 underline transition-colors"
+              >
+                View Privacy Policy
+              </a>
+              <a
+                href="/data-protection"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-bold text-emerald-400 hover:text-emerald-300 underline transition-colors"
+              >
+                BOCRA & DPA Portal →
+              </a>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
