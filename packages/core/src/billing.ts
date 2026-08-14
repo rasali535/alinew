@@ -18,6 +18,14 @@ export const TIER_LIMITS: Record<LicenseTier, LicenseLimits> = {
     allowIndustryModules: false,
     allowCustomRoles: false
   },
+  STANDARD: {
+    maxUsers: 10,
+    maxStorageMb: 5120, // 5 GB
+    aiCreditsPerMonth: 1000,
+    allowWorkflows: true,
+    allowIndustryModules: false,
+    allowCustomRoles: false
+  },
   PROFESSIONAL: {
     maxUsers: 25,
     maxStorageMb: 10240, // 10 GB
