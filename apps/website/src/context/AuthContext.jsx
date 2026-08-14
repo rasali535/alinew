@@ -17,7 +17,7 @@ export const AuthProvider = ({ children }) => {
       setUser(session?.user ?? null);
       setLoading(false);
     }).catch(err => {
-      console.warn('Supabase getSession error (mock mode enabled):', err.message);
+      console.warn('Supabase getSession error:', err.message);
       setLoading(false);
     });
 
@@ -47,46 +47,71 @@ export const AuthProvider = ({ children }) => {
       closeAuthModal();
       return { data, error: null };
     } catch (error) {
-      // Fallback for demo environment if backend auth fails
-      if (email && password) {
-        const mockUser = {
-          id: 'usr_rasali_' + Math.random().toString(36).substring(2, 9),
-          email,
-          user_metadata: { full_name: email.split('@')[0], avatar_url: '' }
-        };
-        setUser(mockUser);
-        setSession({ user: mockUser, access_token: 'mock_token' });
-        closeAuthModal();
-        return { data: { user: mockUser }, error: null };
-      }
       return { data: null, error };
     }
   };
 
   const signUp = async (email, password, metadata = {}) => {
     try {
+      const redirectUrl = typeof window !== 'undefined'
+        ? `${window.location.origin}/account`
+        : 'https://rasalilabs.com/account';
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: metadata }
+        options: {
+          data: metadata,
+          emailRedirectTo: redirectUrl
+        }
+      });
+
+      if (error) throw error;
+
+      const requiresConfirmation = !data?.session;
+      if (!requiresConfirmation) {
+        closeAuthModal();
+      }
+
+      return { data, error: null, requiresConfirmation, email };
+    } catch (error) {
+      return { data: null, error, requiresConfirmation: false };
+    }
+  };
+
+  const resendConfirmation = async (email) => {
+    try {
+      const redirectUrl = typeof window !== 'undefined'
+        ? `${window.location.origin}/account`
+        : 'https://rasalilabs.com/account';
+
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email,
+        options: {
+          emailRedirectTo: redirectUrl
+        }
       });
       if (error) throw error;
-      closeAuthModal();
-      return { data, error: null };
+      return { error: null };
     } catch (error) {
-      // Fallback for demo environment
-      if (email && password) {
-        const mockUser = {
-          id: 'usr_rasali_' + Math.random().toString(36).substring(2, 9),
-          email,
-          user_metadata: { full_name: metadata.full_name || email.split('@')[0] }
-        };
-        setUser(mockUser);
-        setSession({ user: mockUser, access_token: 'mock_token' });
-        closeAuthModal();
-        return { data: { user: mockUser }, error: null };
-      }
-      return { data: null, error };
+      return { error };
+    }
+  };
+
+  const resetPassword = async (email) => {
+    try {
+      const redirectUrl = typeof window !== 'undefined'
+        ? `${window.location.origin}/account`
+        : 'https://rasalilabs.com/account';
+
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: redirectUrl
+      });
+      if (error) throw error;
+      return { error: null };
+    } catch (error) {
+      return { error };
     }
   };
 
@@ -113,6 +138,8 @@ export const AuthProvider = ({ children }) => {
         closeAuthModal,
         signIn,
         signUp,
+        resendConfirmation,
+        resetPassword,
         signOut
       }}
     >

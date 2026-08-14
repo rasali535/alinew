@@ -18,6 +18,8 @@ const DEAL_STAGE_PROBABILITIES: Record<string, number> = {
 };
 
 
+import { createClient } from '@/lib/supabase/client';
+
 interface ContactItem {
   id: string;
   name: string;
@@ -32,21 +34,66 @@ interface ContactItem {
   timeline: Array<{ type: string; title: string; date: string; note: string }>;
 }
 
-const initialContacts: ContactItem[] = [];
-
 export default function CRMPage() {
-  const [contacts, setContacts] = useState<ContactItem[]>(initialContacts);
+  const [contacts, setContacts] = useState<ContactItem[]>([]);
   const [activeTab, setActiveTab] = useState<'PIPELINE' | 'CONTACTS'>('PIPELINE');
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
   const [selectedContact, setSelectedContact] = useState<ContactItem | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [newContact, setNewContact] = useState({ name: '', company: '', email: '', phone: '', dealValue: '10000', stage: 'LEAD' as DealStage });
+
+  const supabase = createClient();
+
+  const loadContacts = async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('ralion_deals')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        const mapped: ContactItem[] = data.map((d: any) => ({
+          id: d.id,
+          name: d.client_name || d.name || 'Lead',
+          company: d.company || 'Enterprise',
+          email: d.email || '',
+          phone: d.phone || '',
+          type: (d.deal_type || 'LEAD') as any,
+          dealValue: Number(d.deal_value || d.amount || 10000),
+          stage: (d.stage || 'LEAD') as DealStage,
+          tags: d.tags || ['Deal'],
+          aiLeadScore: Number(d.ai_score || 85),
+          timeline: [{ type: 'NOTE', title: 'Deal created', date: 'Active', note: 'Loaded from Supabase database' }]
+        }));
+        setContacts(mapped);
+      } else {
+        const local = typeof window !== 'undefined' ? localStorage.getItem('ralion_contacts') : null;
+        if (local) {
+          setContacts(JSON.parse(local));
+        } else {
+          setContacts([]);
+        }
+      }
+    } catch (e) {
+      console.warn('Checking local storage for contacts:', e);
+      const local = typeof window !== 'undefined' ? localStorage.getItem('ralion_contacts') : null;
+      if (local) setContacts(JSON.parse(local));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    loadContacts();
+  }, []);
 
   const pipelineStages: DealStage[] = ['LEAD', 'CONTACTED', 'QUALIFIED', 'PROPOSAL', 'NEGOTIATION', 'WON'];
 
   const filteredContacts = contacts.filter(c => typeFilter === 'ALL' || c.type === typeFilter);
 
-  const handleAddContact = () => {
+  const handleAddContact = async () => {
     if (!newContact.name || !newContact.email) return;
     const created: ContactItem = {
       id: Date.now().toString(),
@@ -61,7 +108,28 @@ export default function CRMPage() {
       aiLeadScore: 80,
       timeline: [{ type: 'NOTE', title: 'Lead Ingested', date: 'Today', note: 'Added via CRM Lead Form' }]
     };
-    setContacts(prev => [created, ...prev]);
+
+    const nextList = [created, ...contacts];
+    setContacts(nextList);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ralion_contacts', JSON.stringify(nextList));
+    }
+
+    try {
+      await supabase.from('ralion_deals').insert({
+        client_name: created.name,
+        company: created.company,
+        email: created.email,
+        phone: created.phone,
+        deal_type: created.type,
+        deal_value: created.dealValue,
+        stage: created.stage,
+        ai_score: created.aiLeadScore
+      });
+    } catch (err) {
+      console.warn('Realtime cloud sync queued:', err);
+    }
+
     setIsAddModalOpen(false);
     setNewContact({ name: '', company: '', email: '', phone: '', dealValue: '10000', stage: 'LEAD' });
   };

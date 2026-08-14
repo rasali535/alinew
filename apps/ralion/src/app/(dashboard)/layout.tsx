@@ -18,6 +18,9 @@ export default function DashboardLayout({
   const [currentUser, setCurrentUser] = useState<{
     fullName: string | null;
     email: string | null;
+    orgName?: string | null;
+    branchName?: string | null;
+    tier?: string | null;
   } | null>(null);
 
   React.useEffect(() => {
@@ -28,13 +31,16 @@ export default function DashboardLayout({
     });
   }, []);
 
+  const organizationName = currentUser?.orgName || 'Ras Ali Labs Workspace';
+  const branchName = currentUser?.branchName || 'Main HQ Branch';
+
   return (
     <ProductAccessGuard>
       <div className="flex h-screen bg-zinc-950 text-zinc-100 overflow-hidden">
         {/* Universal Sidebar */}
         <Sidebar
           currentPath={pathname}
-          orgName="Ras Ali Enterprises"
+          orgName={organizationName}
           onNavigate={(href) => {
             const isDesktop = typeof window !== 'undefined' && ((window as any).__RALION_DESKTOP__ || window.location.protocol === 'file:');
             if (isDesktop) {
@@ -52,11 +58,11 @@ export default function DashboardLayout({
           <Header
             user={{
               name: currentUser?.fullName || 'User',
-              role: 'ORGANIZATION_OWNER',
+              role: currentUser?.tier === 'ENTERPRISE' ? 'ENTERPRISE_ADMIN' : 'ORGANIZATION_OWNER',
               email: currentUser?.email || 'user@example.com'
             }}
-            orgName="Ras Ali Enterprises"
-            activeBranch="Gaborone Main Branch"
+            orgName={organizationName}
+            activeBranch={branchName}
             unreadNotifications={0}
             onOpenMariAI={() => setIsMariDrawerOpen(true)}
           />

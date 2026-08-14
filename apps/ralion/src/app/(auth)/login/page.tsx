@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, Button, Badge } from '@ralion/ui';
-import { Sparkles, Mail, Lock, ArrowRight, ShieldCheck, Building2, AlertCircle } from 'lucide-react';
+import { Sparkles, Mail, Lock, ArrowRight, ShieldCheck, Building2, AlertCircle, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { AuthService } from '@/lib/services/auth.service';
 
 function LoginForm() {
@@ -15,17 +15,47 @@ function LoginForm() {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isUnconfirmed, setIsUnconfirmed] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
+    setIsUnconfirmed(false);
+    setResendSuccess(false);
+
     try {
       await AuthService.login(email, password);
       window.location.href = redirectTarget;
     } catch (err: any) {
-      setError(err.message || 'Invalid login credentials');
+      const msg = err.message || 'Invalid login credentials';
+      if (msg.toLowerCase().includes('email not confirmed')) {
+        setIsUnconfirmed(true);
+        setError('Your email address has not been confirmed yet. Please verify via the link sent to your inbox.');
+      } else {
+        setError(msg);
+      }
       setIsLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (!email) {
+      setError('Please enter your email address to resend the confirmation link.');
+      return;
+    }
+    setResendLoading(true);
+    setResendSuccess(false);
+    try {
+      await AuthService.resendConfirmationEmail(email);
+      setResendSuccess(true);
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || 'Failed to resend confirmation email.');
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -64,9 +94,29 @@ function LoginForm() {
         </CardHeader>
         <CardContent>
           {error && (
-            <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 flex items-start gap-2 text-red-400 text-xs">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <p>{error}</p>
+            <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 space-y-2 text-red-400 text-xs">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <p>{error}</p>
+              </div>
+              {isUnconfirmed && (
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  disabled={resendLoading}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-400 hover:text-blue-300 underline mt-1"
+                >
+                  <RefreshCw className={`w-3 h-3 ${resendLoading ? 'animate-spin' : ''}`} />
+                  {resendLoading ? 'Sending...' : 'Resend confirmation email to this address'}
+                </button>
+              )}
+            </div>
+          )}
+
+          {resendSuccess && (
+            <div className="mb-4 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2 text-emerald-400 text-xs">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <p>Confirmation email sent! Please check your inbox and spam folder.</p>
             </div>
           )}
           <form onSubmit={handleLogin} className="flex flex-col gap-4">

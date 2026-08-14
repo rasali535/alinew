@@ -1,4 +1,4 @@
-// Enterprise Mock & Navigation Data for Ras Ali Labs
+// Enterprise Production Navigation & Content Data for Ras Ali Labs
 export const navLinks = [
   { name: 'Home', href: '/' },
   {

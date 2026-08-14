@@ -5,6 +5,9 @@ export interface UserProfile {
   fullName: string | null;
   avatarUrl: string | null;
   email: string | null;
+  orgName?: string | null;
+  branchName?: string | null;
+  tier?: string | null;
 }
 
 export class AuthService {
@@ -22,6 +25,95 @@ export class AuthService {
       throw error;
     }
     return data;
+  }
+
+  /**
+   * Register new user account with enterprise metadata
+   */
+  static async register(
+    email: string,
+    password: string,
+    metadata: {
+      fullName?: string;
+      orgName?: string;
+      branchName?: string;
+      tier?: string;
+    } = {}
+  ) {
+    const isDesktop = typeof window !== 'undefined' && ((window as any).__RALION_DESKTOP__ || window.location.protocol === 'file:');
+    const redirectUrl = isDesktop
+      ? 'ralion://auth-callback'
+      : typeof window !== 'undefined'
+      ? `${window.location.origin}/ralion/dashboard`
+      : 'https://rasalilabs.com/ralion/dashboard';
+
+    const { data, error } = await this.supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: metadata.fullName,
+          org_name: metadata.orgName,
+          branch_name: metadata.branchName,
+          tier: metadata.tier || 'COMMUNITY',
+        },
+        emailRedirectTo: redirectUrl,
+      },
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    return data;
+  }
+
+  /**
+   * Resend signup email confirmation link
+   */
+  static async resendConfirmationEmail(email: string) {
+    const isDesktop = typeof window !== 'undefined' && ((window as any).__RALION_DESKTOP__ || window.location.protocol === 'file:');
+    const redirectUrl = isDesktop
+      ? 'ralion://auth-callback'
+      : typeof window !== 'undefined'
+      ? `${window.location.origin}/ralion/dashboard`
+      : 'https://rasalilabs.com/ralion/dashboard';
+
+    const { error } = await this.supabase.auth.resend({
+      type: 'signup',
+      email,
+      options: {
+        emailRedirectTo: redirectUrl,
+      },
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    return true;
+  }
+
+  /**
+   * Send password reset recovery email
+   */
+  static async resetPassword(email: string) {
+    const isDesktop = typeof window !== 'undefined' && ((window as any).__RALION_DESKTOP__ || window.location.protocol === 'file:');
+    const redirectUrl = isDesktop
+      ? 'ralion://reset-password'
+      : typeof window !== 'undefined'
+      ? `${window.location.origin}/ralion/login`
+      : 'https://rasalilabs.com/ralion/login';
+
+    const { error } = await this.supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: redirectUrl,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    return true;
   }
 
   /**
@@ -158,6 +250,9 @@ export class AuthService {
         fullName: profile?.full_name || user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'User',
         avatarUrl: profile?.avatar_url || user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
         email: user.email || null,
+        orgName: user.user_metadata?.org_name || null,
+        branchName: user.user_metadata?.branch_name || null,
+        tier: user.user_metadata?.tier || null,
       };
     } catch {
       return null;

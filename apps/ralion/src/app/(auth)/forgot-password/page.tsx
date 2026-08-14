@@ -3,20 +3,27 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, Button } from '@ralion/ui';
-import { Mail, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Mail, ArrowLeft, CheckCircle2, AlertCircle } from 'lucide-react';
+import { AuthService } from '@/lib/services/auth.service';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
+    setError(null);
+    try {
+      await AuthService.resetPassword(email);
       setSubmitted(true);
-    }, 500);
+    } catch (err: any) {
+      setError(err.message || 'Failed to send password reset email. Please verify your address.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -37,6 +44,13 @@ export default function ForgotPasswordPage() {
           <CardDescription>Enter your email to receive password recovery instructions</CardDescription>
         </CardHeader>
         <CardContent>
+          {error && (
+            <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 flex items-start gap-2 text-red-400 text-xs">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <p>{error}</p>
+            </div>
+          )}
+
           {!submitted ? (
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
               <div>

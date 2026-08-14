@@ -81,7 +81,9 @@ const Account = () => {
               <Building2 size={20} />
             </div>
             <h3 className="text-lg font-bold text-white mb-1">Active Organization</h3>
-            <p className="text-brand-gold text-xs font-semibold mb-3">Ras Ali Labs Enterprise Tenant</p>
+            <p className="text-brand-gold text-xs font-semibold mb-3">
+              {user.user_metadata?.org_name || user.user_metadata?.company_name || 'My Organization Workspace'}
+            </p>
             <p className="text-white/60 text-xs leading-relaxed mb-6">
               Row-Level Security (RLS) active on Supabase PostgreSQL.
             </p>
@@ -99,9 +101,11 @@ const Account = () => {
               <ShieldCheck size={20} />
             </div>
             <h3 className="text-lg font-bold text-white mb-1">Subscription Plan</h3>
-            <p className="text-emerald-400 text-xs font-semibold mb-3">Community Plan (Free Forever)</p>
+            <p className="text-emerald-400 text-xs font-semibold mb-3">
+              {user.user_metadata?.tier ? `${user.user_metadata.tier} Tier` : 'Community Plan (Free Forever)'}
+            </p>
             <p className="text-white/60 text-xs leading-relaxed mb-6">
-              Includes Ralion OS core, 1,000 Mari AI executions, and Supabase auth.
+              Includes Ralion OS core, Mari AI executions, and Supabase auth.
             </p>
             <Link
               to="/products/ralion#pricing"

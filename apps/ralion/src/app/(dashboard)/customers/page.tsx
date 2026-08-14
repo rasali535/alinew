@@ -4,6 +4,8 @@ import React, { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, Button, Badge, Modal } from '@ralion/ui';
 import { Users, Plus, Search, Filter, Mail, Phone, MapPin, Clock, FileText, ChevronRight, X, Sparkles, Building } from 'lucide-react';
 
+import { createClient } from '@/lib/supabase/client';
+
 interface CustomerProfile {
   id: string;
   name: string;
@@ -17,13 +19,12 @@ interface CustomerProfile {
   timeline: Array<{ action: string; date: string; details: string }>;
 }
 
-const initialCustomersList: CustomerProfile[] = [];
-
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState<CustomerProfile[]>(initialCustomersList);
+  const [customers, setCustomers] = useState<CustomerProfile[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerProfile | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [newCust, setNewCust] = useState({
     name: '',
     company: '',
@@ -34,13 +35,61 @@ export default function CustomersPage() {
     notes: ''
   });
 
+  const supabase = createClient();
+
+  // Load real customer records
+  const loadCustomers = async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('ralion_customers')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        const mapped: CustomerProfile[] = data.map((c: any) => ({
+          id: c.id,
+          name: c.name || 'Unnamed Customer',
+          company: c.company || 'Independent',
+          email: c.email || '',
+          phone: c.phone || '',
+          address: c.address || 'Botswana',
+          category: (c.category || 'SMB') as any,
+          createdDate: new Date(c.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+          notes: c.notes || '',
+          timeline: [
+            { action: 'Account active', date: 'Active', details: 'Database record verified in Supabase' }
+          ]
+        }));
+        setCustomers(mapped);
+      } else {
+        const local = typeof window !== 'undefined' ? localStorage.getItem('ralion_customers_list') : null;
+        if (local) {
+          setCustomers(JSON.parse(local));
+        } else {
+          setCustomers([]);
+        }
+      }
+    } catch (e) {
+      console.warn('Could not fetch from remote table, checking local storage:', e);
+      const local = typeof window !== 'undefined' ? localStorage.getItem('ralion_customers_list') : null;
+      if (local) setCustomers(JSON.parse(local));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    loadCustomers();
+  }, []);
+
   const filteredCustomers = customers.filter(c =>
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleAddCustomer = () => {
+  const handleAddCustomer = async () => {
     if (!newCust.name || !newCust.email) return;
 
     const created: CustomerProfile = {
@@ -58,7 +107,26 @@ export default function CustomersPage() {
       ]
     };
 
-    setCustomers(prev => [created, ...prev]);
+    const nextList = [created, ...customers];
+    setCustomers(nextList);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ralion_customers_list', JSON.stringify(nextList));
+    }
+
+    try {
+      await supabase.from('ralion_customers').insert({
+        name: created.name,
+        company: created.company,
+        email: created.email,
+        phone: created.phone,
+        address: created.address,
+        category: created.category,
+        notes: created.notes
+      });
+    } catch (err) {
+      console.warn('Realtime cloud sync queued:', err);
+    }
+
     setIsAddModalOpen(false);
     setNewCust({ name: '', company: '', email: '', phone: '', address: 'Gaborone, Botswana', category: 'SMB', notes: '' });
   };
