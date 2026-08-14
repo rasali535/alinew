@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, Button, Badge } from '@ralion/ui';
-import { Sparkles, Mail, Lock, ArrowRight, ShieldCheck, Building2, AlertCircle, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { Sparkles, Mail, Lock, ArrowRight, ShieldCheck, Building2, AlertCircle, RefreshCw, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { AuthService } from '@/lib/services/auth.service';
 
 function LoginForm() {
@@ -18,6 +18,8 @@ function LoginForm() {
   const [isUnconfirmed, setIsUnconfirmed] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [resendSuccess, setResendSuccess] = useState(false);
+
+  const platformUrl = process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com';
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,6 +74,16 @@ function LoginForm() {
 
   return (
     <div className="min-h-screen w-full bg-zinc-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      {/* Top Left Exit Link to Ras Ali Labs */}
+      <a
+        href={platformUrl}
+        title="Return to Ras Ali Labs Website"
+        className="absolute top-6 left-6 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900/80 border border-zinc-800 text-xs font-semibold text-zinc-400 hover:text-white hover:border-zinc-700 transition-all z-20 shadow-sm"
+      >
+        <ArrowLeft className="w-3.5 h-3.5 text-amber-400" />
+        <span>Back to Ras Ali Labs</span>
+      </a>
+
       {/* Ambient background glow */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-blue-600/10 blur-[120px] rounded-full pointer-events-none" />
 

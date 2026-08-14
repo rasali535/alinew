@@ -31,6 +31,7 @@ const Onboarding = () => {
   const [companySize, setCompanySize] = useState('1-10');
   const [country, setCountry] = useState('Botswana');
   const [businessGoals, setBusinessGoals] = useState('Automate operations & CRM');
+  const [selectedTier, setSelectedTier] = useState('STANDARD');
 
   // Selected Modules (Checkboxes)
   const [selectedModules, setSelectedModules] = useState({
@@ -93,13 +94,18 @@ const Onboarding = () => {
       return;
     }
 
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ralion_user_tier', selectedTier);
+    }
+
     setLoading(true);
     analytics.trackConversion('onboarding_4step_complete', {
       companyName,
       industry,
       companySize,
       country,
-      selectedModules
+      selectedModules,
+      selectedTier
     });
 
     marketing.triggerSignupLifecycle(user.email, companyName);
@@ -327,10 +333,43 @@ const Onboarding = () => {
               Ready to initialize tenant <strong className="text-white">{companyName || 'My Organization'}</strong> on Supabase PostgreSQL.
             </p>
 
+            {/* Select Subscription Tier */}
+            <div className="max-w-md mx-auto text-left space-y-2">
+              <label className="block text-white/70 text-xs font-semibold">Select License Tier</label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { id: 'COMMUNITY', name: 'Community', price: 'Free', badge: 'Core' },
+                  { id: 'STANDARD', name: 'Standard', price: '$1/day or $19/mo', badge: 'Most Affordable' },
+                  { id: 'PROFESSIONAL', name: 'Professional', price: '$49/mo', badge: 'Full Power' },
+                  { id: 'ENTERPRISE', name: 'Enterprise', price: 'Custom', badge: 'SSO' },
+                ].map((t) => (
+                  <div
+                    key={t.id}
+                    onClick={() => setSelectedTier(t.id)}
+                    className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                      selectedTier === t.id
+                        ? 'border-brand-gold bg-brand-gold/15 text-white shadow-md'
+                        : 'border-white/10 bg-black/40 text-white/70 hover:border-white/20'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <span>{t.name}</span>
+                      <span className="text-[9px] text-brand-gold font-mono">{t.badge}</span>
+                    </div>
+                    <div className="text-[11px] text-white/60 mt-0.5">{t.price}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="bg-black/40 border border-white/10 p-5 rounded-2xl text-left max-w-md mx-auto text-xs space-y-2 text-white/80">
               <div className="flex justify-between">
                 <span>Organization:</span>
                 <span className="font-bold text-brand-gold">{companyName || 'My Organization'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Selected Tier:</span>
+                <span className="text-amber-400 font-bold">{selectedTier} Plan</span>
               </div>
               <div className="flex justify-between">
                 <span>Industry & Goals:</span>

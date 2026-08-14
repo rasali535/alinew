@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Bell, Sparkles, User, MapPin } from 'lucide-react';
+import { Search, Bell, Sparkles, User, MapPin, ArrowLeft, LogOut } from 'lucide-react';
 import { Button } from './Button';
 import { Badge } from './Badge';
 
@@ -10,6 +10,8 @@ export interface HeaderProps {
   orgName?: string;
   activeBranch?: string;
   unreadNotifications?: number;
+  exitUrl?: string;
+  onExit?: () => void;
   onOpenSearch?: () => void;
   onOpenMariAI?: () => void;
   onLogout?: () => void;
@@ -22,6 +24,8 @@ export const Header: React.FC<HeaderProps> = ({
   orgName,
   activeBranch = "Main Branch",
   unreadNotifications,
+  exitUrl = "https://rasalilabs.com",
+  onExit,
   onOpenSearch,
   onOpenMariAI,
   onLogout
@@ -31,18 +35,38 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="h-16 border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-xl px-6 flex items-center justify-between sticky top-0 z-30">
-      {/* Search Input Bar */}
-      <div className="flex items-center gap-4 w-96">
-        <button
-          onClick={onOpenSearch}
-          className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-400 hover:border-zinc-700 transition-colors shadow-inner"
+      {/* Left Area: Exit Button & Search */}
+      <div className="flex items-center gap-3">
+        {/* Back / Exit Button */}
+        <a
+          href={exitUrl}
+          onClick={(e) => {
+            if (onExit) {
+              e.preventDefault();
+              onExit();
+            }
+          }}
+          title="Return to Ras Ali Labs Website"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900/90 border border-zinc-800 text-xs font-semibold text-zinc-300 hover:text-white hover:border-amber-500/50 hover:bg-zinc-800 transition-all shadow-sm group shrink-0"
         >
-          <div className="flex items-center gap-2">
-            <Search className="w-3.5 h-3.5 text-zinc-500" />
-            <span>Search contacts, deals, tasks, docs...</span>
-          </div>
-          <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 text-[10px] font-mono text-zinc-500 border border-zinc-700">⌘K</kbd>
-        </button>
+          <ArrowLeft className="w-3.5 h-3.5 text-amber-400 group-hover:-translate-x-0.5 transition-transform" />
+          <span className="hidden sm:inline font-medium">Back to Ras Ali Labs</span>
+          <span className="sm:hidden">Exit</span>
+        </a>
+
+        {/* Search Input Bar */}
+        <div className="flex items-center gap-4 w-72 lg:w-96">
+          <button
+            onClick={onOpenSearch}
+            className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-400 hover:border-zinc-700 transition-colors shadow-inner"
+          >
+            <div className="flex items-center gap-2">
+              <Search className="w-3.5 h-3.5 text-zinc-500" />
+              <span>Search contacts, deals, tasks...</span>
+            </div>
+            <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 text-[10px] font-mono text-zinc-500 border border-zinc-700">⌘K</kbd>
+          </button>
+        </div>
       </div>
 
       {/* Right Controls */}

@@ -11,6 +11,7 @@ import {
 import { AuthService } from '@/lib/services/auth.service';
 import { createClient } from '@/lib/supabase/client';
 import { callMariAiApi } from '@ralion/ai';
+import { TierAccessGate } from '@/components/TierAccessGate';
 
 export interface ContentPost {
   id: string;
@@ -454,6 +455,79 @@ function GrowthPageContent() {
               followers: 'Active',
             };
             accountsToCache.push(accObj);
+
+            // If provider is Facebook/Meta, query Graph API for real Pages
+            if (provKey === 'facebook' && session.provider_token) {
+              try {
+                const fbRes = await fetch(`https://graph.facebook.com/v19.0/me/accounts?fields=id,name,access_token,category,followers_count,picture{url}&access_token=${session.provider_token}`);
+                if (fbRes.ok) {
+                  const fbData = await fbRes.json();
+                  if (Array.isArray(fbData.data) && fbData.data.length > 0) {
+                    for (const page of fbData.data) {
+                      const pageAccount: SocialAccount = {
+                        id: `fb-page-${page.id}`,
+                        provider: 'facebook',
+                        label: page.name || 'Facebook Business Page',
+                        handle: `@${(page.name || 'facebook').toLowerCase().replace(/\s+/g, '_')}`,
+                        connectedAt: 'Today',
+                        status: 'connected',
+                        scopes: ['pages_show_list', 'pages_manage_posts', 'pages_read_engagement'],
+                        avatarUrl: page.picture?.data?.url || null,
+                        followers: page.followers_count ? page.followers_count.toLocaleString() : 'Active Page',
+                      };
+                      accountsToCache.push(pageAccount);
+
+                      // Save page token to Supabase
+                      await supabase.from('social_account_tokens').upsert({
+                        user_id: session.user.id,
+                        provider: 'facebook',
+                        access_token: page.access_token,
+                        account_label: page.name,
+                        account_handle: pageAccount.handle,
+                        avatar_url: pageAccount.avatarUrl,
+                        followers_count: page.followers_count || 0,
+                        status: 'connected',
+                        updated_at: new Date().toISOString(),
+                      }, { onConflict: 'user_id,provider' });
+
+                      // Fetch real posts for this Facebook page
+                      try {
+                        const postsRes = await fetch(`https://graph.facebook.com/v19.0/${page.id}/posts?fields=id,message,created_time,full_picture,shares,reactions.summary(true),comments.summary(true)&limit=10&access_token=${page.access_token}`);
+                        if (postsRes.ok) {
+                          const postsData = await postsRes.json();
+                          if (Array.isArray(postsData.data)) {
+                            const realPosts: ContentPost[] = postsData.data.map((p: any) => ({
+                              id: `fb-post-${p.id}`,
+                              title: p.message ? p.message.slice(0, 50) + '...' : 'Facebook Update',
+                              body: p.message || '',
+                              platform: 'facebook',
+                              hashtags: ['#FacebookLive'],
+                              status: 'published',
+                              publishedAt: new Date(p.created_time).toLocaleDateString(),
+                              mediaUrl: p.full_picture,
+                              mediaType: p.full_picture ? 'image' : undefined,
+                              engagement: {
+                                likes: p.reactions?.summary?.total_count || 0,
+                                shares: p.shares?.count || 0,
+                                reach: (p.reactions?.summary?.total_count || 0) * 12,
+                                comments: p.comments?.summary?.total_count || 0,
+                              }
+                            }));
+                            if (realPosts.length > 0) {
+                              setPosts(prev => [...realPosts, ...prev.filter(x => !realPosts.some(r => r.id === x.id))]);
+                            }
+                          }
+                        }
+                      } catch (pErr) {
+                        console.warn('[Growth] Facebook page posts query:', pErr);
+                      }
+                    }
+                  }
+                }
+              } catch (metaErr) {
+                console.warn('[Growth] Meta Graph API query:', metaErr);
+              }
+            }
 
             await supabase.from('social_account_tokens').upsert({
               user_id: session.user.id,
@@ -2143,12 +2217,18 @@ function GrowthPageContent() {
 
 export default function GrowthPage() {
   return (
-    <React.Suspense fallback={
-      <div className="min-h-screen w-full flex items-center justify-center p-8">
-        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    }>
-      <GrowthPageContent />
-    </React.Suspense>
+    <TierAccessGate
+      requiredTier="STANDARD"
+      featureName="Ralion Growth AI"
+      description="Ralion Growth AI powers Facebook Page ingestion, multi-channel social publishing, video reel generation, and AI marketing campaigns. Available starting with Standard Plan ($1/day) or Professional."
+    >
+      <React.Suspense fallback={
+        <div className="min-h-screen w-full flex items-center justify-center p-8">
+          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      }>
+        <GrowthPageContent />
+      </React.Suspense>
+    </TierAccessGate>
   );
 }

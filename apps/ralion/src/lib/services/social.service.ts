@@ -170,8 +170,10 @@ export const metaAdapter = {
   clientId: () => process.env.FACEBOOK_APP_ID || '',
   clientSecret: () => process.env.FACEBOOK_APP_SECRET || '',
   redirectUri: (provider: string) => `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/oauth/${provider}/callback`,
-  scopes: { facebook: ['public_profile', 'email'],
-    instagram: ['public_profile', 'email'] },
+  scopes: {
+    facebook: ['public_profile', 'email', 'pages_show_list', 'pages_read_engagement', 'pages_manage_posts', 'pages_read_user_content'],
+    instagram: ['public_profile', 'email', 'instagram_basic', 'instagram_content_publish', 'pages_show_list']
+  },
 
   getAuthUrl(state: string, provider: string = 'facebook'): string {
     const scopes = provider === 'instagram' ? this.scopes.instagram : this.scopes.facebook;

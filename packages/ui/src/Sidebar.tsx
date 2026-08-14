@@ -45,6 +45,7 @@ export interface SidebarProps {
   onNavigate: (href: string) => void;
   onOpenMariAI?: () => void;
   enabledModules?: string[];
+  tier?: 'COMMUNITY' | 'PROFESSIONAL' | 'ENTERPRISE' | string;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -52,9 +53,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   orgName = "Ralion Enterprise",
   onNavigate,
   onOpenMariAI,
-  enabledModules = ['workspace', 'mari', 'demos', 'customers', 'leads', 'crm', 'tasks', 'calendar', 'documents', 'reports', 'workflows', 'billing', 'growth', 'health', 'funeral', 'logistics', 'trade', 'marketplace', 'developer', 'enterprise', 'government']
+  enabledModules = ['workspace', 'mari', 'demos', 'customers', 'leads', 'crm', 'tasks', 'calendar', 'documents', 'reports', 'workflows', 'billing', 'growth', 'health', 'funeral', 'logistics', 'trade', 'marketplace', 'developer', 'enterprise', 'government'],
+  tier = 'COMMUNITY'
 }) => {
   const platformUrl = process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com';
+  const userTier = (tier || 'COMMUNITY').toUpperCase();
 
   const demoNav: SidebarItem[] = [
     { id: 'workspace', label: 'Ralion App Shell', href: '/ralion/workspace', icon: <Grid className="w-4 h-4 text-emerald-400" />, badge: 'Shell' },
@@ -69,28 +72,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'tasks', label: 'Tasks', href: '/ralion/tasks', icon: <CheckSquare className="w-4 h-4" /> },
     { id: 'calendar', label: 'Calendar', href: '/ralion/calendar', icon: <Calendar className="w-4 h-4" /> },
     { id: 'documents', label: 'Documents', href: '/ralion/documents', icon: <Folder className="w-4 h-4" /> },
-    { id: 'reports', label: 'Reports', href: '/ralion/reports', icon: <BarChart2 className="w-4 h-4 text-emerald-400" /> },
-    { id: 'workflows', label: 'No-Code Workflows', href: '/ralion/workflows', icon: <Zap className="w-4 h-4" /> },
-    { id: 'billing', label: 'Billing & Licenses', href: '/ralion/billing', icon: <CreditCard className="w-4 h-4" /> },
+    { id: 'reports', label: 'Reports & BI', href: '/ralion/reports', icon: <BarChart2 className="w-4 h-4 text-emerald-400" />, badge: userTier === 'COMMUNITY' ? 'PRO' : undefined },
+    { id: 'workflows', label: 'No-Code Workflows', href: '/ralion/workflows', icon: <Zap className="w-4 h-4" />, badge: userTier === 'COMMUNITY' ? 'PRO' : undefined },
+    { id: 'billing', label: 'Billing & Plans', href: '/ralion/billing', icon: <CreditCard className="w-4 h-4" /> },
   ];
 
   const growthNav: SidebarItem[] = [
-    { id: 'growth', label: 'Ralion Growth AI', href: '/ralion/growth', icon: <TrendingUp className="w-4 h-4" />, badge: 'AI' },
+    { id: 'growth', label: 'Ralion Growth AI', href: '/ralion/growth', icon: <TrendingUp className="w-4 h-4" />, badge: userTier === 'COMMUNITY' ? 'PRO' : 'AI' },
   ];
 
   const industryNav: SidebarItem[] = [
-    { id: 'health', label: 'Ralion Health', href: '/ralion/industry/health', icon: <HeartPulse className="w-4 h-4" />, isIndustryPlugin: true },
-    { id: 'funeral', label: 'Ralion Funeral', href: '/ralion/industry/funeral', icon: <Shield className="w-4 h-4" />, isIndustryPlugin: true },
-    { id: 'logistics', label: 'Ralion Logistics', href: '/ralion/industry/logistics', icon: <Truck className="w-4 h-4" />, isIndustryPlugin: true },
-    { id: 'trade', label: 'Ralion Trade', href: '/ralion/industry/trade', icon: <ShoppingBag className="w-4 h-4" />, isIndustryPlugin: true },
+    { id: 'health', label: 'Ralion Health', href: '/ralion/industry/health', icon: <HeartPulse className="w-4 h-4" />, isIndustryPlugin: true, badge: userTier !== 'ENTERPRISE' ? 'ENTERPRISE' : undefined },
+    { id: 'funeral', label: 'Ralion Funeral', href: '/ralion/industry/funeral', icon: <Shield className="w-4 h-4" />, isIndustryPlugin: true, badge: userTier !== 'ENTERPRISE' ? 'ENTERPRISE' : undefined },
+    { id: 'logistics', label: 'Ralion Logistics', href: '/ralion/industry/logistics', icon: <Truck className="w-4 h-4" />, isIndustryPlugin: true, badge: userTier !== 'ENTERPRISE' ? 'ENTERPRISE' : undefined },
+    { id: 'trade', label: 'Ralion Trade', href: '/ralion/industry/trade', icon: <ShoppingBag className="w-4 h-4" />, isIndustryPlugin: true, badge: userTier !== 'ENTERPRISE' ? 'ENTERPRISE' : undefined },
   ];
 
   const ecosystemNav: SidebarItem[] = [
     { id: 'integrations', label: 'Integration Hub', href: '/ralion/settings/integrations', icon: <Globe className="w-4 h-4 text-purple-400" />, badge: 'OAuth' },
     { id: 'marketplace', label: 'Marketplace', href: '/ralion/marketplace', icon: <Store className="w-4 h-4 text-purple-400" /> },
-    { id: 'developer', label: 'Developer Platform', href: '/ralion/developer', icon: <Code className="w-4 h-4 text-blue-400" /> },
-    { id: 'enterprise', label: 'Enterprise SSO', href: '/ralion/enterprise', icon: <Shield className="w-4 h-4 text-emerald-400" /> },
-    { id: 'government', label: 'Government Edition', href: '/ralion/government', icon: <Globe className="w-4 h-4 text-amber-400" /> },
+    { id: 'developer', label: 'Developer Platform', href: '/ralion/developer', icon: <Code className="w-4 h-4 text-blue-400" />, badge: userTier === 'COMMUNITY' ? 'PRO' : undefined },
+    { id: 'enterprise', label: 'Enterprise SSO', href: '/ralion/enterprise', icon: <Shield className="w-4 h-4 text-emerald-400" />, badge: userTier !== 'ENTERPRISE' ? 'ENTERPRISE' : undefined },
+    { id: 'government', label: 'Government Edition', href: '/ralion/government', icon: <Globe className="w-4 h-4 text-amber-400" />, badge: userTier !== 'ENTERPRISE' ? 'ENTERPRISE' : undefined },
   ];
 
   const renderNavSection = (items: SidebarItem[]) => {
@@ -134,10 +137,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <img src="/logo.png" alt="Ralion OS Logo" className="w-full h-full object-cover" />
           </div>
           <div className="flex flex-col">
-            <span className="font-extrabold text-sm text-white tracking-tight leading-none">Ralion Platform</span>
+            <div className="flex items-center gap-1.5">
+              <span className="font-extrabold text-sm text-white tracking-tight leading-none">Ralion Platform</span>
+            </div>
             <span className="text-[10px] text-zinc-500 font-medium tracking-wide mt-0.5">{orgName}</span>
           </div>
         </div>
+        <Badge
+          variant={userTier === 'ENTERPRISE' ? 'primary' : userTier === 'PROFESSIONAL' ? 'purple' : userTier === 'STANDARD' ? 'warning' : 'default'}
+          className="text-[9px] px-1.5 py-0 uppercase font-mono tracking-wider"
+        >
+          {userTier === 'ENTERPRISE' ? 'Enterprise' : userTier === 'PROFESSIONAL' ? 'Pro' : userTier === 'STANDARD' ? 'Standard' : 'Community'}
+        </Badge>
+      </div>
+
+      {/* Exit / Back to Ras Ali Labs Link */}
+      <div className="px-3 pt-3">
+        <a
+          href={platformUrl}
+          title="Return to Ras Ali Labs main portal"
+          className="flex items-center justify-between px-3 py-2 rounded-xl bg-zinc-900/60 border border-zinc-800/80 text-xs font-semibold text-zinc-300 hover:text-white hover:border-amber-500/40 hover:bg-zinc-800/80 transition-all group shadow-sm"
+        >
+          <div className="flex items-center gap-2">
+            <ArrowLeft className="w-3.5 h-3.5 text-amber-400 group-hover:-translate-x-0.5 transition-transform" />
+            <span>Back to Ras Ali Labs</span>
+          </div>
+          <span className="text-[10px] text-zinc-500 font-mono group-hover:text-amber-400">Portal</span>
+        </a>
       </div>
 
       {/* Navigation Groups */}
@@ -194,6 +220,55 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
+      {/* Plan Card (Community or Standard Upgrade) */}
+      {userTier === 'COMMUNITY' && (
+        <div className="p-3 border-t border-zinc-800/80 bg-gradient-to-b from-blue-950/20 to-zinc-950">
+          <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-600/10 via-purple-600/10 to-zinc-900 border border-blue-500/30 text-center">
+            <div className="flex items-center justify-center gap-1 text-[11px] font-bold text-white mb-0.5">
+              <Sparkles className="w-3 h-3 text-blue-400" />
+              Community Plan
+            </div>
+            <p className="text-[9px] text-zinc-400 leading-tight">
+              Unlock Starter Growth AI ($1/day) or Pro
+            </p>
+            <div className="mt-2 flex items-center gap-1.5">
+              <button
+                onClick={() => onNavigate('/ralion/billing?tier=standard')}
+                className="flex-1 py-1 px-1.5 rounded-lg bg-amber-500/20 border border-amber-500/40 hover:bg-amber-500/30 text-amber-300 text-[10px] font-bold transition-all"
+              >
+                Standard ($1/d)
+              </button>
+              <button
+                onClick={() => onNavigate('/ralion/billing?tier=professional')}
+                className="flex-1 py-1 px-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 hover:opacity-95 text-white text-[10px] font-bold transition-all shadow-md shadow-blue-500/20"
+              >
+                Pro ($49/mo)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {userTier === 'STANDARD' && (
+        <div className="p-3 border-t border-zinc-800/80 bg-gradient-to-b from-amber-950/20 to-zinc-950">
+          <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-600/10 via-zinc-900 to-zinc-950 border border-amber-500/30 text-center">
+            <div className="flex items-center justify-center gap-1 text-[11px] font-bold text-amber-300 mb-0.5">
+              <Sparkles className="w-3 h-3 text-amber-400" />
+              Standard Plan Active
+            </div>
+            <p className="text-[9px] text-zinc-400 leading-tight">
+              5 AI posts/day & 3 active workflows
+            </p>
+            <button
+              onClick={() => onNavigate('/ralion/billing')}
+              className="mt-2 w-full py-1 px-2 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 hover:opacity-95 text-white text-[10px] font-bold transition-all shadow-md shadow-blue-500/20"
+            >
+              Upgrade to Pro for Unlimited
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Mari AI Drawer Trigger */}
       <div className="p-3 border-t border-zinc-800/80 bg-zinc-900/40">
         <button
@@ -224,8 +299,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span className="text-[10px] text-zinc-500 font-mono">admin@rasalilabs.com</span>
           </div>
         </div>
-        <a href={platformUrl} target="_blank" rel="noreferrer" className="text-zinc-500 hover:text-zinc-300 p-1">
-          <ArrowLeft className="w-3.5 h-3.5 rotate-180" />
+        <a
+          href={platformUrl}
+          title="Exit Ralion OS & Return to Ras Ali Labs"
+          className="flex items-center gap-1 px-2 py-1 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-amber-500/50 hover:bg-zinc-800 text-zinc-400 hover:text-white text-[11px] font-semibold transition-all group"
+        >
+          <ArrowLeft className="w-3 h-3 text-amber-400 group-hover:-translate-x-0.5 transition-transform" />
+          <span>Exit</span>
         </a>
       </div>
     </aside>

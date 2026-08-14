@@ -25,7 +25,8 @@ export type Permission =
   | 'mari:ai_actions'
   | 'mari:knowledge_base';
 
-export type LicenseTier = 'COMMUNITY' | 'PROFESSIONAL' | 'ENTERPRISE';
+export type LicenseTier = 'COMMUNITY' | 'STANDARD' | 'PROFESSIONAL' | 'ENTERPRISE';
+export type BillingFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
 
 export interface UserProfile {
   uid: string;

@@ -4,19 +4,21 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, Button, Badge } from '@ralion/ui';
-import { Sparkles, Building2, User, Mail, Lock, Check, MapPin, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
+import { Sparkles, Building2, User, Mail, Lock, Check, MapPin, AlertCircle, CheckCircle2, RefreshCw, ArrowLeft } from 'lucide-react';
 import { AuthService } from '@/lib/services/auth.service';
 
 export default function RegisterPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
+  const platformUrl = process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com';
   const [formData, setFormData] = useState({
     orgName: '',
     branchName: '',
     adminName: '',
     email: '',
     password: '',
-    tier: 'COMMUNITY'
+    tier: 'STANDARD',
+    billingFrequency: 'MONTHLY' as 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY'
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +38,11 @@ export default function RegisterPage() {
     // Step 3 submission: execute real registration
     setIsLoading(true);
     try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('ralion_user_tier', formData.tier);
+        localStorage.setItem('ralion_billing_frequency', formData.billingFrequency);
+      }
+
       const data = await AuthService.register(formData.email, formData.password, {
         fullName: formData.adminName,
         orgName: formData.orgName,
@@ -149,6 +156,16 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen w-full bg-zinc-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      {/* Top Left Exit Link to Ras Ali Labs */}
+      <a
+        href={platformUrl}
+        title="Return to Ras Ali Labs Website"
+        className="absolute top-6 left-6 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900/80 border border-zinc-800 text-xs font-semibold text-zinc-400 hover:text-white hover:border-zinc-700 transition-all z-20 shadow-sm"
+      >
+        <ArrowLeft className="w-3.5 h-3.5 text-amber-400" />
+        <span>Back to Ras Ali Labs</span>
+      </a>
+
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-purple-600/10 blur-[120px] rounded-full pointer-events-none" />
 
       {/* Brand Header */}
@@ -253,23 +270,81 @@ export default function RegisterPage() {
 
             {step === 3 && (
               <div className="flex flex-col gap-3">
+                {/* Billing Frequency Selector for Paid Tiers */}
+                {(formData.tier === 'STANDARD' || formData.tier === 'PROFESSIONAL') && (
+                  <div className="p-2 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-between gap-1">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider pl-2">Billing:</span>
+                    <div className="flex items-center gap-1">
+                      {(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'] as const).map((freq) => (
+                        <button
+                          key={freq}
+                          type="button"
+                          onClick={() => setFormData({ ...formData, billingFrequency: freq })}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                            formData.billingFrequency === freq
+                              ? 'bg-blue-600 text-white shadow-sm'
+                              : 'text-zinc-400 hover:text-white bg-zinc-900'
+                          }`}
+                        >
+                          {freq === 'DAILY' ? 'Daily' : freq === 'WEEKLY' ? 'Weekly' : freq === 'MONTHLY' ? 'Monthly' : 'Yearly (-20%)'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {[
-                  { tier: 'COMMUNITY', price: '$0 / mo', desc: 'Free plan, up to 5 users, basic CRM & Tasks' },
-                  { tier: 'PROFESSIONAL', price: '$149 / mo', desc: 'Paid SaaS, up to 25 users, workflows & Mari AI' },
-                  { tier: 'ENTERPRISE', price: 'Custom', desc: 'Unlimited branches, custom modules & white label' },
+                  {
+                    tier: 'COMMUNITY',
+                    badge: 'Free Forever',
+                    price: '$0',
+                    interval: 'forever',
+                    desc: 'Core CRM, Customers & Tasks, 1,000 Mari AI requests/mo'
+                  },
+                  {
+                    tier: 'STANDARD',
+                    badge: 'Most Affordable',
+                    price: formData.billingFrequency === 'DAILY' ? '$1' : formData.billingFrequency === 'WEEKLY' ? '$5' : formData.billingFrequency === 'YEARLY' ? '$190' : '$19',
+                    interval: formData.billingFrequency === 'DAILY' ? '/ day' : formData.billingFrequency === 'WEEKLY' ? '/ week' : formData.billingFrequency === 'YEARLY' ? '/ yr' : '/ mo',
+                    desc: 'Affordable starter-pro: 5 AI posts/day, 3 automated workflows, 10,000 Mari AI executions'
+                  },
+                  {
+                    tier: 'PROFESSIONAL',
+                    badge: 'Full Power',
+                    price: formData.billingFrequency === 'DAILY' ? '$3' : formData.billingFrequency === 'WEEKLY' ? '$15' : formData.billingFrequency === 'YEARLY' ? '$490' : '$49',
+                    interval: formData.billingFrequency === 'DAILY' ? '/ day' : formData.billingFrequency === 'WEEKLY' ? '/ week' : formData.billingFrequency === 'YEARLY' ? '/ yr' : '/ mo',
+                    desc: 'Unlimited Growth AI, unlimited workflows, 50,000 Mari AI, advanced reports'
+                  },
+                  {
+                    tier: 'ENTERPRISE',
+                    badge: 'Multi-Branch',
+                    price: 'Custom',
+                    interval: 'billed annually',
+                    desc: 'Unlimited branches, all industry plugins, SADC trade corridors & SLA'
+                  },
                 ].map((t) => (
                   <div
                     key={t.tier}
                     onClick={() => setFormData({ ...formData, tier: t.tier })}
-                    className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                    className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
                       formData.tier === t.tier
-                        ? 'bg-blue-600/20 border-blue-500 ring-1 ring-blue-500'
+                        ? 'bg-blue-600/20 border-blue-500 ring-1 ring-blue-500 shadow-md shadow-blue-500/10'
                         : 'bg-zinc-950 border-zinc-800 hover:border-zinc-700'
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-white">{t.tier}</span>
-                      <span className="text-xs font-mono font-bold text-blue-400">{t.price}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-white">{t.tier}</span>
+                        {t.badge && (
+                          <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${t.tier === 'STANDARD' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : t.tier === 'PROFESSIONAL' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'bg-blue-500/20 text-blue-300'}`}>
+                            {t.badge}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs font-mono font-bold text-blue-400">{t.price}</span>
+                        <span className="text-[10px] text-zinc-500 ml-1">{t.interval}</span>
+                      </div>
                     </div>
                     <p className="text-[11px] text-zinc-400 mt-1">{t.desc}</p>
                   </div>

@@ -41,6 +41,7 @@ export default function DashboardLayout({
         <Sidebar
           currentPath={pathname}
           orgName={organizationName}
+          tier={currentUser?.tier || 'COMMUNITY'}
           onNavigate={(href) => {
             const isDesktop = typeof window !== 'undefined' && ((window as any).__RALION_DESKTOP__ || window.location.protocol === 'file:');
             if (isDesktop) {
@@ -58,12 +59,17 @@ export default function DashboardLayout({
           <Header
             user={{
               name: currentUser?.fullName || 'User',
-              role: currentUser?.tier === 'ENTERPRISE' ? 'ENTERPRISE_ADMIN' : 'ORGANIZATION_OWNER',
+              role: currentUser?.tier === 'ENTERPRISE' ? 'ENTERPRISE_ADMIN' : currentUser?.tier === 'STANDARD' ? 'STANDARD_USER' : currentUser?.tier === 'PROFESSIONAL' ? 'PRO_OPERATOR' : 'ORGANIZATION_OWNER',
               email: currentUser?.email || 'user@example.com'
             }}
             orgName={organizationName}
             activeBranch={branchName}
             unreadNotifications={0}
+            exitUrl={process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com'}
+            onExit={() => {
+              const platformUrl = process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com';
+              window.location.href = platformUrl;
+            }}
             onOpenMariAI={() => setIsMariDrawerOpen(true)}
           />
 

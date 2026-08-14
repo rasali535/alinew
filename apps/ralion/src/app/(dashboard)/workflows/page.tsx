@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, Button, Badge } from '@ralion/ui';
 import { Zap, Plus, Play, CheckCircle2, ArrowRight, Bell, Mail, FileCheck } from 'lucide-react';
+import { TierAccessGate } from '@/components/TierAccessGate';
 
 interface RuleItem {
   id: string;
@@ -28,78 +29,84 @@ export default function WorkflowsPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between border-b border-zinc-800/80 pb-5">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black tracking-tight text-white">Visual No-Code Workflows</h1>
-            <Badge variant="primary">Phase 1 Core</Badge>
+    <TierAccessGate
+      requiredTier="STANDARD"
+      featureName="No-Code Automated Workflows"
+      description="Visual No-Code Workflows let you automate customer onboarding, trigger email/WhatsApp notifications, and auto-dispatch Mari AI tasks. Available on Standard Plan ($1/day) and Professional."
+    >
+      <div className="flex flex-col gap-6 max-w-7xl mx-auto">
+        <div className="flex items-center justify-between border-b border-zinc-800/80 pb-5">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-black tracking-tight text-white">Visual No-Code Workflows</h1>
+              <Badge variant="primary">Phase 1 Core</Badge>
+            </div>
+            <p className="text-xs text-zinc-400 mt-1">
+              Automate business processes, trigger emails, generate tasks, and notify managers instantly.
+            </p>
           </div>
-          <p className="text-xs text-zinc-400 mt-1">
-            Automate business processes, trigger emails, generate tasks, and notify managers instantly.
-          </p>
+
+          <Button variant="primary" size="sm">
+            <Plus className="w-4 h-4" /> Build Workflow
+          </Button>
         </div>
 
-        <Button variant="primary" size="sm">
-          <Plus className="w-4 h-4" /> Build Workflow
-        </Button>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4">
-        {rules.map((rule) => (
-          <Card key={rule.id} className="p-5 border-zinc-800 hover:border-blue-500/40 transition-all">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-xl border ${rule.isActive ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' : 'bg-zinc-800 border-zinc-700 text-zinc-500'}`}>
-                    <Zap className="w-5 h-5" />
+        <div className="grid grid-cols-1 gap-4">
+          {rules.map((rule) => (
+            <Card key={rule.id} className="p-5 border-zinc-800 hover:border-blue-500/40 transition-all">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-xl border ${rule.isActive ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' : 'bg-zinc-800 border-zinc-700 text-zinc-500'}`}>
+                      <Zap className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        {rule.name}
+                        <Badge variant={rule.isActive ? 'success' : 'default'}>{rule.isActive ? 'Active' : 'Disabled'}</Badge>
+                      </h3>
+                      <p className="text-xs text-zinc-400 font-mono mt-0.5">
+                        Trigger: <span className="text-blue-400">{rule.trigger}</span>
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                      {rule.name}
-                      <Badge variant={rule.isActive ? 'success' : 'default'}>{rule.isActive ? 'Active' : 'Disabled'}</Badge>
-                    </h3>
-                    <p className="text-xs text-zinc-400 font-mono mt-0.5">
-                      Trigger: <span className="text-blue-400">{rule.trigger}</span>
-                    </p>
+
+                  {/* Workflow Sequence Visualization */}
+                  <div className="mt-2 flex flex-wrap items-center gap-2 pl-12 text-xs text-zinc-300">
+                    <span className="px-2.5 py-1 rounded-lg bg-zinc-800 border border-zinc-700 text-[11px] font-semibold text-zinc-200">
+                      {rule.trigger}
+                    </span>
+                    <ArrowRight className="w-3.5 h-3.5 text-zinc-500" />
+                    {rule.actions.map((act, idx) => (
+                      <React.Fragment key={idx}>
+                        <span className="px-2.5 py-1 rounded-lg bg-blue-900/30 border border-blue-500/30 text-[11px] font-semibold text-blue-300">
+                          {act}
+                        </span>
+                        {idx < rule.actions.length - 1 && <ArrowRight className="w-3.5 h-3.5 text-zinc-500" />}
+                      </React.Fragment>
+                    ))}
                   </div>
                 </div>
 
-                {/* Workflow Sequence Visualization */}
-                <div className="mt-2 flex flex-wrap items-center gap-2 pl-12 text-xs text-zinc-300">
-                  <span className="px-2.5 py-1 rounded-lg bg-zinc-800 border border-zinc-700 text-[11px] font-semibold text-zinc-200">
-                    {rule.trigger}
-                  </span>
-                  <ArrowRight className="w-3.5 h-3.5 text-zinc-500" />
-                  {rule.actions.map((act, idx) => (
-                    <React.Fragment key={idx}>
-                      <span className="px-2.5 py-1 rounded-lg bg-blue-900/30 border border-blue-500/30 text-[11px] font-semibold text-blue-300">
-                        {act}
-                      </span>
-                      {idx < rule.actions.length - 1 && <ArrowRight className="w-3.5 h-3.5 text-zinc-500" />}
-                    </React.Fragment>
-                  ))}
+                {/* Status & Executions */}
+                <div className="flex items-center gap-4 border-t md:border-t-0 border-zinc-800 pt-3 md:pt-0">
+                  <div className="text-right">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider block font-bold">Executions</span>
+                    <span className="text-sm font-mono font-bold text-white">{rule.executions} times</span>
+                  </div>
+                  <Button
+                    variant={rule.isActive ? 'outline' : 'primary'}
+                    size="sm"
+                    onClick={() => toggleRule(rule.id)}
+                  >
+                    {rule.isActive ? 'Pause' : 'Enable'}
+                  </Button>
                 </div>
               </div>
-
-              {/* Status & Executions */}
-              <div className="flex items-center gap-4 border-t md:border-t-0 border-zinc-800 pt-3 md:pt-0">
-                <div className="text-right">
-                  <span className="text-[10px] text-zinc-500 uppercase tracking-wider block font-bold">Executions</span>
-                  <span className="text-sm font-mono font-bold text-white">{rule.executions} times</span>
-                </div>
-                <Button
-                  variant={rule.isActive ? 'outline' : 'primary'}
-                  size="sm"
-                  onClick={() => toggleRule(rule.id)}
-                >
-                  {rule.isActive ? 'Pause' : 'Enable'}
-                </Button>
-              </div>
-            </div>
-          </Card>
-        ))}
+            </Card>
+          ))}
+        </div>
       </div>
-    </div>
+    </TierAccessGate>
   );
 }
