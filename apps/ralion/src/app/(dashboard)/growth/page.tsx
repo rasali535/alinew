@@ -82,7 +82,7 @@ const initialSocialAccounts: SocialAccount[] = [
     handle: 'Ras Ali Labs Official',
     connectedAt: 'Yesterday',
     status: 'connected',
-    scopes: ['pages_show_list', 'pages_read_engagement', 'pages_manage_posts'],
+    scopes: ['public_profile', 'email'],
     followers: '28,900'
   },
   {
@@ -471,7 +471,7 @@ function GrowthPageContent() {
                         handle: `@${(page.name || 'facebook').toLowerCase().replace(/\s+/g, '_')}`,
                         connectedAt: 'Today',
                         status: 'connected',
-                        scopes: ['pages_show_list', 'pages_manage_posts', 'pages_read_engagement'],
+                        scopes: ['public_profile', 'email'],
                         avatarUrl: page.picture?.data?.url || null,
                         followers: page.followers_count ? page.followers_count.toLocaleString() : 'Active Page',
                       };
@@ -618,7 +618,7 @@ function GrowthPageContent() {
         handle: handle,
         connectedAt: 'Today',
         status: 'connected',
-        scopes: ['pages_show_list', 'pages_manage_posts', 'public_profile', 'email'],
+        scopes: ['public_profile', 'email'],
         followers: '1.2k',
       };
 
