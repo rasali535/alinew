@@ -3,3 +3,13 @@ export * from './core/crypto';
 export * from './core/memoryGraph';
 export * from './core/learningEngine';
 export * from './connectors';
+export * from './social/types';
+export * from './social/SocialProvider';
+export * from './social/SocialProviderRegistry';
+export * from './social/adapters/MetaProvider';
+export * from './social/adapters/InstagramProvider';
+export * from './social/adapters/WhatsAppProvider';
+export * from './social/adapters/TikTokProvider';
+export * from './social/adapters/LinkedInProvider';
+export * from './social/adapters/XProvider';
+

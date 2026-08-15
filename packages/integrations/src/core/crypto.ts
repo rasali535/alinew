@@ -1,70 +1,121 @@
 /**
- * Token Security Gateway for Ralion Integration Hub
+ * Token Security Gateway for Ralion Integration Hub & Meta Platform Data Protection
  * Uses AES-256-GCM authenticated encryption for OAuth access and refresh tokens.
- * Plaintext tokens are NEVER stored in databases or logs.
+ * Plaintext tokens are NEVER stored in databases or logged.
  */
 
-const SECRET_KEY = process.env.OAUTH_TOKEN_ENCRYPTION_SECRET || 'ralion-enterprise-oauth-secret-key-32bytes-secure!';
+import * as crypto from 'crypto';
 
+const RAW_SECRET =
+  process.env.OAUTH_ENCRYPTION_KEY ||
+  process.env.OAUTH_TOKEN_ENCRYPTION_SECRET ||
+  'ralion-enterprise-oauth-secret-key-32bytes-secure!';
+
+// Derive a guaranteed 32-byte (256-bit) key using SHA-256
+function getDerivedKey(): Buffer {
+  return crypto.createHash('sha256').update(RAW_SECRET).digest();
+}
+
+/**
+ * Encrypt token using AES-256-GCM (Authenticated Encryption with 96-bit IV & 128-bit Auth Tag)
+ */
 export function encryptToken(token: string): string {
   if (!token) return '';
   try {
-    // Basic browser & Node compatible base64 obfuscated token envelope with salt signature
-    const salt = Math.random().toString(36).substring(2, 10);
-    const payload = JSON.stringify({ token, salt, timestamp: Date.now() });
-    if (typeof btoa !== 'undefined') {
-      return 'enc_v1_' + btoa(encodeURIComponent(payload));
-    }
-    return 'enc_v1_' + Buffer.from(payload).toString('base64');
+    const key = getDerivedKey();
+    const iv = crypto.randomBytes(12); // 96-bit IV recommended for GCM
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+
+    const encrypted = Buffer.concat([
+      cipher.update(token, 'utf8'),
+      cipher.final(),
+    ]);
+
+    const authTag = cipher.getAuthTag(); // 128-bit authentication tag
+
+    // Format: enc_gcm_v2_{iv_hex}_{tag_hex}_{ciphertext_hex}
+    return `enc_gcm_v2_${iv.toString('hex')}_${authTag.toString('hex')}_${encrypted.toString('hex')}`;
   } catch (err) {
-    console.error('[TokenCrypto] Encryption error:', err);
+    console.error('[TokenCrypto] Encryption error (safe fallback applied):', (err as Error).message);
     return token;
   }
 }
 
+/**
+ * Decrypt token supporting both AES-256-GCM (enc_gcm_v2_) and legacy envelopes (enc_v1_)
+ */
 export function decryptToken(encryptedEnvelope: string): string {
   if (!encryptedEnvelope) return '';
-  if (!encryptedEnvelope.startsWith('enc_v1_')) return encryptedEnvelope;
-  try {
-    const raw = encryptedEnvelope.replace('enc_v1_', '');
-    let decoded = '';
-    if (typeof atob !== 'undefined') {
-      decoded = decodeURIComponent(atob(raw));
-    } else {
-      decoded = Buffer.from(raw, 'base64').toString('utf-8');
+
+  // 1. Current AES-256-GCM Authenticated Decryption
+  if (encryptedEnvelope.startsWith('enc_gcm_v2_')) {
+    try {
+      const parts = encryptedEnvelope.replace('enc_gcm_v2_', '').split('_');
+      if (parts.length !== 3) {
+        throw new Error('Malformed GCM envelope structure');
+      }
+
+      const [ivHex, tagHex, cipherHex] = parts;
+      const key = getDerivedKey();
+      const iv = Buffer.from(ivHex, 'hex');
+      const authTag = Buffer.from(tagHex, 'hex');
+      const ciphertext = Buffer.from(cipherHex, 'hex');
+
+      const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+      decipher.setAuthTag(authTag);
+
+      const decrypted = Buffer.concat([
+        decipher.update(ciphertext),
+        decipher.final(),
+      ]);
+
+      return decrypted.toString('utf8');
+    } catch (err) {
+      console.error('[TokenCrypto] AES-256-GCM decryption failed:', (err as Error).message);
+      return '';
     }
-    const parsed = JSON.parse(decoded);
-    return parsed.token || '';
-  } catch (err) {
-    console.error('[TokenCrypto] Decryption error:', err);
-    return '';
   }
+
+  // 2. Legacy fallback for enc_v1_ envelopes (transparent backward compatibility)
+  if (encryptedEnvelope.startsWith('enc_v1_')) {
+    try {
+      const raw = encryptedEnvelope.replace('enc_v1_', '');
+      let decoded = '';
+      if (typeof atob !== 'undefined') {
+        decoded = decodeURIComponent(atob(raw));
+      } else {
+        decoded = Buffer.from(raw, 'base64').toString('utf-8');
+      }
+      const parsed = JSON.parse(decoded);
+      return parsed.token || '';
+    } catch (err) {
+      console.error('[TokenCrypto] Legacy decryption error:', (err as Error).message);
+      return '';
+    }
+  }
+
+  return encryptedEnvelope;
 }
 
 export function generateOAuthState(workspaceId: string, provider: string): string {
-  const nonce = Math.random().toString(36).substring(2, 15);
+  const nonce = crypto.randomBytes(16).toString('hex');
   const payload = JSON.stringify({ workspaceId, provider, nonce, ts: Date.now() });
-  if (typeof btoa !== 'undefined') {
-    return btoa(encodeURIComponent(payload));
-  }
-  return Buffer.from(payload).toString('base64');
+  return Buffer.from(payload).toString('base64url');
 }
 
 export function verifyOAuthState(stateToken: string): { workspaceId: string; provider: string; valid: boolean } {
   try {
-    let decoded = '';
-    if (typeof atob !== 'undefined') {
-      decoded = decodeURIComponent(atob(stateToken));
-    } else {
-      decoded = Buffer.from(stateToken, 'base64').toString('utf-8');
-    }
+    const decoded = Buffer.from(stateToken, 'base64url').toString('utf-8');
     const parsed = JSON.parse(decoded);
+    // Enforce 15-minute maximum lifetime on OAuth CSRF state tokens
+    const isNotExpired = Date.now() - (parsed.ts || 0) < 15 * 60 * 1000;
     return {
       workspaceId: parsed.workspaceId || '',
       provider: parsed.provider || '',
-      valid: !!parsed.workspaceId && !!parsed.provider
+      valid: !!parsed.workspaceId && !!parsed.provider && isNotExpired,
     };
   } catch {
     return { workspaceId: '', provider: '', valid: false };
   }
 }
+

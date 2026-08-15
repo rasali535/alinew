@@ -56,17 +56,46 @@ export async function storeOAuthTokens(params: {
   pageId?: string; scopes?: string[]; extraMeta?: Record<string, any>;
 }) {
   const supabase = getServiceSupabase();
+  const encryptedAccessToken = encryptToken(params.accessToken);
+  const encryptedRefreshToken = params.refreshToken ? encryptToken(params.refreshToken) : null;
+  const tokenExpiresAt = params.expiresAt?.toISOString() ?? null;
+
   const { error } = await supabase.from('social_account_tokens').upsert({
     user_id: params.userId, provider: params.provider,
-    encrypted_access_token: encryptToken(params.accessToken),
-    encrypted_refresh_token: params.refreshToken ? encryptToken(params.refreshToken) : null,
-    expires_at: params.expiresAt?.toISOString() ?? null,
+    encrypted_access_token: encryptedAccessToken,
+    encrypted_refresh_token: encryptedRefreshToken,
+    expires_at: tokenExpiresAt,
     account_handle: params.accountHandle, account_label: params.accountLabel,
     followers_count: params.followersCount ?? 0, avatar_url: params.avatarUrl ?? null,
     page_id: params.pageId ?? null, scopes: params.scopes ?? [], extra_meta: params.extraMeta ?? {},
     status: 'connected', connected_at: new Date().toISOString(),
   }, { onConflict: 'user_id,provider' });
   if (error) throw new Error(`[SocialService] Token store failed: ${error.message}`);
+
+  // If Meta provider (Facebook/Instagram), also synchronize with dedicated meta_connections table
+  if (['facebook', 'instagram', 'meta', 'whatsapp'].includes(params.provider.toLowerCase())) {
+    try {
+      const metaUserId = params.pageId || params.accountHandle.replace(/^@/, '') || params.userId;
+      await supabase.from('meta_connections').upsert({
+        user_id: params.userId,
+        meta_user_id: metaUserId,
+        provider: params.provider.toLowerCase() as any,
+        account_handle: params.accountHandle,
+        account_name: params.accountLabel,
+        profile_picture_url: params.avatarUrl || null,
+        page_id: params.pageId || null,
+        scopes: params.scopes || [],
+        connection_status: 'connected',
+        encrypted_access_token: encryptedAccessToken,
+        encrypted_refresh_token: encryptedRefreshToken,
+        token_expires_at: tokenExpiresAt,
+        last_sync_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,provider,meta_user_id' });
+    } catch (metaErr) {
+      console.warn('[SocialService] meta_connections sync notice:', (metaErr as Error).message);
+    }
+  }
 }
 
 export async function loadOAuthTokens(userId: string, provider: string) {
@@ -99,6 +128,15 @@ export async function loadAllUserAccounts(userId: string): Promise<SocialAccount
 export async function deleteOAuthToken(userId: string, provider: string) {
   const supabase = getServiceSupabase();
   await supabase.from('social_account_tokens').delete().eq('user_id', userId).eq('provider', provider);
+
+  if (['facebook', 'instagram', 'meta', 'whatsapp'].includes(provider.toLowerCase())) {
+    await supabase.from('meta_connections').update({
+      connection_status: 'disconnected',
+      encrypted_access_token: null,
+      encrypted_refresh_token: null,
+      disconnected_at: new Date().toISOString()
+    }).eq('user_id', userId).eq('provider', provider.toLowerCase());
+  }
 }
 
 export async function markTokenExpired(userId: string, provider: string) {
@@ -112,6 +150,7 @@ export async function updateLastSynced(userId: string, provider: string) {
   await supabase.from('social_account_tokens').update({ last_synced_at: new Date().toISOString() })
     .eq('user_id', userId).eq('provider', provider);
 }
+
 
 // LinkedIn Adapter
 export const linkedinAdapter = {

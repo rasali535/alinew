@@ -115,6 +115,31 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const signInWithOAuth = async (provider) => {
+    try {
+      const redirectUrl = typeof window !== 'undefined'
+        ? `${window.location.origin}/account`
+        : 'https://rasalilabs.com/account';
+
+      const defaultScopes = {
+        facebook: 'public_profile,email',
+        google: 'email profile'
+      };
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: redirectUrl,
+          scopes: defaultScopes[provider]
+        }
+      });
+      if (error) throw error;
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error };
+    }
+  };
+
   const signOut = async () => {
     try {
       await supabase.auth.signOut();
@@ -138,6 +163,7 @@ export const AuthProvider = ({ children }) => {
         closeAuthModal,
         signIn,
         signUp,
+        signInWithOAuth,
         resendConfirmation,
         resetPassword,
         signOut
@@ -146,6 +172,7 @@ export const AuthProvider = ({ children }) => {
       {children}
     </AuthContext.Provider>
   );
+
 };
 
 export const useAuth = () => {

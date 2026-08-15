@@ -122,11 +122,32 @@ export class AuthService {
    */
   static async loginWithProvider(provider: 'google' | 'github' | 'azure' | 'apple' | 'linkedin_oidc' | 'facebook' | 'twitter' | 'discord' | string) {
     const isDesktop = typeof window !== 'undefined' && ((window as any).__RALION_DESKTOP__ || window.location.protocol === 'file:');
+
+    const providerMap: Record<string, string> = {
+      linkedin: 'linkedin_oidc',
+      x: 'twitter',
+      facebook: 'facebook',
+      instagram: 'facebook',
+      google: 'google',
+      github: 'github',
+      azure: 'azure',
+      apple: 'apple'
+    };
+
+    const targetProvider = providerMap[provider.toLowerCase()] || provider;
+
+    const defaultScopes: Record<string, string> = {
+      facebook: 'public_profile,email',
+      instagram: 'public_profile,email',
+      linkedin_oidc: 'openid profile email',
+      google: 'email profile'
+    };
     
     const { data, error } = await this.supabase.auth.signInWithOAuth({
-      provider: provider as any,
+      provider: targetProvider as any,
       options: {
         redirectTo: isDesktop ? 'ralion://oauth-callback' : `${window.location.origin}/ralion/dashboard`,
+        scopes: defaultScopes[targetProvider],
         skipBrowserRedirect: isDesktop,
       },
     });
@@ -153,6 +174,14 @@ export class AuthService {
   static async loginWithGoogle() {
     return this.loginWithProvider('google');
   }
+
+  /**
+   * Login with Facebook OAuth
+   */
+  static async loginWithFacebook() {
+    return this.loginWithProvider('facebook');
+  }
+
 
   /**
    * Link a social account (OAuth) for Growth OS

@@ -53,7 +53,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   orgName = "Ralion Enterprise",
   onNavigate,
   onOpenMariAI,
-  enabledModules = ['workspace', 'mari', 'demos', 'customers', 'leads', 'crm', 'tasks', 'calendar', 'documents', 'reports', 'workflows', 'billing', 'growth', 'health', 'funeral', 'logistics', 'trade', 'marketplace', 'developer', 'enterprise', 'government'],
+  enabledModules = ['workspace', 'security', 'mari', 'demos', 'customers', 'leads', 'crm', 'tasks', 'calendar', 'documents', 'reports', 'workflows', 'billing', 'growth', 'health', 'funeral', 'logistics', 'trade', 'marketplace', 'developer', 'enterprise', 'government'],
   tier = 'COMMUNITY'
 }) => {
   const platformUrl = process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com';
@@ -89,6 +89,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const ecosystemNav: SidebarItem[] = [
+    { id: 'security', label: 'Security & Compliance', href: '/ralion/enterprise/security', icon: <Shield className="w-4 h-4 text-emerald-400" />, badge: 'Meta' },
     { id: 'integrations', label: 'Integration Hub', href: '/ralion/settings/integrations', icon: <Globe className="w-4 h-4 text-purple-400" />, badge: 'OAuth' },
     { id: 'marketplace', label: 'Marketplace', href: '/ralion/marketplace', icon: <Store className="w-4 h-4 text-purple-400" /> },
     { id: 'developer', label: 'Developer Platform', href: '/ralion/developer', icon: <Code className="w-4 h-4 text-blue-400" />, badge: userTier === 'COMMUNITY' ? 'PRO' : undefined },
