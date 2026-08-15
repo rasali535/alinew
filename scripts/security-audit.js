@@ -64,6 +64,7 @@ const requiredDocs = [
   'docs/security/remote-server-access-mfa-policy.md',
   'docs/security/meta-compliance-evidence/remote-server-mfa-evidence-2026-08-15.md',
   'docs/security/meta-compliance-evidence/ralion-patch-vulnerability-management-evidence-2026-08-15.md',
+  'docs/security/admin-audit-logging-policy.md',
 ];
 
 for (const docPath of requiredDocs) {
