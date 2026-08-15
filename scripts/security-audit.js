@@ -52,6 +52,7 @@ const requiredDocs = [
   'docs/security/supabase-security-review.md',
   'docs/security/platform-data-device-storage-policy.md',
   'docs/security/meta-access-token-protection-policy.md',
+  'docs/security/meta-app-secret-protection-policy.md',
   'docs/security/incident-response-policy.md',
   'docs/security/meta-compliance-matrix.md',
   'docs/security/meta-compliance-evidence/README.md',
