@@ -51,9 +51,11 @@ const requiredDocs = [
   'docs/security/vulnerability-management-policy.md',
   'docs/security/supabase-security-review.md',
   'docs/security/platform-data-device-storage-policy.md',
+  'docs/security/meta-access-token-protection-policy.md',
   'docs/security/incident-response-policy.md',
   'docs/security/meta-compliance-matrix.md',
   'docs/security/meta-compliance-evidence/README.md',
+  'docs/security/meta-compliance-evidence/ralion-backend-security-testing-report-2026-08-15.md',
 ];
 
 for (const docPath of requiredDocs) {
