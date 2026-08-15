@@ -27,7 +27,9 @@
     "next": "^15.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-smooth": "^4.0.4",
     "recharts": "^2.12.7",
+    "recharts-scale": "^0.4.5",
     "tailwind-merge": "^2.3.0",
     "zustand": "^4.5.2"
   },
