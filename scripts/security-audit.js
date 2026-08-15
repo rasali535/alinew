@@ -62,6 +62,7 @@ const requiredDocs = [
   'docs/security/mfa-and-authentication-policy.md',
   'docs/security/meta-compliance-evidence/mfa-enforcement-evidence-2026-08-15.md',
   'docs/security/remote-server-access-mfa-policy.md',
+  'docs/security/meta-compliance-evidence/remote-server-mfa-evidence-2026-08-15.md',
 ];
 
 for (const docPath of requiredDocs) {
