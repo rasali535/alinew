@@ -60,6 +60,7 @@ const requiredDocs = [
   'docs/security/meta-compliance-evidence/meta-access-token-protection-evidence-2026-08-15.md',
   'docs/security/meta-compliance-evidence/meta-app-secret-protection-evidence-2026-08-15.md',
   'docs/security/mfa-and-authentication-policy.md',
+  'docs/security/meta-compliance-evidence/mfa-enforcement-evidence-2026-08-15.md',
 ];
 
 for (const docPath of requiredDocs) {
