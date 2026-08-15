@@ -69,6 +69,7 @@ const requiredDocs = [
   'docs/security/application-event-audit-logging-policy.md',
   'docs/security/meta-compliance-evidence/application-event-audit-log-evidence-2026-08-15.md',
   'docs/security/application-audit-log-review-policy.md',
+  'docs/security/meta-compliance-evidence/application-audit-log-review-evidence-2026-08-15.md',
 ];
 
 for (const docPath of requiredDocs) {
