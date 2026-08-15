@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { SocialInboxService } from '@/lib/services/social/socialInbox.service';
 import { SocialPlatformType } from '@ralion/integrations';
 
+export const dynamic = 'force-static';
+
 export async function GET(request: NextRequest) {
   try {
     const provider = request.nextUrl.searchParams.get('provider') as SocialPlatformType | null;
