@@ -19,8 +19,7 @@ import {
   UserCheck,
   Server
 } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, Button } from '@ralion/ui';
 import { createClient } from '@/lib/supabase/client';
 
 export default function SecurityCenterPage() {

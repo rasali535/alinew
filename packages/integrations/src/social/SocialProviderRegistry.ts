@@ -13,7 +13,7 @@ import { LinkedInProvider } from './adapters/LinkedInProvider';
 import { XProvider } from './adapters/XProvider';
 
 export class SocialProviderRegistry {
-  private static providers: Map<SocialPlatformType, SocialProvider> = new Map([
+  private static providers: Map<SocialPlatformType, SocialProvider> = new Map<SocialPlatformType, SocialProvider>([
     ['facebook', new MetaProvider()],
     ['instagram', new InstagramProvider()],
     ['whatsapp', new WhatsAppProvider()],

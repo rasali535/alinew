@@ -20,6 +20,7 @@
     "desktop:dist:win": "npm run desktop:dist:win --workspace=@ralion/desktop",
     "lint": "npm run lint --workspaces --if-present",
     "test": "node ./scripts/test-social.js",
+    "test:e2e": "node ./scripts/production-e2e-readiness.js",
     "security:audit": "node ./scripts/security-audit.js"
   },
   "overrides": {
