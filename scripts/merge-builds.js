@@ -38,19 +38,12 @@ try {
       fs.mkdirSync(destDir, { recursive: true });
     }
 
-    // A. Check for standard 'out' directory
-    const outDir = path.join(appDir, 'out');
-    if (fs.existsSync(outDir)) {
-      console.log(`Copying ${appName} from static export: ${outDir} -> ${destDir}`);
-      fs.cpSync(outDir, destDir, { recursive: true });
-      return;
-    }
-
-    // B. Check for pre-rendered pages in .next/server/app
     const serverAppDir = path.join(appDir, '.next', 'server', 'app');
     const staticDir = path.join(appDir, '.next', 'static');
     const publicDir = path.join(appDir, 'public');
+    const outDir = path.join(appDir, 'out');
 
+    // If pre-rendered pages exist in .next/server/app, extract the full Next.js application
     if (fs.existsSync(serverAppDir)) {
       console.log(`Copying pre-rendered Next.js pages for ${appName} from ${serverAppDir} -> ${destDir}`);
 
@@ -96,18 +89,23 @@ try {
 
       copyHtmlPages(serverAppDir);
 
-      // Ensure root index.html exists in destDir
-      const indexFile = path.join(destDir, 'index.html');
-      if (!fs.existsSync(indexFile)) {
-        const dashboardHtml = path.join(destDir, 'dashboard', 'index.html');
-        if (fs.existsSync(dashboardHtml)) {
-          fs.copyFileSync(dashboardHtml, indexFile);
-        }
+      // Ensure root index.html is the rich dashboard entry page
+      const dashboardSrc = path.join(serverAppDir, 'dashboard.html');
+      if (fs.existsSync(dashboardSrc)) {
+        fs.copyFileSync(dashboardSrc, path.join(destDir, 'index.html'));
       }
-      console.log(`Successfully populated static pages for ${appName}`);
-    } else {
-      console.log(`Skipping ${appName} - no build artifacts found.`);
+      console.log(`Successfully populated full Next.js static application for ${appName}`);
+      return;
     }
+
+    // Fallback: Check for standard 'out' directory
+    if (fs.existsSync(outDir)) {
+      console.log(`Copying ${appName} from static export: ${outDir} -> ${destDir}`);
+      fs.cpSync(outDir, destDir, { recursive: true });
+      return;
+    }
+
+    console.log(`Skipping ${appName} - no build artifacts found.`);
   }
 
   // Copy Ralion OS
