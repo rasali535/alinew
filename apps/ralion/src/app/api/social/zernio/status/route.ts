@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ZernioSocialService, SocialPlatformType } from '@ralion/integrations';
 import { SocialProviderRouter } from '@/lib/services/social/socialProviderRouter.service';
 
-export const dynamic = 'force-static';
+export const dynamic = 'force-dynamic';
 
 export type ZernioConnectionState =
   | 'ZERNIO_NOT_CONFIGURED'

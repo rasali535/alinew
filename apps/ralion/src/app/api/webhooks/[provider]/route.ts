@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { SocialPlatformType } from '@ralion/integrations';
 import { SocialWebhookService } from '@/lib/services/social/socialWebhook.service';
 
-export const dynamic = 'force-static';
+export const dynamic = 'force-dynamic';
 
 const SUPPORTED_WEBHOOK_PROVIDERS = ['facebook', 'instagram', 'whatsapp', 'tiktok', 'linkedin', 'x'];
 

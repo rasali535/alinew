@@ -1,8 +1,8 @@
 /** @type {import('next').NextConfig} */
 
-// NEXT_STANDALONE=1 is set inside Dockerfile.ralion for server mode.
-// By default (or when building for static export / merge-builds), output: 'export' is used.
-const isStandalone = process.env.NEXT_STANDALONE === '1';
+// Default to standalone server mode to support full dynamic API routes and OAuth endpoints.
+// Set NEXT_STATIC_EXPORT=1 only when building for a static HTML host.
+const isStaticExport = process.env.NEXT_STATIC_EXPORT === '1';
 
 const securityHeaders = [
   {
@@ -32,14 +32,14 @@ const securityHeaders = [
 ];
 
 const nextConfig = {
-  output: isStandalone ? 'standalone' : 'export',
+  output: isStaticExport ? 'export' : 'standalone',
   basePath: '/ralion',
   trailingSlash: true,
   images: {
     unoptimized: true,
   },
   reactStrictMode: true,
-  ...(isStandalone
+  ...(!isStaticExport
     ? {
         async headers() {
           return [

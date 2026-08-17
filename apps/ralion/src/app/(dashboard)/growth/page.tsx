@@ -8,7 +8,8 @@ import {
   Globe, Video, Image, Wand2, LayoutTemplate, Trash2, Eye, RefreshCw, Lock, ExternalLink, 
   Clock, Play, Download, Settings, Layers, Filter, CheckCircle2, AlertCircle, Smartphone,
   LayoutDashboard, Users, Heart, MessageCircle, ArrowUpRight, ArrowDownRight, Compass,
-  ShieldCheck, Flame, Award, Zap, ThumbsUp, Radio, HelpCircle, Activity, ChevronDown
+  ShieldCheck, Flame, Award, Zap, ThumbsUp, Radio, HelpCircle, Activity, ChevronDown,
+  Upload, Paperclip, MessageSquare, Inbox, CornerDownRight, X
 } from 'lucide-react';
 import { AuthService } from '@/lib/services/auth.service';
 import { createClient } from '@/lib/supabase/client';
@@ -351,11 +352,16 @@ function GrowthPageContent() {
   const [connectedAccounts, setConnectedAccounts] = useState<SocialAccount[]>(initialSocialAccounts);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
   const [isSyncing, setIsSyncing] = useState<string | null>(null); // provider being synced
-  const [publishingPostId, setPublishingPostId] = useState<string | null>(null);
-  const [oauthAlert, setOauthAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [oauthAlert, setOauthAlert] = useState<{
+    type: 'success' | 'error' | 'info';
+    message: string;
+    actionUrl?: string;
+    actionLabel?: string;
+    onRetry?: () => void;
+  } | null>(null);
 
   // Active Dashboard Navigation
-  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'ACCOUNTS' | 'CONTENT' | 'CAMPAIGNS' | 'AI_STUDIO' | 'CREATIVES' | 'ANALYTICS' | 'GENERATED_OUTPUT'>('OVERVIEW');
+  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'ACCOUNTS' | 'CONTENT' | 'INBOX' | 'CAMPAIGNS' | 'AI_STUDIO' | 'CREATIVES' | 'ANALYTICS' | 'GENERATED_OUTPUT'>('OVERVIEW');
   const [selectedFilter, setSelectedFilter] = useState<'ALL' | 'VIDEO' | 'POSTER' | 'TEXT'>('ALL');
   const [postStatusFilter, setPostStatusFilter] = useState<'all' | 'draft' | 'scheduled' | 'published'>('all');
 
@@ -414,13 +420,41 @@ function GrowthPageContent() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const [newPost, setNewPost] = useState({
+  // Post Creator State with Image & Video File Upload Support
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [newPost, setNewPost] = useState<{
+    title: string;
+    body: string;
+    platform: ContentPost['platform'];
+    hashtags: string;
+    scheduledAt: string;
+    mediaUrl?: string;
+    mediaType?: 'image' | 'video';
+    mediaFileName?: string;
+  }>({
     title: '',
     body: '',
-    platform: 'facebook' as ContentPost['platform'],
-    hashtags: '#RalionOS #RasAliLabs',
-    scheduledAt: ''
+    platform: 'facebook',
+    hashtags: '#RalionOS #RasAliLabs #EnterpriseAI',
+    scheduledAt: '',
   });
+
+  const [publishingPostId, setPublishingPostId] = useState<string | null>(null);
+
+  // Comments Management State
+  const [isCommentsModalOpen, setIsCommentsModalOpen] = useState(false);
+  const [selectedCommentPost, setSelectedCommentPost] = useState<any | null>(null);
+  const [postComments, setPostComments] = useState<any[]>([]);
+  const [isLoadingComments, setIsLoadingComments] = useState(false);
+  const [newCommentReplyText, setNewCommentReplyText] = useState('');
+  const [isSubmittingReply, setIsSubmittingReply] = useState(false);
+
+  // Unified Social Inbox State
+  const [inboxConversations, setInboxConversations] = useState<any[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [isLoadingInbox, setIsLoadingInbox] = useState(false);
+  const [inboxReplyText, setInboxReplyText] = useState('');
+  const [isSendingInboxReply, setIsSendingInboxReply] = useState(false);
 
   // ── Facebook Page Management & Multi-Destination States ─────────────────
   const [availableFacebookPages, setAvailableFacebookPages] = useState<any[]>([
@@ -963,9 +997,199 @@ function GrowthPageContent() {
     }
   }, []);
 
+  // ── Media File Upload Handler (Image & Video) ───────────────────────────
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const isVideo = file.type.startsWith('video/') || /\.(mp4|mov|webm|m4v)$/i.test(file.name);
+    const isImage = file.type.startsWith('image/') || /\.(png|jpg|jpeg|webp|gif)$/i.test(file.name);
+
+    if (!isVideo && !isImage) {
+      setOauthAlert({
+        type: 'error',
+        message: 'Please upload an image (PNG, JPG, WebP) or video (MP4, MOV, WebM).',
+      });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (uploadEvent) => {
+      const dataUrl = uploadEvent.target?.result as string;
+      setNewPost(prev => ({
+        ...prev,
+        mediaUrl: dataUrl,
+        mediaType: isVideo ? 'video' : 'image',
+        mediaFileName: file.name,
+      }));
+      setOauthAlert({
+        type: 'info',
+        message: `📎 Attached ${isVideo ? 'video' : 'image'}: ${file.name}`,
+      });
+      setTimeout(() => setOauthAlert(null), 3000);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveMedia = () => {
+    setNewPost(prev => ({
+      ...prev,
+      mediaUrl: undefined,
+      mediaType: undefined,
+      mediaFileName: undefined,
+    }));
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // ── Comments Management Handlers ─────────────────────────────────────────
+  const fetchPostComments = useCallback(async (postId?: string) => {
+    setIsLoadingComments(true);
+    try {
+      const url = postId ? `/api/social/comments?postId=${encodeURIComponent(postId)}` : '/api/social/comments';
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        setPostComments(data.comments || []);
+      }
+    } catch (err) {
+      console.warn('Comments fetch notice:', err);
+    } finally {
+      setIsLoadingComments(false);
+    }
+  }, []);
+
+  const handleOpenCommentsModal = (post: any) => {
+    setSelectedCommentPost(post);
+    fetchPostComments(post.id);
+    setIsCommentsModalOpen(true);
+  };
+
+  const handleSendCommentReply = async (commentId: string, postId: string) => {
+    if (!newCommentReplyText.trim()) return;
+    setIsSubmittingReply(true);
+    try {
+      const res = await fetch('/api/social/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          commentId,
+          postId,
+          replyText: newCommentReplyText.trim(),
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.reply) {
+          setPostComments(prev =>
+            prev.map(c =>
+              c.id === commentId
+                ? { ...c, replies: [...(c.replies || []), data.reply] }
+                : c
+            )
+          );
+          setNewCommentReplyText('');
+          setOauthAlert({
+            type: 'success',
+            message: '✓ Reply posted as Ras Ali Labs to Facebook comment!',
+          });
+          setTimeout(() => setOauthAlert(null), 5000);
+        }
+      }
+    } catch (e: any) {
+      setOauthAlert({
+        type: 'error',
+        message: `✕ Failed to post comment reply: ${e.message}`,
+      });
+    } finally {
+      setIsSubmittingReply(false);
+    }
+  };
+
+  // ── Unified Inbox Handlers ───────────────────────────────────────────────
+  const fetchInboxConversations = useCallback(async () => {
+    setIsLoadingInbox(true);
+    try {
+      const res = await fetch('/api/social/inbox?provider=facebook');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.conversations && data.conversations.length > 0) {
+          setInboxConversations(data.conversations);
+          if (!activeConversationId) {
+            setActiveConversationId(data.conversations[0].conversationId);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Inbox fetch notice:', err);
+    } finally {
+      setIsLoadingInbox(false);
+    }
+  }, [activeConversationId]);
+
+  const handleSendInboxReply = async () => {
+    if (!inboxReplyText.trim() || !activeConversationId) return;
+    setIsSendingInboxReply(true);
+
+    const activeConv = inboxConversations.find(c => c.conversationId === activeConversationId);
+    const recipientId = activeConv?.participantId || 'user_fb_8821';
+
+    try {
+      const res = await fetch('/api/social/inbox', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          connectionId: '6a82df7277555aae018b92b4',
+          provider: 'facebook',
+          conversationId: activeConversationId,
+          recipientId: recipientId,
+          messageText: inboxReplyText.trim(),
+        }),
+      });
+
+      const newMsg = {
+        id: `msg_${Date.now()}`,
+        direction: 'OUTBOUND',
+        sender_name: 'Ras Ali Labs Support',
+        message_text: inboxReplyText.trim(),
+        timestamp: 'Just now',
+      };
+
+      setInboxConversations(prev =>
+        prev.map(c =>
+          c.conversationId === activeConversationId
+            ? {
+                ...c,
+                lastMessage: inboxReplyText.trim(),
+                lastTimestamp: 'Just now',
+                messages: [...(c.messages || []), newMsg],
+              }
+            : c
+        )
+      );
+
+      setInboxReplyText('');
+      setOauthAlert({
+        type: 'success',
+        message: '✓ Direct message reply sent via Facebook Messenger!',
+      });
+      setTimeout(() => setOauthAlert(null), 5000);
+    } catch (err: any) {
+      setOauthAlert({
+        type: 'error',
+        message: `✕ Failed to send message: ${err.message}`,
+      });
+    } finally {
+      setIsSendingInboxReply(false);
+    }
+  };
+
   useEffect(() => {
     loadConnectedAccounts();
     fetchLiveFacebookPosts();
+    fetchInboxConversations();
+    fetchPostComments();
 
     // Auto-capture and store provider OAuth tokens (Facebook, Google, LinkedIn, etc.) returned by Supabase Auth
     const supabase = createClient();
@@ -1435,6 +1659,8 @@ function GrowthPageContent() {
     const post = posts.find(p => p.id === postId);
     if (!post) return;
 
+    if (publishingPostId) return; // Prevent double-submission
+
     setPublishingPostId(postId);
     try {
       const payload = {
@@ -1444,48 +1670,70 @@ function GrowthPageContent() {
         mediaUrls: post.mediaUrl ? [post.mediaUrl] : undefined,
         mediaTypes: post.mediaType ? [post.mediaType] : undefined,
         authorName: 'Ras Ali Labs',
+        socialConnectionId: '6a82df7277555aae018b92b4',
+        pageId: '477334159265235',
       };
 
-      let postUrl = '';
-      try {
-        const res = await fetch('/api/social/publish', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+      const res = await fetch('/api/social/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || data.success === false) {
+        const errorMsg = data.error || `Publishing returned HTTP ${res.status}`;
+        setOauthAlert({
+          type: 'error',
+          message: `✕ Facebook publishing failed: ${errorMsg}`,
+          onRetry: () => publishPostNow(postId),
         });
-        if (res.ok) {
-          const data = await res.json();
-          postUrl = data.result?.platformResults?.facebook?.postUrl || '';
-        }
-      } catch (e) {
-        console.warn('Direct publish notice:', e);
+        return;
       }
 
-      setPosts(prev => prev.map(p =>
-        p.id === postId
-          ? { ...p, status: 'published', publishedAt: new Date().toLocaleString() }
-          : p
-      ));
+      const postUrl =
+        data.result?.platformResults?.facebook?.postUrl ||
+        data.platformResults?.facebook?.postUrl ||
+        'https://www.facebook.com/477334159265235';
+
+      setPosts(prev =>
+        prev.map(p =>
+          p.id === postId
+            ? { ...p, status: 'published', publishedAt: new Date().toLocaleString() }
+            : p
+        )
+      );
 
       setFacebookPagePosts(prev => [
         {
-          id: postId,
+          id: data.postId || postId,
           title: post.title,
           body: post.body,
           publishedAt: 'Just now',
           status: 'published',
           source: 'RALION',
-          permalink: postUrl || 'https://www.facebook.com/477334159265235',
-          engagement: { likes: 0, comments: 0, shares: 0, reach: 1 },
+          permalink: postUrl,
+          engagement: { likes: 1, comments: 0, shares: 0, reach: 1 },
         },
-        ...prev.filter(p => p.id !== postId)
+        ...prev.filter(p => p.id !== postId),
       ]);
 
-      setOauthAlert({ type: 'success', message: `✅ Post published live to Facebook Page (@rasalibass)!` });
-      setTimeout(() => setOauthAlert(null), 8000);
+      setOauthAlert({
+        type: 'success',
+        message: '✓ Published to Facebook Page — Ras Ali Labs (Published just now)',
+        actionUrl: postUrl,
+        actionLabel: 'View on Facebook',
+      });
+
+      // Revalidate real posts from server
+      fetchLiveFacebookPosts();
     } catch (err: any) {
-      setOauthAlert({ type: 'error', message: `❌ Publish error: ${err.message}` });
-      setTimeout(() => setOauthAlert(null), 6000);
+      setOauthAlert({
+        type: 'error',
+        message: `✕ Facebook publishing failed: ${err.message}`,
+        onRetry: () => publishPostNow(postId),
+      });
     } finally {
       setPublishingPostId(null);
     }
@@ -1558,15 +1806,39 @@ function GrowthPageContent() {
 
   return (
     <div className="flex flex-col gap-6 max-w-7xl mx-auto pb-12">
-      {/* OAuth Alert Banner */}
+      {/* OAuth & Publishing Alert Banner */}
       {oauthAlert && (
-        <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border text-xs font-semibold animate-in slide-in-from-top-2 ${
+        <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 py-3 rounded-2xl border text-xs font-semibold animate-in slide-in-from-top-2 shadow-lg ${
           oauthAlert.type === 'success'
-            ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
-            : 'bg-red-950/60 border-red-500/40 text-red-300'
+            ? 'bg-emerald-950/70 border-emerald-500/40 text-emerald-300 shadow-emerald-950/40'
+            : oauthAlert.type === 'error'
+              ? 'bg-red-950/70 border-red-500/40 text-red-300 shadow-red-950/40'
+              : 'bg-blue-950/70 border-blue-500/40 text-blue-300 shadow-blue-950/40'
         }`}>
-          {oauthAlert.message}
-          <button onClick={() => setOauthAlert(null)} className="ml-auto text-zinc-400 hover:text-white">✕</button>
+          <div className="flex items-center gap-2">
+            <span>{oauthAlert.message}</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {oauthAlert.actionUrl && (
+              <a
+                href={oauthAlert.actionUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all inline-flex items-center gap-1 shadow"
+              >
+                {oauthAlert.actionLabel || 'View on Facebook'} →
+              </a>
+            )}
+            {oauthAlert.onRetry && (
+              <button
+                onClick={oauthAlert.onRetry}
+                className="px-3 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-all inline-flex items-center gap-1 shadow"
+              >
+                Retry
+              </button>
+            )}
+            <button onClick={() => setOauthAlert(null)} className="text-zinc-400 hover:text-white ml-1 px-1">✕</button>
+          </div>
         </div>
       )}
 
@@ -1597,7 +1869,7 @@ function GrowthPageContent() {
 
       {/* Primary Navigation Tabs */}
       <div className="flex gap-1 bg-zinc-900 p-1.5 rounded-2xl border border-zinc-800 w-full sm:w-fit overflow-x-auto shadow-inner">
-        {(['OVERVIEW', 'ACCOUNTS', 'CONTENT', 'CAMPAIGNS', 'AI_STUDIO', 'CREATIVES', 'ANALYTICS', 'GENERATED_OUTPUT'] as const).map(tab => (
+        {(['OVERVIEW', 'ACCOUNTS', 'CONTENT', 'INBOX', 'CAMPAIGNS', 'AI_STUDIO', 'CREATIVES', 'ANALYTICS', 'GENERATED_OUTPUT'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -1610,12 +1882,13 @@ function GrowthPageContent() {
             {tab === 'OVERVIEW' && <LayoutDashboard className="w-3.5 h-3.5 text-indigo-300" />}
             {tab === 'ACCOUNTS' && <Globe className="w-3.5 h-3.5 text-emerald-400" />}
             {tab === 'CONTENT' && <Share2 className="w-3.5 h-3.5 text-blue-400" />}
+            {tab === 'INBOX' && <Inbox className="w-3.5 h-3.5 text-teal-400" />}
             {tab === 'CAMPAIGNS' && <Megaphone className="w-3.5 h-3.5 text-amber-400" />}
             {tab === 'ANALYTICS' && <BarChart2 className="w-3.5 h-3.5 text-emerald-400" />}
             {tab === 'AI_STUDIO' && <Sparkles className="w-3.5 h-3.5 text-purple-300" />}
             {tab === 'CREATIVES' && <Play className="w-3.5 h-3.5 text-pink-400" />}
             {tab === 'GENERATED_OUTPUT' && <Sparkles className="w-3.5 h-3.5 text-cyan-400" />}
-            {tab === 'OVERVIEW' ? 'Social Manager Hub' : tab === 'GENERATED_OUTPUT' ? `All Outputs (${generatedGallery.length})` : tab.replace('_', ' ')}
+            {tab === 'OVERVIEW' ? 'Social Manager Hub' : tab === 'INBOX' ? `Social Inbox (${inboxConversations.length})` : tab === 'GENERATED_OUTPUT' ? `All Outputs (${generatedGallery.length})` : tab.replace('_', ' ')}
           </button>
         ))}
       </div>
@@ -2113,6 +2386,13 @@ function GrowthPageContent() {
                           </td>
                           <td className="py-3.5 text-right whitespace-nowrap">
                             <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => handleOpenCommentsModal({ id: post.id, body: post.preview })}
+                                className="p-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/40 transition-all flex items-center gap-1 text-[11px]"
+                                title="Read & Reply to Facebook Comments"
+                              >
+                                <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
+                              </button>
                               <a
                                 href={post.permalink}
                                 target="_blank"
@@ -3200,6 +3480,15 @@ function GrowthPageContent() {
                         <Eye className="w-3.5 h-3.5 text-blue-400" /> Visual Preview
                       </Button>
 
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => handleOpenCommentsModal(post)}
+                        className="text-xs gap-1 border-zinc-800 text-zinc-300 hover:text-white"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5 text-emerald-400" /> Comments
+                      </Button>
+
                       {post.status !== 'published' && (
                         <Button 
                           variant="primary" 
@@ -3230,6 +3519,198 @@ function GrowthPageContent() {
                 No posts found under "{postStatusFilter}". Click "Create New Post" to draft or schedule content.
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ==================================== */}
+      {/* 3.5. SOCIAL INBOX & MESSAGING TAB */}
+      {/* ==================================== */}
+      {activeTab === 'INBOX' && (
+        <div className="flex flex-col gap-6 animate-in fade-in duration-300">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-zinc-900/80 p-4 rounded-2xl border border-zinc-800 shadow-xl">
+            <div>
+              <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                <Inbox className="w-4 h-4 text-teal-400" /> Unified Social Inbox & Messenger
+              </h2>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Read and respond to direct customer messages across Facebook Messenger as <strong>Ras Ali Labs</strong> (@rasalibass).
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => fetchInboxConversations()} 
+                disabled={isLoadingInbox}
+                className="text-xs border-zinc-800 text-zinc-300 gap-1.5"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-teal-400 ${isLoadingInbox ? 'animate-spin' : ''}`} /> Refresh Inbox
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[560px]">
+            {/* Left Pane: Conversation Threads List */}
+            <div className="lg:col-span-4 flex flex-col gap-3 bg-zinc-900/60 p-3.5 rounded-3xl border border-zinc-800">
+              <div className="flex items-center justify-between px-1 pb-2 border-b border-zinc-800">
+                <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Conversations</span>
+                <Badge variant="purple" className="text-[10px] font-mono">{inboxConversations.length} Active</Badge>
+              </div>
+
+              <div className="flex flex-col gap-2 overflow-y-auto max-h-[500px]">
+                {inboxConversations.map(conv => {
+                  const isSelected = conv.conversationId === activeConversationId;
+                  return (
+                    <button
+                      key={conv.conversationId}
+                      onClick={() => setActiveConversationId(conv.conversationId)}
+                      className={`p-3.5 rounded-2xl border text-left transition-all flex items-start gap-3 ${
+                        isSelected 
+                          ? 'bg-teal-950/40 border-teal-500/50 shadow-md' 
+                          : 'bg-zinc-950/60 border-zinc-800/80 hover:border-zinc-700'
+                      }`}
+                    >
+                      <div className="relative shrink-0">
+                        {conv.avatarUrl ? (
+                          <img src={conv.avatarUrl} alt={conv.participantName} className="w-10 h-10 rounded-xl object-cover border border-zinc-800" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-xl bg-teal-600/20 border border-teal-500/30 flex items-center justify-center font-bold text-teal-300 text-xs">
+                            {conv.participantName.slice(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                        <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-blue-600 border-2 border-zinc-900 flex items-center justify-center text-[8px] text-white font-bold">
+                          fb
+                        </span>
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1">
+                          <h4 className="text-xs font-bold text-white truncate">{conv.participantName}</h4>
+                          <span className="text-[10px] text-zinc-500 font-mono shrink-0">{conv.lastTimestamp}</span>
+                        </div>
+                        <p className="text-[11px] text-zinc-400 mt-1 truncate leading-tight">{conv.lastMessage}</p>
+                        {conv.unreadCount > 0 && (
+                          <span className="inline-block mt-1.5 px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-300 font-bold text-[9px] border border-teal-500/30">
+                            New Inquiry
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+
+                {inboxConversations.length === 0 && (
+                  <div className="p-8 text-center text-xs text-zinc-500 italic">
+                    No active inbox conversations found.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right Pane: Active Message Thread & Response Composer */}
+            <div className="lg:col-span-8 flex flex-col justify-between bg-zinc-900/60 p-5 rounded-3xl border border-zinc-800">
+              {(() => {
+                const activeConv = inboxConversations.find(c => c.conversationId === activeConversationId);
+                if (!activeConv) {
+                  return (
+                    <div className="flex-1 flex items-center justify-center text-xs text-zinc-500">
+                      Select a conversation thread on the left to start messaging.
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="flex flex-col h-full justify-between gap-4">
+                    {/* Thread Header */}
+                    <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-teal-600/20 border border-teal-500/30 flex items-center justify-center font-bold text-teal-300 text-xs">
+                          {activeConv.participantName.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-sm font-bold text-white">{activeConv.participantName}</h3>
+                            <Badge variant="success" className="text-[9px]">Facebook Messenger</Badge>
+                          </div>
+                          <p className="text-[11px] text-zinc-400 font-mono">Recipient ID: {activeConv.participantId}</p>
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Replying as Ras Ali Labs
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Messages Scroll Area */}
+                    <div className="flex-1 overflow-y-auto max-h-[360px] flex flex-col gap-3 p-2">
+                      {activeConv.messages?.map((msg: any, idx: number) => {
+                        const isOutbound = msg.direction === 'OUTBOUND';
+                        return (
+                          <div key={idx} className={`flex flex-col ${isOutbound ? 'items-end' : 'items-start'}`}>
+                            <div className={`max-w-md p-3.5 rounded-2xl text-xs leading-relaxed ${
+                              isOutbound 
+                                ? 'bg-gradient-to-r from-teal-600 to-indigo-600 text-white rounded-br-none shadow-md' 
+                                : 'bg-zinc-950 border border-zinc-800 text-zinc-200 rounded-bl-none'
+                            }`}>
+                              <p className="font-semibold text-[10px] opacity-75 mb-1">
+                                {isOutbound ? 'Ras Ali Labs Support' : activeConv.participantName}
+                              </p>
+                              <p className="whitespace-pre-wrap">{msg.message_text}</p>
+                            </div>
+                            <span className="text-[10px] text-zinc-500 font-mono mt-1 px-1">
+                              {msg.timestamp || 'Just now'}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* AI Smart Reply Suggestions */}
+                    <div className="flex flex-wrap gap-1.5 pt-2 border-t border-zinc-800/80">
+                      <span className="text-[10px] text-zinc-400 font-semibold flex items-center gap-1 mr-1">
+                        <Sparkles className="w-3 h-3 text-purple-400" /> Mari AI Quick Replies:
+                      </span>
+                      {[
+                        'We would be delighted to schedule an enterprise architecture demo for your team this week.',
+                        'All Ralion OS deployments include sovereign multi-region encryption and dedicated SADC telemetry.',
+                        'Thank you for reaching out! Our lead technical consultant will contact you via email shortly.'
+                      ].map((promptText, i) => (
+                        <button
+                          key={i}
+                          onClick={() => setInboxReplyText(promptText)}
+                          className="px-2.5 py-1 rounded-lg bg-zinc-950 border border-zinc-800 hover:border-teal-500/50 text-[10px] text-zinc-300 hover:text-white transition-all text-left"
+                        >
+                          "{promptText.slice(0, 48)}..."
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Reply Input & Send Button */}
+                    <div className="flex items-center gap-2 pt-2">
+                      <textarea
+                        rows={2}
+                        value={inboxReplyText}
+                        onChange={e => setInboxReplyText(e.target.value)}
+                        placeholder="Write direct response to customer as Ras Ali Labs..."
+                        className="flex-1 p-3 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-teal-500 resize-none font-sans"
+                      />
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        disabled={isSendingInboxReply || !inboxReplyText.trim()}
+                        onClick={handleSendInboxReply}
+                        className="h-full px-5 bg-teal-600 hover:bg-teal-700 font-bold text-xs shrink-0 flex items-center gap-1.5 shadow-lg shadow-teal-600/30"
+                      >
+                        {isSendingInboxReply ? 'Sending...' : <><Send className="w-3.5 h-3.5" /> Send Reply</>}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
           </div>
         </div>
       )}
@@ -3659,11 +4140,23 @@ function GrowthPageContent() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-semibold text-zinc-300">Target Channel</label>
-              <div className="mt-1 px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-indigo-500/40 text-xs text-indigo-300 font-bold flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-400"></span> Facebook Page (@rasalibass)
+              <label className="text-xs font-semibold text-zinc-300">Target Social Destination</label>
+              <div className="mt-1 p-2.5 rounded-xl bg-zinc-950 border border-indigo-500/40 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center font-bold text-xs text-indigo-400">
+                    fb
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                      ✓ Ras Ali Labs
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                    </div>
+                    <p className="text-[10px] text-zinc-400 font-mono">@rasalibass • ID: 477334159265235</p>
+                  </div>
+                </div>
+                <Badge variant="success" className="text-[9px] py-0 px-1.5">ACTIVE</Badge>
               </div>
             </div>
 
@@ -3673,7 +4166,7 @@ function GrowthPageContent() {
                 type="datetime-local" 
                 value={newPost.scheduledAt} 
                 onChange={e => setNewPost({ ...newPost, scheduledAt: e.target.value })}
-                className="w-full mt-1 px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white focus:outline-none"
+                className="w-full mt-1 px-3 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white focus:outline-none"
               />
             </div>
           </div>
@@ -3687,6 +4180,69 @@ function GrowthPageContent() {
               placeholder="Write Facebook post content..." 
               className="w-full mt-1 p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white resize-none focus:border-indigo-500 focus:outline-none font-mono" 
             />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-semibold text-zinc-300">Media Attachment (Image or Video)</label>
+              <span className="text-[10px] text-zinc-500 font-mono">Supports PNG, JPG, WebP, MP4, MOV</span>
+            </div>
+
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/*,video/*"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+
+            {!newPost.mediaUrl ? (
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 hover:border-indigo-500/50 text-xs text-zinc-300 hover:text-white transition-all flex items-center justify-center gap-2"
+                >
+                  <Image className="w-4 h-4 text-pink-400" /> Upload Image
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 hover:border-indigo-500/50 text-xs text-zinc-300 hover:text-white transition-all flex items-center justify-center gap-2"
+                >
+                  <Video className="w-4 h-4 text-blue-400" /> Upload Video
+                </button>
+              </div>
+            ) : (
+              <div className="p-3 rounded-2xl bg-zinc-950 border border-indigo-500/30 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-12 h-12 rounded-xl overflow-hidden bg-black border border-zinc-800 shrink-0 flex items-center justify-center">
+                    {newPost.mediaType === 'video' ? (
+                      <video src={newPost.mediaUrl} className="w-full h-full object-cover" />
+                    ) : (
+                      <img src={newPost.mediaUrl} alt="Upload Preview" className="w-full h-full object-cover" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant={newPost.mediaType === 'video' ? 'primary' : 'purple'} className="text-[9px]">
+                        {newPost.mediaType?.toUpperCase()}
+                      </Badge>
+                      <p className="text-xs font-semibold text-white truncate">{newPost.mediaFileName || 'Media attached'}</p>
+                    </div>
+                    <p className="text-[10px] text-emerald-400 mt-0.5">✓ Ready to publish to Facebook Page</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleRemoveMedia}
+                  className="p-1.5 rounded-lg bg-zinc-900 hover:bg-red-950/60 text-zinc-400 hover:text-red-300 border border-zinc-800 transition-all text-xs"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
           </div>
 
           <div>
@@ -3707,19 +4263,30 @@ function GrowthPageContent() {
               size="sm" 
               disabled={isConnecting}
               onClick={async () => {
-                if (!newPost.title.trim() || !newPost.body.trim()) return;
+                const topic = newPost.title.trim();
+                const contentBody = newPost.body.trim();
+
+                if (!contentBody) {
+                  setOauthAlert({
+                    type: 'error',
+                    message: 'Select a connected social account and enter post copy before publishing.',
+                  });
+                  return;
+                }
+
                 setIsConnecting(true);
 
                 const payload = {
-                  title: newPost.title,
-                  body: `${newPost.body}\n\n${newPost.hashtags}`.trim(),
+                  title: topic || 'Ras Ali Labs Social Post',
+                  body: `${contentBody}\n\n${newPost.hashtags}`.trim(),
                   platforms: ['facebook'],
+                  mediaUrls: newPost.mediaUrl ? [newPost.mediaUrl] : undefined,
+                  mediaTypes: newPost.mediaType ? [newPost.mediaType] : undefined,
                   scheduledFor: newPost.scheduledAt || undefined,
                   authorName: 'Ras Ali Labs',
+                  socialConnectionId: '6a82df7277555aae018b92b4',
+                  pageId: '477334159265235',
                 };
-
-                let publishedPostId = `fb_post_${Date.now()}`;
-                let postUrl = `https://www.facebook.com/477334159265235/posts/`;
 
                 try {
                   const res = await fetch('/api/social/publish', {
@@ -3727,61 +4294,83 @@ function GrowthPageContent() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload),
                   });
-                  if (res.ok) {
-                    const data = await res.json();
-                    if (data.result?.postId) {
-                      publishedPostId = data.result.postId;
-                    }
-                    if (data.result?.platformResults?.facebook?.postUrl) {
-                      postUrl = data.result.platformResults.facebook.postUrl;
-                    }
+
+                  const data = await res.json().catch(() => ({}));
+
+                  if (!res.ok || data.success === false) {
+                    const errorMsg = data.error || `Publishing returned HTTP ${res.status}`;
+                    setOauthAlert({
+                      type: 'error',
+                      message: `✕ Facebook publishing failed: ${errorMsg}`,
+                    });
+                    setIsConnecting(false);
+                    return;
                   }
-                } catch (publishErr) {
-                  console.warn('Direct API publish call handled:', publishErr);
+
+                  const publishedPostId = data.postId || data.result?.postId || `fb_post_${Date.now()}`;
+                  const postUrl =
+                    data.result?.platformResults?.facebook?.postUrl ||
+                    data.platformResults?.facebook?.postUrl ||
+                    'https://www.facebook.com/477334159265235';
+
+                  const createdPost: ContentPost = {
+                    id: publishedPostId,
+                    title: topic || 'Social Post',
+                    body: contentBody,
+                    platform: 'facebook',
+                    hashtags: newPost.hashtags ? newPost.hashtags.split(' ').filter(Boolean) : [],
+                    status: newPost.scheduledAt ? 'scheduled' : 'published',
+                    publishedAt: newPost.scheduledAt ? undefined : new Date().toLocaleString(),
+                    scheduledAt: newPost.scheduledAt || undefined,
+                    mediaUrl: newPost.mediaUrl,
+                    mediaType: newPost.mediaType,
+                    engagement: { likes: 1, shares: 0, reach: 1, comments: 0 },
+                  };
+
+                  const fbFeedItem = {
+                    id: publishedPostId,
+                    title: topic || 'Social Post',
+                    body: contentBody,
+                    publishedAt: 'Just now',
+                    status: newPost.scheduledAt ? 'scheduled' : 'published',
+                    source: 'RALION',
+                    permalink: postUrl,
+                    engagement: { likes: 1, comments: 0, shares: 0, reach: 1 },
+                  };
+
+                  setPosts(prev => [createdPost, ...prev]);
+                  setFacebookPagePosts(prev => [fbFeedItem, ...prev]);
+                  setIsCreateOpen(false);
+                  setIsConnecting(false);
+                  setNewPost({
+                    title: '',
+                    body: '',
+                    platform: 'facebook',
+                    hashtags: '#RalionOS #RasAliLabs #EnterpriseAI',
+                    scheduledAt: '',
+                    mediaUrl: undefined,
+                    mediaType: undefined,
+                    mediaFileName: undefined,
+                  });
+
+                  setOauthAlert({
+                    type: 'success',
+                    message: newPost.scheduledAt
+                      ? `🗓️ Post scheduled for Facebook Page (@rasalibass)!`
+                      : `✓ Published to Facebook Page — Ras Ali Labs (Published just now)`,
+                    actionUrl: postUrl,
+                    actionLabel: 'View on Facebook',
+                  });
+
+                  // Revalidate real posts from server
+                  fetchLiveFacebookPosts();
+                } catch (publishErr: any) {
+                  setOauthAlert({
+                    type: 'error',
+                    message: `✕ Facebook publishing failed: ${publishErr.message}`,
+                  });
+                  setIsConnecting(false);
                 }
-
-                const createdPost: ContentPost = {
-                  id: publishedPostId,
-                  title: newPost.title,
-                  body: newPost.body,
-                  platform: 'facebook',
-                  hashtags: newPost.hashtags ? newPost.hashtags.split(' ').filter(Boolean) : [],
-                  status: newPost.scheduledAt ? 'scheduled' : 'published',
-                  publishedAt: newPost.scheduledAt ? undefined : new Date().toLocaleString(),
-                  scheduledAt: newPost.scheduledAt || undefined,
-                  engagement: { likes: 0, shares: 0, reach: 1, comments: 0 },
-                };
-
-                const fbFeedItem = {
-                  id: publishedPostId,
-                  title: newPost.title,
-                  body: newPost.body,
-                  publishedAt: 'Just now',
-                  status: newPost.scheduledAt ? 'scheduled' : 'published',
-                  source: 'RALION',
-                  permalink: postUrl,
-                  engagement: { likes: 0, comments: 0, shares: 0, reach: 1 },
-                };
-
-                setPosts(prev => [createdPost, ...prev]);
-                setFacebookPagePosts(prev => [fbFeedItem, ...prev]);
-                setIsCreateOpen(false);
-                setIsConnecting(false);
-                setNewPost({
-                  title: '',
-                  body: '',
-                  platform: 'facebook',
-                  hashtags: '#RalionOS #RasAliLabs #EnterpriseAI',
-                  scheduledAt: '',
-                });
-
-                setOauthAlert({
-                  type: 'success',
-                  message: newPost.scheduledAt
-                    ? `🗓️ Post scheduled for Facebook Page (@rasalibass)!`
-                    : `✅ Post published live to Facebook Page (@rasalibass)!`,
-                });
-                setTimeout(() => setOauthAlert(null), 8000);
               }}
               className="bg-indigo-600 hover:bg-indigo-700 font-bold text-xs"
             >
@@ -3790,6 +4379,122 @@ function GrowthPageContent() {
           </div>
         </div>
       </Modal>
+
+      {/* ==================================== */}
+      {/* MODAL: FACEBOOK COMMENTS MANAGEMENT */}
+      {/* ==================================== */}
+      {isCommentsModalOpen && selectedCommentPost && (
+        <Modal 
+          isOpen={isCommentsModalOpen} 
+          onClose={() => {
+            setIsCommentsModalOpen(false);
+            setSelectedCommentPost(null);
+          }} 
+          title="Facebook Post Comments & Community Management"
+        >
+          <div className="flex flex-col gap-4">
+            {/* Post Snippet */}
+            <div className="p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center font-bold text-white text-xs shrink-0">
+                RAL
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-white text-xs">Ras Ali Labs</span>
+                  <span className="text-[10px] text-zinc-500 font-mono">@rasalibass</span>
+                </div>
+                <p className="text-xs text-zinc-300 mt-1 line-clamp-2">{selectedCommentPost.body}</p>
+              </div>
+            </div>
+
+            {/* Comments List */}
+            <div className="flex flex-col gap-3 max-h-72 overflow-y-auto pr-1">
+              <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+                <span className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
+                  <MessageCircle className="w-3.5 h-3.5 text-emerald-400" /> Active Comments ({postComments.length})
+                </span>
+                <span className="text-[10px] text-emerald-400 font-semibold">● Facebook Page Live Feed</span>
+              </div>
+
+              {isLoadingComments ? (
+                <div className="p-6 text-center text-xs text-zinc-400">Loading comments...</div>
+              ) : postComments.length === 0 ? (
+                <div className="p-6 text-center text-xs text-zinc-500 italic">No comments on this post yet.</div>
+              ) : (
+                postComments.map((c) => (
+                  <div key={c.id} className="p-3 rounded-xl bg-zinc-950 border border-zinc-800/80 flex flex-col gap-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        {c.authorAvatarUrl ? (
+                          <img src={c.authorAvatarUrl} alt={c.authorName} className="w-6 h-6 rounded-full object-cover" />
+                        ) : (
+                          <div className="w-6 h-6 rounded-full bg-blue-600/20 text-blue-400 text-[10px] flex items-center justify-center font-bold">
+                            {c.authorName.slice(0, 1)}
+                          </div>
+                        )}
+                        <span className="text-xs font-bold text-white">{c.authorName}</span>
+                        <span className="text-[10px] text-zinc-500 font-mono">• {c.createdAt}</span>
+                      </div>
+                      <span className="text-[10px] text-zinc-400">❤️ {c.likesCount}</span>
+                    </div>
+
+                    <p className="text-xs text-zinc-200 pl-8 leading-relaxed">{c.commentText}</p>
+
+                    {/* Nested Replies */}
+                    {c.replies && c.replies.length > 0 && (
+                      <div className="ml-8 mt-1 flex flex-col gap-2 pl-3 border-l-2 border-indigo-500/40">
+                        {c.replies.map((rep: any) => (
+                          <div key={rep.id} className="p-2 rounded-lg bg-indigo-950/20 border border-indigo-500/20 text-xs">
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <span className="font-bold text-indigo-300 text-[11px]">{rep.authorName}</span>
+                              <Badge variant="success" className="text-[8px] py-0 px-1">PAGE OWNER</Badge>
+                              <span className="text-[9px] text-zinc-500 font-mono">• {rep.createdAt}</span>
+                            </div>
+                            <p className="text-zinc-300 text-[11px] leading-relaxed">{rep.replyText}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Inline Reply Input for this comment */}
+                    <div className="ml-8 mt-1 flex items-center gap-2 pt-1">
+                      <input
+                        type="text"
+                        value={newCommentReplyText}
+                        onChange={e => setNewCommentReplyText(e.target.value)}
+                        placeholder="Reply to this comment as Ras Ali Labs..."
+                        className="flex-1 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-white focus:outline-none focus:border-indigo-500 font-sans"
+                      />
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        disabled={isSubmittingReply || !newCommentReplyText.trim()}
+                        onClick={() => handleSendCommentReply(c.id, selectedCommentPost.id)}
+                        className="text-[11px] font-bold bg-indigo-600 hover:bg-indigo-700 py-1 px-3"
+                      >
+                        {isSubmittingReply ? 'Posting...' : 'Reply'}
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-zinc-800">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => {
+                  setIsCommentsModalOpen(false);
+                  setSelectedCommentPost(null);
+                }}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* ==================================== */}
       {/* MODAL: CONNECT SOCIAL ACCOUNT */}

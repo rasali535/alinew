@@ -1,34 +1,81 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SocialPublishingService } from '@/lib/services/social/socialPublishing.service';
 
-export const dynamic = 'force-static';
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { userId, workspaceId, title, body: postBody, mediaUrls, mediaTypes, platforms, scheduledFor, authorName } = body;
+    const {
+      userId,
+      workspaceId,
+      organizationId,
+      title,
+      content,
+      body: postBody,
+      mediaUrls,
+      mediaItems,
+      mediaTypes,
+      platforms,
+      scheduledFor,
+      socialConnectionId,
+      authorName,
+    } = body;
 
-    if (!postBody || !platforms || platforms.length === 0) {
-      return NextResponse.json({ success: false, error: 'Post content and at least one platform are required.' }, { status: 400 });
+    const actualContent = content || postBody;
+
+    console.log('[UI_PUBLISH_REQUEST_RECEIVED]', {
+      endpoint: '/api/social/publish',
+      platforms: platforms || ['facebook'],
+      hasContent: Boolean(actualContent),
+      contentLength: actualContent?.length || 0,
+      hasMedia: Boolean((mediaUrls || mediaItems)?.length),
+      isScheduled: Boolean(scheduledFor),
+      timestamp: new Date().toISOString(),
+    });
+
+    if (!actualContent) {
+      return NextResponse.json(
+        { success: false, error: 'Post content is required before publishing.' },
+        { status: 400 }
+      );
     }
+
+    const targetPlatforms = Array.isArray(platforms) && platforms.length > 0
+      ? platforms
+      : ['facebook'];
 
     const result = await SocialPublishingService.publish({
       userId: userId || 'default-user',
       workspaceId,
-      title,
-      body: postBody,
-      mediaUrls,
+      organizationId,
+      title: title || 'Social Post',
+      body: actualContent,
+      mediaUrls: mediaUrls || mediaItems || [],
       mediaTypes,
-      platforms,
+      platforms: targetPlatforms,
       scheduledFor: scheduledFor ? new Date(scheduledFor) : undefined,
-      authorName,
+      authorName: authorName || 'Ras Ali Labs',
+    });
+
+    const isSuccess = result.overallStatus === 'PUBLISHED' || result.overallStatus === 'QUEUED';
+
+    console.log('[ZERNIO_PUBLISH_RESPONSE]', {
+      overallStatus: result.overallStatus,
+      postId: result.postId,
+      platformResults: result.platformResults,
+      success: isSuccess,
     });
 
     return NextResponse.json({
-      success: result.overallStatus !== 'FAILED',
+      success: isSuccess,
+      postId: result.postId,
+      overallStatus: result.overallStatus,
+      platformResults: result.platformResults,
       result,
-    });
+    }, { status: isSuccess ? 200 : 500 });
   } catch (error: any) {
+    console.error('[UI_PUBLISH_REQUEST_ERROR]', error.message);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

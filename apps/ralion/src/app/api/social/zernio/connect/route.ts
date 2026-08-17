@@ -4,7 +4,7 @@ import { SocialPlatformType, ZernioSocialService } from '@ralion/integrations';
 import { SocialProviderRouter } from '@/lib/services/social/socialProviderRouter.service';
 import { AuditLoggerService } from '@/lib/services/auditLogger.service';
 
-export const dynamic = 'force-static';
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {

@@ -326,10 +326,32 @@ export class ZernioSocialService {
       });
     }
 
+    // Format media items for Zernio schema: Array<{ url: string, type: 'image' | 'video' }>
+    let normalizedMediaItems: Array<{ url: string; type: 'image' | 'video' }> = [];
+    const rawMedia = params.mediaItems || params.mediaUrls || [];
+
+    if (Array.isArray(rawMedia) && rawMedia.length > 0) {
+      normalizedMediaItems = rawMedia
+        .map((m: any) => {
+          if (typeof m === 'string') {
+            const isVideo = /\.(mp4|mov|webm|m4v)(\?.*)?$/i.test(m);
+            return { url: m, type: isVideo ? ('video' as const) : ('image' as const) };
+          }
+          if (m && typeof m === 'object' && (m.url || m.uri || m.link)) {
+            return {
+              url: m.url || m.uri || m.link,
+              type: m.type === 'video' ? ('video' as const) : ('image' as const),
+            };
+          }
+          return null;
+        })
+        .filter((m: any): m is { url: string; type: 'image' | 'video' } => Boolean(m && m.url));
+    }
+
     const payload = {
       content: params.content || params.body || params.message || '',
       platforms: platformsPayload,
-      mediaItems: params.mediaUrls || params.mediaItems || [],
+      mediaItems: normalizedMediaItems,
       publishNow: params.publishNow !== false && !params.scheduledFor,
       ...(params.scheduledFor ? { scheduledFor: params.scheduledFor } : {}),
       ...(params.profileId ? { profileId: params.profileId } : {}),
