@@ -1,0 +1,1 @@
+self.__SSG_MANIFEST=new Set(["\u002Fapi\u002Foauth\u002F[provider]\u002Fcallback"]);self.__SSG_MANIFEST_CB&&self.__SSG_MANIFEST_CB()
