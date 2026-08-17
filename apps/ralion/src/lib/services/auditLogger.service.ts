@@ -51,7 +51,12 @@ export type SecurityEventType =
   | 'ADMIN_ACTION'
   | 'SECURITY_ALERT'
   | 'ACCOUNT_LOCKED'
-  | 'ACCOUNT_UNLOCKED';
+  | 'ACCOUNT_UNLOCKED'
+  | 'FACEBOOK_PAGE_CONNECTED'
+  | 'FACEBOOK_PAGE_DISCONNECTED'
+  | 'FACEBOOK_PAGE_CONNECTION_BLOCKED'
+  | 'MARI_PAGE_ANALYSIS'
+  | 'MARI_GROWTH_RECOMMENDATION';
 
 export type SecurityEventCategory =
   | 'AUTH'
@@ -59,7 +64,8 @@ export type SecurityEventCategory =
   | 'ADMIN'
   | 'SECURITY'
   | 'DATA_ACCESS'
-  | 'RBAC';
+  | 'RBAC'
+  | 'MARI_AI';
 
 export interface SecurityLogParams {
   eventType: SecurityEventType;
