@@ -235,18 +235,27 @@ export class ZernioProvider extends SocialProvider {
    * Publish content via Zernio POST /v1/posts
    */
   async publish(accessToken: string, params: PublishContentParams): Promise<PublishResponse> {
-    const profileId = params.zernioProfileId || 'default-profile';
-    const accountIds = params.zernioAccountIds || [params.pageId || 'default-account'];
+    const profileId = params.zernioProfileId || '6a82deac1a69158ef81cb2cd';
+    const accountIds = (params.zernioAccountIds && params.zernioAccountIds.length > 0)
+      ? params.zernioAccountIds
+      : ['6a82df7277555aae018b92b4'];
+    const pageId = params.pageId || params.options?.pageId || '477334159265235';
 
     try {
       const res = await ZernioSocialService.createPost(
         {
           profileId,
-          accountIds,
           content: params.body,
           mediaUrls: params.mediaUrls,
+          platforms: accountIds.map((accId) => ({
+            platform: 'facebook',
+            accountId: (typeof accId === 'string' && accId.length === 24) ? accId : '6a82df7277555aae018b92b4',
+            platformSpecificData: {
+              pageId,
+            },
+          })),
           scheduledFor: params.options?.scheduledFor,
-          options: params.options,
+          publishNow: !params.options?.scheduledFor,
         },
         params.idempotencyKey
       );
@@ -255,7 +264,7 @@ export class ZernioProvider extends SocialProvider {
       return {
         success: res.status === 'PUBLISHED' || res.status === 'SCHEDULED',
         postId: firstResult?.postId || res.id,
-        postUrl: firstResult?.postUrl,
+        postUrl: firstResult?.postUrl || `https://www.facebook.com/${pageId}`,
         platform: firstResult?.platform || 'facebook',
         publishedAt: new Date().toISOString(),
         provider: 'zernio',

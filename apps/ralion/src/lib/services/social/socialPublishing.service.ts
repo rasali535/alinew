@@ -138,11 +138,12 @@ export class SocialPublishingService {
       connMap.set('facebook', {
         id: 'conn_fb_verified_default',
         provider: 'facebook',
-        provider_account_id: '477334159265235',
+        provider_account_id: '6a82df7277555aae018b92b4',
         connection_status: 'CONNECTED',
         infrastructure_provider: 'zernio',
         zernio_profile_id: '6a82deac1a69158ef81cb2cd',
-        zernio_account_id: '477334159265235',
+        zernio_account_id: '6a82df7277555aae018b92b4',
+        page_id: '477334159265235',
       });
     }
 
@@ -180,14 +181,23 @@ export class SocialPublishingService {
 
         if (routing.provider === 'zernio') {
           // Dispatch via Zernio Infrastructure
+          const zernioAccId = (conn.zernio_account_id && conn.zernio_account_id.length === 24)
+            ? conn.zernio_account_id
+            : '6a82df7277555aae018b92b4';
+          const targetPageId = conn.page_id || conn.metadata?.pageId || '477334159265235';
+
           res = await routing.adapter.publish('zernio_master', {
             title: params.title,
             body: params.body,
             mediaUrls: params.mediaUrls,
             mediaTypes: params.mediaTypes,
             idempotencyKey: `${idempotencyKey}_${platform}`,
-            zernioProfileId: conn.zernio_profile_id || routing.zernioProfileId,
-            zernioAccountIds: [conn.zernio_account_id || conn.provider_account_id],
+            zernioProfileId: conn.zernio_profile_id || routing.zernioProfileId || '6a82deac1a69158ef81cb2cd',
+            zernioAccountIds: [zernioAccId],
+            pageId: targetPageId,
+            options: {
+              pageId: targetPageId,
+            },
           });
         } else {
           // Dispatch via Native Provider
