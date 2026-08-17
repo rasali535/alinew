@@ -21,13 +21,19 @@ export const ProductAccessGuard: React.FC<ProductAccessGuardProps> = ({ children
       const platformUrl = process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com';
 
       if (!session) {
-        if (isDesktop) {
-          // On Desktop app, grant desktop workspace access without forcing redirect to web login
-          setAccess({ hasAccess: true, edition: 'desktop_enterprise', status: 'active' });
+        const isLocalhost = typeof window !== 'undefined' && (
+          window.location.hostname === 'localhost' ||
+          window.location.hostname === '127.0.0.1' ||
+          window.location.protocol === 'file:'
+        );
+
+        if (isDesktop || isLocalhost || process.env.NODE_ENV === 'development') {
+          // On Desktop app or local development, grant workspace access without redirect loops
+          setAccess({ hasAccess: true, edition: isDesktop ? 'desktop_enterprise' : 'community', status: 'active' });
           setLoading(false);
           return;
         } else {
-          // Redirect to Ras Ali Labs platform login if no session exists on web
+          // Redirect to platform login if unauthenticated on remote web
           window.location.href = `${platformUrl}/login?redirect=${encodeURIComponent(window.location.href)}`;
           return;
         }

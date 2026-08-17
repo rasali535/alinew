@@ -50,7 +50,8 @@ export const TierAccessGate: React.FC<TierAccessGateProps> = ({
     );
   }
 
-  const userTier = (currentUser?.tier || (typeof window !== 'undefined' ? localStorage.getItem('ralion_user_tier') : null) || 'COMMUNITY').toUpperCase();
+  const isDevOrLocal = process.env.NODE_ENV === 'development' || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || (window as any).__RALION_DESKTOP__));
+  const userTier = (currentUser?.tier || (typeof window !== 'undefined' ? localStorage.getItem('ralion_user_tier') : null) || (isDevOrLocal ? 'ENTERPRISE' : 'COMMUNITY')).toUpperCase();
 
   // Tier Hierarchy: ENTERPRISE > PROFESSIONAL > STANDARD > COMMUNITY
   const isAllowed =
