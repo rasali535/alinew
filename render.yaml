@@ -1,5 +1,5 @@
 services:
-  # Backend Web Service
+  # 1. Chatbot & API Backend Web Service (Express/Node.js)
   - type: web
     name: alinew-chatbot-backend
     runtime: node
@@ -28,20 +28,25 @@ services:
       - key: RUN_MIGRATIONS
         value: "true"
       - key: CORS_ORIGINS
-        fromService:
-          type: web
-          name: alinew-chatbot-frontend
-          property: host
+        value: https://rasalilabs.com,http://localhost:5173,http://localhost:6509
 
-  # Frontend Static Site
+  # 2. Ralion Next.js Standalone Backend (Dynamic Social API & OAuth)
   - type: web
-    name: alinew-chatbot-frontend
-    runtime: static
-    buildCommand: npm install && npm run build
-    staticPublishPath: build
+    name: ralion-dynamic-backend
+    runtime: docker
+    dockerfilePath: Dockerfile.ralion
     envVars:
-      - key: VITE_API_URL
-        fromService:
-          type: web
-          name: alinew-chatbot-backend
-          property: host
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        value: https://yidsfihagwttlmhfynmf.supabase.co
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpZHNmaWhhZ3d0dGxtaGZ5bm1mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4MjM5NDUsImV4cCI6MjA5ODM5OTk0NX0.r-hhC-BT3WCf9JLq-HeTHXIFkulM5XkorUEfkqMhc-g
+      - key: NEXT_PUBLIC_APP_URL
+        value: https://rasalilabs.com/ralion
+      - key: NEXT_PUBLIC_RASALI_PLATFORM_URL
+        value: https://rasalilabs.com
+      - key: NEXT_STANDALONE
+        value: "1"
