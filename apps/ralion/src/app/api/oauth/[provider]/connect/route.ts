@@ -5,7 +5,8 @@ import {
   generateCodeVerifier, generateCodeChallenge,
   SUPPORTED_SOCIAL_PROVIDERS
 } from '@/lib/services/social.service';
-import { generateOAuthState } from '@ralion/integrations';
+import { generateOAuthState, ZernioSocialService } from '@ralion/integrations';
+import { SocialProviderRouter } from '@/lib/services/social/socialProviderRouter.service';
 
 const ALL_PROVIDERS = [
   'google', 'meta', 'facebook', 'instagram', 'whatsapp', 'microsoft', 'linkedin', 'tiktok',
@@ -41,19 +42,48 @@ export async function GET(
     // Generate CSRF state token embedding userId + provider
     const stateToken = generateOAuthState(userId, provider);
 
+    // Check if routed to Zernio infrastructure
+    const normalizedPlatform = (provider === 'twitter' ? 'x' : provider) as any;
+    if (SocialProviderRouter.isZernioEnabledForPlatform(normalizedPlatform)) {
+      try {
+        const profileId = await SocialProviderRouter.getOrCreateZernioProfile({ userId });
+        if (profileId) {
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+          const callbackUrl = `${appUrl}/ralion/growth?connected=${provider}&provider=zernio`;
+          const zernioConnect = await ZernioSocialService.getConnectUrl(
+            normalizedPlatform,
+            profileId,
+            callbackUrl
+          );
+          if (zernioConnect?.authUrl) {
+            const response = NextResponse.json({
+              success: true,
+              provider,
+              authorizationUrl: zernioConnect.authUrl,
+              infrastructure: 'zernio',
+              stateToken,
+            });
+            return response;
+          }
+        }
+      } catch (zErr: any) {
+        console.warn(`[OAuth Connect] Zernio routing fallback for ${provider}:`, zErr.message);
+      }
+    }
+
     // Build provider-specific authorization URL with credential checks
     let authorizationUrl: string;
     switch (provider) {
       case 'linkedin':
         if (!linkedinAdapter.clientId()) {
-          return NextResponse.json({ success: false, error: 'LinkedIn is not configured. Please add LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET to .env.local' }, { status: 400 });
+          return NextResponse.json({ success: false, error: 'LinkedIn is not configured. Please add LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET to .env.local or use Zernio' }, { status: 400 });
         }
         authorizationUrl = linkedinAdapter.getAuthUrl(stateToken);
         break;
       case 'facebook':
       case 'instagram':
         if (!metaAdapter.clientId()) {
-          return NextResponse.json({ success: false, error: 'Meta (Facebook/Instagram) is not configured. Please add FACEBOOK_APP_ID and FACEBOOK_APP_SECRET to .env.local' }, { status: 400 });
+          return NextResponse.json({ success: false, error: 'Meta (Facebook/Instagram) is not configured. Please add FACEBOOK_APP_ID and FACEBOOK_APP_SECRET to .env.local or use Zernio' }, { status: 400 });
         }
         authorizationUrl = metaAdapter.getAuthUrl(stateToken, provider as 'facebook' | 'instagram');
         break;
@@ -66,14 +96,14 @@ export async function GET(
         break;
       case 'tiktok':
         if (!tiktokAdapter.clientKey()) {
-          return NextResponse.json({ success: false, error: 'TikTok is not configured. Please add TIKTOK_CLIENT_KEY and TIKTOK_CLIENT_SECRET to .env.local' }, { status: 400 });
+          return NextResponse.json({ success: false, error: 'TikTok is not configured. Please add TIKTOK_CLIENT_KEY and TIKTOK_CLIENT_SECRET to .env.local or use Zernio' }, { status: 400 });
         }
         authorizationUrl = tiktokAdapter.getAuthUrl(stateToken, codeChallenge);
         break;
       case 'youtube':
       case 'google':
         if (!youtubeAdapter.clientId()) {
-          return NextResponse.json({ success: false, error: 'Google/YouTube is not configured. Please add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env.local' }, { status: 400 });
+          return NextResponse.json({ success: false, error: 'Google/YouTube is not configured. Please add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env.local or use Zernio' }, { status: 400 });
         }
         authorizationUrl = youtubeAdapter.getAuthUrl(stateToken, provider as 'youtube' | 'google');
         break;

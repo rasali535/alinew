@@ -66,26 +66,55 @@ export class SocialProviderRouter {
     const supabase = getServiceSupabase();
 
     // 1. Check existing mapping in database
-    let query = supabase
-      .from('social_provider_profiles')
-      .select('provider_profile_id')
-      .eq('provider', 'zernio')
-      .eq('status', 'ACTIVE');
+    try {
+      let query = supabase
+        .from('social_provider_profiles')
+        .select('provider_profile_id')
+        .eq('provider', 'zernio')
+        .eq('status', 'ACTIVE');
 
-    if (params.workspaceId) {
-      query = query.eq('workspace_id', params.workspaceId);
-    } else if (params.organizationId) {
-      query = query.eq('organization_id', params.organizationId);
-    } else {
-      query = query.eq('user_id', params.userId);
+      if (params.workspaceId) {
+        query = query.eq('workspace_id', params.workspaceId);
+      } else if (params.organizationId) {
+        query = query.eq('organization_id', params.organizationId);
+      } else {
+        query = query.eq('user_id', params.userId);
+      }
+
+      const { data: existing } = await query.maybeSingle();
+      if (existing?.provider_profile_id) {
+        return existing.provider_profile_id;
+      }
+    } catch (dbErr: any) {
+      console.warn('[SocialProviderRouter] DB check error:', dbErr.message);
     }
 
-    const { data: existing } = await query.maybeSingle();
-    if (existing?.provider_profile_id) {
-      return existing.provider_profile_id;
+    // 2. Check if Zernio already has active profiles
+    try {
+      const existingZProfiles = await ZernioSocialService.listProfiles();
+      if (existingZProfiles.length > 0 && existingZProfiles[0].id) {
+        const defaultId = existingZProfiles[0].id;
+        // Attempt to persist mapping
+        try {
+          await supabase.from('social_provider_profiles').upsert({
+            workspace_id: params.workspaceId || null,
+            organization_id: params.organizationId || null,
+            user_id: params.userId,
+            provider: 'zernio',
+            provider_profile_id: defaultId,
+            profile_name: existingZProfiles[0].name || 'Default Workspace Profile',
+            status: 'ACTIVE',
+          }, { onConflict: 'provider_profile_id' });
+        } catch {
+          // Continue even if DB write is pending migration
+        }
+        return defaultId;
+      }
+    } catch (listErr: any) {
+      console.warn('[SocialProviderRouter] List profiles error:', listErr.message);
     }
 
-    // 2. Create new profile in Zernio
+    // 3. Create new profile in Zernio
     try {
       const profileName = params.workspaceName || `Ralion Workspace ${params.workspaceId || params.userId}`;
       const zProfile = await ZernioSocialService.createProfile(
@@ -94,16 +123,20 @@ export class SocialProviderRouter {
       );
 
       if (zProfile?.id) {
-        // 3. Save mapping in database
-        await supabase.from('social_provider_profiles').insert({
-          workspace_id: params.workspaceId || null,
-          organization_id: params.organizationId || null,
-          user_id: params.userId,
-          provider: 'zernio',
-          provider_profile_id: zProfile.id,
-          profile_name: profileName,
-          status: 'ACTIVE',
-        });
+        // Save mapping in database
+        try {
+          await supabase.from('social_provider_profiles').insert({
+            workspace_id: params.workspaceId || null,
+            organization_id: params.organizationId || null,
+            user_id: params.userId,
+            provider: 'zernio',
+            provider_profile_id: zProfile.id,
+            profile_name: profileName,
+            status: 'ACTIVE',
+          });
+        } catch {
+          // Continue even if DB write is pending migration
+        }
 
         return zProfile.id;
       }

@@ -146,11 +146,12 @@ export class ZernioSocialService {
   ): Promise<ZernioProfileModel> {
     const payload = { name, description };
     const res = await this.request<any>('profiles', 'POST', payload, { idempotencyKey });
+    const profileObj = res.profile || res;
     return {
-      id: res.id || res.profile?.id,
-      name: res.name || res.profile?.name || name,
-      description: res.description || description,
-      createdAt: res.createdAt || new Date().toISOString(),
+      id: profileObj._id || profileObj.id || res.id || res._id,
+      name: profileObj.name || name,
+      description: profileObj.description || description,
+      createdAt: profileObj.createdAt || new Date().toISOString(),
     };
   }
 
@@ -160,11 +161,12 @@ export class ZernioSocialService {
   static async getProfile(profileId: string): Promise<ZernioProfileModel | null> {
     try {
       const res = await this.request<any>(`profiles/${profileId}`, 'GET');
+      const profileObj = res.profile || res;
       return {
-        id: res.id || profileId,
-        name: res.name || 'Ralion Workspace',
-        description: res.description,
-        createdAt: res.createdAt || new Date().toISOString(),
+        id: profileObj._id || profileObj.id || profileId,
+        name: profileObj.name || 'Ralion Workspace',
+        description: profileObj.description,
+        createdAt: profileObj.createdAt || new Date().toISOString(),
       };
     } catch (err: any) {
       if (err.status === 404) return null;
@@ -179,7 +181,7 @@ export class ZernioSocialService {
     const res = await this.request<any>('profiles', 'GET');
     const profiles = Array.isArray(res) ? res : res.profiles || [];
     return profiles.map((p: any) => ({
-      id: p.id,
+      id: p._id || p.id,
       name: p.name,
       description: p.description,
       createdAt: p.createdAt || new Date().toISOString(),
@@ -224,7 +226,7 @@ export class ZernioSocialService {
     const accounts = Array.isArray(res) ? res : res.accounts || [];
 
     return accounts.map((a: any) => ({
-      id: a.id,
+      id: a._id || a.id,
       profileId: a.profileId || profileId,
       platform: (a.platform || 'facebook').toLowerCase() as SocialPlatformType,
       name: a.name || a.accountName || 'Connected Account',
@@ -247,7 +249,7 @@ export class ZernioSocialService {
       const res = await this.request<any>(`accounts/${accountId}`, 'GET');
       const a = res.account || res;
       return {
-        id: a.id || accountId,
+        id: a._id || a.id || accountId,
         profileId: a.profileId,
         platform: (a.platform || 'facebook').toLowerCase() as SocialPlatformType,
         name: a.name || a.accountName || 'Connected Account',
