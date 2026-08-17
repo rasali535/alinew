@@ -229,15 +229,15 @@ export class ZernioSocialService {
       id: a._id || a.id,
       profileId: a.profileId || profileId,
       platform: (a.platform || 'facebook').toLowerCase() as SocialPlatformType,
-      name: a.name || a.accountName || 'Connected Account',
-      username: a.username || a.handle,
-      avatarUrl: a.avatarUrl || a.profileImageUrl,
-      status: (a.status === 'connected' ? 'connected' : a.status === 'reauth_required' ? 'reauth_required' : 'disconnected') as any,
+      name: a.selectedPageName || a.accountName || a.name || 'Connected Account',
+      username: a.selectedPageUsername || a.username || a.handle,
+      avatarUrl: a.profilePicture || a.avatarUrl || a.profileImageUrl,
+      status: (a.platformStatus === 'active' || a.status === 'connected' || a.status === 'active') ? 'connected' : (a.needsReconnection || a.status === 'reauth_required') ? 'reauth_required' : 'disconnected',
       capabilities: a.capabilities || {},
-      followersCount: Number(a.followersCount || a.followers || 0),
+      followersCount: Number(a.followersCount || a.followers || a.fan_count || 0),
       createdAt: a.createdAt || new Date().toISOString(),
       updatedAt: a.updatedAt,
-      metadata: a.metadata || {},
+      metadata: a.metadata || a.pageInfo || {},
     }));
   }
 
@@ -252,15 +252,15 @@ export class ZernioSocialService {
         id: a._id || a.id || accountId,
         profileId: a.profileId,
         platform: (a.platform || 'facebook').toLowerCase() as SocialPlatformType,
-        name: a.name || a.accountName || 'Connected Account',
-        username: a.username || a.handle,
-        avatarUrl: a.avatarUrl || a.profileImageUrl,
-        status: a.status || 'connected',
+        name: a.selectedPageName || a.accountName || a.name || 'Connected Account',
+        username: a.selectedPageUsername || a.username || a.handle,
+        avatarUrl: a.profilePicture || a.avatarUrl || a.profileImageUrl,
+        status: (a.platformStatus === 'active' || a.status === 'connected' || a.status === 'active') ? 'connected' : (a.needsReconnection || a.status === 'reauth_required') ? 'reauth_required' : 'disconnected',
         capabilities: a.capabilities || {},
-        followersCount: Number(a.followersCount || a.followers || 0),
+        followersCount: Number(a.followersCount || a.followers || a.fan_count || 0),
         createdAt: a.createdAt || new Date().toISOString(),
         updatedAt: a.updatedAt,
-        metadata: a.metadata || {},
+        metadata: a.metadata || a.pageInfo || {},
       };
     } catch (err: any) {
       if (err.status === 404) return null;
@@ -372,6 +372,15 @@ export class ZernioSocialService {
   // =====================================================================
   // 6. Webhooks & Security Verification
   // =====================================================================
+
+  /**
+   * Generate HMAC-SHA256 signature for testing or validating webhook payloads
+   */
+  static generateWebhookSignature(rawBody: string, secret?: string): string {
+    const webhookSecret = secret || process.env.ZERNIO_WEBHOOK_SECRET || '';
+    if (!webhookSecret) return '';
+    return 'sha256=' + crypto.createHmac('sha256', webhookSecret).update(rawBody).digest('hex');
+  }
 
   /**
    * Verify HMAC-SHA256 signature from incoming Zernio webhook header

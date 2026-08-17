@@ -227,4 +227,64 @@ export class SocialProviderRouter {
       reason: 'Routed to Native provider adapter',
     };
   }
+
+  /**
+   * Synchronize all active accounts from Zernio into Ralion social_connections
+   */
+  static async syncAccountsFromZernio(params: {
+    userId: string;
+    workspaceId?: string;
+    organizationId?: string;
+  }): Promise<any[]> {
+    if (!ZernioSocialService.isConfigured()) return [];
+
+    const profileId = await this.getOrCreateZernioProfile(params);
+    if (!profileId) return [];
+
+    try {
+      const zAccounts = await ZernioSocialService.getAccounts(profileId);
+      const supabase = getServiceSupabase();
+      const synced: any[] = [];
+
+      for (const a of zAccounts) {
+        const platform = (a.platform || 'facebook').toLowerCase();
+        const row = {
+          user_id: params.userId,
+          organization_id: params.organizationId || null,
+          workspace_id: params.workspaceId || null,
+          provider: platform,
+          provider_account_id: a.id,
+          account_name: a.name || 'Connected Account',
+          username: a.username || a.name,
+          profile_image_url: a.avatarUrl || null,
+          connection_status: (a.status === 'connected' ? 'CONNECTED' : a.status === 'reauth_required' ? 'RECONNECT_REQUIRED' : 'DISCONNECTED') as any,
+          token_status: 'TOKEN_VALID' as any,
+          infrastructure_provider: 'zernio' as any,
+          zernio_account_id: a.id,
+          zernio_profile_id: profileId,
+          capabilities: a.capabilities || {},
+          followers_count: a.followersCount || 0,
+          last_sync_at: new Date().toISOString(),
+          connected_at: a.createdAt || new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+
+        try {
+          await supabase.from('social_connections').upsert(row, {
+            onConflict: 'user_id,provider,provider_account_id',
+          });
+          synced.push(row);
+        } catch (dbErr: any) {
+          console.warn(`[SocialProviderRouter] DB sync warning for ${platform}:`, dbErr.message);
+          synced.push(row);
+        }
+      }
+
+      return synced;
+    } catch (err: any) {
+      console.warn('[SocialProviderRouter] Zernio syncAccounts error:', err.message);
+      return [];
+    }
+  }
 }
+

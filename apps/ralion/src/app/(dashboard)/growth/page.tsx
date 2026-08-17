@@ -327,13 +327,41 @@ function GrowthPageContent() {
         }
       } catch {}
 
-      // 2. Direct query to Supabase social_account_tokens table & user identities
+      // 2. Direct query to Supabase social_connections & social_account_tokens tables
       try {
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
 
         if (user) {
-          // A. Direct query from Supabase social_account_tokens table
+          // A. Direct query from unified social_connections table
+          try {
+            const { data: conns, error: connErr } = await supabase
+              .from('social_connections')
+              .select('id, provider, account_name, username, profile_image_url, followers_count, scopes, connection_status, token_status, updated_at')
+              .eq('user_id', user.id)
+              .eq('connection_status', 'CONNECTED');
+
+            if (!connErr && Array.isArray(conns)) {
+              conns.forEach((c: any) => {
+                const prov = (c.provider || '').toLowerCase();
+                accountsMap[prov] = {
+                  id: c.id || `acc-${prov}`,
+                  provider: prov,
+                  label: c.account_name || prov,
+                  handle: c.username ? (c.username.startsWith('@') ? c.username : `@${c.username}`) : `@${prov}`,
+                  connectedAt: c.updated_at ? new Date(c.updated_at).toLocaleDateString() : 'Connected',
+                  status: c.connection_status === 'CONNECTED' ? 'connected' : 'expired',
+                  scopes: c.scopes || [],
+                  avatarUrl: c.profile_image_url,
+                  followers: c.followers_count ? Number(c.followers_count).toLocaleString() : undefined,
+                };
+              });
+            }
+          } catch (connDbErr) {
+            console.warn('[Growth] social_connections query skipped:', connDbErr);
+          }
+
+          // B. Legacy tokens fallback
           try {
             const { data: tokens, error: supabaseError } = await supabase
               .from('social_account_tokens')
@@ -343,40 +371,44 @@ function GrowthPageContent() {
             if (!supabaseError && Array.isArray(tokens)) {
               tokens.forEach((a: any) => {
                 const prov = (a.provider || '').toLowerCase();
-                accountsMap[prov] = {
-                  id: `acc-${prov}`,
-                  provider: prov,
-                  label: a.account_label || prov,
-                  handle: a.account_handle || `@${prov}`,
-                  connectedAt: a.updated_at ? new Date(a.updated_at).toLocaleDateString() : 'Connected',
-                  status: (a.token_expires_at && new Date(a.token_expires_at) < new Date()) ? 'expired' : 'connected',
-                  scopes: a.scopes || [],
-                  avatarUrl: a.avatar_url,
-                  followers: a.followers_count ? a.followers_count.toLocaleString() : undefined,
-                };
+                if (!accountsMap[prov]) {
+                  accountsMap[prov] = {
+                    id: `acc-${prov}`,
+                    provider: prov,
+                    label: a.account_label || prov,
+                    handle: a.account_handle || `@${prov}`,
+                    connectedAt: a.updated_at ? new Date(a.updated_at).toLocaleDateString() : 'Connected',
+                    status: (a.token_expires_at && new Date(a.token_expires_at) < new Date()) ? 'expired' : 'connected',
+                    scopes: a.scopes || [],
+                    avatarUrl: a.avatar_url,
+                    followers: a.followers_count ? a.followers_count.toLocaleString() : undefined,
+                  };
+                }
               });
             }
           } catch (dbErr) {
             console.warn('[Growth] Supabase tokens table query skipped:', dbErr);
           }
 
-          // B. Detect connected provider identities from Supabase auth profile
+          // C. Detect connected provider identities from Supabase auth profile
           const identities = user.identities || [];
           identities.forEach((identity: any) => {
             if (identity.provider && identity.provider !== 'email') {
               const prov = identity.provider === 'linkedin_oidc' ? 'linkedin' : (identity.provider === 'twitter' ? 'x' : identity.provider.toLowerCase());
-              const idData = identity.identity_data || user.user_metadata || {};
-              accountsMap[prov] = {
-                id: `acc-${prov}`,
-                provider: prov,
-                label: idData.full_name || idData.name || prov,
-                handle: idData.user_name ? `@${idData.user_name}` : (idData.email ? `@${idData.email.split('@')[0]}` : (user.user_metadata?.full_name ? `@${user.user_metadata.full_name.toLowerCase().replace(/\s+/g, '_')}` : `@${prov}_account`)),
-                connectedAt: identity.last_sign_in_at ? new Date(identity.last_sign_in_at).toLocaleDateString() : 'Connected',
-                status: 'connected',
-                scopes: ['public_profile', 'email'],
-                avatarUrl: idData.avatar_url || idData.picture || user.user_metadata?.avatar_url || null,
-                followers: undefined,
-              };
+              if (!accountsMap[prov]) {
+                const idData = identity.identity_data || user.user_metadata || {};
+                accountsMap[prov] = {
+                  id: `acc-${prov}`,
+                  provider: prov,
+                  label: idData.full_name || idData.name || prov,
+                  handle: idData.user_name ? `@${idData.user_name}` : (idData.email ? `@${idData.email.split('@')[0]}` : (user.user_metadata?.full_name ? `@${user.user_metadata.full_name.toLowerCase().replace(/\s+/g, '_')}` : `@${prov}_account`)),
+                  connectedAt: identity.last_sign_in_at ? new Date(identity.last_sign_in_at).toLocaleDateString() : 'Connected',
+                  status: 'connected',
+                  scopes: ['public_profile', 'email'],
+                  avatarUrl: idData.avatar_url || idData.picture || user.user_metadata?.avatar_url || null,
+                  followers: undefined,
+                };
+              }
             }
           });
         }
@@ -413,6 +445,7 @@ function GrowthPageContent() {
 
       const accountList = Object.values(accountsMap);
       setConnectedAccounts(accountList);
+
       
       // Keep localStorage in sync
       try {
