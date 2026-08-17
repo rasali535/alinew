@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SocialPublishingService } from '@/lib/services/social/socialPublishing.service';
 
-export const dynamic = 'force-dynamic';
+export const dynamic = 'force-static';
 
 export async function POST(request: NextRequest) {
   try {

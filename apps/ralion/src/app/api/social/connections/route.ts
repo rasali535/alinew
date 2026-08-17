@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-
-export const dynamic = 'force-dynamic';
 import { SocialProviderRegistry, SocialPlatformType, ZernioSocialService } from '@ralion/integrations';
+
+export const dynamic = 'force-static';
 import { SocialTokenManager } from '@/lib/services/social/socialTokenManager.service';
 import { SocialConnectionHealthService } from '@/lib/services/social/socialConnectionHealth.service';
 import { AuditLoggerService } from '@/lib/services/auditLogger.service';
@@ -28,28 +28,9 @@ export async function GET(request: NextRequest) {
       console.warn('[SocialConnectionsAPI] DB query notice:', error.message);
     }
 
-    // Return current connections or verified default accounts if table is fresh
-    const resolvedConnections = (connections && connections.length > 0) ? connections : [
-      {
-        id: 'conn_fb_1',
-        provider: 'facebook',
-        account_name: 'Ras Ali Labs',
-        username: '@rasalibass',
-        account_type: 'PAGE',
-        connection_status: 'CONNECTED',
-        token_status: 'TOKEN_VALID',
-        infrastructure_provider: 'zernio',
-        scopes: ['pages_manage_posts', 'pages_read_engagement', 'public_profile'],
-        capabilities: SocialProviderRegistry.getProvider('facebook', 'native').getCapabilities(),
-        followers_count: 107,
-        last_sync_at: new Date().toISOString(),
-      },
-    ];
-
-
     return NextResponse.json({
       success: true,
-      connections: resolvedConnections,
+      connections: connections || [],
       allCapabilities: SocialProviderRegistry.getAllCapabilities(),
     });
   } catch (error: any) {

@@ -188,21 +188,21 @@ export class FacebookPageManagementService {
     // 3. Assemble available pages list
     const pages: FacebookPageDescriptor[] = [];
 
-    // If verified live account exists, add it
+    // If accounts returned from Zernio, map them
     if (fbAccounts.length > 0) {
       fbAccounts.forEach((acc, idx) => {
-        const pageId = acc.metadata?.selectedPageId || acc.metadata?.pageId || acc.id || '477334159265235';
-        const isConnected = connectedPageIds.has(pageId) || idx === 0; // Primary active page
+        const pageId = acc.metadata?.selectedPageId || acc.metadata?.pageId || acc.id;
+        const isConnected = connectedPageIds.has(pageId) || idx === 0;
         const isLocked = !isConnected && entitlement.current >= entitlement.limit;
 
         pages.push({
           id: acc.id,
-          pageId,
-          name: acc.name || 'Ras Ali Labs',
-          username: acc.username || '@rasalibass',
+          pageId: pageId || acc.id,
+          name: acc.name || 'Facebook Page',
+          username: acc.username || `@${acc.name?.toLowerCase().replace(/\s+/g, '') || 'facebook'}`,
           avatarUrl: acc.avatarUrl,
-          category: acc.metadata?.category || 'Technology & Software',
-          followersCount: acc.followersCount || 107,
+          category: acc.metadata?.category || 'Business',
+          followersCount: Number(acc.followersCount) || 0,
           status: isConnected ? 'CONNECTED' : isLocked ? 'LOCKED' : 'AVAILABLE',
           capabilities: {
             canPublish: true,
@@ -213,23 +213,26 @@ export class FacebookPageManagementService {
           isCurrentDestination: isConnected,
         });
       });
-    } else {
-      // Fallback verified discovery descriptor
-      pages.push({
-        id: 'dest_fb_rasali',
-        pageId: '477334159265235',
-        name: 'Ras Ali Labs',
-        username: '@rasalibass',
-        category: 'Technology & AI',
-        followersCount: 107,
-        status: 'CONNECTED',
-        capabilities: {
-          canPublish: true,
-          canReadAnalytics: true,
-          canManagePosts: true,
-          canManageMessages: true,
-        },
-        isCurrentDestination: true,
+    } else if (existingDestinations && existingDestinations.length > 0) {
+      // Map destinations from database
+      existingDestinations.forEach((d) => {
+        pages.push({
+          id: d.id,
+          pageId: d.provider_page_id || d.id,
+          name: d.page_name || 'Facebook Page',
+          username: d.page_username || '@facebook_page',
+          avatarUrl: d.profile_image_url,
+          category: d.category || 'Business',
+          followersCount: Number(d.followers_count) || 0,
+          status: (d.status as any) || 'CONNECTED',
+          capabilities: d.capabilities || {
+            canPublish: true,
+            canReadAnalytics: true,
+            canManagePosts: true,
+            canManageMessages: true,
+          },
+          isCurrentDestination: true,
+        });
       });
     }
 
@@ -261,7 +264,7 @@ export class FacebookPageManagementService {
     }
     const { data: existing } = await existingQuery.maybeSingle();
 
-    const isReconnect = (!!existing && existing.status === 'CONNECTED' && existing.is_active) || params.pageId === '477334159265235';
+    const isReconnect = (!!existing && existing.status === 'CONNECTED' && existing.is_active);
 
     // 2. Enforce subscription limit if this is a NEW page connection
     if (!isReconnect && entitlement.current >= entitlement.limit) {
@@ -304,7 +307,7 @@ export class FacebookPageManagementService {
       page_username: params.pageData.username || '@facebook_page',
       profile_image_url: params.pageData.avatarUrl || null,
       category: params.pageData.category || 'Business',
-      followers_count: params.pageData.followersCount || 107,
+      followers_count: params.pageData.followersCount || 0,
       status: 'CONNECTED',
       is_active: true,
       capabilities: params.pageData.capabilities || { canPublish: true, canReadAnalytics: true },
@@ -331,13 +334,13 @@ export class FacebookPageManagementService {
         workspace_id: params.workspaceId || null,
         provider: 'facebook',
         provider_account_id: params.pageId,
-        account_name: params.pageData.name || 'Ras Ali Labs',
-        username: params.pageData.username || '@rasalibass',
+        account_name: params.pageData.name || 'Facebook Page',
+        username: params.pageData.username || '@facebook_page',
         account_type: 'PAGE',
         connection_status: 'CONNECTED',
         token_status: 'TOKEN_VALID',
         infrastructure_provider: 'zernio',
-        followers_count: params.pageData.followersCount || 107,
+        followers_count: params.pageData.followersCount || 0,
         zernio_profile_id: '6a82deac1a69158ef81cb2cd',
         zernio_account_id: params.pageData.id || params.pageId,
         updated_at: new Date().toISOString(),
@@ -439,8 +442,9 @@ export class FacebookPageManagementService {
       if (Array.isArray(zPosts) && zPosts.length > 0) {
         zPosts.forEach((zp: any) => {
           const fbPlatform = (zp.platforms || []).find((pl: any) => pl.platform === 'facebook') || zp.platforms?.[0];
-          const permalink = fbPlatform?.platformPostUrl || (fbPlatform?.platformPostId ? `https://www.facebook.com/${fbPlatform.platformPostId}` : 'https://www.facebook.com/477334159265235');
+          const permalink = fbPlatform?.platformPostUrl || (fbPlatform?.platformPostId ? `https://www.facebook.com/${fbPlatform.platformPostId}` : undefined);
           const isPublished = zp.status === 'published' || fbPlatform?.status === 'published';
+          const eng = zp.engagement || fbPlatform?.engagement || {};
 
           posts.push({
             id: zp._id || zp.id,
@@ -454,10 +458,10 @@ export class FacebookPageManagementService {
             permalink,
             source: 'RALION',
             engagement: {
-              likes: isPublished ? 28 : 0,
-              comments: isPublished ? 7 : 0,
-              shares: isPublished ? 4 : 0,
-              reach: isPublished ? 385 : 0,
+              likes: Number(eng.likes) || 0,
+              comments: Number(eng.comments) || 0,
+              shares: Number(eng.shares) || 0,
+              reach: Number(eng.reach) || 0,
             },
           });
         });
@@ -471,6 +475,7 @@ export class FacebookPageManagementService {
       dbPosts.forEach((p) => {
         if (!posts.some((existing) => existing.id === p.id)) {
           const fbResult = p.platform_results?.facebook;
+          const eng = p.engagement || fbResult?.engagement || {};
           posts.push({
             id: p.id,
             platformPostId: p.platform_post_ids?.facebook || fbResult?.postId,
@@ -480,13 +485,13 @@ export class FacebookPageManagementService {
             mediaType: p.media_types?.[0] || 'text',
             publishedAt: p.published_at || p.created_at,
             status: p.status === 'PUBLISHED' ? 'published' : p.status === 'QUEUED' ? 'scheduled' : 'draft',
-            permalink: fbResult?.postUrl || 'https://www.facebook.com/477334159265235',
+            permalink: fbResult?.postUrl || undefined,
             source: 'RALION',
             engagement: {
-              likes: 24,
-              comments: 6,
-              shares: 3,
-              reach: 340,
+              likes: Number(eng.likes) || 0,
+              comments: Number(eng.comments) || 0,
+              shares: Number(eng.shares) || 0,
+              reach: Number(eng.reach) || 0,
             },
           });
         }
@@ -504,20 +509,67 @@ export class FacebookPageManagementService {
     pageId?: string;
     period?: string;
   }): Promise<NormalizedPageAnalytics> {
+    const supabase = getServiceSupabase();
+    const pageId = params.pageId || '';
+
+    let followers = 0;
+    let pageName = 'Facebook Page';
+
+    try {
+      const { data: conn } = await supabase
+        .from('social_connections')
+        .select('account_name, followers_count')
+        .eq('provider', 'facebook')
+        .maybeSingle();
+
+      if (conn) {
+        followers = Number(conn.followers_count) || 0;
+        pageName = conn.account_name || pageName;
+      }
+    } catch {}
+
+    let totalPosts = 0;
+    let totalLikes = 0;
+    let totalComments = 0;
+    let totalShares = 0;
+    let totalReach = 0;
+
+    try {
+      const { data: posts } = await supabase
+        .from('social_posts')
+        .select('engagement, platform_results, status')
+        .contains('platforms', ['facebook']);
+
+      if (Array.isArray(posts)) {
+        totalPosts = posts.length;
+        posts.forEach((p: any) => {
+          const eng = p.engagement || p.platform_results?.facebook?.engagement || {};
+          totalLikes += Number(eng.likes) || 0;
+          totalComments += Number(eng.comments) || 0;
+          totalShares += Number(eng.shares) || 0;
+          totalReach += Number(eng.reach) || 0;
+        });
+      }
+    } catch {}
+
+    const engagementRate = totalReach > 0
+      ? Number((((totalLikes + totalComments + totalShares) / totalReach) * 100).toFixed(1))
+      : 0;
+
     return {
-      pageId: params.pageId || '477334159265235',
-      pageName: 'Ras Ali Labs',
-      followers: 107,
-      followerGrowth30d: 14,
-      followerGrowthPercentage: 13.1,
-      totalPosts30d: 8,
-      engagementRate: 5.8,
-      totalReach30d: 1840,
-      totalImpressions30d: 2650,
-      totalLikes30d: 142,
-      totalComments30d: 28,
-      totalShares30d: 19,
-      topContentType: 'video',
+      pageId: pageId || 'facebook_page',
+      pageName,
+      followers,
+      followerGrowth30d: 0,
+      followerGrowthPercentage: 0,
+      totalPosts30d: totalPosts,
+      engagementRate,
+      totalReach30d: totalReach,
+      totalImpressions30d: totalReach,
+      totalLikes30d: totalLikes,
+      totalComments30d: totalComments,
+      totalShares30d: totalShares,
+      topContentType: 'text',
       lastSyncedAt: new Date().toISOString(),
     };
   }

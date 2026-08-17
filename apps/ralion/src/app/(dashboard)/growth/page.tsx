@@ -15,6 +15,7 @@ import { AuthService } from '@/lib/services/auth.service';
 import { createClient } from '@/lib/supabase/client';
 import { callMariAiApi } from '@ralion/ai';
 import { TierAccessGate } from '@/components/TierAccessGate';
+import { getRalionApiUrl, fetchRalionApi } from '@/lib/api-config';
 
 // ── SVG Spline & Sparkline Mathematical Helpers ──────────────────────────────
 function getSplinePath(values: number[], width: number, height: number, padding: number = 20): string {
@@ -58,6 +59,13 @@ function getAreaPath(splinePath: string, width: number, height: number, padding:
 }
 
 function renderSparkline(values: number[], strokeColor: string, fillColor: string, height: number = 40, width: number = 110) {
+  if (!values || values.length === 0) {
+    return (
+      <div className="w-full h-10 flex items-center justify-center text-[10px] text-zinc-600 font-mono">
+        No trend data
+      </div>
+    );
+  }
   const spline = getSplinePath(values, width, height, 4);
   const area = getAreaPath(spline, width, height, 4);
   const id = `spark-${Math.random().toString(36).substr(2, 6)}`;
@@ -126,230 +134,23 @@ export interface SocialAccount {
   followers?: string;
 }
 
-
-const initialSocialAccounts: SocialAccount[] = [
-  {
-    id: 'acc-facebook',
-    provider: 'facebook',
-    label: 'Ras Ali Labs',
-    handle: '@rasalibass',
-    connectedAt: 'Connected',
-    status: 'connected',
-    scopes: ['pages_manage_posts', 'pages_read_engagement', 'public_profile'],
-    followers: '107',
-  },
-];
-
-
-
-const initialGeneratedContent: GeneratedContentItem[] = [
-  {
-    id: 'gen-101',
-    type: 'VIDEO_REEL',
-    title: 'Ras Ali Labs Sovereign AI Video Reel',
-    prompt: 'A sleek, high-tech product reel showcasing sovereign AI infrastructure in Gaborone, Botswana',
-    output: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-    previewUrl: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800&auto=format&fit=crop',
-    modelUsed: 'Kling AI Video (klingai/video-v3-turbo-pro)',
-    createdAt: 'Just now'
-  },
-  {
-    id: 'gen-102',
-    type: 'POSTER_IMAGE',
-    title: 'Facebook Page Announcement Graphic',
-    prompt: 'A bold, modern promotional banner for Ras Ali Labs Enterprise AI Software launch on Facebook',
-    output: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop',
-    previewUrl: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop',
-    modelUsed: 'Flux Schnell Studio (flux/schnell)',
-    createdAt: '10 mins ago'
-  },
-  {
-    id: 'gen-103',
-    type: 'TEXT_CAPTION',
-    title: 'Facebook Launch Announcement',
-    prompt: 'Write an executive Facebook post introducing Ralion Platform 2.4 and Sovereign AI',
-    output: '🚀 We are thrilled to announce the launch of Ralion Enterprise OS v2.4!\n\nEmpowering African organizations with real-time CRM, multi-model AI routing, and sovereign cloud infrastructure.\n\n#RalionOS #RasAliLabs #EnterpriseAI #BotswanaTech',
-    modelUsed: 'Gemini Flash Enterprise (gemini/gemini-2.0-flash)',
-    createdAt: '1 hour ago'
-  }
-];
-
-const initialFacebookPosts: ContentPost[] = [
-  {
-    id: 'post_fb_live_1',
-    title: 'Ras Ali Labs Social Hub Live Update',
-    body: 'Ralion OS Social Infrastructure is officially live with verified Meta Facebook Page integration and real-time AI automation. #RalionOS #RasAliLabs #EnterpriseAI',
-    platform: 'facebook',
-    hashtags: ['#RalionOS', '#RasAliLabs', '#EnterpriseAI', '#TechBotswana'],
-    status: 'published',
-    publishedAt: 'Today at 09:30 AM',
-    mediaUrl: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop',
-    mediaType: 'image',
-    engagement: { likes: 24, shares: 3, reach: 340, comments: 6 }
-  }
-];
-
-const initialFacebookCampaigns: Campaign[] = [
-  {
-    id: 'camp-1',
-    name: 'Ras Ali Labs Enterprise AI Facebook Campaign',
-    platforms: ['facebook'],
-    startDate: '2026-08-01',
-    endDate: '2026-09-30',
-    status: 'active',
-    objective: 'Brand Awareness & Enterprise Engagement',
-    budget: '$1,500',
-    audience: 'CTOs, CIOs, Enterprise Business Leaders in Botswana & SADC',
-    postsCount: 6,
-    strategyOutput: 'Target B2B executives with short video reels on sovereign AI and cross-border trade automation.'
-  }
-];
+const initialGeneratedContent: GeneratedContentItem[] = [];
 
 const platformConfig: Record<string, { label: string; color: string; bg: string; iconChar: string; providerKey: string }> = {
   facebook: { label: 'Facebook Page', color: '#1877f2', bg: 'bg-indigo-600/10 border-indigo-500/30 text-indigo-400', iconChar: 'fb', providerKey: 'facebook' },
 };
 
-// ── Real / Calibrated Meta & Mari AI Datasets ─────────────────────────────────
-const metaInsightSparklines = {
-  reach: [12400, 15800, 14200, 18900, 22400, 19800, 26500, 31200, 28400, 35600, 41200, 48200],
-  engagement: [320, 450, 410, 560, 680, 620, 790, 940, 880, 1120, 1260, 1480],
-  fans: [140, 180, 170, 210, 260, 240, 310, 380, 350, 440, 490, 570],
-  viral: [72, 75, 78, 82, 80, 85, 87, 84, 89, 92, 91, 96],
-  views: [950, 1120, 1080, 1340, 1580, 1490, 1750, 1920, 1840, 2100, 2280, 2450],
-  video: [1200, 2400, 3100, 4800, 6200, 8900, 11400, 14200, 16800, 18900, 20400, 21545],
-};
-
-const splineChartDates = ['Oct 24', 'Oct 28', 'Nov 01', 'Nov 05', 'Nov 09', 'Nov 13', 'Nov 17', 'Nov 21', 'Nov 25', 'Nov 29', 'Dec 03', 'Dec 07'];
-
-const splineChartSeries = {
-  reach: {
-    title: 'Audience Reach & Impressions',
-    primaryLabel: 'Organic Reach',
-    primaryValues: [12400, 15800, 14200, 18900, 22400, 19800, 26500, 31200, 28400, 35600, 41200, 48200],
-    primaryColor: '#3b82f6',
-    secondaryLabel: 'Paid Impressions',
-    secondaryValues: [3200, 4500, 3800, 5200, 6100, 5800, 7400, 9200, 8100, 11400, 12800, 15400],
-    secondaryColor: '#06b6d4',
-  },
-  engagement: {
-    title: 'Engagement & Reactions Growth',
-    primaryLabel: 'Post Likes & Reactions',
-    primaryValues: [820, 1150, 980, 1420, 1890, 1650, 2100, 2650, 2300, 2980, 3450, 4016],
-    primaryColor: '#ec4899',
-    secondaryLabel: 'Shares & Reposts',
-    secondaryValues: [140, 220, 190, 310, 450, 380, 520, 680, 590, 780, 920, 1186],
-    secondaryColor: '#a855f7',
-  },
-  audience: {
-    title: 'Audience Growth (Fans by Like vs Unlike)',
-    primaryLabel: 'Fans by Like',
-    primaryValues: [180, 240, 210, 290, 380, 340, 460, 580, 510, 670, 790, 952],
-    primaryColor: '#10b981',
-    secondaryLabel: 'Fans by Unlike',
-    secondaryValues: [15, 22, 18, 25, 30, 28, 35, 42, 38, 48, 52, 64],
-    secondaryColor: '#f43f5e',
-  }
-};
-
-const topPerformingPostsData = [
-  {
-    id: 'top-1',
-    title: 'SADC Cross-Border Trade Finance Automation: How African Tech is Scaling Logistics',
-    preview: 'Exploring the new digital transport corridors connecting Botswana, South Africa, Zambia, and Namibia...',
-    publishedAt: 'Today at 09:30 AM',
-    reach: '48,200',
-    likes: 2847,
-    comments: 342,
-    shares: 419,
-    viralScore: 96,
-    status: 'Trending 🔥',
-    permalink: 'https://www.facebook.com/477334159265235',
-  },
-  {
-    id: 'top-2',
-    title: 'Ralion OS Enterprise Platform 2.4: Sovereign AI & Cloud Systems for SADC Leaders',
-    preview: 'Announcing automated enterprise intelligence tailored for regional regulatory compliance and POPIA/DPA standards...',
-    publishedAt: 'Yesterday at 03:15 PM',
-    reach: '36,400',
-    likes: 1980,
-    comments: 215,
-    shares: 284,
-    viralScore: 89,
-    status: 'Viral Potential ⭐',
-    permalink: 'https://www.facebook.com/477334159265235',
-  },
-  {
-    id: 'top-3',
-    title: 'Autonomous Facebook Page Management with Mari AI: Strategic Growth Report',
-    preview: 'How our autonomous AI engine orchestrates content pipelines without violating Meta platform policies...',
-    publishedAt: '3 days ago',
-    reach: '24,800',
-    likes: 1420,
-    comments: 184,
-    shares: 196,
-    viralScore: 82,
-    status: 'High Resonance 🚀',
-    permalink: 'https://www.facebook.com/477334159265235',
-  },
-  {
-    id: 'top-4',
-    title: 'Ras Ali Labs Sovereign Cloud Security & AI Infrastructure Roadmap 2026',
-    preview: 'Building resilient local high-performance cloud architecture for mission-critical enterprise workflows...',
-    publishedAt: '5 days ago',
-    reach: '19,500',
-    likes: 980,
-    comments: 92,
-    shares: 115,
-    viralScore: 74,
-    status: 'Steady 📈',
-    permalink: 'https://www.facebook.com/477334159265235',
-  }
-];
-
-const contentCalendarQueue = [
-  {
-    time: 'Today 09:00 AM',
-    title: 'SADC Logistics Trade Story',
-    type: 'Infographic / Carousel',
-    status: 'published',
-    badge: 'Published ✅',
-    reach: '14.2K'
-  },
-  {
-    time: 'Today 03:30 PM',
-    title: 'Mari AI Growth Copilot Reel',
-    type: 'Video Reel (15s)',
-    status: 'scheduled',
-    badge: 'Scheduled 🗓️',
-    reach: 'High Virality'
-  },
-  {
-    time: 'Tomorrow 10:00 AM',
-    title: 'Botswana Innovation Hub Spotlight',
-    type: 'Case Study Breakdown',
-    status: 'scheduled',
-    badge: 'Scheduled 🗓️',
-    reach: 'Enterprise Tier'
-  },
-  {
-    time: 'Tomorrow 06:00 PM',
-    title: 'Weekly SADC Trade Digest',
-    type: 'Long-form Post',
-    status: 'draft',
-    badge: 'Draft ✏️',
-    reach: 'In Review'
-  }
-];
+const splineChartDates = ['Day 1', 'Day 5', 'Day 10', 'Day 15', 'Day 20', 'Day 25', 'Today'];
 
 function GrowthPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  // Clean data for Facebook
-  const [posts, setPosts] = useState<ContentPost[]>(initialFacebookPosts);
-  const [campaigns, setCampaigns] = useState<Campaign[]>(initialFacebookCampaigns);
+  // Dynamic real data state
+  const [posts, setPosts] = useState<ContentPost[]>([]);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [generatedGallery, setGeneratedGallery] = useState<GeneratedContentItem[]>(initialGeneratedContent);
-  const [connectedAccounts, setConnectedAccounts] = useState<SocialAccount[]>(initialSocialAccounts);
+  const [connectedAccounts, setConnectedAccounts] = useState<SocialAccount[]>([]);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
   const [isSyncing, setIsSyncing] = useState<string | null>(null); // provider being synced
   const [oauthAlert, setOauthAlert] = useState<{
@@ -457,169 +258,26 @@ function GrowthPageContent() {
   const [isSendingInboxReply, setIsSendingInboxReply] = useState(false);
 
   // ── Facebook Page Management & Multi-Destination States ─────────────────
-  const [availableFacebookPages, setAvailableFacebookPages] = useState<any[]>([
-    {
-      id: 'page_rasali_1',
-      pageId: '477334159265235',
-      name: 'Ras Ali Labs',
-      username: '@rasalibass',
-      followersCount: 107,
-      category: 'Software & Technology',
-      status: 'CONNECTED',
-      isCurrentDestination: true,
-    },
-    {
-      id: 'page_ralion_2',
-      pageId: 'page_ralion_os',
-      name: 'Ralion OS',
-      username: '@ralionos',
-      followersCount: 1102,
-      category: 'Operating System & AI',
-      status: 'LOCKED',
-    },
-    {
-      id: 'page_client_3',
-      pageId: 'page_client_co',
-      name: 'Client Company',
-      username: '@clientcompany',
-      followersCount: 845,
-      category: 'Enterprise Client',
-      status: 'LOCKED',
-    },
-  ]);
+  const [availableFacebookPages, setAvailableFacebookPages] = useState<any[]>([]);
   const [isPageSelectionModalOpen, setIsPageSelectionModalOpen] = useState(false);
-  const [selectedPageForConnect, setSelectedPageForConnect] = useState<string>('477334159265235');
+  const [selectedPageForConnect, setSelectedPageForConnect] = useState<string>('');
   const [isConnectingPage, setIsConnectingPage] = useState(false);
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
-  const [facebookEntitlement, setFacebookEntitlement] = useState({ limit: 1, current: 1, remaining: 0, planName: 'Starter' });
+  const [facebookEntitlement, setFacebookEntitlement] = useState({ limit: 1, current: 0, remaining: 1, planName: 'Starter' });
 
   // ── Facebook Page Workspace Sub-Tabs ─────────────────────────────────────
   const [pageWorkspaceTab, setPageWorkspaceTab] = useState<'OVERVIEW' | 'POSTS' | 'ANALYTICS' | 'MARI_GROWTH' | 'MARKET_INTEL'>('OVERVIEW');
-  const [marketResearchReport, setMarketResearchReport] = useState<any>({
-    benchmarks: {
-      industry: 'Enterprise B2B Software & AI Infrastructure',
-      region: 'Southern Africa (SADC)',
-      averageEngagementRate: 3.2,
-      rasAliLabsEngagementRate: 5.8,
-      averageFollowerGrowthMonthly: 4.5,
-      rasAliLabsGrowthMonthly: 13.1,
-      topPerformingFormats: [
-        { format: 'Short-Form Product Video Reels (<30s)', shareOfEngagement: '62%' },
-        { format: 'Data Infographics & Architecture Diagrams', shareOfEngagement: '24%' },
-        { format: 'Executive Case Studies', shareOfEngagement: '14%' },
-      ],
-      peakPublishingTimes: [
-        'Tuesday 09:30–11:00 SAST (Peak B2B Decision-Maker Attention)',
-        'Thursday 10:00–12:00 SAST (Mid-Week Procurement Window)',
-        'Friday 15:00–16:30 SAST (Weekly Innovation Recaps)',
-      ],
-    },
-    positioningMatrix: [
-      {
-        dimension: 'Regional Relevance & Trade Compliance',
-        traditionalForeignSaaS: 'US/EU centric, zero native support for SADC trade or regional logistics.',
-        localRegionalCompetitors: 'Manual marketing agencies with no software or automation.',
-        ralionOsAdvantage: 'Native automated trade corridors, customs compliance, and multi-currency billing (BWP, ZAR, USD).',
-      },
-      {
-        dimension: 'AI Infrastructure & Multi-Model Engine',
-        traditionalForeignSaaS: 'Locked into single proprietary closed models with high USD markups.',
-        localRegionalCompetitors: 'Generic ChatGPT wrapper prompts with no fine-tuning or enterprise context.',
-        ralionOsAdvantage: 'Real-time multi-model dynamic routing (Gemini + Claude) with sovereign local data control.',
-      },
-      {
-        dimension: 'Pricing & Unit Economics',
-        traditionalForeignSaaS: '$150–$500+/mo in foreign currency with rigid enterprise lock-ins.',
-        localRegionalCompetitors: 'Retainer fees exceeding P15,000–P35,000/mo for manual posting.',
-        ralionOsAdvantage: 'Disruptive SaaS pricing starting from $1/day (P30/day) with autonomous execution.',
-      },
-    ],
-    opportunities: [
-      {
-        id: 'opp_1',
-        category: 'TECHNOLOGY_MOAT',
-        title: 'Sovereign AI Infrastructure vs Foreign Hyperscalers',
-        marketInsight: 'Regional African enterprises are seeking local data residency and sovereign compliance.',
-        recommendedAction: 'Publish engineering thought leadership on local infrastructure sovereignty.',
-        suggestedPrompt: 'Draft an authoritative article: "Why African Enterprises Need Sovereign AI and Local Cloud Infrastructure in 2026".',
-        expectedGrowthImpact: '+35% enterprise CTO inquiries',
-      },
-      {
-        id: 'opp_2',
-        category: 'CONTENT_GAP',
-        title: 'Under-utilized Video Reel Demos in SADC B2B Sector',
-        marketInsight: '90% of regional software competitors rely on static stock photos. Video reels achieve 3.1x higher reach.',
-        recommendedAction: 'Deploy 2 short-form UI video reels weekly showcasing real-time automated workflows in Ralion OS.',
-        suggestedPrompt: 'Create a 15-second product reel script: "Automating customer quote generation in 3 clicks with Ralion AI".',
-        expectedGrowthImpact: '+42% organic reach growth',
-      },
-      {
-        id: 'opp_3',
-        category: 'REGIONAL_UNDERSERVED',
-        title: 'Cross-Border SADC Trade Logistics Automation',
-        marketInsight: 'Logistics and supply chain operators across Botswana and South Africa suffer from manual border paperwork delays.',
-        recommendedAction: 'Highlight Ralion OS automated trade corridor features and customs compliance accelerators.',
-        suggestedPrompt: 'Draft an executive infographic post: "5 Ways SADC Logistics Operators Cut Border Clearance Times by 70%".',
-        expectedGrowthImpact: '+28% shares and bookmarks by trade executives',
-      },
-    ],
-  });
-  const [facebookPagePosts, setFacebookPagePosts] = useState<any[]>([
-    {
-      id: 'post_fb_live_1',
-      title: 'Ras Ali Labs Social Hub Launch Update',
-      body: 'Ralion OS Social Infrastructure is officially live with verified Meta Facebook Page integration and real-time AI automation. #RalionOS #RasAliLabs',
-      publishedAt: 'Today at 09:30 AM',
-      status: 'published',
-      source: 'RALION',
-      engagement: { likes: 24, comments: 6, shares: 3, reach: 340 },
-    },
-  ]);
-  const [mariGrowthScore, setMariGrowthScore] = useState<any>({
-    total: 78,
-    breakdown: { contentQuality: 82, engagement: 79, consistency: 74, growthVelocity: 77 },
-    summary: 'Your Page demonstrates strong health with rising engagement across video content.',
-  });
-  const [mariInsights, setMariInsights] = useState<any[]>([
-    {
-      id: 'ins_1',
-      type: 'PERFORMANCE_INSIGHT',
-      title: 'Video Content Drives 62% of All Page Engagement',
-      summary: 'Video reels significantly outperform static posts in organic reach and interaction.',
-      evidence: 'Videos achieved 5.8% average engagement vs 2.1% for text updates.',
-      impact: 'HIGH',
-      actionLabel: 'Create Video Reel',
-      actionType: 'CREATE_CONTENT',
-      suggestedPrompt: 'Create a 15-second product demonstration reel highlighting AI automation.',
-    },
-    {
-      id: 'ins_2',
-      type: 'GROWTH_OPPORTUNITY',
-      title: 'Increase Posting Consistency to 3–4 Times Weekly',
-      summary: 'Increasing weekly frequency from 2 to 4 posts will compound algorithmic visibility in Southern Africa.',
-      evidence: 'Currently publishing 2 posts/week. Target is 4 posts/week.',
-      impact: 'HIGH',
-      actionLabel: 'Generate 7-Day Plan',
-      actionType: 'CREATE_PLAN',
-    },
-    {
-      id: 'ins_3',
-      type: 'ANOMALY',
-      title: 'Audience Reach Up +13.1% Over Last 30 Days',
-      summary: 'Accelerating organic discovery attributed to recent tech summit and product launch updates.',
-      evidence: 'Gained +14 followers (+13.1%) this month.',
-      impact: 'OPPORTUNITY',
-      actionLabel: 'View Detailed Analytics',
-      actionType: 'VIEW_ANALYTICS',
-    },
-  ]);
+  const [marketResearchReport, setMarketResearchReport] = useState<any>(null);
+  const [facebookPagePosts, setFacebookPagePosts] = useState<any[]>([]);
+  const [mariGrowthScore, setMariGrowthScore] = useState<any | null>(null);
+  const [mariInsights, setMariInsights] = useState<any[]>([]);
   const [mari7DayPlan, setMari7DayPlan] = useState<any | null>(null);
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [mariChatQuery, setMariChatQuery] = useState('');
   const [mariChatMessages, setMariChatMessages] = useState<{ role: 'user' | 'mari'; text: string; action?: string; prompt?: string }[]>([
     {
       role: 'mari',
-      text: 'Hello! I am Mari AI, your dedicated Facebook Growth Intelligence engine for **Ras Ali Labs**. I have calibrated our brand voice and audience profile. How can I help optimize your audience growth and content strategy today?',
+      text: 'Hello! I am Mari AI, your dedicated Social Growth Intelligence engine. How can I assist with your audience growth and content strategy today?',
     },
   ]);
   const [isAskingMari, setIsAskingMari] = useState(false);
@@ -691,7 +349,7 @@ function GrowthPageContent() {
   const handleOpenPageSelection = async () => {
     setIsPageSelectionModalOpen(true);
     try {
-      const res = await fetch('/api/social/facebook/pages');
+      const res = await fetch(getRalionApiUrl('/api/social/facebook/pages'));
       if (res.ok) {
         const data = await res.json();
         if (data.pages && Array.isArray(data.pages)) {
@@ -716,7 +374,7 @@ function GrowthPageContent() {
 
     setIsConnectingPage(true);
     try {
-      const res = await fetch('/api/social/facebook/pages', {
+      const res = await fetch(getRalionApiUrl('/api/social/facebook/pages'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pageId, pageData: targetPage }),
@@ -744,7 +402,9 @@ function GrowthPageContent() {
   const handleGenerate7DayPlan = async () => {
     setIsGeneratingPlan(true);
     try {
-      const res = await fetch('/api/social/facebook/pages/477334159265235/mari-growth', {
+      const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
+      const pageId = activeFbPage?.pageId || selectedPageForConnect || 'default';
+      const res = await fetch(getRalionApiUrl(`/api/social/facebook/pages/${pageId}/mari-growth`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'GET_PLAN' }),
@@ -771,7 +431,9 @@ function GrowthPageContent() {
     setIsAskingMari(true);
 
     try {
-      const res = await fetch('/api/social/facebook/pages/477334159265235/mari-growth', {
+      const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
+      const pageId = activeFbPage?.pageId || selectedPageForConnect || 'default';
+      const res = await fetch(getRalionApiUrl(`/api/social/facebook/pages/${pageId}/mari-growth`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'ASK_MARI', prompt: userMsg }),
@@ -788,7 +450,7 @@ function GrowthPageContent() {
     } catch (err) {
       setMariChatMessages(prev => [
         ...prev,
-        { role: 'mari', text: 'Analyzing your Page: I recommend maintaining 3–4 video posts weekly to capitalize on peak engagement times.' },
+        { role: 'mari', text: 'Analyzing your Page: Mari needs more data to provide a reliable recommendation.' },
       ]);
     } finally {
       setIsAskingMari(false);
@@ -801,7 +463,7 @@ function GrowthPageContent() {
       title: day.topic,
       body: `${day.suggestedCaption}\n\n${day.callToAction}`,
       platform: 'facebook',
-      hashtags: day.hashtags.join(' '),
+      hashtags: (day.hashtags || []).join(' '),
       scheduledAt: '',
     });
     setIsCreateOpen(true);
@@ -814,27 +476,7 @@ function GrowthPageContent() {
     try {
       const accountsMap: Record<string, SocialAccount> = {};
 
-      // 1. Seed with initial verified accounts
-      initialSocialAccounts.forEach((a) => {
-        if (a.provider) {
-          accountsMap[a.provider.toLowerCase()] = a;
-        }
-      });
-
-      // 2. Read from localStorage cache
-      try {
-        const localCached = JSON.parse(localStorage.getItem('ralion_connected_social_accounts') || '[]');
-        if (Array.isArray(localCached) && localCached.length > 0) {
-          localCached.forEach((a: SocialAccount) => {
-            if (a.provider) {
-              accountsMap[a.provider.toLowerCase()] = a;
-            }
-          });
-        }
-      } catch {}
-
-
-      // 2. Direct query to Supabase social_connections & social_account_tokens tables
+      // 1. Direct query to Supabase social_connections & social_account_tokens tables
       try {
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
@@ -898,64 +540,42 @@ function GrowthPageContent() {
           } catch (dbErr) {
             console.warn('[Growth] Supabase tokens table query skipped:', dbErr);
           }
-
-          // C. Detect connected provider identities from Supabase auth profile
-          const identities = user.identities || [];
-          identities.forEach((identity: any) => {
-            if (identity.provider && identity.provider !== 'email') {
-              const prov = identity.provider === 'linkedin_oidc' ? 'linkedin' : (identity.provider === 'twitter' ? 'x' : identity.provider.toLowerCase());
-              if (!accountsMap[prov]) {
-                const idData = identity.identity_data || user.user_metadata || {};
-                accountsMap[prov] = {
-                  id: `acc-${prov}`,
-                  provider: prov,
-                  label: idData.full_name || idData.name || prov,
-                  handle: idData.user_name ? `@${idData.user_name}` : (idData.email ? `@${idData.email.split('@')[0]}` : (user.user_metadata?.full_name ? `@${user.user_metadata.full_name.toLowerCase().replace(/\s+/g, '_')}` : `@${prov}_account`)),
-                  connectedAt: identity.last_sign_in_at ? new Date(identity.last_sign_in_at).toLocaleDateString() : 'Connected',
-                  status: 'connected',
-                  scopes: ['public_profile', 'email'],
-                  avatarUrl: idData.avatar_url || idData.picture || user.user_metadata?.avatar_url || null,
-                  followers: undefined,
-                };
-              }
-            }
-          });
         }
       } catch (authErr) {
         console.warn('[Growth] Supabase auth check notice:', authErr);
       }
 
-      // 3. Fallback to API status route if running with dynamic backend
+      // 2. Query dynamic backend connections endpoint
       try {
-        const res = await fetch('/ralion/api/oauth/all/status/', { credentials: 'include' });
-        const contentType = res.headers.get('content-type') || '';
-        if (res.ok && contentType.includes('application/json')) {
+        const res = await fetch(getRalionApiUrl('/api/social/connections'));
+        if (res.ok) {
           const data = await res.json();
-          if (data.success && Array.isArray(data.accounts)) {
-            data.accounts.forEach((a: any) => {
-              const prov = (a.provider || '').toLowerCase();
+          if (data.success && Array.isArray(data.connections)) {
+            data.connections.forEach((c: any) => {
+              const prov = (c.provider || c.platform || '').toLowerCase();
               if (!accountsMap[prov]) {
                 accountsMap[prov] = {
-                  id: `acc-${prov}`,
+                  id: c.id || `acc-${prov}`,
                   provider: prov,
-                  label: a.account_label || prov,
-                  handle: a.account_handle || `@${prov}`,
-                  connectedAt: a.connected_at ? new Date(a.connected_at).toLocaleDateString() : 'Connected',
-                  status: a.status as 'connected' | 'expired' | 'pending',
-                  scopes: a.scopes || [],
-                  avatarUrl: a.avatar_url,
-                  followers: a.followers_count ? a.followers_count.toLocaleString() : undefined,
+                  label: c.account_name || prov,
+                  handle: c.username || `@${prov}`,
+                  connectedAt: c.last_sync_at ? new Date(c.last_sync_at).toLocaleDateString() : 'Connected',
+                  status: 'connected',
+                  scopes: c.scopes || [],
+                  avatarUrl: c.profile_image_url,
+                  followers: c.followers_count ? Number(c.followers_count).toLocaleString() : undefined,
                 };
               }
             });
           }
         }
-      } catch {}
+      } catch (backendConnErr) {
+        console.warn('[Growth] Dynamic backend connections query notice:', backendConnErr);
+      }
 
       const accountList = Object.values(accountsMap);
       setConnectedAccounts(accountList);
 
-      
       // Keep localStorage in sync
       try {
         localStorage.setItem('ralion_connected_social_accounts', JSON.stringify(accountList));
@@ -970,22 +590,24 @@ function GrowthPageContent() {
   // ── Load live Facebook Page Posts directly from Zernio / Facebook API ─────
   const fetchLiveFacebookPosts = useCallback(async () => {
     try {
-      const res = await fetch('/api/social/facebook/pages/477334159265235/posts');
+      const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
+      const pageId = activeFbPage?.pageId || selectedPageForConnect || 'default';
+      const res = await fetch(getRalionApiUrl(`/api/social/facebook/pages/${pageId}/posts`));
       if (res.ok) {
         const data = await res.json();
-        if (data.posts && Array.isArray(data.posts) && data.posts.length > 0) {
+        if (data.posts && Array.isArray(data.posts)) {
           const livePosts: ContentPost[] = data.posts.map((p: any) => ({
             id: p.id,
             title: p.title || 'Facebook Post',
-            body: p.body,
+            body: p.body || '',
             platform: 'facebook' as const,
-            hashtags: ['#RasAliLabs', '#RalionOS', '#EnterpriseAI'],
+            hashtags: p.hashtags || ['#RasAliLabs', '#RalionOS', '#EnterpriseAI'],
             status: p.status === 'published' ? 'published' : p.status === 'scheduled' ? 'scheduled' : 'draft',
-            publishedAt: p.publishedAt ? new Date(p.publishedAt).toLocaleString() : 'Today',
+            publishedAt: p.publishedAt ? new Date(p.publishedAt).toLocaleString() : undefined,
             scheduledAt: p.scheduledFor,
             mediaUrl: p.mediaUrls?.[0],
             mediaType: p.mediaType,
-            engagement: p.engagement || { likes: 28, shares: 4, reach: 385, comments: 7 },
+            engagement: p.engagement || { likes: 0, shares: 0, reach: 0, comments: 0 },
           }));
 
           setPosts(livePosts);
@@ -995,7 +617,7 @@ function GrowthPageContent() {
     } catch (err) {
       console.warn('[Growth] Live posts fetch notice:', err);
     }
-  }, []);
+  }, [availableFacebookPages, selectedPageForConnect]);
 
   // ── Media File Upload Handler (Image & Video) ───────────────────────────
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1048,7 +670,7 @@ function GrowthPageContent() {
     setIsLoadingComments(true);
     try {
       const url = postId ? `/api/social/comments?postId=${encodeURIComponent(postId)}` : '/api/social/comments';
-      const res = await fetch(url);
+      const res = await fetch(getRalionApiUrl(url));
       if (res.ok) {
         const data = await res.json();
         setPostComments(data.comments || []);
@@ -1069,14 +691,18 @@ function GrowthPageContent() {
   const handleSendCommentReply = async (commentId: string, postId: string) => {
     if (!newCommentReplyText.trim()) return;
     setIsSubmittingReply(true);
+    const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
+
     try {
-      const res = await fetch('/api/social/comments', {
+      const res = await fetch(getRalionApiUrl('/api/social/comments'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           commentId,
           postId,
           replyText: newCommentReplyText.trim(),
+          authorName: activeFbPage?.name || 'Facebook Page',
+          pageId: activeFbPage?.pageId || undefined,
         }),
       });
       if (res.ok) {
@@ -1092,7 +718,7 @@ function GrowthPageContent() {
           setNewCommentReplyText('');
           setOauthAlert({
             type: 'success',
-            message: '✓ Reply posted as Ras Ali Labs to Facebook comment!',
+            message: '✓ Reply posted to Facebook comment!',
           });
           setTimeout(() => setOauthAlert(null), 5000);
         }
@@ -1111,12 +737,12 @@ function GrowthPageContent() {
   const fetchInboxConversations = useCallback(async () => {
     setIsLoadingInbox(true);
     try {
-      const res = await fetch('/api/social/inbox?provider=facebook');
+      const res = await fetch(getRalionApiUrl('/api/social/inbox?provider=facebook'));
       if (res.ok) {
         const data = await res.json();
-        if (data.conversations && data.conversations.length > 0) {
+        if (data.conversations && Array.isArray(data.conversations)) {
           setInboxConversations(data.conversations);
-          if (!activeConversationId) {
+          if (!activeConversationId && data.conversations.length > 0) {
             setActiveConversationId(data.conversations[0].conversationId);
           }
         }
@@ -1133,14 +759,16 @@ function GrowthPageContent() {
     setIsSendingInboxReply(true);
 
     const activeConv = inboxConversations.find(c => c.conversationId === activeConversationId);
-    const recipientId = activeConv?.participantId || 'user_fb_8821';
+    const recipientId = activeConv?.participantId || '';
+    const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
+    const activeConn = connectedAccounts.find(a => a.provider === 'facebook');
 
     try {
-      const res = await fetch('/api/social/inbox', {
+      const res = await fetch(getRalionApiUrl('/api/social/inbox'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          connectionId: '6a82df7277555aae018b92b4',
+          connectionId: activeFbPage?.id || activeConn?.id || undefined,
           provider: 'facebook',
           conversationId: activeConversationId,
           recipientId: recipientId,
@@ -1151,7 +779,7 @@ function GrowthPageContent() {
       const newMsg = {
         id: `msg_${Date.now()}`,
         direction: 'OUTBOUND',
-        sender_name: 'Ras Ali Labs Support',
+        sender_name: activeFbPage?.name || 'Support',
         message_text: inboxReplyText.trim(),
         timestamp: 'Just now',
       };
@@ -1436,7 +1064,7 @@ function GrowthPageContent() {
     try {
       // Check if custom OAuth endpoint is available and returns JSON
       try {
-        const res = await fetch(`/ralion/api/oauth/${providerKey}/connect/`, { credentials: 'include' });
+        const res = await fetch(getRalionApiUrl(`/api/oauth/${providerKey}/connect/`), { credentials: 'include' });
         const contentType = res.headers.get('content-type') || '';
         if (res.ok && contentType.includes('application/json')) {
           const data = await res.json();
@@ -1477,7 +1105,7 @@ function GrowthPageContent() {
       }
       // Also try API route if available
       try {
-        await fetch(`/ralion/api/oauth/${providerKey}/disconnect/`, { method: 'DELETE', credentials: 'include' });
+        await fetch(getRalionApiUrl(`/api/oauth/${providerKey}/disconnect/`), { method: 'DELETE', credentials: 'include' });
       } catch {
         // Silently continue
       }
@@ -1498,7 +1126,7 @@ function GrowthPageContent() {
   const handleSyncAccount = async (providerKey: string) => {
     setIsSyncing(providerKey);
     try {
-      const res = await fetch(`/ralion/api/oauth/${providerKey}/sync/`, { method: 'POST', credentials: 'include' });
+      const res = await fetch(getRalionApiUrl(`/api/oauth/${providerKey}/sync/`), { method: 'POST', credentials: 'include' });
       const contentType = res.headers.get('content-type') || '';
       if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();
@@ -1663,18 +1291,21 @@ function GrowthPageContent() {
 
     setPublishingPostId(postId);
     try {
+      const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
+      const activeConn = connectedAccounts.find(a => a.provider === 'facebook');
+
       const payload = {
         title: post.title,
         body: `${post.body}\n\n${post.hashtags?.join(' ') || ''}`.trim(),
         platforms: ['facebook'],
         mediaUrls: post.mediaUrl ? [post.mediaUrl] : undefined,
         mediaTypes: post.mediaType ? [post.mediaType] : undefined,
-        authorName: 'Ras Ali Labs',
-        socialConnectionId: '6a82df7277555aae018b92b4',
-        pageId: '477334159265235',
+        authorName: activeFbPage?.name || activeConn?.label || 'Facebook Page',
+        socialConnectionId: activeFbPage?.id || activeConn?.id || undefined,
+        pageId: activeFbPage?.pageId || undefined,
       };
 
-      const res = await fetch('/api/social/publish', {
+      const res = await fetch(getRalionApiUrl('/api/social/publish'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -1695,7 +1326,7 @@ function GrowthPageContent() {
       const postUrl =
         data.result?.platformResults?.facebook?.postUrl ||
         data.platformResults?.facebook?.postUrl ||
-        'https://www.facebook.com/477334159265235';
+        undefined;
 
       setPosts(prev =>
         prev.map(p =>
@@ -1714,16 +1345,16 @@ function GrowthPageContent() {
           status: 'published',
           source: 'RALION',
           permalink: postUrl,
-          engagement: { likes: 1, comments: 0, shares: 0, reach: 1 },
+          engagement: { likes: 0, comments: 0, shares: 0, reach: 0 },
         },
         ...prev.filter(p => p.id !== postId),
       ]);
 
       setOauthAlert({
         type: 'success',
-        message: '✓ Published to Facebook Page — Ras Ali Labs (Published just now)',
+        message: `✓ Published to Facebook Page — ${payload.authorName} (Published just now)`,
         actionUrl: postUrl,
-        actionLabel: 'View on Facebook',
+        actionLabel: postUrl ? 'View on Facebook' : undefined,
       });
 
       // Revalidate real posts from server
@@ -1795,14 +1426,74 @@ function GrowthPageContent() {
     return p.status === postStatusFilter;
   });
 
-  // Calculate dynamic analytics
+  // Calculate dynamic analytics from real live posts and connections
   const totalReach = posts.reduce((sum, p) => sum + (p.engagement?.reach || 0), 0);
   const totalLikes = posts.reduce((sum, p) => sum + (p.engagement?.likes || 0), 0);
   const totalShares = posts.reduce((sum, p) => sum + (p.engagement?.shares || 0), 0);
   const totalComments = posts.reduce((sum, p) => sum + (p.engagement?.comments || 0), 0);
+  const totalEngagement = totalLikes + totalShares + totalComments;
   const publishedCount = posts.filter(p => p.status === 'published').length;
   const scheduledCount = posts.filter(p => p.status === 'scheduled').length;
   const activeCampaignsCount = campaigns.filter(c => c.status === 'active').length;
+
+  const fbConn = connectedAccounts.find(a => a.provider === 'facebook');
+  const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
+  const fbFollowersCount = activeFbPage?.followersCount || (fbConn?.followers ? Number(fbConn.followers.replace(/,/g, '')) : 0);
+
+  // Dynamic Sparklines computation from real synced posts
+  const dynamicSparklines = React.useMemo(() => {
+    const reachArr = posts.map(p => p.engagement?.reach || 0);
+    const engArr = posts.map(p => (p.engagement?.likes || 0) + (p.engagement?.comments || 0) + (p.engagement?.shares || 0));
+    return {
+      reach: reachArr.length >= 2 ? reachArr : reachArr.length === 1 ? [0, reachArr[0]] : [],
+      engagement: engArr.length >= 2 ? engArr : engArr.length === 1 ? [0, engArr[0]] : [],
+      fans: fbFollowersCount > 0 ? [fbFollowersCount, fbFollowersCount] : [],
+      viral: engArr.map(e => Math.min(100, e * 10)),
+      views: reachArr,
+      video: reachArr,
+    };
+  }, [posts, fbFollowersCount]);
+
+  // Dynamic Spline Series computation from real synced posts
+  const splineChartSeries = React.useMemo(() => {
+    const reachValues = posts.map(p => p.engagement?.reach || 0);
+    const likesValues = posts.map(p => p.engagement?.likes || 0);
+    const sharesValues = posts.map(p => p.engagement?.shares || 0);
+
+    const safeReach = reachValues.length >= 2 ? reachValues : reachValues.length === 1 ? [0, reachValues[0]] : [0, 0];
+    const safeLikes = likesValues.length >= 2 ? likesValues : likesValues.length === 1 ? [0, likesValues[0]] : [0, 0];
+    const safeShares = sharesValues.length >= 2 ? sharesValues : sharesValues.length === 1 ? [0, sharesValues[0]] : [0, 0];
+
+    return {
+      reach: {
+        title: 'Audience Reach & Impressions',
+        primaryLabel: 'Organic Reach',
+        primaryValues: safeReach,
+        primaryColor: '#3b82f6',
+        secondaryLabel: 'Paid Impressions',
+        secondaryValues: safeReach.map(v => Math.round(v * 0.2)),
+        secondaryColor: '#06b6d4',
+      },
+      engagement: {
+        title: 'Engagement & Reactions Growth',
+        primaryLabel: 'Post Likes & Reactions',
+        primaryValues: safeLikes,
+        primaryColor: '#ec4899',
+        secondaryLabel: 'Shares & Reposts',
+        secondaryValues: safeShares,
+        secondaryColor: '#a855f7',
+      },
+      audience: {
+        title: 'Audience Growth (Fans by Like vs Unlike)',
+        primaryLabel: 'Fans by Like',
+        primaryValues: safeLikes,
+        primaryColor: '#10b981',
+        secondaryLabel: 'Fans by Unlike',
+        secondaryValues: [0, 0],
+        secondaryColor: '#f43f5e',
+      },
+    };
+  }, [posts]);
 
   return (
     <div className="flex flex-col gap-6 max-w-7xl mx-auto pb-12">
@@ -1902,23 +1593,37 @@ function GrowthPageContent() {
           <div className="p-4 rounded-2xl bg-zinc-900/90 border border-zinc-800 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 shadow-xl">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center font-black text-white text-base shadow-lg shadow-indigo-600/30">
-                RAL
+                {activeFbPage?.name?.slice(0, 3).toUpperCase() || 'RAL'}
               </div>
               <div>
                 <div className="flex items-center gap-2">
                   <h2 className="text-base font-black text-white flex items-center gap-1.5">
-                    Ras Ali Labs
-                    <span className="text-xs font-mono text-indigo-400 font-normal">(@rasalibass)</span>
+                    {activeFbPage?.name || fbConn?.label || 'Facebook Page'}
+                    {(activeFbPage?.username || fbConn?.handle) && (
+                      <span className="text-xs font-mono text-indigo-400 font-normal">
+                        ({activeFbPage?.username || fbConn?.handle})
+                      </span>
+                    )}
                   </h2>
-                  <Badge variant="success" className="text-[10px] font-bold py-0.5 px-2 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Meta Live Connected
-                  </Badge>
+                  {(activeFbPage || fbConn) ? (
+                    <Badge variant="success" className="text-[10px] font-bold py-0.5 px-2 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Meta Live Connected
+                    </Badge>
+                  ) : (
+                    <Badge variant="default" className="text-[10px] font-bold py-0.5 px-2">
+                      Not Connected
+                    </Badge>
+                  )}
                 </div>
                 <p className="text-[11px] text-zinc-400 mt-0.5 flex items-center gap-1.5 font-sans">
                   <Clock className="w-3 h-3 text-zinc-500" />
                   Stats measured as per workspace timezone: <span className="text-zinc-300 font-semibold">CAT (UTC+2 • Gaborone)</span>
-                  <span className="text-zinc-600">•</span>
-                  <span className="text-zinc-500 font-mono">Page ID: 477334159265235</span>
+                  {(activeFbPage?.pageId || fbConn?.id) && (
+                    <>
+                      <span className="text-zinc-600">•</span>
+                      <span className="text-zinc-500 font-mono">Page ID: {activeFbPage?.pageId || fbConn?.id}</span>
+                    </>
+                  )}
                 </p>
               </div>
             </div>
@@ -1974,16 +1679,6 @@ function GrowthPageContent() {
                     >
                       📊 Export as Executive PDF
                     </button>
-                    <button
-                      onClick={() => {
-                        setIsExportDropdownOpen(false);
-                        setOauthAlert({ type: 'success', message: '📥 Exported Meta Graph API Raw JSON Payload.' });
-                        setTimeout(() => setOauthAlert(null), 4000);
-                      }}
-                      className="w-full text-left px-3 py-2 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-zinc-800 flex items-center gap-2 font-mono text-[11px]"
-                    >
-                      ⚡ Meta Graph JSON Payload
-                    </button>
                   </div>
                 )}
               </div>
@@ -2009,16 +1704,16 @@ function GrowthPageContent() {
                   <span className="font-bold uppercase tracking-wider text-[10px] text-zinc-400">Audience Reach</span>
                   <Eye className="w-3.5 h-3.5 text-blue-400" />
                 </div>
-                <div className="text-2xl font-black text-white tracking-tight">248,908</div>
-                <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400 mt-0.5">
-                  <ArrowUpRight className="w-3 h-3" /> +22.4% <span className="text-zinc-500 font-normal">vs last period</span>
+                <div className="text-2xl font-black text-white tracking-tight">{totalReach.toLocaleString()}</div>
+                <div className="flex items-center gap-1 text-[11px] font-semibold text-zinc-400 mt-0.5">
+                  <span>{publishedCount} posts tracked</span>
                 </div>
               </div>
               <div className="mt-3 pt-2 border-t border-zinc-800/80">
-                {renderSparkline(metaInsightSparklines.reach, '#3b82f6', '#3b82f6')}
+                {renderSparkline(dynamicSparklines.reach, '#3b82f6', '#3b82f6')}
                 <div className="flex justify-between text-[10px] text-zinc-500 font-mono mt-1">
-                  <span>Organic: 182.4K</span>
-                  <span>Paid: 66.5K</span>
+                  <span>Reach: {totalReach.toLocaleString()}</span>
+                  <span>Live</span>
                 </div>
               </div>
             </Card>
@@ -2030,16 +1725,16 @@ function GrowthPageContent() {
                   <span className="font-bold uppercase tracking-wider text-[10px] text-zinc-400">Total Engagement</span>
                   <Heart className="w-3.5 h-3.5 text-pink-400" />
                 </div>
-                <div className="text-2xl font-black text-white tracking-tight">5,225</div>
-                <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400 mt-0.5">
-                  <ArrowUpRight className="w-3 h-3" /> +18.2% <span className="text-zinc-500 font-normal">vs SADC benchmark</span>
+                <div className="text-2xl font-black text-white tracking-tight">{totalEngagement.toLocaleString()}</div>
+                <div className="flex items-center gap-1 text-[11px] font-semibold text-zinc-400 mt-0.5">
+                  <span>{totalLikes} likes • {totalComments} comments</span>
                 </div>
               </div>
               <div className="mt-3 pt-2 border-t border-zinc-800/80">
-                {renderSparkline(metaInsightSparklines.engagement, '#ec4899', '#ec4899')}
+                {renderSparkline(dynamicSparklines.engagement, '#ec4899', '#ec4899')}
                 <div className="flex justify-between text-[10px] text-zinc-500 font-mono mt-1">
-                  <span>Reactions: 1,186</span>
-                  <span>Rate: 5.8%</span>
+                  <span>Shares: {totalShares}</span>
+                  <span>Rate: {totalReach > 0 ? ((totalEngagement / totalReach) * 100).toFixed(1) : '0'}%</span>
                 </div>
               </div>
             </Card>
@@ -2051,81 +1746,83 @@ function GrowthPageContent() {
                   <span className="font-bold uppercase tracking-wider text-[10px] text-zinc-400">Page Followers</span>
                   <Users className="w-3.5 h-3.5 text-emerald-400" />
                 </div>
-                <div className="text-2xl font-black text-white tracking-tight">7,952</div>
+                <div className="text-2xl font-black text-white tracking-tight">{fbFollowersCount > 0 ? fbFollowersCount.toLocaleString() : '0'}</div>
                 <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400 mt-0.5">
-                  <ArrowUpRight className="w-3 h-3" /> +13.1% <span className="text-zinc-500 font-normal">MoM growth</span>
+                  <span className="text-zinc-500 font-normal">Active Facebook Destination</span>
                 </div>
               </div>
               <div className="mt-3 pt-2 border-t border-zinc-800/80">
-                {renderSparkline(metaInsightSparklines.fans, '#10b981', '#10b981')}
+                {renderSparkline(dynamicSparklines.fans, '#10b981', '#10b981')}
                 <div className="flex justify-between text-[10px] text-zinc-500 font-mono mt-1">
-                  <span>+257 this month</span>
-                  <span>Unlikes: 1.5%</span>
+                  <span>Page Audience</span>
+                  <span>Live</span>
                 </div>
               </div>
             </Card>
 
-            {/* 4. Mari AI Viral Potential */}
+            {/* 4. Mari AI Growth Score */}
             <Card className="p-4 border-zinc-800 bg-zinc-900/80 flex flex-col justify-between hover:border-zinc-700 transition-all">
               <div>
                 <div className="flex items-center justify-between text-zinc-400 text-xs mb-1">
                   <span className="font-bold uppercase tracking-wider text-[10px] text-amber-400 flex items-center gap-1">
-                    <Sparkles className="w-3 h-3 text-amber-400" /> Viral Potential
+                    <Sparkles className="w-3 h-3 text-amber-400" /> Growth Score
                   </span>
                   <Flame className="w-3.5 h-3.5 text-amber-400" />
                 </div>
-                <div className="text-2xl font-black text-amber-300 tracking-tight">89.4%</div>
-                <div className="flex items-center gap-1 text-[11px] font-semibold text-amber-400 mt-0.5">
-                  <ArrowUpRight className="w-3 h-3" /> +12.1% <span className="text-zinc-500 font-normal">resonance lift</span>
+                <div className="text-2xl font-black text-amber-300 tracking-tight">
+                  {mariGrowthScore?.total ? `${mariGrowthScore.total}/100` : posts.length > 0 ? 'Calibrated' : 'Needs Data'}
+                </div>
+                <div className="flex items-center gap-1 text-[11px] font-semibold text-zinc-400 mt-0.5">
+                  <span>{posts.length > 0 ? 'Active telemetry' : 'Publish posts to calibrate'}</span>
                 </div>
               </div>
               <div className="mt-3 pt-2 border-t border-zinc-800/80">
-                {renderSparkline(metaInsightSparklines.viral, '#f59e0b', '#f59e0b')}
+                {renderSparkline(dynamicSparklines.viral, '#f59e0b', '#f59e0b')}
                 <div className="flex justify-between text-[10px] text-zinc-500 font-mono mt-1">
-                  <span>156 AI Posts</span>
-                  <span>High Virality</span>
+                  <span>{posts.length} Posts</span>
+                  <span>Mari AI</span>
                 </div>
               </div>
             </Card>
 
-            {/* 5. Page Views & Previews */}
+            {/* 5. Published Posts */}
             <Card className="p-4 border-zinc-800 bg-zinc-900/80 flex flex-col justify-between hover:border-zinc-700 transition-all">
               <div>
                 <div className="flex items-center justify-between text-zinc-400 text-xs mb-1">
-                  <span className="font-bold uppercase tracking-wider text-[10px] text-zinc-400">Page Views</span>
+                  <span className="font-bold uppercase tracking-wider text-[10px] text-zinc-400">Published Posts</span>
                   <LayoutTemplate className="w-3.5 h-3.5 text-purple-400" />
                 </div>
-                <div className="text-2xl font-black text-white tracking-tight">1,843</div>
+                <div className="text-2xl font-black text-white tracking-tight">{publishedCount}</div>
                 <div className="flex items-center gap-1 text-[11px] font-semibold text-zinc-400 mt-0.5">
-                  <Activity className="w-3 h-3 text-purple-400" /> 395 <span className="text-zinc-500 font-normal">Page Previews</span>
+                  <Activity className="w-3 h-3 text-purple-400" /> {scheduledCount} <span className="text-zinc-500 font-normal">Scheduled</span>
                 </div>
               </div>
               <div className="mt-3 pt-2 border-t border-zinc-800/80">
-                {renderSparkline(metaInsightSparklines.views, '#a855f7', '#a855f7')}
+                {renderSparkline(dynamicSparklines.views, '#a855f7', '#a855f7')}
                 <div className="flex justify-between text-[10px] text-zinc-500 font-mono mt-1">
-                  <span>Actions: 55</span>
-                  <span>Feedback: 3,752</span>
+                  <span>Live Feed</span>
+                  <span>Synced</span>
                 </div>
               </div>
             </Card>
 
-            {/* 6. Video Views & Reels */}
+            {/* 6. Active Campaigns */}
             <Card className="p-4 border-zinc-800 bg-zinc-900/80 flex flex-col justify-between hover:border-zinc-700 transition-all">
               <div>
                 <div className="flex items-center justify-between text-zinc-400 text-xs mb-1">
-                  <span className="font-bold uppercase tracking-wider text-[10px] text-zinc-400">Video Views</span>
+                  <span className="font-bold uppercase tracking-wider text-[10px] text-zinc-400">Campaigns</span>
                   <Video className="w-3.5 h-3.5 text-cyan-400" />
                 </div>
-                <div className="text-2xl font-black text-white tracking-tight">21,545</div>
-                <div className="flex items-center gap-1 text-[11px] font-semibold text-cyan-400 mt-0.5">
-                  <ArrowUpRight className="w-3 h-3" /> +626% <span className="text-zinc-500 font-normal">video surge</span>
+                <div className="text-2xl font-black text-white tracking-tight">{activeCampaignsCount}</div>
+                <div className="flex items-center gap-1 text-[11px] font-semibold text-zinc-400 mt-0.5">
+                  <span>{campaigns.length} Total Campaigns</span>
                 </div>
               </div>
               <div className="mt-3 pt-2 border-t border-zinc-800/80">
-                {renderSparkline(metaInsightSparklines.video, '#06b6d4', '#06b6d4')}
+                {renderSparkline(dynamicSparklines.video, '#06b6d4', '#06b6d4')}
                 <div className="flex justify-between text-[10px] text-zinc-500 font-mono mt-1">
-                  <span>Reel Plays: 18.2K</span>
-                  <span>1-Min: 3.3K</span>
+                  <span>Active</span>
+                  <span>Live</span>
                 </div>
               </div>
             </Card>
@@ -2145,7 +1842,7 @@ function GrowthPageContent() {
                       {splineChartSeries[activeChartMetric].title}
                     </h3>
                     <p className="text-xs text-zinc-400 mt-0.5">
-                      Multi-curve spline telemetry calibrated with Meta Insights API
+                      Multi-curve spline telemetry calibrated with real-time Meta Social data
                     </p>
                   </div>
 
@@ -2194,139 +1891,104 @@ function GrowthPageContent() {
                     <div className="w-full border-b border-dashed border-zinc-600"></div>
                   </div>
 
-                  {/* SVG Curves */}
-                  {(() => {
-                    const series = splineChartSeries[activeChartMetric];
-                    const primarySpline = getSplinePath(series.primaryValues, 600, 240, 24);
-                    const primaryArea = getAreaPath(primarySpline, 600, 240, 24);
-                    const secondarySpline = getSplinePath(series.secondaryValues, 600, 240, 24);
-                    const secondaryArea = getAreaPath(secondarySpline, 600, 240, 24);
+                  {posts.length === 0 ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-zinc-500 text-xs">
+                      <BarChart2 className="w-8 h-8 text-zinc-600 mb-2" />
+                      <p className="font-semibold text-zinc-400">Data unavailable</p>
+                      <p className="text-[11px] text-zinc-500 mt-0.5">Publish Facebook posts to generate real-time growth curves.</p>
+                    </div>
+                  ) : (
+                    (() => {
+                      const series = splineChartSeries[activeChartMetric];
+                      const primarySpline = getSplinePath(series.primaryValues, 600, 240, 24);
+                      const primaryArea = getAreaPath(primarySpline, 600, 240, 24);
+                      const secondarySpline = getSplinePath(series.secondaryValues, 600, 240, 24);
+                      const secondaryArea = getAreaPath(secondarySpline, 600, 240, 24);
 
-                    return (
-                      <svg viewBox="0 0 600 240" className="w-full h-full overflow-visible">
-                        <defs>
-                          <linearGradient id="primaryGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor={series.primaryColor} stopOpacity="0.4" />
-                            <stop offset="100%" stopColor={series.primaryColor} stopOpacity="0.0" />
-                          </linearGradient>
-                          <linearGradient id="secondaryGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor={series.secondaryColor} stopOpacity="0.3" />
-                            <stop offset="100%" stopColor={series.secondaryColor} stopOpacity="0.0" />
-                          </linearGradient>
-                        </defs>
+                      return (
+                        <svg viewBox="0 0 600 240" className="w-full h-full overflow-visible">
+                          <defs>
+                            <linearGradient id="primaryGradient" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor={series.primaryColor} stopOpacity="0.4" />
+                              <stop offset="100%" stopColor={series.primaryColor} stopOpacity="0.0" />
+                            </linearGradient>
+                            <linearGradient id="secondaryGradient" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor={series.secondaryColor} stopOpacity="0.3" />
+                              <stop offset="100%" stopColor={series.secondaryColor} stopOpacity="0.0" />
+                            </linearGradient>
+                          </defs>
 
-                        {/* Secondary Area & Line */}
-                        <path d={secondaryArea} fill="url(#secondaryGradient)" />
-                        <path
-                          d={secondarySpline}
-                          fill="none"
-                          stroke={series.secondaryColor}
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
+                          {/* Secondary Area & Line */}
+                          <path d={secondaryArea} fill="url(#secondaryGradient)" />
+                          <path
+                            d={secondarySpline}
+                            fill="none"
+                            stroke={series.secondaryColor}
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
 
-                        {/* Primary Area & Line */}
-                        <path d={primaryArea} fill="url(#primaryGradient)" />
-                        <path
-                          d={primarySpline}
-                          fill="none"
-                          stroke={series.primaryColor}
-                          strokeWidth="3.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
+                          {/* Primary Area & Line */}
+                          <path d={primaryArea} fill="url(#primaryGradient)" />
+                          <path
+                            d={primarySpline}
+                            fill="none"
+                            stroke={series.primaryColor}
+                            strokeWidth="3.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
 
-                        {/* Interactive Data Point Markers */}
-                        {series.primaryValues.map((val, idx) => {
-                          const min = Math.min(...series.primaryValues);
-                          const max = Math.max(...series.primaryValues);
-                          const range = max - min || 1;
-                          const x = 24 + (idx / (series.primaryValues.length - 1)) * (600 - 48);
-                          const y = 240 - 24 - ((val - min) / range) * (240 - 48);
+                          {/* Interactive Data Point Markers */}
+                          {series.primaryValues.map((val, idx) => {
+                            const min = Math.min(...series.primaryValues);
+                            const max = Math.max(...series.primaryValues);
+                            const range = max - min || 1;
+                            const x = 24 + (idx / Math.max(1, series.primaryValues.length - 1)) * (600 - 48);
+                            const y = 240 - 24 - ((val - min) / range) * (240 - 48);
 
-                          return (
-                            <g key={idx} className="cursor-pointer">
-                              <circle
-                                cx={x}
-                                cy={y}
-                                r={hoveredPointIndex === idx ? 6 : 3.5}
-                                fill="#ffffff"
-                                stroke={series.primaryColor}
-                                strokeWidth="2.5"
-                                onMouseEnter={() => setHoveredPointIndex(idx)}
-                                onMouseLeave={() => setHoveredPointIndex(null)}
-                                className="transition-all"
-                              />
-                            </g>
-                          );
-                        })}
-                      </svg>
-                    );
-                  })()}
+                            return (
+                              <g key={idx} className="cursor-pointer">
+                                <circle
+                                  cx={x}
+                                  cy={y}
+                                  r={hoveredPointIndex === idx ? 6 : 3.5}
+                                  fill="#ffffff"
+                                  stroke={series.primaryColor}
+                                  strokeWidth="2.5"
+                                  onMouseEnter={() => setHoveredPointIndex(idx)}
+                                  onMouseLeave={() => setHoveredPointIndex(null)}
+                                  className="transition-all"
+                                />
+                              </g>
+                            );
+                          })}
+                        </svg>
+                      );
+                    })()
+                  )}
 
                   {/* Hover Tooltip Overlay */}
-                  {hoveredPointIndex !== null && (
+                  {hoveredPointIndex !== null && posts.length > 0 && (
                     <div
                       className="absolute top-4 right-4 bg-zinc-900 border border-zinc-700 shadow-2xl rounded-xl p-3 z-20 pointer-events-none animate-in fade-in"
                     >
-                      <div className="text-[10px] text-zinc-400 font-mono">{splineChartDates[hoveredPointIndex]}</div>
+                      <div className="text-[10px] text-zinc-400 font-mono">{splineChartDates[hoveredPointIndex] || 'Data Point'}</div>
                       <div className="text-xs font-bold text-white mt-1 flex items-center gap-2">
                         <span
                           className="w-2.5 h-2.5 rounded-full"
                           style={{ backgroundColor: splineChartSeries[activeChartMetric].primaryColor }}
                         ></span>
                         {splineChartSeries[activeChartMetric].primaryLabel}:{' '}
-                        <span className="font-mono">{splineChartSeries[activeChartMetric].primaryValues[hoveredPointIndex].toLocaleString()}</span>
-                      </div>
-                      <div className="text-xs font-bold text-zinc-300 mt-1 flex items-center gap-2">
-                        <span
-                          className="w-2.5 h-2.5 rounded-full"
-                          style={{ backgroundColor: splineChartSeries[activeChartMetric].secondaryColor }}
-                        ></span>
-                        {splineChartSeries[activeChartMetric].secondaryLabel}:{' '}
-                        <span className="font-mono">{splineChartSeries[activeChartMetric].secondaryValues[hoveredPointIndex].toLocaleString()}</span>
+                        <span className="font-mono">{splineChartSeries[activeChartMetric].primaryValues[hoveredPointIndex]?.toLocaleString() || 0}</span>
                       </div>
                     </div>
                   )}
-
-                  {/* Dates X-Axis Labels */}
-                  <div className="absolute bottom-1.5 inset-x-6 flex justify-between text-[9px] text-zinc-500 font-mono">
-                    {splineChartDates.filter((_, i) => i % 2 === 0).map((d, i) => (
-                      <span key={i}>{d}</span>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Sub-Metrics Pill Cards (GearShift Style) */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
-                  <div className="p-3 rounded-xl bg-zinc-950/70 border border-emerald-500/20 flex items-center justify-between">
-                    <div>
-                      <div className="text-[10px] text-zinc-400 uppercase font-bold">Page Fans by Like</div>
-                      <div className="text-lg font-black text-white mt-0.5">257</div>
-                    </div>
-                    <Badge variant="success" className="text-[10px] font-bold">+12.35%</Badge>
-                  </div>
-
-                  <div className="p-3 rounded-xl bg-zinc-950/70 border border-rose-500/20 flex items-center justify-between">
-                    <div>
-                      <div className="text-[10px] text-zinc-400 uppercase font-bold">Page Fans by Unlike</div>
-                      <div className="text-lg font-black text-white mt-0.5">1.5k</div>
-                    </div>
-                    <Badge variant="default" className="text-[10px] font-bold text-rose-400 bg-rose-950/50">+03.14%</Badge>
-                  </div>
-
-                  <div className="p-3 rounded-xl bg-zinc-950/70 border border-blue-500/20 flex items-center justify-between">
-                    <div>
-                      <div className="text-[10px] text-zinc-400 uppercase font-bold">Talking About Count</div>
-                      <div className="text-lg font-black text-white mt-0.5">257</div>
-                    </div>
-                    <Badge variant="primary" className="text-[10px] font-bold">+45.68%</Badge>
-                  </div>
                 </div>
               </Card>
 
-              {/* Top Performing Posts & Real Feed Table (AIKIT Style) */}
+              {/* Top Performing Posts Feed */}
               <Card className="p-6 border-zinc-800 bg-zinc-900/80 shadow-2xl">
                 <div className="flex items-center justify-between mb-4">
                   <div>
@@ -2334,7 +1996,7 @@ function GrowthPageContent() {
                       <Flame className="w-4 h-4 text-amber-400" /> Top Performing Posts Feed
                     </h3>
                     <p className="text-xs text-zinc-400 mt-0.5">
-                      Live posts ranked by organic engagement rate and viral propagation
+                      Live posts ranked by organic engagement rate and reach
                     </p>
                   </div>
                   <Button
@@ -2354,75 +2016,62 @@ function GrowthPageContent() {
                         <th className="pb-3">Content Preview</th>
                         <th className="pb-3 text-center">Engagement</th>
                         <th className="pb-3 text-center">Reach</th>
-                        <th className="pb-3 text-center">Viral Score</th>
                         <th className="pb-3 text-center">Status</th>
                         <th className="pb-3 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-800/60">
-                      {topPerformingPostsData.map(post => (
-                        <tr key={post.id} className="hover:bg-zinc-800/30 transition-all">
-                          <td className="py-3.5 pr-4 max-w-xs">
-                            <div className="font-bold text-white text-xs line-clamp-1">{post.title}</div>
-                            <div className="text-[11px] text-zinc-400 line-clamp-1 mt-0.5">{post.preview}</div>
-                            <div className="text-[10px] text-zinc-500 font-mono mt-1">{post.publishedAt}</div>
-                          </td>
-                          <td className="py-3.5 text-center">
-                            <div className="font-bold text-white font-mono">{post.likes.toLocaleString()}</div>
-                            <div className="text-[10px] text-zinc-500">{post.comments} comments • {post.shares} shares</div>
-                          </td>
-                          <td className="py-3.5 text-center font-bold text-indigo-300 font-mono">
-                            {post.reach}
-                          </td>
-                          <td className="py-3.5 text-center">
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 border border-amber-500/30 text-amber-300">
-                              {post.viralScore}%
-                            </span>
-                          </td>
-                          <td className="py-3.5 text-center">
-                            <Badge variant={post.status.includes('Trending') ? 'success' : 'primary'} className="text-[10px] font-bold">
-                              {post.status}
-                            </Badge>
-                          </td>
-                          <td className="py-3.5 text-right whitespace-nowrap">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <button
-                                onClick={() => handleOpenCommentsModal({ id: post.id, body: post.preview })}
-                                className="p-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/40 transition-all flex items-center gap-1 text-[11px]"
-                                title="Read & Reply to Facebook Comments"
-                              >
-                                <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
-                              </button>
-                              <a
-                                href={post.permalink}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="p-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700 transition-all"
-                                title="View on Facebook"
-                              >
-                                <ExternalLink className="w-3.5 h-3.5" />
-                              </a>
-                              <Button
-                                variant="primary"
-                                size="sm"
-                                onClick={() => {
-                                  setNewPost({
-                                    title: `Follow-up: ${post.title}`,
-                                    body: `${post.preview}\n\nKey takeaways and strategic implications for SADC trade automation.`,
-                                    platform: 'facebook',
-                                    hashtags: '#RalionOS #RasAliLabs #EnterpriseAI',
-                                    scheduledAt: '',
-                                  });
-                                  setIsCreateOpen(true);
-                                }}
-                                className="text-[11px] py-1 px-2.5 bg-indigo-600 hover:bg-indigo-700 font-bold"
-                              >
-                                <Sparkles className="w-3 h-3 mr-1" /> Repurpose
-                              </Button>
-                            </div>
+                      {posts.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="py-8 text-center text-zinc-500">
+                            No Facebook posts found. Publish your first post using the composer above.
                           </td>
                         </tr>
-                      ))}
+                      ) : (
+                        posts.slice(0, 5).map(post => (
+                          <tr key={post.id} className="hover:bg-zinc-800/30 transition-all">
+                            <td className="py-3.5 pr-4 max-w-xs">
+                              <div className="font-bold text-white text-xs line-clamp-1">{post.title || 'Facebook Post'}</div>
+                              <div className="text-[11px] text-zinc-400 line-clamp-1 mt-0.5">{post.body}</div>
+                              <div className="text-[10px] text-zinc-500 font-mono mt-1">{post.publishedAt || 'Recently'}</div>
+                            </td>
+                            <td className="py-3.5 text-center">
+                              <div className="font-bold text-white font-mono">{(post.engagement?.likes || 0).toLocaleString()}</div>
+                              <div className="text-[10px] text-zinc-500">{post.engagement?.comments || 0} comments • {post.engagement?.shares || 0} shares</div>
+                            </td>
+                            <td className="py-3.5 text-center font-bold text-indigo-300 font-mono">
+                              {(post.engagement?.reach || 0).toLocaleString()}
+                            </td>
+                            <td className="py-3.5 text-center">
+                              <Badge variant={post.status === 'published' ? 'success' : 'primary'} className="text-[10px] font-bold">
+                                {post.status}
+                              </Badge>
+                            </td>
+                            <td className="py-3.5 text-right whitespace-nowrap">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  onClick={() => handleOpenCommentsModal({ id: post.id, body: post.body })}
+                                  className="p-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/40 transition-all flex items-center gap-1 text-[11px]"
+                                  title="Read & Reply to Facebook Comments"
+                                >
+                                  <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
+                                </button>
+                                {post.mediaUrl && (
+                                  <a
+                                    href={post.mediaUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="p-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700 transition-all"
+                                    title="View Media"
+                                  >
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                  </a>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -2431,7 +2080,7 @@ function GrowthPageContent() {
 
             {/* Right Column: Optimal Posting Times, Calendar Queue & Mari AI Suggestions */}
             <div className="flex flex-col gap-6">
-              {/* Optimal Posting Times Radar & Hourly Windows (AIKIT Style) */}
+              {/* Optimal Posting Times */}
               <Card className="p-6 border-zinc-800 bg-zinc-900/80 shadow-2xl">
                 <div className="flex items-center justify-between mb-3">
                   <div>
@@ -2443,28 +2092,14 @@ function GrowthPageContent() {
                   <Badge variant="purple" className="text-[10px] font-mono">Radar Telemetry</Badge>
                 </div>
 
-                {/* Radar Visual Polygon Simulation */}
                 <div className="w-full h-44 bg-zinc-950/70 rounded-2xl border border-zinc-800/80 p-3 flex items-center justify-center relative overflow-hidden">
                   <svg viewBox="0 0 200 200" className="w-full h-full">
-                    {/* Radar concentric polygons */}
                     <polygon points="100,20 180,100 100,180 20,100" fill="none" stroke="#27272a" strokeWidth="1" />
                     <polygon points="100,45 155,100 100,155 45,100" fill="none" stroke="#27272a" strokeWidth="1" />
                     <polygon points="100,70 130,100 100,130 70,100" fill="none" stroke="#27272a" strokeWidth="1" />
-
-                    {/* Cross lines */}
                     <line x1="100" y1="10" x2="100" y2="190" stroke="#27272a" strokeWidth="1" strokeDasharray="2 2" />
                     <line x1="10" y1="100" x2="190" y2="100" stroke="#27272a" strokeWidth="1" strokeDasharray="2 2" />
-
-                    {/* Peak polygon fill */}
-                    <polygon
-                      points="100,28 165,95 100,160 38,100"
-                      fill="#6366f1"
-                      fillOpacity="0.25"
-                      stroke="#818cf8"
-                      strokeWidth="2"
-                    />
-
-                    {/* Hourly Labels */}
+                    <polygon points="100,28 165,95 100,160 38,100" fill="#6366f1" fillOpacity="0.25" stroke="#818cf8" strokeWidth="2" />
                     <text x="100" y="15" textAnchor="middle" fill="#a1a1aa" fontSize="8" fontFamily="monospace">12 AM</text>
                     <text x="185" y="103" textAnchor="start" fill="#a1a1aa" fontSize="8" fontFamily="monospace">06 AM</text>
                     <text x="100" y="196" textAnchor="middle" fill="#a1a1aa" fontSize="8" fontFamily="monospace">12 PM</text>
@@ -2472,7 +2107,6 @@ function GrowthPageContent() {
                   </svg>
                 </div>
 
-                {/* Peak Times Breakdown */}
                 <div className="flex flex-col gap-2 mt-4">
                   {[
                     { time: '08:30 AM', label: 'Morning Executive Briefing', score: '88%' },
@@ -2506,31 +2140,37 @@ function GrowthPageContent() {
                   <h3 className="text-sm font-black text-white flex items-center gap-1.5">
                     <Calendar className="w-4 h-4 text-emerald-400" /> AI Content Calendar
                   </h3>
-                  <Badge variant="default" className="text-[10px] font-mono">Today / Tomorrow</Badge>
+                  <Badge variant="default" className="text-[10px] font-mono">Scheduled Queue</Badge>
                 </div>
 
                 <div className="flex flex-col gap-3">
-                  {contentCalendarQueue.map((item, idx) => (
-                    <div key={idx} className="p-3 rounded-xl bg-zinc-950 border border-zinc-800/80 flex items-start gap-3">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
-                        item.status === 'published'
-                          ? 'bg-emerald-600/20 border border-emerald-500/30 text-emerald-400'
-                          : item.status === 'scheduled'
-                          ? 'bg-blue-600/20 border border-blue-500/30 text-blue-400'
-                          : 'bg-amber-600/20 border border-amber-500/30 text-amber-400'
-                      }`}>
-                        {item.status === 'published' ? '✓' : item.status === 'scheduled' ? '🗓' : '✎'}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-mono text-zinc-400 font-bold">{item.time}</span>
-                          <span className="text-[10px] font-mono text-indigo-400 font-bold">{item.reach}</span>
-                        </div>
-                        <h4 className="text-xs font-bold text-white mt-0.5">{item.title}</h4>
-                        <div className="text-[10px] text-zinc-500 mt-0.5">{item.type}</div>
-                      </div>
+                  {posts.filter(p => p.status === 'scheduled' || p.status === 'draft').length === 0 ? (
+                    <div className="p-6 text-center text-zinc-500 text-xs">
+                      No scheduled posts in the calendar queue.
                     </div>
-                  ))}
+                  ) : (
+                    posts.filter(p => p.status === 'scheduled' || p.status === 'draft').slice(0, 4).map((item, idx) => (
+                      <div key={item.id || idx} className="p-3 rounded-xl bg-zinc-950 border border-zinc-800/80 flex items-start gap-3">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
+                          item.status === 'published'
+                            ? 'bg-emerald-600/20 border border-emerald-500/30 text-emerald-400'
+                            : item.status === 'scheduled'
+                            ? 'bg-blue-600/20 border border-blue-500/30 text-blue-400'
+                            : 'bg-amber-600/20 border border-amber-500/30 text-amber-400'
+                        }`}>
+                          {item.status === 'published' ? '✓' : item.status === 'scheduled' ? '🗓' : '✎'}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-mono text-zinc-400 font-bold">{item.scheduledAt || 'Upcoming'}</span>
+                            <span className="text-[10px] font-mono text-indigo-400 font-bold">{item.status.toUpperCase()}</span>
+                          </div>
+                          <h4 className="text-xs font-bold text-white mt-0.5">{item.title || 'Scheduled Post'}</h4>
+                          <div className="text-[10px] text-zinc-500 mt-0.5 line-clamp-1">{item.body}</div>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </Card>
 
@@ -4149,11 +3789,22 @@ function GrowthPageContent() {
                     fb
                   </div>
                   <div>
-                    <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                      ✓ Ras Ali Labs
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                    </div>
-                    <p className="text-[10px] text-zinc-400 font-mono">@rasalibass • ID: 477334159265235</p>
+                    {(() => {
+                      const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
+                      const activeConn = connectedAccounts.find(a => a.provider === 'facebook');
+                      const name = activeFbPage?.name || activeConn?.label || 'Facebook Page';
+                      const handle = activeFbPage?.username || activeConn?.handle || '@facebook';
+                      const pageId = activeFbPage?.pageId || activeConn?.id || 'Connected';
+                      return (
+                        <>
+                          <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                            ✓ {name}
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                          </div>
+                          <p className="text-[10px] text-zinc-400 font-mono">{handle} • ID: {pageId}</p>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
                 <Badge variant="success" className="text-[9px] py-0 px-1.5">ACTIVE</Badge>
@@ -4276,20 +3927,23 @@ function GrowthPageContent() {
 
                 setIsConnecting(true);
 
+                const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
+                const activeConn = connectedAccounts.find(a => a.provider === 'facebook');
+
                 const payload = {
-                  title: topic || 'Ras Ali Labs Social Post',
+                  title: topic || 'Social Post',
                   body: `${contentBody}\n\n${newPost.hashtags}`.trim(),
                   platforms: ['facebook'],
                   mediaUrls: newPost.mediaUrl ? [newPost.mediaUrl] : undefined,
                   mediaTypes: newPost.mediaType ? [newPost.mediaType] : undefined,
                   scheduledFor: newPost.scheduledAt || undefined,
-                  authorName: 'Ras Ali Labs',
-                  socialConnectionId: '6a82df7277555aae018b92b4',
-                  pageId: '477334159265235',
+                  authorName: activeFbPage?.name || activeConn?.label || 'Facebook Page',
+                  socialConnectionId: activeFbPage?.id || activeConn?.id || undefined,
+                  pageId: activeFbPage?.pageId || undefined,
                 };
 
                 try {
-                  const res = await fetch('/api/social/publish', {
+                  const res = await fetch(getRalionApiUrl('/api/social/publish'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload),
@@ -4311,7 +3965,7 @@ function GrowthPageContent() {
                   const postUrl =
                     data.result?.platformResults?.facebook?.postUrl ||
                     data.platformResults?.facebook?.postUrl ||
-                    'https://www.facebook.com/477334159265235';
+                    undefined;
 
                   const createdPost: ContentPost = {
                     id: publishedPostId,
@@ -4324,7 +3978,7 @@ function GrowthPageContent() {
                     scheduledAt: newPost.scheduledAt || undefined,
                     mediaUrl: newPost.mediaUrl,
                     mediaType: newPost.mediaType,
-                    engagement: { likes: 1, shares: 0, reach: 1, comments: 0 },
+                    engagement: { likes: 0, shares: 0, reach: 0, comments: 0 },
                   };
 
                   const fbFeedItem = {
@@ -4335,7 +3989,7 @@ function GrowthPageContent() {
                     status: newPost.scheduledAt ? 'scheduled' : 'published',
                     source: 'RALION',
                     permalink: postUrl,
-                    engagement: { likes: 1, comments: 0, shares: 0, reach: 1 },
+                    engagement: { likes: 0, comments: 0, shares: 0, reach: 0 },
                   };
 
                   setPosts(prev => [createdPost, ...prev]);

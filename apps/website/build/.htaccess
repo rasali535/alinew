@@ -1,3 +1,5 @@
+DirectoryIndex index.html
+
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
@@ -6,7 +8,20 @@
   RewriteCond %{REQUEST_URI} \.(exe|dmg|AppImage|deb|zip|tar\.gz)$ [NC]
   RewriteRule ^ - [L]
 
-  # Standard SPA Rewrite Rules
+  # Sub-application SPA Rewrites:
+  # 1. Ralion Application (/ralion/...)
+  RewriteCond %{REQUEST_URI} ^/ralion/ [NC]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^ralion/.*$ /ralion/index.html [L]
+
+  # 2. Admin Application (/admin/...)
+  RewriteCond %{REQUEST_URI} ^/admin/ [NC]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^admin/.*$ /admin/index.html [L]
+
+  # 3. Root Marketing SPA Rewrite Rules
   RewriteRule ^index\.html$ - [L]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d

@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Button, Card, Badge } from '@ralion/ui';
 import { Download, Sparkles, Shield, Truck, HeartPulse, ShoppingBag, TrendingUp, Check, ArrowRight, Monitor, Globe, CheckCircle2 } from 'lucide-react';
+import { getRalionApiUrl } from '@/lib/api-config';
 
 interface LatestRelease {
   version: string;
@@ -26,7 +27,7 @@ export default function RalionProductPage() {
   useEffect(() => {
     async function fetchLatest() {
       try {
-        const res = await fetch('/api/releases/latest?platform=windows');
+        const res = await fetch(getRalionApiUrl('/api/releases/latest?platform=windows'));
         if (res.ok) {
           const data = await res.json();
           if (data.version) setRelease(data);

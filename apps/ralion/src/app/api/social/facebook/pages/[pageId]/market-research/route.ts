@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MariCompetitiveIntelligenceService } from '@/lib/services/social/mariCompetitiveIntelligence.service';
 
-export const dynamic = 'force-dynamic';
-
 export async function generateStaticParams() {
   return [{ pageId: '477334159265235' }, { pageId: 'default' }];
 }

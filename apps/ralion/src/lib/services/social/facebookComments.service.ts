@@ -41,9 +41,6 @@ function getServiceSupabase() {
 }
 
 export class FacebookCommentsService {
-  private static readonly PAGE_ID = '477334159265235';
-  private static readonly PAGE_NAME = 'Ras Ali Labs';
-
   /**
    * Fetch all comments for a Facebook Page or specific post
    */
@@ -53,10 +50,8 @@ export class FacebookCommentsService {
     userId?: string;
   }): Promise<FacebookComment[]> {
     const supabase = getServiceSupabase();
-    const targetPageId = params.pageId || this.PAGE_ID;
 
-    // Check database for cached or custom replies
-    let dbComments: any[] = [];
+    // Check database for real comments
     try {
       const query = supabase
         .from('social_post_comments')
@@ -65,99 +60,42 @@ export class FacebookCommentsService {
 
       if (params.postId) {
         query.eq('post_id', params.postId);
+      } else if (params.pageId) {
+        query.eq('page_id', params.pageId);
       }
 
-      const { data } = await query;
-      if (data) dbComments = data;
+      const { data, error } = await query;
+      if (!error && Array.isArray(data)) {
+        return data as FacebookComment[];
+      }
     } catch {
       // Table optional in schema cache
     }
 
-    // Default live synchronized comments across verified Ras Ali Labs Facebook posts
-    const liveDefaultComments: FacebookComment[] = [
-      {
-        id: 'comm_fb_101',
-        postId: '477334159265235_1685926583538664',
-        authorName: 'Kabo Mogotsi',
-        authorAvatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop',
-        commentText: 'Incredible speed on the autonomous routing engine! Is this already deployed across SADC trade routes?',
-        createdAt: '2 hours ago',
-        likesCount: 5,
-        replies: [
-          {
-            id: 'rep_fb_101_1',
-            commentId: 'comm_fb_101',
-            authorName: 'Ras Ali Labs',
-            authorAvatarUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop',
-            replyText: 'Hi Kabo! Yes, Ralion OS is actively operating across the Trans-Kalahari corridor with real-time telematics.',
-            createdAt: '1 hour ago',
-            isPageOwner: true,
-          }
-        ],
-      },
-      {
-        id: 'comm_fb_102',
-        postId: '477334159265235_1685948880203101',
-        authorName: 'Tshepo Dlamini',
-        authorAvatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop',
-        commentText: 'Does Ralion provide sovereign data isolation for financial services in Botswana?',
-        createdAt: '3 hours ago',
-        likesCount: 3,
-        replies: [
-          {
-            id: 'rep_fb_102_1',
-            commentId: 'comm_fb_102',
-            authorName: 'Ras Ali Labs',
-            authorAvatarUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop',
-            replyText: 'Absolutely Tshepo. All client telemetry and ERP data remains cryptographically isolated in your sovereign tenant.',
-            createdAt: '2 hours ago',
-            isPageOwner: true,
-          }
-        ],
-      },
-      {
-        id: 'comm_fb_103',
-        postId: '477334159265235_1685951006869555',
-        authorName: 'Mpho Khumalo',
-        authorAvatarUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop',
-        commentText: 'Looking forward to testing the new Mari AI growth suite for our logistics operations!',
-        createdAt: '4 hours ago',
-        likesCount: 8,
-        replies: [],
-      }
-    ];
-
-    // Merge database replies with default comments
-    if (dbComments.length > 0) {
-      return [...dbComments, ...liveDefaultComments];
-    }
-
-    const currentPostId = params.postId;
-    if (currentPostId) {
-      return liveDefaultComments.filter(c => c.postId === currentPostId || currentPostId.includes(c.postId));
-    }
-
-    return liveDefaultComments;
+    return [];
   }
 
   /**
-   * Post a reply to a comment as "Ras Ali Labs"
+   * Post a reply to a comment
    */
   static async replyToComment(params: {
     commentId: string;
     postId: string;
     replyText: string;
     userId?: string;
+    authorName?: string;
+    pageId?: string;
   }): Promise<FacebookCommentReply> {
     if (!params.replyText.trim()) {
       throw new Error('Reply text is required.');
     }
 
+    const pageAuthor = params.authorName || 'Facebook Page';
+
     const reply: FacebookCommentReply = {
       id: `rep_${Date.now()}`,
       commentId: params.commentId,
-      authorName: this.PAGE_NAME,
-      authorAvatarUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop',
+      authorName: pageAuthor,
       replyText: params.replyText.trim(),
       createdAt: 'Just now',
       isPageOwner: true,
@@ -169,7 +107,7 @@ export class FacebookCommentsService {
         comment_id: params.commentId,
         post_id: params.postId,
         reply_text: params.replyText.trim(),
-        author_name: this.PAGE_NAME,
+        author_name: pageAuthor,
         created_at: new Date().toISOString(),
       });
     } catch {
@@ -184,7 +122,7 @@ export class FacebookCommentsService {
       resourceId: params.commentId,
       metadata: {
         postId: params.postId,
-        pageId: this.PAGE_ID,
+        pageId: params.pageId || null,
         replyLength: params.replyText.length,
       },
     });
@@ -192,3 +130,4 @@ export class FacebookCommentsService {
     return reply;
   }
 }
+

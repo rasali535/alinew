@@ -1,4 +1,5 @@
 import { createClient } from '../supabase/client';
+import { getRalionApiUrl } from '../api-config';
 
 export interface LicenseValidation {
   valid: boolean;
@@ -47,7 +48,7 @@ export class LicenseService {
    */
   static async registerDesktopDevice(licenseKey: string, deviceId: string, deviceName: string) {
     try {
-      const res = await fetch('/api/license/activate', {
+      const res = await fetch(getRalionApiUrl('/api/license/activate'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ licenseKey, deviceId, deviceName, platform: typeof window !== 'undefined' ? navigator.platform : 'Web' }),

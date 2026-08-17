@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SocialAnalyticsService } from '@/lib/services/social/socialAnalytics.service';
 
-export const dynamic = 'force-dynamic';
+export const dynamic = 'force-static';
 
 export async function GET(request: NextRequest) {
   try {

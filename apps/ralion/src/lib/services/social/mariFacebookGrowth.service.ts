@@ -77,24 +77,39 @@ export class MariFacebookGrowthService {
    * Compute deterministic Facebook Page Growth Score based on verified methodology
    */
   static calculateGrowthScore(analytics: NormalizedPageAnalytics): MariGrowthScore {
+    if (analytics.totalPosts30d === 0 && analytics.totalReach30d === 0) {
+      return {
+        total: 0,
+        breakdown: {
+          contentQuality: 0,
+          engagement: 0,
+          consistency: 0,
+          growthVelocity: 0,
+        },
+        summary: 'Mari needs more data to provide a reliable recommendation. Publish posts to calibrate your growth score.',
+      };
+    }
+
     // 1. Content score (based on active publishing)
-    const contentQuality = Math.min(95, Math.max(40, 50 + analytics.totalPosts30d * 4));
+    const contentQuality = Math.min(95, Math.max(30, 40 + analytics.totalPosts30d * 6));
 
     // 2. Engagement score (benchmark standard is 3.5% for business pages)
-    const engagement = Math.min(98, Math.max(40, Math.round((analytics.engagementRate / 3.5) * 65)));
+    const engagement = analytics.engagementRate > 0 
+      ? Math.min(98, Math.max(20, Math.round((analytics.engagementRate / 3.5) * 65)))
+      : 20;
 
     // 3. Consistency score
-    const consistency = Math.min(90, Math.max(35, analytics.totalPosts30d >= 8 ? 82 : 64));
+    const consistency = Math.min(90, Math.max(20, analytics.totalPosts30d >= 8 ? 85 : analytics.totalPosts30d * 10));
 
     // 4. Growth velocity score
-    const growthVelocity = Math.min(95, Math.max(45, Math.round(55 + analytics.followerGrowthPercentage * 2.5)));
+    const growthVelocity = Math.min(95, Math.max(20, Math.round(30 + analytics.followerGrowthPercentage * 2.5)));
 
     const total = Math.round((contentQuality + engagement + consistency + growthVelocity) / 4);
 
-    let summary = 'Your Page demonstrates strong health with rising engagement across video content.';
-    if (total < 60) {
+    let summary = 'Your Page demonstrates rising engagement across social channels.';
+    if (total < 50) {
       summary = 'Publishing frequency needs acceleration to unlock broader algorithmic reach.';
-    } else if (total > 85) {
+    } else if (total > 80) {
       summary = 'Exceptional performance! High organic engagement and rapid audience growth.';
     }
 
@@ -119,55 +134,51 @@ export class MariFacebookGrowthService {
   }): Promise<{ score: MariGrowthScore; insights: MariInsightItem[] }> {
     const score = this.calculateGrowthScore({
       ...params.context,
-      totalLikes30d: 142,
-      totalComments30d: 28,
-      totalShares30d: 19,
+      totalLikes30d: 0,
+      totalComments30d: 0,
+      totalShares30d: 0,
       lastSyncedAt: new Date().toISOString(),
     });
 
-    const insights: MariInsightItem[] = [
-      {
-        id: 'ins_1',
-        type: 'PERFORMANCE_INSIGHT',
-        title: 'Video Content Drives 62% of All Page Engagement',
-        summary: 'Video reels significantly outperform static posts in organic reach and interaction.',
-        evidence: `Videos achieved ${params.context.engagementRate}% average engagement vs 2.1% for text updates.`,
-        impact: 'HIGH',
-        actionLabel: 'Create Video Reel',
-        actionType: 'CREATE_CONTENT',
-        suggestedPrompt: 'Create a 15-second product demonstration reel highlighting AI automation.',
-      },
-      {
-        id: 'ins_2',
-        type: 'GROWTH_OPPORTUNITY',
-        title: 'Increase Posting Consistency to 3–4 Times Weekly',
-        summary: 'Increasing weekly frequency from 2 to 4 posts will compound algorithmic visibility in Southern Africa.',
-        evidence: `Currently publishing ${params.context.postingFrequencyPerWeek || 2} posts/week. Target is 4 posts/week.`,
-        impact: 'HIGH',
-        actionLabel: 'Generate 7-Day Plan',
-        actionType: 'CREATE_PLAN',
-      },
-      {
-        id: 'ins_3',
-        type: 'TIMING_INSIGHT',
-        title: 'Peak Audience Engagement: Tuesday & Thursday 09:00–11:00 SAST',
-        summary: 'Morning business hours show a 42% higher click-through rate on enterprise announcements.',
-        evidence: 'Historical impressions peak between 09:00 and 11:00 AM Central Africa Time.',
-        impact: 'MEDIUM',
-        actionLabel: 'Schedule Best Time',
-        actionType: 'SCHEDULE_POST',
-      },
-      {
-        id: 'ins_4',
-        type: 'ANOMALY',
-        title: 'Audience Reach Up +13.1% Over Last 30 Days',
-        summary: 'Accelerating organic discovery attributed to recent tech summit and product launch updates.',
-        evidence: `Gained +${params.context.followerGrowth30d} followers (+${params.context.followerGrowthPercentage}%) this month.`,
-        impact: 'OPPORTUNITY',
-        actionLabel: 'View Detailed Analytics',
-        actionType: 'VIEW_ANALYTICS',
-      },
-    ];
+    const hasData = params.context.totalPosts30d > 0 || params.context.totalReach30d > 0;
+
+    const insights: MariInsightItem[] = hasData
+      ? [
+          {
+            id: 'ins_1',
+            type: 'PERFORMANCE_INSIGHT',
+            title: `Active Publishing: ${params.context.totalPosts30d} Posts Tracked`,
+            summary: 'Your posts are active in the feed with real-time engagement tracking.',
+            evidence: `Current calculated engagement rate: ${params.context.engagementRate}%.`,
+            impact: 'HIGH',
+            actionLabel: 'Create Post',
+            actionType: 'CREATE_CONTENT',
+            suggestedPrompt: 'Create a product demonstration reel highlighting AI automation.',
+          },
+          {
+            id: 'ins_2',
+            type: 'GROWTH_OPPORTUNITY',
+            title: 'Optimize Posting Consistency',
+            summary: 'Maintaining 3 to 4 posts weekly compounds algorithmic visibility.',
+            evidence: `Currently tracking ${params.context.totalPosts30d} posts in this cycle.`,
+            impact: 'HIGH',
+            actionLabel: 'Generate 7-Day Plan',
+            actionType: 'CREATE_PLAN',
+          },
+        ]
+      : [
+          {
+            id: 'ins_init',
+            type: 'GROWTH_OPPORTUNITY',
+            title: 'Publish Your First Post to Calibrate Growth Insights',
+            summary: 'Mari needs more data to provide a reliable recommendation.',
+            evidence: 'No active posts recorded for this cycle.',
+            impact: 'HIGH',
+            actionLabel: 'Create First Post',
+            actionType: 'CREATE_CONTENT',
+            suggestedPrompt: 'Write an introductory announcement for our audience.',
+          },
+        ];
 
     await AuditLoggerService.log({
       eventType: 'MARI_PAGE_ANALYSIS' as any,

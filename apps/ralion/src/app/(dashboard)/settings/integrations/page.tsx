@@ -27,6 +27,7 @@ import {
   X
 } from 'lucide-react';
 import { INTEGRATION_SERVICES_REGISTRY, IntegrationCategory, IntegrationServiceMeta, MariMemoryGraph } from '@ralion/integrations';
+import { getRalionApiUrl } from '@/lib/api-config';
 
 export default function IntegrationHubPage() {
   const [activeCategory, setActiveCategory] = useState<string>('ALL');
@@ -57,7 +58,7 @@ export default function IntegrationHubPage() {
     
     // Request OAuth Connect URL
     try {
-      const res = await fetch(`/ralion/api/oauth/${selectedProvider.provider}/connect/?workspaceId=ras-ali-labs`);
+      const res = await fetch(getRalionApiUrl(`/api/oauth/${selectedProvider.provider}/connect/?workspaceId=ras-ali-labs`));
       const data = await res.json();
       
       if (data.authorizationUrl) {
@@ -110,7 +111,7 @@ export default function IntegrationHubPage() {
     setSyncingProviders(prev => [...prev, provider]);
     
     try {
-      await fetch(`/ralion/api/oauth/${provider}/sync/`, {
+      await fetch(getRalionApiUrl(`/api/oauth/${provider}/sync/`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ workspaceId: 'ras-ali-labs' })
@@ -126,7 +127,7 @@ export default function IntegrationHubPage() {
 
   const handleDisconnect = async (provider: string) => {
     try {
-      await fetch(`/ralion/api/oauth/${provider}/disconnect/`, {
+      await fetch(getRalionApiUrl(`/api/oauth/${provider}/disconnect/`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ workspaceId: 'ras-ali-labs' })
