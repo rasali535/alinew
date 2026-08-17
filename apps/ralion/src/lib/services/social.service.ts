@@ -119,10 +119,45 @@ export async function loadOAuthTokens(userId: string, provider: string) {
 
 export async function loadAllUserAccounts(userId: string): Promise<SocialAccountRecord[]> {
   const supabase = getServiceSupabase();
-  const { data, error } = await supabase.from('social_accounts_safe').select('*')
-    .eq('user_id', userId).eq('status', 'connected');
-  if (error || !data) return [];
-  return data as SocialAccountRecord[];
+  const accounts: SocialAccountRecord[] = [];
+
+  try {
+    const { data: legacyAccounts } = await supabase
+      .from('social_accounts_safe')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('status', 'connected');
+    if (legacyAccounts) accounts.push(...(legacyAccounts as SocialAccountRecord[]));
+  } catch {}
+
+  try {
+    const { data: unifiedAccounts } = await supabase
+      .from('social_connections')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('connection_status', 'CONNECTED');
+    if (unifiedAccounts) {
+      unifiedAccounts.forEach((u: any) => {
+        if (!accounts.some(a => a.provider.toLowerCase() === u.provider.toLowerCase())) {
+          accounts.push({
+            provider: u.provider,
+            account_handle: u.username ? `@${u.username}` : `@${u.account_name.toLowerCase().replace(/\s+/g, '_')}`,
+            account_label: u.account_name,
+            followers_count: Number(u.followers_count || 0),
+            avatar_url: u.profile_image_url,
+            page_id: u.provider_account_id,
+            status: 'connected',
+            connected_at: u.connected_at,
+            last_synced_at: u.last_sync_at,
+            scopes: u.scopes || [],
+            extra_meta: u.metadata || {},
+          } as any);
+        }
+      });
+    }
+  } catch {}
+
+  return accounts;
 }
 
 export async function deleteOAuthToken(userId: string, provider: string) {

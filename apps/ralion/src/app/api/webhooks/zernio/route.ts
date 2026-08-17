@@ -98,15 +98,61 @@ export async function POST(request: NextRequest) {
     switch (eventType) {
       case 'account.connected': {
         if (accountId) {
-          await supabase
-            .from('social_connections')
-            .update({
-              connection_status: 'CONNECTED',
-              token_status: 'TOKEN_VALID',
-              last_sync_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            })
-            .or(`zernio_account_id.eq.${accountId},provider_account_id.eq.${accountId}`);
+          try {
+            // Attempt to retrieve full account metadata from Zernio
+            const acc = await ZernioSocialService.getAccount(accountId);
+            if (acc) {
+              const platform = (acc.platform || payload.data?.platform || 'facebook').toLowerCase();
+              const name = acc.name || payload.data?.name || 'Connected Account';
+              const username = acc.username || payload.data?.username;
+              const avatar = acc.avatarUrl || payload.data?.avatarUrl;
+
+              // Find target user from profile mapping
+              const targetUserId = organizationId || workspaceId;
+              let resolvedUserId = '00000000-0000-0000-0000-000000000000';
+              if (profileId) {
+                const { data: pm } = await supabase
+                  .from('social_provider_profiles')
+                  .select('user_id')
+                  .eq('provider_profile_id', profileId)
+                  .maybeSingle();
+                if (pm?.user_id) resolvedUserId = pm.user_id;
+              }
+
+              await supabase.from('social_connections').upsert({
+                user_id: resolvedUserId,
+                organization_id: organizationId,
+                workspace_id: workspaceId,
+                provider: platform,
+                provider_account_id: accountId,
+                account_name: name,
+                username: username,
+                profile_image_url: avatar,
+                connection_status: 'CONNECTED',
+                token_status: 'TOKEN_VALID',
+                infrastructure_provider: 'zernio',
+                zernio_account_id: accountId,
+                zernio_profile_id: profileId,
+                capabilities: acc.capabilities || {},
+                followers_count: acc.followersCount || 0,
+                last_sync_at: new Date().toISOString(),
+                connected_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              }, { onConflict: 'user_id,provider,provider_account_id' });
+            }
+          } catch (syncErr: any) {
+            console.warn('[ZernioWebhook] Account sync warning:', syncErr.message);
+            // Fallback status update
+            await supabase
+              .from('social_connections')
+              .update({
+                connection_status: 'CONNECTED',
+                token_status: 'TOKEN_VALID',
+                last_sync_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              })
+              .or(`zernio_account_id.eq.${accountId},provider_account_id.eq.${accountId}`);
+          }
         }
         break;
       }

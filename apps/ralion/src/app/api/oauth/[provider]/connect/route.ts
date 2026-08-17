@@ -44,27 +44,30 @@ export async function GET(
 
     // Check if routed to Zernio infrastructure
     const normalizedPlatform = (provider === 'twitter' ? 'x' : provider) as any;
-    if (SocialProviderRouter.isZernioEnabledForPlatform(normalizedPlatform)) {
+    const routing = await SocialProviderRouter.resolveRouting({
+      platform: normalizedPlatform,
+      userId,
+    });
+
+    if (routing.provider === 'zernio' && routing.zernioProfileId) {
       try {
-        const profileId = await SocialProviderRouter.getOrCreateZernioProfile({ userId });
-        if (profileId) {
-          const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-          const callbackUrl = `${appUrl}/ralion/growth?connected=${provider}&provider=zernio`;
-          const zernioConnect = await ZernioSocialService.getConnectUrl(
-            normalizedPlatform,
-            profileId,
-            callbackUrl
-          );
-          if (zernioConnect?.authUrl) {
-            const response = NextResponse.json({
-              success: true,
-              provider,
-              authorizationUrl: zernioConnect.authUrl,
-              infrastructure: 'zernio',
-              stateToken,
-            });
-            return response;
-          }
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://rasalilabs.com';
+        const callbackUrl = `${appUrl}/ralion/growth?connected=${provider}&provider=zernio`;
+        const zernioConnect = await ZernioSocialService.getConnectUrl(
+          normalizedPlatform,
+          routing.zernioProfileId,
+          callbackUrl
+        );
+        if (zernioConnect?.authUrl) {
+          const response = NextResponse.json({
+            success: true,
+            provider,
+            authorizationUrl: zernioConnect.authUrl,
+            infrastructure: 'zernio',
+            profileId: routing.zernioProfileId,
+            stateToken,
+          });
+          return response;
         }
       } catch (zErr: any) {
         console.warn(`[OAuth Connect] Zernio routing fallback for ${provider}:`, zErr.message);
