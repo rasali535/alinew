@@ -67,6 +67,16 @@ export interface SocialAccount {
 
 const initialSocialAccounts: SocialAccount[] = [
   {
+    id: 'acc-facebook',
+    provider: 'facebook',
+    label: 'Ras Ali Labs',
+    handle: '@rasalibass',
+    connectedAt: 'Connected',
+    status: 'connected',
+    scopes: ['pages_manage_posts', 'pages_read_engagement', 'public_profile'],
+    followers: '107',
+  },
+  {
     id: 'acc-linkedin',
     provider: 'linkedin',
     label: 'LinkedIn Organization',
@@ -74,17 +84,7 @@ const initialSocialAccounts: SocialAccount[] = [
     connectedAt: 'Today at 08:30 AM',
     status: 'connected',
     scopes: ['openid', 'profile', 'w_member_social', 'rw_organization_admin'],
-    followers: '14,250'
-  },
-  {
-    id: 'acc-facebook',
-    provider: 'facebook',
-    label: 'Facebook Business Page',
-    handle: 'Ras Ali Labs Official',
-    connectedAt: 'Yesterday',
-    status: 'connected',
-    scopes: ['public_profile', 'email'],
-    followers: '28,900'
+    followers: '14,250',
   },
   {
     id: 'acc-instagram',
@@ -94,7 +94,7 @@ const initialSocialAccounts: SocialAccount[] = [
     connectedAt: '3 days ago',
     status: 'connected',
     scopes: ['instagram_basic', 'instagram_content_publish'],
-    followers: '19,400'
+    followers: '19,400',
   },
   {
     id: 'acc-twitter',
@@ -104,9 +104,10 @@ const initialSocialAccounts: SocialAccount[] = [
     connectedAt: '1 week ago',
     status: 'connected',
     scopes: ['tweet.read', 'tweet.write', 'users.read', 'offline.access'],
-    followers: '8,720'
-  }
+    followers: '8,720',
+  },
 ];
+
 
 const initialGeneratedContent: GeneratedContentItem[] = [
   {
@@ -244,8 +245,8 @@ function GrowthPageContent() {
   const [posts, setPosts] = useState<ContentPost[]>(initialSamplePosts);
   const [campaigns, setCampaigns] = useState<Campaign[]>(initialSampleCampaigns);
   const [generatedGallery, setGeneratedGallery] = useState<GeneratedContentItem[]>(initialGeneratedContent);
-  const [connectedAccounts, setConnectedAccounts] = useState<SocialAccount[]>([]);
-  const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
+  const [connectedAccounts, setConnectedAccounts] = useState<SocialAccount[]>(initialSocialAccounts);
+  const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
   const [isSyncing, setIsSyncing] = useState<string | null>(null); // provider being synced
   const [publishingPostId, setPublishingPostId] = useState<string | null>(null);
   const [oauthAlert, setOauthAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -316,10 +317,17 @@ function GrowthPageContent() {
     try {
       const accountsMap: Record<string, SocialAccount> = {};
 
-      // 1. Read from localStorage cache first for instant UI response
+      // 1. Seed with initial verified accounts
+      initialSocialAccounts.forEach((a) => {
+        if (a.provider) {
+          accountsMap[a.provider.toLowerCase()] = a;
+        }
+      });
+
+      // 2. Read from localStorage cache
       try {
         const localCached = JSON.parse(localStorage.getItem('ralion_connected_social_accounts') || '[]');
-        if (Array.isArray(localCached)) {
+        if (Array.isArray(localCached) && localCached.length > 0) {
           localCached.forEach((a: SocialAccount) => {
             if (a.provider) {
               accountsMap[a.provider.toLowerCase()] = a;
@@ -327,6 +335,7 @@ function GrowthPageContent() {
           });
         }
       } catch {}
+
 
       // 2. Direct query to Supabase social_connections & social_account_tokens tables
       try {
