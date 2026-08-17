@@ -64,6 +64,8 @@ const requiredDocs = [
   'docs/social/zernio-webhooks.md',
   'docs/social/zernio-migration.md',
   'docs/social/zernio-third-party-assessment.md',
+  'docs/social/zernio-secret-verification.md',
+  'docs/social/zernio-supabase-secret-guide.md',
   'docs/social/zernio-implementation-report.md',
 ];
 

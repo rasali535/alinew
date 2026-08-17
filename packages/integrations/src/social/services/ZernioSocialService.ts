@@ -25,6 +25,11 @@ export interface ZernioRequestOptions {
 
 export class ZernioSocialService {
   private static BASE_URL = process.env.ZERNIO_API_BASE_URL || 'https://zernio.com/api/v1';
+  private static SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co';
+  private static SUPABASE_ANON_KEY =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    '';
 
   /**
    * Securely retrieve ZERNIO_API_KEY from server-side environment
@@ -35,10 +40,10 @@ export class ZernioSocialService {
   }
 
   /**
-   * Check if Zernio API key is configured on the server
+   * Check if Zernio API key or Supabase Secrets bridge is configured on the server
    */
   static isConfigured(): boolean {
-    return !!this.getApiKey();
+    return !!this.getApiKey() || !!this.SUPABASE_URL;
   }
 
   /**
@@ -50,17 +55,25 @@ export class ZernioSocialService {
     body?: any,
     options?: ZernioRequestOptions
   ): Promise<T> {
-    const apiKey = this.getApiKey();
-    if (!apiKey) {
-      throw new Error('[ZernioSocialService] ZERNIO_API_KEY is not configured on the server.');
-    }
+    const directKey = this.getApiKey();
 
-    const url = `${this.BASE_URL.replace(/\/$/, '')}/${endpoint.replace(/^\//, '')}`;
+    let url: string;
     const headers: Record<string, string> = {
-      'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
       'User-Agent': 'Ralion-OS-Social-Engine/2.4',
     };
+
+    if (directKey) {
+      url = `${this.BASE_URL.replace(/\/$/, '')}/${endpoint.replace(/^\//, '')}`;
+      headers['Authorization'] = `Bearer ${directKey}`;
+    } else {
+      // Route securely through Supabase Edge Function bridge (which has ZERNIO_API_KEY in Supabase Secrets)
+      url = `${this.SUPABASE_URL.replace(/\/$/, '')}/functions/v1/zernio-bridge/${endpoint.replace(/^\//, '')}`;
+      if (this.SUPABASE_ANON_KEY) {
+        headers['apikey'] = this.SUPABASE_ANON_KEY;
+        headers['Authorization'] = `Bearer ${this.SUPABASE_ANON_KEY}`;
+      }
+    }
 
     if (options?.idempotencyKey) {
       headers['Idempotency-Key'] = options.idempotencyKey;

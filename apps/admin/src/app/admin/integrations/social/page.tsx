@@ -14,16 +14,17 @@ import {
   Globe,
   Radio,
   Lock,
-  ExternalLink,
+  XCircle,
 } from 'lucide-react';
 
 interface ZernioStatusState {
   configured: boolean;
   reachable: boolean;
-  status: string;
+  status: 'ZERNIO_NOT_CONFIGURED' | 'ZERNIO_CONFIGURED' | 'ZERNIO_CONNECTED' | 'ZERNIO_CONNECTION_FAILED';
   latencyMs?: number;
   profileCount?: number;
   featureFlags: Record<string, boolean>;
+  testedEndpoint?: string;
   error?: string;
   checkedAt?: string;
 }
@@ -41,21 +42,11 @@ export default function AdminSocialInfrastructurePage() {
       setStatus(data);
     } catch (err: any) {
       setStatus({
-        configured: true,
-        reachable: true,
-        status: 'healthy',
-        latencyMs: 142,
-        profileCount: 4,
-        featureFlags: {
-          instagram: true,
-          facebook: true,
-          linkedin: true,
-          x: true,
-          tiktok: true,
-          whatsapp: true,
-          youtube: true,
-          threads: true,
-        },
+        configured: false,
+        reachable: false,
+        status: 'ZERNIO_NOT_CONFIGURED',
+        featureFlags: {},
+        testedEndpoint: 'https://zernio.com/api/v1/profiles',
         checkedAt: new Date().toISOString(),
       });
     } finally {
@@ -71,6 +62,36 @@ export default function AdminSocialInfrastructurePage() {
     setTesting(true);
     await fetchStatus();
     setTesting(false);
+  };
+
+  const getStatusBadge = (state?: string) => {
+    switch (state) {
+      case 'ZERNIO_CONNECTED':
+        return (
+          <Badge variant="success" className="text-xs flex items-center gap-1">
+            <CheckCircle2 className="w-3.5 h-3.5" /> ZERNIO_CONNECTED
+          </Badge>
+        );
+      case 'ZERNIO_CONFIGURED':
+        return (
+          <Badge variant="warning" className="text-xs flex items-center gap-1">
+            <Activity className="w-3.5 h-3.5" /> ZERNIO_CONFIGURED
+          </Badge>
+        );
+      case 'ZERNIO_CONNECTION_FAILED':
+        return (
+          <Badge variant="danger" className="text-xs flex items-center gap-1">
+            <XCircle className="w-3.5 h-3.5" /> ZERNIO_CONNECTION_FAILED
+          </Badge>
+        );
+      case 'ZERNIO_NOT_CONFIGURED':
+      default:
+        return (
+          <Badge variant="default" className="text-xs text-zinc-400 bg-zinc-800 flex items-center gap-1">
+            <AlertTriangle className="w-3.5 h-3.5 text-zinc-400" /> ZERNIO_NOT_CONFIGURED
+          </Badge>
+        );
+    }
   };
 
   return (
@@ -101,7 +122,7 @@ export default function AdminSocialInfrastructurePage() {
               className="gap-2 text-xs"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${testing ? 'animate-spin' : ''}`} />
-              Test API Reachability
+              Probe Server-Side Connectivity
             </Button>
           </div>
         </div>
@@ -115,24 +136,31 @@ export default function AdminSocialInfrastructurePage() {
               <span className="text-[11px] text-zinc-400 uppercase font-bold tracking-wider">Secret Configuration</span>
               <Lock className="w-4 h-4 text-emerald-400" />
             </div>
-            <div className="text-xl font-black text-white mt-2 flex items-center gap-2">
-              <Badge variant="success" className="text-xs">
-                Configured
-              </Badge>
+            <div className="text-lg font-black text-white mt-2 flex items-center gap-2">
+              {status?.configured ? (
+                <Badge variant="success" className="text-xs">
+                  CONFIGURED
+                </Badge>
+              ) : (
+                <Badge variant="default" className="text-xs text-zinc-400 bg-zinc-800">
+                  NOT CONFIGURED
+                </Badge>
+              )}
             </div>
             <p className="text-[11px] text-zinc-500 mt-1">Supabase Vault / Server-side secret</p>
           </Card>
 
           <Card className="p-5 bg-zinc-900/60 border-zinc-800">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] text-zinc-400 uppercase font-bold tracking-wider">API Reachability</span>
+              <span className="text-[11px] text-zinc-400 uppercase font-bold tracking-wider">API Verification Status</span>
               <Activity className="w-4 h-4 text-blue-400" />
             </div>
-            <div className="text-xl font-black text-white mt-2 flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              {status?.reachable ? 'Connected (200 OK)' : 'Checking...'}
+            <div className="text-lg font-black text-white mt-2 flex items-center gap-2">
+              {getStatusBadge(status?.status)}
             </div>
-            <p className="text-[11px] text-zinc-500 mt-1">Latency: {status?.latencyMs || 142} ms</p>
+            <p className="text-[11px] text-zinc-500 mt-1">
+              {status?.latencyMs ? `Latency: ${status.latencyMs} ms` : 'Awaiting verification'}
+            </p>
           </Card>
 
           <Card className="p-5 bg-zinc-900/60 border-zinc-800">
@@ -141,7 +169,7 @@ export default function AdminSocialInfrastructurePage() {
               <Layers className="w-4 h-4 text-purple-400" />
             </div>
             <div className="text-xl font-black text-white mt-2">
-              {status?.profileCount !== undefined ? status.profileCount : 4} Active
+              {status?.profileCount !== undefined ? status.profileCount : 0} Active
             </div>
             <p className="text-[11px] text-zinc-500 mt-1">1:1 Workspace Isolation</p>
           </Card>
@@ -152,7 +180,7 @@ export default function AdminSocialInfrastructurePage() {
               <Radio className="w-4 h-4 text-emerald-400" />
             </div>
             <div className="text-xl font-black text-emerald-400 mt-2 flex items-center gap-1.5">
-              <CheckCircle2 className="w-5 h-5" /> Active
+              <CheckCircle2 className="w-5 h-5" /> Endpoint Ready
             </div>
             <p className="text-[11px] text-zinc-500 mt-1">HMAC-SHA256 Verified</p>
           </Card>
@@ -172,7 +200,7 @@ export default function AdminSocialInfrastructurePage() {
                 </CardDescription>
               </div>
               <Badge variant="default" className="text-[10px]">
-                ZERO-DOWNTIME FAILOVER
+                NATIVE PRIMARY DEFAULT
               </Badge>
             </div>
           </CardHeader>
@@ -189,26 +217,26 @@ export default function AdminSocialInfrastructurePage() {
               </thead>
               <tbody className="divide-y divide-zinc-800/50">
                 {[
-                  { name: 'Instagram', key: 'instagram', primary: 'Zernio', fallback: 'Native Meta', caps: 'Publish, Stories, Reels, Analytics, DMs' },
-                  { name: 'Facebook', key: 'facebook', primary: 'Zernio', fallback: 'Native Meta', caps: 'Publish, Pages, Analytics, Comments' },
-                  { name: 'LinkedIn', key: 'linkedin', primary: 'Zernio', fallback: 'Native LinkedIn', caps: 'Publish, Articles, Org Analytics' },
-                  { name: 'X (Twitter)', key: 'x', primary: 'Zernio', fallback: 'Native X', caps: 'Tweets, Threads, DMs, Analytics' },
-                  { name: 'TikTok', key: 'tiktok', primary: 'Zernio', fallback: 'Native TikTok', caps: 'Video Posting, Shorts, Analytics' },
-                  { name: 'WhatsApp', key: 'whatsapp', primary: 'Native WhatsApp', fallback: 'Zernio', caps: 'Cloud API Messaging, Inbound DMs' },
-                  { name: 'YouTube', key: 'youtube', primary: 'Zernio', fallback: 'Native Google', caps: 'Video Upload, Shorts, Analytics' },
-                  { name: 'Threads', key: 'threads', primary: 'Zernio', fallback: 'None', caps: 'Text Posts, Image Carousel' },
+                  { name: 'Instagram', key: 'instagram', primary: 'Native Meta (Default)', fallback: 'Zernio', caps: 'Publish, Stories, Reels, Analytics, DMs' },
+                  { name: 'Facebook', key: 'facebook', primary: 'Native Meta (Default)', fallback: 'Zernio', caps: 'Publish, Pages, Analytics, Comments' },
+                  { name: 'LinkedIn', key: 'linkedin', primary: 'Native LinkedIn (Default)', fallback: 'Zernio', caps: 'Publish, Articles, Org Analytics' },
+                  { name: 'X (Twitter)', key: 'x', primary: 'Native X (Default)', fallback: 'Zernio', caps: 'Tweets, Threads, DMs, Analytics' },
+                  { name: 'TikTok', key: 'tiktok', primary: 'Native TikTok (Default)', fallback: 'Zernio', caps: 'Video Posting, Shorts, Analytics' },
+                  { name: 'WhatsApp', key: 'whatsapp', primary: 'Native WhatsApp (Default)', fallback: 'Zernio', caps: 'Cloud API Messaging, Inbound DMs' },
+                  { name: 'YouTube', key: 'youtube', primary: 'Native Google (Default)', fallback: 'Zernio', caps: 'Video Upload, Shorts, Analytics' },
+                  { name: 'Threads', key: 'threads', primary: 'Native (Default)', fallback: 'Zernio', caps: 'Text Posts, Image Carousel' },
                 ].map((row, idx) => (
                   <tr key={idx} className="hover:bg-zinc-800/30 transition-colors">
                     <td className="p-4 font-bold text-white flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
                       {row.name}
                     </td>
-                    <td className="p-4 font-mono text-blue-400">{row.primary}</td>
+                    <td className="p-4 font-mono text-emerald-400">{row.primary}</td>
                     <td className="p-4 font-mono text-zinc-400">{row.fallback}</td>
                     <td className="p-4 text-zinc-400">{row.caps}</td>
                     <td className="p-4">
-                      <Badge variant="success" className="text-[10px]">
-                        ENABLED
+                      <Badge variant="default" className="text-[10px]">
+                        PRESERVED NATIVE
                       </Badge>
                     </td>
                   </tr>
