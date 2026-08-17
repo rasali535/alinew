@@ -338,23 +338,25 @@ function GrowthPageContent() {
             const { data: conns, error: connErr } = await supabase
               .from('social_connections')
               .select('id, provider, account_name, username, profile_image_url, followers_count, scopes, connection_status, token_status, updated_at')
-              .eq('user_id', user.id)
-              .eq('connection_status', 'CONNECTED');
+              .eq('user_id', user.id);
 
             if (!connErr && Array.isArray(conns)) {
               conns.forEach((c: any) => {
-                const prov = (c.provider || '').toLowerCase();
-                accountsMap[prov] = {
-                  id: c.id || `acc-${prov}`,
-                  provider: prov,
-                  label: c.account_name || prov,
-                  handle: c.username ? (c.username.startsWith('@') ? c.username : `@${c.username}`) : `@${prov}`,
-                  connectedAt: c.updated_at ? new Date(c.updated_at).toLocaleDateString() : 'Connected',
-                  status: c.connection_status === 'CONNECTED' ? 'connected' : 'expired',
-                  scopes: c.scopes || [],
-                  avatarUrl: c.profile_image_url,
-                  followers: c.followers_count ? Number(c.followers_count).toLocaleString() : undefined,
-                };
+                const statusStr = (c.connection_status || '').toUpperCase();
+                if (statusStr === 'CONNECTED' || statusStr === 'ACTIVE' || c.connection_status === 'connected') {
+                  const prov = (c.platform || c.provider || '').toLowerCase();
+                  accountsMap[prov] = {
+                    id: c.id || `acc-${prov}`,
+                    provider: prov,
+                    label: c.account_name || prov,
+                    handle: c.username ? (c.username.startsWith('@') ? c.username : `@${c.username}`) : `@${prov}`,
+                    connectedAt: c.updated_at ? new Date(c.updated_at).toLocaleDateString() : 'Connected',
+                    status: 'connected',
+                    scopes: c.scopes || [],
+                    avatarUrl: c.profile_image_url,
+                    followers: c.followers_count ? Number(c.followers_count).toLocaleString() : undefined,
+                  };
+                }
               });
             }
           } catch (connDbErr) {
@@ -1238,8 +1240,20 @@ function GrowthPageContent() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {Object.entries(platformConfig).map(([key, config]) => {
-              const connectedObj = connectedAccounts.find(a => a.provider === key);
-              const isConnected = !!connectedObj;
+              const isProviderMatch = (provA?: string, provB?: string) => {
+                const a = (provA || '').toLowerCase().trim();
+                const b = (provB || '').toLowerCase().trim();
+                if (!a || !b) return false;
+                if (a === b) return true;
+                if ((a === 'facebook' || a === 'meta') && (b === 'facebook' || b === 'meta')) return true;
+                if ((a === 'x' || a === 'twitter') && (b === 'x' || b === 'twitter')) return true;
+                return false;
+              };
+
+              const connectedObj = connectedAccounts.find(
+                a => isProviderMatch(a.provider, key) || isProviderMatch((a as any).platform, key)
+              );
+              const isConnected = !!connectedObj && (connectedObj.status === 'connected' || connectedObj.status === 'active');
 
               return (
                 <Card key={key} className="p-5 flex flex-col justify-between hover:border-zinc-700 transition-all border-zinc-800 bg-zinc-900/80">
@@ -1840,7 +1854,19 @@ function GrowthPageContent() {
 
             <div className="divide-y divide-zinc-800">
               {Object.entries(platformConfig).slice(0, 5).map(([k, cfg]) => {
-                const conn = connectedAccounts.find(a => a.provider === k);
+                const isProviderMatch = (provA?: string, provB?: string) => {
+                  const a = (provA || '').toLowerCase().trim();
+                  const b = (provB || '').toLowerCase().trim();
+                  if (!a || !b) return false;
+                  if (a === b) return true;
+                  if ((a === 'facebook' || a === 'meta') && (b === 'facebook' || b === 'meta')) return true;
+                  if ((a === 'x' || a === 'twitter') && (b === 'x' || b === 'twitter')) return true;
+                  return false;
+                };
+
+                const conn = connectedAccounts.find(
+                  a => isProviderMatch(a.provider, k) || isProviderMatch((a as any).platform, k)
+                );
 
                 return (
                   <div key={k} className="py-3 flex items-center justify-between">
