@@ -97,6 +97,17 @@ export class SocialAiService {
           };
           break;
         }
+
+        default: {
+          result[platform] = {
+            platform,
+            body: cleanIdea,
+            hashtags: ['#Tech', '#Enterprise'],
+            tips: 'Optimized draft for platform distribution.',
+            charCount: cleanIdea.length,
+          };
+          break;
+        }
       }
     }
 

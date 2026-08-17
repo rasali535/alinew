@@ -27,6 +27,11 @@ export class SocialContentValidator {
     linkedin: 3000,
     facebook: 63206,
     whatsapp: 4096,
+    youtube: 5000,
+    threads: 500,
+    pinterest: 500,
+    reddit: 40000,
+    bluesky: 300,
   };
 
   /**

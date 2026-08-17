@@ -1,0 +1,1 @@
+{"success":true,"status":"not_configured","configured":false,"reachable":false,"featureFlags":{"facebook":false,"instagram":false,"whatsapp":false,"tiktok":false,"linkedin":false,"x":false,"youtube":false,"threads":false,"pinterest":false,"reddit":false,"bluesky":false},"error":"ZERNIO_API_KEY is not configured.","checkedAt":"2026-08-17T10:54:20.388Z"}

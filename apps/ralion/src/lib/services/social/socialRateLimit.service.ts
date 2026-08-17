@@ -20,6 +20,11 @@ export class SocialRateLimitService {
     tiktok: { maxPerMin: 50, windowMs: 60000 },
     linkedin: { maxPerMin: 100, windowMs: 60000 },
     x: { maxPerMin: 50, windowMs: 900000 }, // 50 requests per 15 min
+    youtube: { maxPerMin: 50, windowMs: 60000 },
+    threads: { maxPerMin: 100, windowMs: 60000 },
+    pinterest: { maxPerMin: 50, windowMs: 60000 },
+    reddit: { maxPerMin: 60, windowMs: 60000 },
+    bluesky: { maxPerMin: 100, windowMs: 60000 },
   };
 
   private static buckets: Map<string, RateLimitBucket> = new Map();
