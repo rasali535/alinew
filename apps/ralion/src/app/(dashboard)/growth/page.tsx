@@ -58,11 +58,12 @@ export interface SocialAccount {
   label: string;
   handle: string;
   connectedAt: string;
-  status: 'connected' | 'expired' | 'pending';
+  status: 'connected' | 'expired' | 'pending' | 'active' | 'disconnected';
   scopes: string[];
   avatarUrl?: string;
   followers?: string;
 }
+
 
 const initialSocialAccounts: SocialAccount[] = [
   {
