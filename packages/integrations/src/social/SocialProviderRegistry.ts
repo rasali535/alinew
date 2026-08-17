@@ -4,16 +4,17 @@
  */
 
 import { SocialProvider } from './SocialProvider';
-import { SocialPlatformType, SocialCapabilities } from './types';
+import { SocialPlatformType, SocialCapabilities, InfrastructureProviderType } from './types';
 import { MetaProvider } from './adapters/MetaProvider';
 import { InstagramProvider } from './adapters/InstagramProvider';
 import { WhatsAppProvider } from './adapters/WhatsAppProvider';
 import { TikTokProvider } from './adapters/TikTokProvider';
 import { LinkedInProvider } from './adapters/LinkedInProvider';
 import { XProvider } from './adapters/XProvider';
+import { ZernioProvider } from './adapters/ZernioProvider';
 
 export class SocialProviderRegistry {
-  private static providers: Map<SocialPlatformType, SocialProvider> = new Map<SocialPlatformType, SocialProvider>([
+  private static nativeProviders: Map<SocialPlatformType, SocialProvider> = new Map<SocialPlatformType, SocialProvider>([
     ['facebook', new MetaProvider()],
     ['instagram', new InstagramProvider()],
     ['whatsapp', new WhatsAppProvider()],
@@ -22,22 +23,39 @@ export class SocialProviderRegistry {
     ['x', new XProvider()],
   ]);
 
+  private static zernioProviderInstance = new ZernioProvider();
+
   /**
-   * Retrieve the provider adapter instance for a given platform
+   * Retrieve the provider adapter instance for a given platform and infrastructure mode
    */
-  static getProvider(platform: SocialPlatformType): SocialProvider {
-    const provider = this.providers.get(platform);
+  static getProvider(
+    platform: SocialPlatformType,
+    infrastructure: InfrastructureProviderType = 'native'
+  ): SocialProvider {
+    if (infrastructure === 'zernio') {
+      return this.zernioProviderInstance;
+    }
+
+    const provider = this.nativeProviders.get(platform);
     if (!provider) {
-      throw new Error(`[SocialProviderRegistry] Unsupported social platform: ${platform}`);
+      // If native adapter does not exist for an extended platform (e.g. youtube, threads, bluesky), default to Zernio
+      return this.zernioProviderInstance;
     }
     return provider;
   }
 
   /**
-   * Retrieve all supported providers
+   * Directly get the Zernio provider instance
+   */
+  static getZernioProvider(): ZernioProvider {
+    return this.zernioProviderInstance;
+  }
+
+  /**
+   * Retrieve all supported native providers
    */
   static getAllProviders(): SocialProvider[] {
-    return Array.from(this.providers.values());
+    return Array.from(this.nativeProviders.values());
   }
 
   /**
@@ -45,7 +63,7 @@ export class SocialProviderRegistry {
    */
   static getAllCapabilities(): Record<SocialPlatformType, SocialCapabilities> {
     const result: Partial<Record<SocialPlatformType, SocialCapabilities>> = {};
-    for (const [platform, provider] of this.providers.entries()) {
+    for (const [platform, provider] of this.nativeProviders.entries()) {
       result[platform] = provider.getCapabilities();
     }
     return result as Record<SocialPlatformType, SocialCapabilities>;
@@ -55,6 +73,19 @@ export class SocialProviderRegistry {
    * Check if a platform is officially supported
    */
   static isSupported(platform: string): platform is SocialPlatformType {
-    return this.providers.has(platform as SocialPlatformType);
+    const supportedPlatforms = [
+      'facebook',
+      'instagram',
+      'whatsapp',
+      'tiktok',
+      'linkedin',
+      'x',
+      'youtube',
+      'threads',
+      'pinterest',
+      'reddit',
+      'bluesky',
+    ];
+    return supportedPlatforms.includes(platform);
   }
 }

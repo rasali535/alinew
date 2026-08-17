@@ -68,23 +68,43 @@ export class SocialInboxService {
     messageText: string;
     userId: string;
   }) {
-    const token = await SocialTokenManager.getValidToken(params.connectionId, params.provider);
-    if (!token) {
-      throw new Error(`[SocialInboxService] ${params.provider} authentication token expired. Please reconnect.`);
-    }
+    const supabase = getServiceSupabase();
 
-    const adapter = SocialProviderRegistry.getProvider(params.provider);
-    const result = await adapter.sendMessage(token, {
-      conversationId: params.conversationId,
-      recipientId: params.recipientId,
-      messageText: params.messageText,
-    });
+    // Check connection infrastructure type
+    const { data: conn } = await supabase
+      .from('social_connections')
+      .select('id, infrastructure_provider, zernio_account_id')
+      .eq('id', params.connectionId)
+      .maybeSingle();
+
+    const isZernio = conn?.infrastructure_provider === 'zernio';
+    let result: any;
+
+    if (isZernio) {
+      const zernioProvider = SocialProviderRegistry.getZernioProvider();
+      result = await zernioProvider.sendMessage('zernio_master', {
+        conversationId: params.conversationId,
+        recipientId: params.recipientId,
+        messageText: params.messageText,
+      });
+    } else {
+      const token = await SocialTokenManager.getValidToken(params.connectionId, params.provider);
+      if (!token) {
+        throw new Error(`[SocialInboxService] ${params.provider} authentication token expired. Please reconnect.`);
+      }
+
+      const adapter = SocialProviderRegistry.getProvider(params.provider, 'native');
+      result = await adapter.sendMessage(token, {
+        conversationId: params.conversationId,
+        recipientId: params.recipientId,
+        messageText: params.messageText,
+      });
+    }
 
     if (!result.success) {
       throw new Error(`[SocialInboxService] Message send failed: ${result.error || 'Unknown error'}`);
     }
 
-    const supabase = getServiceSupabase();
     await supabase.from('social_inbox_messages').insert({
       connection_id: params.connectionId,
       provider: params.provider,

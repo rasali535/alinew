@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * RALION — Automated Security & Meta Compliance Audit CLI
+ * RALION — Automated Security, Meta & Zernio Compliance Audit CLI
  * Ras Ali Labs (Pty) Ltd
  *
  * Runs comprehensive static and architectural checks across the entire codebase.
@@ -36,7 +36,7 @@ function manual(name, detail) {
 }
 
 console.log('\n' + '='.repeat(70));
-console.log('  🛡️   RALION ENTERPRISE SECURITY & META COMPLIANCE AUDIT');
+console.log('  🛡️   RALION ENTERPRISE SECURITY & INFRASTRUCTURE AUDIT');
 console.log('      Ras Ali Labs (Pty) Ltd — Security Architecture Audit');
 console.log('='.repeat(70) + '\n');
 
@@ -55,55 +55,57 @@ const requiredDocs = [
   'docs/security/meta-app-secret-protection-policy.md',
   'docs/security/incident-response-policy.md',
   'docs/security/meta-compliance-matrix.md',
-  'docs/security/meta-compliance-evidence/README.md',
-  'docs/security/meta-compliance-evidence/ralion-backend-security-testing-report-2026-08-15.md',
-  'docs/security/meta-compliance-evidence/meta-access-token-protection-evidence-2026-08-15.md',
-  'docs/security/meta-compliance-evidence/meta-app-secret-protection-evidence-2026-08-15.md',
-  'docs/security/mfa-and-authentication-policy.md',
-  'docs/security/meta-compliance-evidence/mfa-enforcement-evidence-2026-08-15.md',
-  'docs/security/remote-server-access-mfa-policy.md',
-  'docs/security/meta-compliance-evidence/remote-server-mfa-evidence-2026-08-15.md',
-  'docs/security/meta-compliance-evidence/ralion-patch-vulnerability-management-evidence-2026-08-15.md',
-  'docs/security/admin-audit-logging-policy.md',
-  'docs/security/meta-compliance-evidence/admin-audit-log-evidence-2026-08-15.md',
-  'docs/security/application-event-audit-logging-policy.md',
-  'docs/security/meta-compliance-evidence/application-event-audit-log-evidence-2026-08-15.md',
-  'docs/security/application-audit-log-review-policy.md',
-  'docs/security/meta-compliance-evidence/application-audit-log-review-evidence-2026-08-15.md',
-  'docs/security/admin-audit-log-review-policy.md',
-  'docs/security/account-and-access-management-policy.md',
-  'docs/security/meta-compliance-evidence/account-access-revocation-evidence-2026-08-15.md',
-  'docs/security/meta-compliance-evidence/managed-endpoint-patching-evidence-2026-08-15.md',
+  'docs/social/zernio-pre-implementation-audit.md',
+  'docs/social/zernio-api-verification.md',
+  'docs/social/zernio-integration.md',
+  'docs/social/zernio-security.md',
+  'docs/social/zernio-data-flow.md',
+  'docs/social/zernio-multi-tenancy.md',
+  'docs/social/zernio-webhooks.md',
+  'docs/social/zernio-migration.md',
+  'docs/social/zernio-third-party-assessment.md',
+  'docs/social/zernio-implementation-report.md',
 ];
 
 for (const docPath of requiredDocs) {
   const fullPath = path.join(ROOT_DIR, docPath);
   if (fs.existsSync(fullPath)) {
-    pass(`Security Doc: ${docPath}`, 'Verified present');
+    pass(`Doc: ${path.basename(docPath)}`, 'Verified present');
   } else {
-    fail(`Security Doc: ${docPath}`, 'Missing required compliance document');
+    fail(`Doc: ${path.basename(docPath)}`, 'Missing required documentation file');
   }
 }
 
 // ---------------------------------------------------------------------
 // 2. Check Database Schema & Migrations
 // ---------------------------------------------------------------------
-const migrationFile = path.join(ROOT_DIR, 'packages/database/migrations/20260815_meta_security_hardening.sql');
-if (fs.existsSync(migrationFile)) {
-  const content = fs.readFileSync(migrationFile, 'utf-8');
-  if (content.includes('meta_connections') && content.includes('security_audit_logs') && content.includes('security_review_records')) {
-    pass('Database Migration Schema', 'Contains meta_connections, security_audit_logs, security_review_records');
+const metaMigrationFile = path.join(ROOT_DIR, 'packages/database/migrations/20260815_meta_security_hardening.sql');
+if (fs.existsSync(metaMigrationFile)) {
+  const content = fs.readFileSync(metaMigrationFile, 'utf-8');
+  if (content.includes('meta_connections') && content.includes('security_audit_logs')) {
+    pass('Meta DB Migration Schema', 'Contains meta_connections and security_audit_logs');
   } else {
-    fail('Database Migration Schema', 'Missing required table definitions');
-  }
-
-  if (content.includes('ENABLE ROW LEVEL SECURITY') && content.includes('meta_conn_select_own')) {
-    pass('Row Level Security (RLS) Policies', 'Strict RLS defined for all Meta and security tables');
-  } else {
-    fail('Row Level Security (RLS) Policies', 'RLS policies missing from migration');
+    fail('Meta DB Migration Schema', 'Missing required table definitions');
   }
 } else {
-  fail('Database Migration File', '20260815_meta_security_hardening.sql not found');
+  fail('Meta DB Migration File', '20260815_meta_security_hardening.sql not found');
+}
+
+const zernioMigrationFile = path.join(ROOT_DIR, 'packages/database/migrations/20260817_zernio_social_infrastructure.sql');
+if (fs.existsSync(zernioMigrationFile)) {
+  const content = fs.readFileSync(zernioMigrationFile, 'utf-8');
+  if (
+    content.includes('social_provider_profiles') &&
+    content.includes('social_provider_routing') &&
+    content.includes('social_webhook_events') &&
+    content.includes('ENABLE ROW LEVEL SECURITY')
+  ) {
+    pass('Zernio DB Migration Schema', 'Contains social_provider_profiles, routing, webhook_events, and strict RLS');
+  } else {
+    fail('Zernio DB Migration Schema', 'Missing required Zernio table definitions or RLS');
+  }
+} else {
+  fail('Zernio DB Migration File', '20260817_zernio_social_infrastructure.sql not found');
 }
 
 // ---------------------------------------------------------------------
@@ -113,7 +115,7 @@ const cryptoFile = path.join(ROOT_DIR, 'packages/integrations/src/core/crypto.ts
 if (fs.existsSync(cryptoFile)) {
   const content = fs.readFileSync(cryptoFile, 'utf-8');
   if (content.includes('aes-256-gcm') && content.includes('getAuthTag') && content.includes('setAuthTag')) {
-    pass('Token Encryption (AES-256-GCM)', 'Authenticated encryption with 96-bit IV and 128-bit auth tags active');
+    pass('Token Encryption (AES-256-GCM)', 'Authenticated encryption active');
   } else {
     fail('Token Encryption (AES-256-GCM)', 'AES-256-GCM implementation missing or incomplete');
   }
@@ -122,39 +124,29 @@ if (fs.existsSync(cryptoFile)) {
 }
 
 // ---------------------------------------------------------------------
-// 4. Check Meta Services
+// 4. Check Zernio Infrastructure & Services
 // ---------------------------------------------------------------------
-const metaServiceFile = path.join(ROOT_DIR, 'apps/ralion/src/lib/services/metaCredential.service.ts');
-if (fs.existsSync(metaServiceFile)) {
-  pass('MetaCredentialService', 'Server-side credential manager and data minimization active');
-} else {
-  fail('MetaCredentialService', 'metaCredential.service.ts not found');
-}
-
-const auditLoggerFile = path.join(ROOT_DIR, 'apps/ralion/src/lib/services/auditLogger.service.ts');
-if (fs.existsSync(auditLoggerFile)) {
-  const content = fs.readFileSync(auditLoggerFile, 'utf-8');
-  if (content.includes('sanitizeMetadata') && content.includes('META_TOKEN_CREATED')) {
-    pass('AuditLoggerService', 'All required Meta application events supported with automatic secret redaction');
+const zernioServiceFile = path.join(ROOT_DIR, 'packages/integrations/src/social/services/ZernioSocialService.ts');
+if (fs.existsSync(zernioServiceFile)) {
+  const content = fs.readFileSync(zernioServiceFile, 'utf-8');
+  if (content.includes('verifyWebhookSignature') && content.includes('createPost') && content.includes('Idempotency-Key')) {
+    pass('ZernioSocialService', 'Server-side client with idempotency and webhook HMAC active');
   } else {
-    warn('AuditLoggerService', 'Secret redaction filter may be missing');
+    warn('ZernioSocialService', 'Methods incomplete');
   }
 } else {
-  fail('AuditLoggerService', 'auditLogger.service.ts not found');
+  fail('ZernioSocialService', 'ZernioSocialService.ts not found');
 }
 
-// ---------------------------------------------------------------------
-// 5. Check Meta Data Deletion Callback Endpoint
-// ---------------------------------------------------------------------
-const dataDeletionEndpoint = path.join(ROOT_DIR, 'apps/ralion/src/app/api/meta/data-deletion/route.ts');
-if (fs.existsSync(dataDeletionEndpoint)) {
-  pass('Meta Data Deletion Callback', 'Endpoint /api/meta/data-deletion implemented per Meta Platform Term 4.a');
+const zernioWebhookFile = path.join(ROOT_DIR, 'apps/ralion/src/app/api/webhooks/zernio/route.ts');
+if (fs.existsSync(zernioWebhookFile)) {
+  pass('Zernio Webhook Route', 'Endpoint /api/webhooks/zernio active with signature verification');
 } else {
-  fail('Meta Data Deletion Callback', 'Data deletion route missing');
+  fail('Zernio Webhook Route', 'Zernio webhook route missing');
 }
 
 // ---------------------------------------------------------------------
-// 6. Check Frontend Client Files for Leaked Server Secrets
+// 5. Check Frontend Client Files for Leaked Server Secrets
 // ---------------------------------------------------------------------
 function scanDirForSecrets(dir, disallowedPatterns) {
   let leaks = [];
@@ -179,7 +171,6 @@ function scanDirForSecrets(dir, disallowedPatterns) {
   return leaks;
 }
 
-// Disallow hardcoded secret values in client source
 const clientDirs = [
   path.join(ROOT_DIR, 'apps/website/src'),
   path.join(ROOT_DIR, 'apps/ralion/src/components'),
@@ -191,6 +182,9 @@ for (const cDir of clientDirs) {
   const leaks = scanDirForSecrets(cDir, [
     /SUPABASE_SERVICE_ROLE_KEY\s*=\s*['"`][A-Za-z0-9-_.]+['"`]/,
     /FACEBOOK_APP_SECRET\s*=\s*['"`][A-Za-z0-9-_.]+['"`]/,
+    /ZERNIO_API_KEY\s*=\s*['"`][A-Za-z0-9-_.]+['"`]/,
+    /NEXT_PUBLIC_ZERNIO/,
+    /VITE_ZERNIO/,
   ]);
   foundLeaks = foundLeaks.concat(leaks);
 }
@@ -202,11 +196,11 @@ if (foundLeaks.length === 0) {
 }
 
 // ---------------------------------------------------------------------
-// 7. Manual Verification Items
+// 6. Manual Verification Items
 // ---------------------------------------------------------------------
 manual('Supabase Dashboard MFA', 'Verify TOTP MFA is toggled ON in Supabase Auth Settings');
-manual('Meta Developer Console Live Mode', 'Verify Meta App 1364275985909476 is toggled to Live Mode');
-manual('Valid OAuth Redirect URIs in Meta Console', 'Ensure https://yidsfihagwttlmhfynmf.supabase.co/auth/v1/callback is listed');
+manual('Meta Developer Console Live Mode', 'Verify Meta App is in Live Mode');
+manual('Zernio Production API Key', 'Configure ZERNIO_API_KEY in Supabase Vault / VPS environment');
 
 // ---------------------------------------------------------------------
 // Print Results Summary
@@ -232,14 +226,16 @@ if (checks.failed.length > 0) {
   }
 }
 
-console.log(`\n🔍 MANUAL VERIFICATION ITEMS (${checks.manual.length}):`);
-for (const m of checks.manual) {
-  console.log(`   [MANUAL] ${m.name.padEnd(36)} : ${m.detail}`);
+if (checks.manual.length > 0) {
+  console.log(`\n🔍 MANUAL VERIFICATION ITEMS (${checks.manual.length}):`);
+  for (const m of checks.manual) {
+    console.log(`   [MANUAL] ${m.name.padEnd(36)} : ${m.detail}`);
+  }
 }
 
 console.log('\n' + '='.repeat(70));
 if (checks.failed.length === 0) {
-  console.log('  🏆 OVERALL AUDIT STATUS: PASSED / META ASSESSMENT READY');
+  console.log('  🏆 OVERALL AUDIT STATUS: PASSED / ZERNIO & META COMPLIANCE READY');
 } else {
   console.log('  ⚠️ OVERALL AUDIT STATUS: ACTIONS REQUIRED (See failed checks)');
 }

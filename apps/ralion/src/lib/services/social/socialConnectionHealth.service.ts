@@ -1,11 +1,18 @@
 /**
  * Ralion Unified Social Media Architecture — Connection Health Service
  * Ras Ali Labs (Pty) Ltd
- * Periodically verifies token validity, account status, and API reachability across connected accounts.
+ *
+ * Periodically verifies token validity, account status, and API reachability
+ * across both Native and Zernio connected accounts.
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { SocialPlatformType, SocialProviderRegistry, ConnectionHealthResult } from '@ralion/integrations';
+import {
+  SocialPlatformType,
+  SocialProviderRegistry,
+  ConnectionHealthResult,
+  ZernioSocialService,
+} from '@ralion/integrations';
 import { SocialTokenManager } from './socialTokenManager.service';
 
 function getServiceSupabase() {
@@ -16,14 +23,14 @@ function getServiceSupabase() {
 
 export class SocialConnectionHealthService {
   /**
-   * Run a live health check on a specific social connection
+   * Run a live health check on a specific social connection (Native or Zernio)
    */
   static async checkConnectionHealth(connectionId: string): Promise<ConnectionHealthResult> {
     const supabase = getServiceSupabase();
 
     const { data: conn, error } = await supabase
       .from('social_connections')
-      .select('id, provider, provider_account_id')
+      .select('id, provider, provider_account_id, infrastructure_provider, zernio_account_id, zernio_profile_id')
       .eq('id', connectionId)
       .single();
 
@@ -38,6 +45,43 @@ export class SocialConnectionHealthService {
     }
 
     const provider = conn.provider as SocialPlatformType;
+    const isZernio = conn.infrastructure_provider === 'zernio';
+
+    // 1. Zernio-managed Connection Health Check
+    if (isZernio) {
+      const zernioAccountId = conn.zernio_account_id || conn.provider_account_id;
+      try {
+        const zernioProvider = SocialProviderRegistry.getZernioProvider();
+        const health = await zernioProvider.healthCheck('zernio_master', zernioAccountId);
+
+        await supabase.from('social_connections').update({
+          connection_status: health.status,
+          token_status: health.tokenStatus,
+          last_health_check_at: health.checkedAt,
+          health_error_message: health.errorMessage || null,
+        }).eq('id', connectionId);
+
+        return health;
+      } catch (err: any) {
+        const failResult: ConnectionHealthResult = {
+          healthy: false,
+          status: 'PLATFORM_UNAVAILABLE',
+          tokenStatus: 'REAUTH_REQUIRED',
+          errorMessage: err.message || 'Zernio infrastructure health check failed',
+          checkedAt: new Date().toISOString(),
+        };
+
+        await supabase.from('social_connections').update({
+          connection_status: 'NEEDS_ATTENTION',
+          last_health_check_at: failResult.checkedAt,
+          health_error_message: failResult.errorMessage,
+        }).eq('id', connectionId);
+
+        return failResult;
+      }
+    }
+
+    // 2. Native Connection Health Check
     const token = await SocialTokenManager.getValidToken(connectionId, provider);
 
     if (!token) {
@@ -60,7 +104,7 @@ export class SocialConnectionHealthService {
     }
 
     try {
-      const adapter = SocialProviderRegistry.getProvider(provider);
+      const adapter = SocialProviderRegistry.getProvider(provider, 'native');
       const health = await adapter.healthCheck(token, conn.provider_account_id);
 
       await supabase.from('social_connections').update({

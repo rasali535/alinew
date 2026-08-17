@@ -265,6 +265,9 @@ export interface SocialConnectionRecord {
   capabilities: Partial<SocialCapabilities>;
   metadata: Record<string, any>;
   followersCount?: number;
+  infrastructureProvider?: 'native' | 'zernio';
+  zernioAccountId?: string;
+  zernioProfileId?: string;
   lastSyncAt?: string;
   lastHealthCheckAt?: string;
   healthErrorMessage?: string;
@@ -272,6 +275,49 @@ export interface SocialConnectionRecord {
   disconnectedAt?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SocialProviderProfileRecord {
+  id: string;
+  organizationId?: string;
+  workspaceId?: string;
+  userId: string;
+  provider: 'zernio';
+  providerProfileId: string;
+  profileName: string;
+  status: 'ACTIVE' | 'SUSPENDED' | 'DELETED';
+  metadata: Record<string, any>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SocialProviderRoutingRecord {
+  id: string;
+  workspaceId?: string;
+  platform: SocialPlatform;
+  provider: 'zernio' | 'native';
+  enabled: boolean;
+  priority: number;
+  fallbackProvider?: 'zernio' | 'native' | 'none';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SocialWebhookEventRecord {
+  id: string;
+  provider: string;
+  eventType: string;
+  eventId?: string;
+  providerProfileId?: string;
+  providerAccountId?: string;
+  organizationId?: string;
+  workspaceId?: string;
+  signatureValid: boolean;
+  payload: Record<string, any>;
+  processed: boolean;
+  processedAt?: string;
+  errorMessage?: string;
+  createdAt: string;
 }
 
 export interface SocialCredentialRecord {

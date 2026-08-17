@@ -3,7 +3,20 @@
  * Ras Ali Labs (Pty) Ltd
  */
 
-export type SocialPlatformType = 'facebook' | 'instagram' | 'whatsapp' | 'tiktok' | 'linkedin' | 'x';
+export type SocialPlatformType =
+  | 'facebook'
+  | 'instagram'
+  | 'whatsapp'
+  | 'tiktok'
+  | 'linkedin'
+  | 'x'
+  | 'youtube'
+  | 'threads'
+  | 'pinterest'
+  | 'reddit'
+  | 'bluesky';
+
+export type InfrastructureProviderType = 'native' | 'zernio';
 
 export type SocialAccountKind = 'PERSONAL' | 'PAGE' | 'BUSINESS' | 'ORGANIZATION' | 'CREATOR';
 
@@ -35,6 +48,9 @@ export interface SocialProfile {
   followersCount?: number;
   email?: string;
   pageId?: string;
+  infrastructureProvider?: InfrastructureProviderType;
+  zernioAccountId?: string;
+  zernioProfileId?: string;
   metadata?: Record<string, any>;
 }
 
@@ -54,6 +70,9 @@ export interface PublishContentParams {
   accountType?: SocialAccountKind;
   pageId?: string;
   options?: Record<string, any>;
+  idempotencyKey?: string;
+  zernioProfileId?: string;
+  zernioAccountIds?: string[];
 }
 
 export interface PublishResponse {
@@ -63,6 +82,8 @@ export interface PublishResponse {
   error?: string;
   platform: SocialPlatformType;
   publishedAt: string;
+  provider?: InfrastructureProviderType;
+  metadata?: Record<string, any>;
 }
 
 export interface SocialMetricData {
@@ -110,4 +131,60 @@ export interface ConnectionHealthResult {
   errorMessage?: string;
   expiresAt?: Date;
   checkedAt: string;
+}
+
+// Zernio Specific Interfaces
+export interface ZernioProfileModel {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface ZernioAccountModel {
+  id: string;
+  profileId: string;
+  platform: SocialPlatformType;
+  name: string;
+  username?: string;
+  avatarUrl?: string;
+  status: 'connected' | 'disconnected' | 'reauth_required';
+  capabilities?: Partial<SocialCapabilities>;
+  followersCount?: number;
+  createdAt: string;
+  updatedAt?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface ZernioPostPayload {
+  profileId: string;
+  accountIds: string[];
+  content: string;
+  mediaUrls?: string[];
+  scheduledFor?: string;
+  options?: Record<string, any>;
+}
+
+export interface ZernioPostResult {
+  id: string;
+  profileId: string;
+  status: 'PUBLISHED' | 'SCHEDULED' | 'FAILED' | 'PARTIALLY_PUBLISHED';
+  platformResults: Array<{
+    accountId: string;
+    platform: SocialPlatformType;
+    status: 'PUBLISHED' | 'QUEUED' | 'FAILED';
+    postId?: string;
+    postUrl?: string;
+    error?: string;
+  }>;
+  createdAt: string;
+}
+
+export interface ZernioWebhookPayload {
+  event: string;
+  profileId?: string;
+  accountId?: string;
+  data: Record<string, any>;
+  timestamp: string;
 }

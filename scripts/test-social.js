@@ -3,10 +3,13 @@
 /**
  * RALION — Social Media System Unit & Integration Test Suite
  * Ras Ali Labs (Pty) Ltd
+ * Automated Verification for Native Providers and Zernio Social Infrastructure Layer
  */
 
 const assert = require('assert');
 const crypto = require('crypto');
+const { execSync } = require('child_process');
+const path = require('path');
 
 console.log('\n' + '='.repeat(70));
 console.log('  🧪  RALION UNIFIED SOCIAL MEDIA SYSTEM TEST SUITE');
@@ -85,7 +88,6 @@ runTest('Content Length Validation (X limit vs Instagram vs TikTok)', () => {
   const shortText = 'Exciting news from Ras Ali Labs! Ralion OS 2.4 is live.';
   const longText = 'A'.repeat(300);
 
-  // X should reject > 280 chars
   assert(shortText.length <= 280, 'Short text must pass X validation');
   assert(longText.length > 280, '300-char text must trigger X character limit error');
 });
@@ -122,6 +124,19 @@ runTest('Exponential Backoff Rate Limit Calculation', () => {
   assert.strictEqual(calculateBackoff(2), 4000);
   assert.strictEqual(calculateBackoff(3), 8000);
   assert.strictEqual(calculateBackoff(10), 30000); // capped at 30s
+});
+
+// ---------------------------------------------------------------------
+// 6. Test Zernio Provider Integration & Sub-suites
+// ---------------------------------------------------------------------
+runTest('Zernio Service Sub-Suite Execution', () => {
+  const scriptPath = path.join(__dirname, 'test-zernio-service.js');
+  execSync(`node "${scriptPath}"`, { stdio: 'pipe' });
+});
+
+runTest('Zernio Multi-Tenant RLS Sub-Suite Execution', () => {
+  const scriptPath = path.join(__dirname, 'test-zernio-rls.js');
+  execSync(`node "${scriptPath}"`, { stdio: 'pipe' });
 });
 
 // ---------------------------------------------------------------------
