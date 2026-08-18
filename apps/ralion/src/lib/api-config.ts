@@ -27,28 +27,28 @@ export function getRalionApiBase(): string {
       const port = window.location.port;
       // If running through Next.js dev server on localhost:6509 or 3000
       if (port === '6509' || port === '3000') {
-        return `${window.location.origin}/ralion`;
+        return window.location.origin;
       }
-      return 'http://localhost:6509/ralion';
+      return 'http://localhost:6509';
     }
 
     // In production on the web (e.g. rasalilabs.com):
     // Fallback to the canonical Render dynamic backend domain
-    return 'https://alinew.onrender.com/ralion';
+    return 'https://ralion-dynamic-backend.onrender.com';
   }
 
   // Server-side fallback during build/SSR
   if (isProd) {
-    return 'https://alinew.onrender.com/ralion';
+    return 'https://ralion-dynamic-backend.onrender.com';
   }
 
-  return 'http://localhost:6509/ralion';
+  return 'http://localhost:6509';
 }
 
 /**
  * Build a full canonical API URL for a given route path.
  * Example: getRalionApiUrl('/api/social/publish')
- * Returns: 'https://alinew.onrender.com/ralion/api/social/publish' or 'http://localhost:6509/ralion/api/social/publish'
+ * Returns: 'https://ralion-dynamic-backend.onrender.com/api/social/publish' or 'http://localhost:6509/api/social/publish'
  */
 export function getRalionApiUrl(path: string): string {
   const base = getRalionApiBase();
