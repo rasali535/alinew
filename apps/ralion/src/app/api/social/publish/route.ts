@@ -1,7 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { SocialPublishingService } from '@/lib/services/social/socialPublishing.service';
+import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 
 export const dynamic = 'force-dynamic';
+
+export async function OPTIONS(request: NextRequest) {
+  return handleCorsPreflight(request);
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -35,9 +40,10 @@ export async function POST(request: NextRequest) {
     });
 
     if (!actualContent) {
-      return NextResponse.json(
+      return corsJsonResponse(
         { success: false, error: 'Post content is required before publishing.' },
-        { status: 400 }
+        { status: 400 },
+        request
       );
     }
 
@@ -67,15 +73,15 @@ export async function POST(request: NextRequest) {
       success: isSuccess,
     });
 
-    return NextResponse.json({
+    return corsJsonResponse({
       success: isSuccess,
       postId: result.postId,
       overallStatus: result.overallStatus,
       platformResults: result.platformResults,
       result,
-    }, { status: isSuccess ? 200 : 500 });
+    }, { status: isSuccess ? 200 : 500 }, request);
   } catch (error: any) {
     console.error('[UI_PUBLISH_REQUEST_ERROR]', error.message);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return corsJsonResponse({ success: false, error: error.message }, { status: 500 }, request);
   }
 }

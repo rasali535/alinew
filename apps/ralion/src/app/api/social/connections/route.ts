@@ -1,17 +1,22 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { SocialProviderRegistry, SocialPlatformType, ZernioSocialService } from '@ralion/integrations';
-
-export const dynamic = 'force-dynamic';
 import { SocialTokenManager } from '@/lib/services/social/socialTokenManager.service';
 import { SocialConnectionHealthService } from '@/lib/services/social/socialConnectionHealth.service';
 import { AuditLoggerService } from '@/lib/services/auditLogger.service';
+import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
+
+export const dynamic = 'force-dynamic';
 
 function getServiceSupabase() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co',
     process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
   );
+}
+
+export async function OPTIONS(request: NextRequest) {
+  return handleCorsPreflight(request);
 }
 
 export async function GET(request: NextRequest) {
@@ -28,13 +33,13 @@ export async function GET(request: NextRequest) {
       console.warn('[SocialConnectionsAPI] DB query notice:', error.message);
     }
 
-    return NextResponse.json({
+    return corsJsonResponse({
       success: true,
       connections: connections || [],
       allCapabilities: SocialProviderRegistry.getAllCapabilities(),
-    });
+    }, undefined, request);
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return corsJsonResponse({ success: false, error: error.message }, { status: 500 }, request);
   }
 }
 
@@ -81,16 +86,16 @@ export async function POST(request: NextRequest) {
         await SocialTokenManager.revokeAndDestroy(connectionId, provider as SocialPlatformType, userId);
       }
 
-      return NextResponse.json({ success: true, message: `${provider} disconnected successfully` });
+      return corsJsonResponse({ success: true, message: `${provider} disconnected successfully` }, undefined, request);
     }
 
     if (action === 'health_check') {
       const health = await SocialConnectionHealthService.checkConnectionHealth(connectionId);
-      return NextResponse.json({ success: true, health });
+      return corsJsonResponse({ success: true, health }, undefined, request);
     }
 
-    return NextResponse.json({ success: false, error: 'Unknown action' }, { status: 400 });
+    return corsJsonResponse({ success: false, error: 'Unknown action' }, { status: 400 }, request);
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return corsJsonResponse({ success: false, error: error.message }, { status: 500 }, request);
   }
 }

@@ -1,9 +1,14 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { FacebookPageManagementService } from '@/lib/services/social/facebookPageManagement.service';
 import { MariFacebookGrowthService, MariPageContext } from '@/lib/services/social/mariFacebookGrowth.service';
+import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 
 export async function generateStaticParams() {
   return [{ pageId: '477334159265235' }, { pageId: 'default' }];
+}
+
+export async function OPTIONS(request: NextRequest) {
+  return handleCorsPreflight(request);
 }
 
 export async function POST(
@@ -46,7 +51,7 @@ export async function POST(
         userId,
         focusObjective: body.objective,
       });
-      return NextResponse.json({ success: true, plan });
+      return corsJsonResponse({ success: true, plan }, undefined, request);
     }
 
     if (action === 'ASK_MARI') {
@@ -55,7 +60,7 @@ export async function POST(
         prompt: body.prompt || 'How is my page performing?',
         userId,
       });
-      return NextResponse.json({ success: true, chat: chatRes });
+      return corsJsonResponse({ success: true, chat: chatRes }, undefined, request);
     }
 
     // Default: Get Growth Score & Strategic Insights
@@ -64,15 +69,16 @@ export async function POST(
       userId,
     });
 
-    return NextResponse.json({
+    return corsJsonResponse({
       success: true,
       score: insights.score,
       insights: insights.insights,
-    });
+    }, undefined, request);
   } catch (err: any) {
-    return NextResponse.json(
+    return corsJsonResponse(
       { success: false, error: err.message || 'Failed to process Mari Growth Intelligence' },
-      { status: 500 }
+      { status: 500 },
+      request
     );
   }
 }

@@ -1,7 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { FacebookCommentsService } from '@/lib/services/social/facebookComments.service';
+import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 
 export const dynamic = 'force-dynamic';
+
+export async function OPTIONS(request: NextRequest) {
+  return handleCorsPreflight(request);
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,15 +19,16 @@ export async function GET(request: NextRequest) {
       pageId,
     });
 
-    return NextResponse.json({
+    return corsJsonResponse({
       success: true,
       comments,
       total: comments.length,
-    });
+    }, undefined, request);
   } catch (error: any) {
-    return NextResponse.json(
+    return corsJsonResponse(
       { success: false, error: error.message || 'Failed to load comments' },
-      { status: 500 }
+      { status: 500 },
+      request
     );
   }
 }
@@ -33,9 +39,10 @@ export async function POST(request: NextRequest) {
     const { commentId, postId, replyText, userId, authorName, pageId } = body;
 
     if (!commentId || !replyText) {
-      return NextResponse.json(
+      return corsJsonResponse(
         { success: false, error: 'commentId and replyText are required.' },
-        { status: 400 }
+        { status: 400 },
+        request
       );
     }
 
@@ -48,15 +55,16 @@ export async function POST(request: NextRequest) {
       pageId,
     });
 
-    return NextResponse.json({
+    return corsJsonResponse({
       success: true,
       reply,
       message: 'Reply posted successfully.',
-    });
+    }, undefined, request);
   } catch (error: any) {
-    return NextResponse.json(
+    return corsJsonResponse(
       { success: false, error: error.message || 'Failed to post reply' },
-      { status: 500 }
+      { status: 500 },
+      request
     );
   }
 }

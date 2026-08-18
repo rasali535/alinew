@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { ZernioSocialService, SocialPlatformType } from '@ralion/integrations';
 import { SocialProviderRouter } from '@/lib/services/social/socialProviderRouter.service';
+import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +10,10 @@ export type ZernioConnectionState =
   | 'ZERNIO_CONFIGURED'
   | 'ZERNIO_CONNECTED'
   | 'ZERNIO_CONNECTION_FAILED';
+
+export async function OPTIONS(request: NextRequest) {
+  return handleCorsPreflight(request);
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -44,7 +49,7 @@ export async function GET(request: NextRequest) {
       featureFlags[p] = SocialProviderRouter.isZernioEnabledForPlatform(p);
     }
 
-    return NextResponse.json({
+    return corsJsonResponse({
       success: true,
       status: connectionState,
       configured: health.configured,
@@ -55,9 +60,9 @@ export async function GET(request: NextRequest) {
       testedEndpoint: 'https://zernio.com/api/v1/profiles',
       error: health.error ? 'Connection test failed: server was unable to verify remote endpoint.' : undefined,
       checkedAt: new Date().toISOString(),
-    });
+    }, undefined, request);
   } catch (err: any) {
-    return NextResponse.json(
+    return corsJsonResponse(
       {
         success: false,
         status: 'ZERNIO_CONNECTION_FAILED' as ZernioConnectionState,
@@ -67,7 +72,8 @@ export async function GET(request: NextRequest) {
         error: 'Unexpected server-side error during health probe.',
         checkedAt: new Date().toISOString(),
       },
-      { status: 500 }
+      { status: 500 },
+      request
     );
   }
 }

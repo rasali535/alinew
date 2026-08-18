@@ -1,8 +1,13 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { MariBusinessLearningService } from '@/lib/services/social/mariBusinessLearning.service';
+import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 
 export async function generateStaticParams() {
   return [{ pageId: '477334159265235' }, { pageId: 'default' }];
+}
+
+export async function OPTIONS(request: NextRequest) {
+  return handleCorsPreflight(request);
 }
 
 export async function GET(
@@ -19,14 +24,15 @@ export async function GET(
       pageName: 'Ras Ali Labs',
     });
 
-    return NextResponse.json({
+    return corsJsonResponse({
       success: true,
       knowledge,
-    });
+    }, undefined, request);
   } catch (err: any) {
-    return NextResponse.json(
+    return corsJsonResponse(
       { success: false, error: err.message || 'Failed to retrieve business knowledge' },
-      { status: 500 }
+      { status: 500 },
+      request
     );
   }
 }
@@ -49,14 +55,15 @@ export async function POST(
       customKeywords: body.customKeywords,
     });
 
-    return NextResponse.json({
+    return corsJsonResponse({
       success: true,
       knowledge: updated,
-    });
+    }, undefined, request);
   } catch (err: any) {
-    return NextResponse.json(
+    return corsJsonResponse(
       { success: false, error: err.message || 'Failed to update business knowledge' },
-      { status: 500 }
+      { status: 500 },
+      request
     );
   }
 }

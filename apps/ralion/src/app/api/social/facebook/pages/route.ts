@@ -1,7 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { FacebookPageManagementService } from '@/lib/services/social/facebookPageManagement.service';
+import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 
 export const dynamic = 'force-dynamic';
+
+export async function OPTIONS(request: NextRequest) {
+  return handleCorsPreflight(request);
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,15 +18,16 @@ export async function GET(request: NextRequest) {
       userId,
     });
 
-    return NextResponse.json({
+    return corsJsonResponse({
       success: true,
       pages: result.pages,
       entitlement: result.entitlement,
-    });
+    }, undefined, request);
   } catch (err: any) {
-    return NextResponse.json(
+    return corsJsonResponse(
       { success: false, error: err.message || 'Failed to discover Facebook Pages' },
-      { status: 500 }
+      { status: 500 },
+      request
     );
   }
 }
@@ -33,7 +39,7 @@ export async function POST(request: NextRequest) {
     const userId = request.headers.get('x-user-id') || body.userId || 'default-user';
 
     if (!body.pageId) {
-      return NextResponse.json({ success: false, error: 'pageId is required' }, { status: 400 });
+      return corsJsonResponse({ success: false, error: 'pageId is required' }, { status: 400 }, request);
     }
 
     const result = await FacebookPageManagementService.connectPage({
@@ -43,14 +49,14 @@ export async function POST(request: NextRequest) {
       pageData: body.pageData || {},
     });
 
-    return NextResponse.json({
+    return corsJsonResponse({
       success: true,
       destination: result.destination,
       entitlement: result.entitlement,
-    });
+    }, undefined, request);
   } catch (err: any) {
     if (err.code === 'FEATURE_LIMIT_REACHED' || err.statusCode === 403) {
-      return NextResponse.json(
+      return corsJsonResponse(
         {
           success: false,
           code: 'FEATURE_LIMIT_REACHED',
@@ -60,13 +66,15 @@ export async function POST(request: NextRequest) {
           upgradeRequired: true,
           error: err.message,
         },
-        { status: 403 }
+        { status: 403 },
+        request
       );
     }
 
-    return NextResponse.json(
+    return corsJsonResponse(
       { success: false, error: err.message || 'Failed to connect Facebook Page' },
-      { status: 500 }
+      { status: 500 },
+      request
     );
   }
 }

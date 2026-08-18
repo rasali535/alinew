@@ -1,8 +1,13 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { SocialInboxService } from '@/lib/services/social/socialInbox.service';
 import { SocialPlatformType } from '@ralion/integrations';
+import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 
 export const dynamic = 'force-dynamic';
+
+export async function OPTIONS(request: NextRequest) {
+  return handleCorsPreflight(request);
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,12 +16,12 @@ export async function GET(request: NextRequest) {
 
     const conversations = await SocialInboxService.getConversations(userId, provider || undefined);
 
-    return NextResponse.json({
+    return corsJsonResponse({
       success: true,
       conversations,
-    });
+    }, undefined, request);
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return corsJsonResponse({ success: false, error: error.message }, { status: 500 }, request);
   }
 }
 
@@ -34,11 +39,11 @@ export async function POST(request: NextRequest) {
       userId: userId || 'default-user',
     });
 
-    return NextResponse.json({
+    return corsJsonResponse({
       success: true,
       result,
-    });
+    }, undefined, request);
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return corsJsonResponse({ success: false, error: error.message }, { status: 500 }, request);
   }
 }

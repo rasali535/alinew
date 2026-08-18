@@ -1,8 +1,13 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { FacebookPageManagementService } from '@/lib/services/social/facebookPageManagement.service';
+import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 
 export async function generateStaticParams() {
   return [{ pageId: '477334159265235' }, { pageId: 'default' }];
+}
+
+export async function OPTIONS(request: NextRequest) {
+  return handleCorsPreflight(request);
 }
 
 export async function GET(
@@ -20,14 +25,15 @@ export async function GET(
       period,
     });
 
-    return NextResponse.json({
+    return corsJsonResponse({
       success: true,
       analytics,
-    });
+    }, undefined, request);
   } catch (err: any) {
-    return NextResponse.json(
+    return corsJsonResponse(
       { success: false, error: err.message || 'Failed to retrieve Facebook analytics' },
-      { status: 500 }
+      { status: 500 },
+      request
     );
   }
 }

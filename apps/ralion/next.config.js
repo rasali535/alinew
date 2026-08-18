@@ -43,7 +43,7 @@ const corsApiHeaders = [
 const nextConfig = {
   ...(isStandalone ? { output: 'standalone' } : {}),
   basePath: isStandalone ? '' : '/ralion',
-  trailingSlash: true,
+  trailingSlash: false,
   images: {
     unoptimized: true,
   },

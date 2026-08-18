@@ -1,13 +1,18 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { SocialPublishingService } from '@/lib/services/social/socialPublishing.service';
+import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
-  return NextResponse.json({
+export async function OPTIONS(request: NextRequest) {
+  return handleCorsPreflight(request);
+}
+
+export async function GET(request: NextRequest) {
+  return corsJsonResponse({
     success: true,
     message: 'Ralion Unified Social Posts API ready.',
-  });
+  }, undefined, request);
 }
 
 export async function POST(request: NextRequest) {
@@ -44,9 +49,10 @@ export async function POST(request: NextRequest) {
     });
 
     if (!actualContent) {
-      return NextResponse.json(
+      return corsJsonResponse(
         { success: false, error: 'Post content is required before publishing.' },
-        { status: 400 }
+        { status: 400 },
+        request
       );
     }
 
@@ -76,18 +82,19 @@ export async function POST(request: NextRequest) {
       success: isSuccess,
     });
 
-    return NextResponse.json({
+    return corsJsonResponse({
       success: isSuccess,
       postId: result.postId,
       overallStatus: result.overallStatus,
       platformResults: result.platformResults,
       result,
-    }, { status: isSuccess ? 200 : 500 });
+    }, { status: isSuccess ? 200 : 500 }, request);
   } catch (error: any) {
     console.error('[UI_PUBLISH_REQUEST_ERROR]', error.message);
-    return NextResponse.json(
+    return corsJsonResponse(
       { success: false, error: error.message || 'Failed to publish post' },
-      { status: 500 }
+      { status: 500 },
+      request
     );
   }
 }
