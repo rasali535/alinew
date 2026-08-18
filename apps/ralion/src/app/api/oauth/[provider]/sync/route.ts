@@ -1,9 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import {
   loadOAuthTokens, updateLastSynced, markTokenExpired,
   linkedinAdapter, metaAdapter, xAdapter, tiktokAdapter, youtubeAdapter,
 } from '@/lib/services/social.service';
+import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
+
+export const dynamic = 'force-dynamic';
 
 const PROVIDERS = [
   'google', 'meta', 'facebook', 'instagram', 'whatsapp', 'microsoft', 'linkedin', 'tiktok',
@@ -14,6 +17,10 @@ const PROVIDERS = [
 
 export async function generateStaticParams() {
   return PROVIDERS.map(provider => ({ provider }));
+}
+
+export async function OPTIONS(request: NextRequest) {
+  return handleCorsPreflight(request);
 }
 
 export async function POST(
@@ -31,13 +38,13 @@ export async function POST(
     );
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      return NextResponse.json({ success: false, error: 'Not authenticated' }, { status: 401 });
+      return corsJsonResponse({ success: false, error: 'Not authenticated' }, { status: 401 }, request);
     }
 
     // Load token from Supabase
     const tokenData = await loadOAuthTokens(user.id, provider);
     if (!tokenData?.accessToken) {
-      return NextResponse.json({ success: false, error: `No connected token found for provider: ${provider}` }, { status: 404 });
+      return corsJsonResponse({ success: false, error: `No connected token found for provider: ${provider}` }, { status: 404 }, request);
     }
 
     const { accessToken, record } = tokenData;
@@ -76,7 +83,7 @@ export async function POST(
       // Token might be expired — mark it
       if (fetchError.message?.includes('401') || fetchError.message?.includes('unauthorized')) {
         await markTokenExpired(user.id, provider);
-        return NextResponse.json({ success: false, error: 'Token expired — please reconnect this account.', tokenExpired: true }, { status: 401 });
+        return corsJsonResponse({ success: false, error: 'Token expired — please reconnect this account.', tokenExpired: true }, { status: 401 }, request);
       }
       throw fetchError;
     }
@@ -84,16 +91,15 @@ export async function POST(
     // Update last synced timestamp
     await updateLastSynced(user.id, provider);
 
-    return NextResponse.json({
+    return corsJsonResponse({
       success: true,
       provider,
       postsCount: posts.length,
       posts,
       syncedAt: new Date().toISOString(),
-    });
+    }, undefined, request);
   } catch (error: any) {
     console.error('[OAuth Sync]', error);
-    return NextResponse.json({ success: false, error: error.message || 'Sync failed' }, { status: 500 });
+    return corsJsonResponse({ success: false, error: error.message || 'Sync failed' }, { status: 500 }, request);
   }
 }
-

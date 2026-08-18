@@ -1,9 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import {
   loadOAuthTokens, markTokenExpired,
   linkedinAdapter, metaAdapter, xAdapter,
 } from "@/lib/services/social.service";
+import { corsJsonResponse, handleCorsPreflight } from "@/lib/cors";
+
+export const dynamic = 'force-dynamic';
 
 const PROVIDERS = [
   "google", "meta", "facebook", "instagram", "whatsapp", "microsoft", "linkedin", "tiktok",
@@ -16,6 +19,10 @@ export async function generateStaticParams() {
   return PROVIDERS.map(provider => ({ provider }));
 }
 
+export async function OPTIONS(request: NextRequest) {
+  return handleCorsPreflight(request);
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ provider: string }> }
@@ -26,7 +33,7 @@ export async function POST(
     const { content, imageUrl } = body;
 
     if (!content?.trim()) {
-      return NextResponse.json({ success: false, error: "Post content is required" }, { status: 400 });
+      return corsJsonResponse({ success: false, error: "Post content is required" }, { status: 400 }, request);
     }
 
     const supabase = createClient(
@@ -36,12 +43,12 @@ export async function POST(
     );
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      return NextResponse.json({ success: false, error: "Not authenticated" }, { status: 401 });
+      return corsJsonResponse({ success: false, error: "Not authenticated" }, { status: 401 }, request);
     }
 
     const tokenData = await loadOAuthTokens(user.id, provider);
     if (!tokenData?.accessToken) {
-      return NextResponse.json({ success: false, error: "No connected account found for " + provider + ". Please connect your account first." }, { status: 404 });
+      return corsJsonResponse({ success: false, error: "No connected account found for " + provider + ". Please connect your account first." }, { status: 404 }, request);
     }
 
     const { accessToken, record } = tokenData;
@@ -53,16 +60,16 @@ export async function POST(
         break;
       case "facebook":
         if (!record.page_id || !record.extra_meta?.pageAccessToken) {
-          return NextResponse.json({ success: false, error: "Facebook Page token not found" }, { status: 400 });
+          return corsJsonResponse({ success: false, error: "Facebook Page token not found" }, { status: 400 }, request);
         }
         result = await metaAdapter.publishFacebookPost(record.page_id, record.extra_meta.pageAccessToken, content);
         break;
       case "instagram":
         if (!record.extra_meta?.igUserId || !record.extra_meta?.pageAccessToken) {
-          return NextResponse.json({ success: false, error: "Instagram Business account not linked" }, { status: 400 });
+          return corsJsonResponse({ success: false, error: "Instagram Business account not linked" }, { status: 400 }, request);
         }
         if (!imageUrl) {
-          return NextResponse.json({ success: false, error: "Instagram publishing requires an image URL" }, { status: 400 });
+          return corsJsonResponse({ success: false, error: "Instagram publishing requires an image URL" }, { status: 400 }, request);
         }
         result = await metaAdapter.publishInstagramPost(record.extra_meta.igUserId, record.extra_meta.pageAccessToken, content, imageUrl);
         break;
@@ -72,26 +79,26 @@ export async function POST(
         result = await xAdapter.publishTweet(accessToken, tweetText);
         break;
       default:
-        return NextResponse.json({ success: false, error: "Publishing to " + provider + " is not supported yet." }, { status: 400 });
+        return corsJsonResponse({ success: false, error: "Publishing to " + provider + " is not supported yet." }, { status: 400 }, request);
     }
 
     if (!result.success) {
       if (result.error?.includes("401") || result.error?.toLowerCase().includes("unauthorized")) {
         await markTokenExpired(user.id, provider);
-        return NextResponse.json({ success: false, error: "Token expired — please reconnect your account.", tokenExpired: true }, { status: 401 });
+        return corsJsonResponse({ success: false, error: "Token expired — please reconnect your account.", tokenExpired: true }, { status: 401 }, request);
       }
-      return NextResponse.json({ success: false, error: result.error }, { status: 500 });
+      return corsJsonResponse({ success: false, error: result.error }, { status: 500 }, request);
     }
 
-    return NextResponse.json({
+    return corsJsonResponse({
       success: true,
       provider,
       postId: result.postId,
       postUrl: result.postUrl,
       publishedAt: new Date().toISOString(),
-    });
+    }, undefined, request);
   } catch (error: any) {
     console.error("[OAuth Publish]", error);
-    return NextResponse.json({ success: false, error: error.message || "Publish failed" }, { status: 500 });
+    return corsJsonResponse({ success: false, error: error.message || "Publish failed" }, { status: 500 }, request);
   }
 }

@@ -12,29 +12,52 @@ const ALLOWED_ORIGINS = new Set([
   'http://127.0.0.1:5173',
 ]);
 
-export function getCorsHeaders(request?: NextRequest | Request): Record<string, string> {
+const ALLOWED_HEADERS = [
+  'Content-Type',
+  'Authorization',
+  'Accept',
+  'X-Requested-With',
+  'apikey',
+  'x-client-info',
+  'Idempotency-Key',
+  'Origin',
+  'Cache-Control',
+  'x-user-id',
+  'x-organization-id',
+  'cookie',
+].join(', ');
+
+export function resolveAllowedOrigin(request?: NextRequest | Request): string {
   let origin: string | null = null;
   if (request) {
     origin = request.headers.get('origin');
   }
 
-  let allowedOrigin = 'https://rasalilabs.com';
   if (origin) {
     if (ALLOWED_ORIGINS.has(origin) || /^https:\/\/([a-zA-Z0-9-]+\.)*rasalilabs\.com$/.test(origin)) {
-      allowedOrigin = origin;
+      return origin;
     }
   }
+
+  return 'https://rasalilabs.com';
+}
+
+export function getCorsHeaders(request?: NextRequest | Request): Record<string, string> {
+  const allowedOrigin = resolveAllowedOrigin(request);
 
   return {
     'Access-Control-Allow-Origin': allowedOrigin,
     'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, Accept, X-Requested-With, apikey, x-client-info, Idempotency-Key, Origin, Cache-Control',
+    'Access-Control-Allow-Headers': ALLOWED_HEADERS,
     'Access-Control-Allow-Credentials': 'true',
     'Access-Control-Max-Age': '86400',
   };
 }
 
-export function corsJsonResponse(data: any, init?: ResponseInit, request?: NextRequest | Request) {
+/**
+ * Wraps JSON data into a NextResponse with complete CORS headers attached.
+ */
+export function corsJsonResponse(data: any, init?: ResponseInit, request?: NextRequest | Request): NextResponse {
   const headers = new Headers(init?.headers);
   const cors = getCorsHeaders(request);
   for (const [k, v] of Object.entries(cors)) {
@@ -47,7 +70,26 @@ export function corsJsonResponse(data: any, init?: ResponseInit, request?: NextR
   });
 }
 
-export function handleCorsPreflight(request: NextRequest | Request) {
+/**
+ * Generic alias for corsJsonResponse
+ */
+export const createCorsResponse = corsJsonResponse;
+
+/**
+ * Attaches CORS headers to an existing Response or NextResponse.
+ */
+export function withCors<T extends Response>(response: T, request?: NextRequest | Request): T {
+  const cors = getCorsHeaders(request);
+  for (const [k, v] of Object.entries(cors)) {
+    response.headers.set(k, v);
+  }
+  return response;
+}
+
+/**
+ * Immediate, preflight OPTIONS handler returning 204 No Content with CORS headers.
+ */
+export function handleCorsPreflight(request: NextRequest | Request): NextResponse {
   return new NextResponse(null, {
     status: 204,
     headers: getCorsHeaders(request),

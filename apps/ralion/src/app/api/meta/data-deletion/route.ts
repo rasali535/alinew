@@ -9,11 +9,16 @@
  * Response: { "url": "https://rasalilabs.com/ralion/deletion-status?code=...", "confirmation_code": "..." }
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import * as crypto from 'crypto';
 import { MetaCredentialService } from '@/lib/services/metaCredential.service';
+import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 
 export const dynamic = 'force-dynamic';
+
+export async function OPTIONS(request: NextRequest) {
+  return handleCorsPreflight(request);
+}
 
 function parseSignedRequest(signedRequest: string, appSecret: string): { user_id?: string; algorithm?: string } | null {
   try {
@@ -71,25 +76,26 @@ export async function POST(request: NextRequest) {
     const platformUrl = process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com';
     const statusUrl = `${platformUrl}/deletion-status?code=${encodeURIComponent(confirmationCode)}`;
 
-    return NextResponse.json({
+    return corsJsonResponse({
       url: statusUrl,
       confirmation_code: confirmationCode,
-    });
+    }, undefined, request);
   } catch (error: any) {
     console.error('[MetaDataDeletion] Request processing error:', error);
-    return NextResponse.json(
+    return corsJsonResponse(
       { error: error.message || 'Data deletion request failed' },
-      { status: 500 }
+      { status: 500 },
+      request
     );
   }
 }
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get('code') || 'N/A';
-  return NextResponse.json({
+  return corsJsonResponse({
     status: 'COMPLETED',
     message: 'Meta Platform Data successfully deleted and purged in accordance with Ras Ali Labs privacy policy.',
     confirmation_code: code,
     timestamp: new Date().toISOString(),
-  });
+  }, undefined, request);
 }

@@ -1,7 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { deleteOAuthToken } from '@/lib/services/social.service';
 import { getConnectorForProvider, IntegrationProvider } from '@ralion/integrations';
+import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
+
+export const dynamic = 'force-dynamic';
 
 const PROVIDERS = [
   'google', 'meta', 'facebook', 'instagram', 'whatsapp', 'microsoft', 'linkedin', 'tiktok',
@@ -12,6 +15,10 @@ const PROVIDERS = [
 
 export async function generateStaticParams() {
   return PROVIDERS.map(provider => ({ provider }));
+}
+
+export async function OPTIONS(request: NextRequest) {
+  return handleCorsPreflight(request);
 }
 
 async function handleDisconnect(request: NextRequest, provider: string) {
@@ -33,13 +40,13 @@ async function handleDisconnect(request: NextRequest, provider: string) {
       // Connector fallback if not implemented in GenericOAuthConnector
     }
 
-    return NextResponse.json({
+    return corsJsonResponse({
       success: true,
       provider,
       status: 'DISCONNECTED'
-    });
+    }, undefined, request);
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message || 'Disconnect failed' }, { status: 500 });
+    return corsJsonResponse({ success: false, error: error.message || 'Disconnect failed' }, { status: 500 }, request);
   }
 }
 

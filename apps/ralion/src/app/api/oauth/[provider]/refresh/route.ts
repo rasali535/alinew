@@ -1,3 +1,9 @@
+import { NextRequest } from 'next/server';
+import { getConnectorForProvider, IntegrationProvider } from '@ralion/integrations';
+import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
+
+export const dynamic = 'force-dynamic';
+
 const PROVIDERS = [
   'google', 'meta', 'facebook', 'instagram', 'whatsapp', 'microsoft', 'linkedin', 'tiktok',
   'x', 'youtube', 'pinterest', 'reddit', 'github', 'slack', 'discord', 'notion', 'dropbox',
@@ -9,8 +15,9 @@ export async function generateStaticParams() {
   return PROVIDERS.map(provider => ({ provider }));
 }
 
-import { NextRequest, NextResponse } from 'next/server';
-import { getConnectorForProvider, IntegrationProvider } from '@ralion/integrations';
+export async function OPTIONS(request: NextRequest) {
+  return handleCorsPreflight(request);
+}
 
 export async function POST(
   request: NextRequest,
@@ -24,12 +31,12 @@ export async function POST(
     const connector = getConnectorForProvider(provider as IntegrationProvider);
     const refreshed = await connector.refreshToken(refreshToken);
 
-    return NextResponse.json({
+    return corsJsonResponse({
       success: true,
       provider,
       expiresAt: refreshed.expiresAt
-    });
+    }, undefined, request);
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message || 'Token refresh failed' }, { status: 500 });
+    return corsJsonResponse({ success: false, error: error.message || 'Token refresh failed' }, { status: 500 }, request);
   }
 }

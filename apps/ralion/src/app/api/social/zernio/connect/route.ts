@@ -1,10 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { SocialPlatformType, ZernioSocialService } from '@ralion/integrations';
 import { SocialProviderRouter } from '@/lib/services/social/socialProviderRouter.service';
 import { AuditLoggerService } from '@/lib/services/auditLogger.service';
+import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 
 export const dynamic = 'force-dynamic';
+
+export async function OPTIONS(request: NextRequest) {
+  return handleCorsPreflight(request);
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,7 +17,7 @@ export async function POST(request: NextRequest) {
     const { platform, workspaceId, organizationId } = body;
 
     if (!platform) {
-      return NextResponse.json({ success: false, error: 'Social platform is required.' }, { status: 400 });
+      return corsJsonResponse({ success: false, error: 'Social platform is required.' }, { status: 400 }, request);
     }
 
     // Verify user authentication
@@ -25,9 +30,10 @@ export async function POST(request: NextRequest) {
     const userId = user?.id || 'anonymous';
 
     if (!ZernioSocialService.isConfigured()) {
-      return NextResponse.json(
+      return corsJsonResponse(
         { success: false, error: 'Zernio social infrastructure is not configured on the server.' },
-        { status: 503 }
+        { status: 503 },
+        request
       );
     }
 
@@ -39,9 +45,10 @@ export async function POST(request: NextRequest) {
     });
 
     if (!profileId) {
-      return NextResponse.json(
+      return corsJsonResponse(
         { success: false, error: 'Failed to provision Zernio tenant profile.' },
-        { status: 500 }
+        { status: 500 },
+        request
       );
     }
 
@@ -68,15 +75,15 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({
+    return corsJsonResponse({
       success: true,
       provider: 'zernio',
       platform,
       authUrl,
       profileId,
-    });
+    }, undefined, request);
   } catch (err: any) {
     console.error('[ZernioConnectAPI] Error:', err.message);
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return corsJsonResponse({ success: false, error: err.message }, { status: 500 }, request);
   }
 }

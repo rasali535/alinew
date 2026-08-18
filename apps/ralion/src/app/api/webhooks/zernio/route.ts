@@ -2,8 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { ZernioSocialService } from '@ralion/integrations';
 import { AuditLoggerService } from '@/lib/services/auditLogger.service';
+import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 
 export const dynamic = 'force-dynamic';
+
+export async function OPTIONS(request: NextRequest) {
+  return handleCorsPreflight(request);
+}
 
 function getServiceSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co';
@@ -22,7 +27,7 @@ export async function GET(request: NextRequest) {
     return new NextResponse(challenge, { status: 200 });
   }
 
-  return NextResponse.json({ status: 'ok', endpoint: 'zernio-webhook-receiver' });
+  return corsJsonResponse({ status: 'ok', endpoint: 'zernio-webhook-receiver' }, undefined, request);
 }
 
 /**
@@ -91,7 +96,7 @@ export async function POST(request: NextRequest) {
 
     if (!isValid) {
       console.warn('[ZernioWebhook] Invalid signature received on webhook endpoint.');
-      return NextResponse.json({ success: false, error: 'Invalid HMAC signature' }, { status: 401 });
+      return corsJsonResponse({ success: false, error: 'Invalid HMAC signature' }, { status: 401 }, request);
     }
 
     // 3. Process Specific Event Types
@@ -108,7 +113,6 @@ export async function POST(request: NextRequest) {
               const avatar = acc.avatarUrl || payload.data?.avatarUrl;
 
               // Find target user from profile mapping
-              const targetUserId = organizationId || workspaceId;
               let resolvedUserId = '00000000-0000-0000-0000-000000000000';
               if (profileId) {
                 const { data: pm } = await supabase
@@ -234,9 +238,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, received: true });
+    return corsJsonResponse({ success: true, received: true }, undefined, request);
   } catch (err: any) {
     console.error('[ZernioWebhook] Processing error:', err.message);
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return corsJsonResponse({ success: false, error: err.message }, { status: 500 }, request);
   }
 }

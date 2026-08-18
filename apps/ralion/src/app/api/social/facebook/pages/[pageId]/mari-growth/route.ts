@@ -3,6 +3,8 @@ import { FacebookPageManagementService } from '@/lib/services/social/facebookPag
 import { MariFacebookGrowthService, MariPageContext } from '@/lib/services/social/mariFacebookGrowth.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 
+export const dynamic = 'force-dynamic';
+
 export async function generateStaticParams() {
   return [{ pageId: '477334159265235' }, { pageId: 'default' }];
 }

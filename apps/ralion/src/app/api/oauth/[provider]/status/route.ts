@@ -1,6 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { loadAllUserAccounts, loadOAuthTokens } from '@/lib/services/social.service';
+import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
+
+export const dynamic = 'force-dynamic';
 
 const PROVIDERS = [
   'all',
@@ -12,6 +15,10 @@ const PROVIDERS = [
 
 export async function generateStaticParams() {
   return PROVIDERS.map(provider => ({ provider }));
+}
+
+export async function OPTIONS(request: NextRequest) {
+  return handleCorsPreflight(request);
 }
 
 export async function GET(
@@ -29,25 +36,25 @@ export async function GET(
     );
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      return NextResponse.json({ success: false, connected: false, error: 'Not authenticated' }, { status: 401 });
+      return corsJsonResponse({ success: false, connected: false, error: 'Not authenticated' }, { status: 401 }, request);
     }
 
     // Special case: fetch ALL accounts for this user (provider='all')
     if (provider === 'all') {
       const accounts = await loadAllUserAccounts(user.id);
-      return NextResponse.json({ success: true, accounts });
+      return corsJsonResponse({ success: true, accounts }, undefined, request);
     }
 
     // Load specific provider token record from Supabase
     const tokenData = await loadOAuthTokens(user.id, provider);
     if (!tokenData) {
-      return NextResponse.json({ success: true, connected: false, provider });
+      return corsJsonResponse({ success: true, connected: false, provider }, undefined, request);
     }
 
     const record = tokenData.record;
     const isExpired = tokenData.expiresAt ? tokenData.expiresAt < new Date() : false;
 
-    return NextResponse.json({
+    return corsJsonResponse({
       success: true,
       connected: !isExpired,
       provider,
@@ -63,10 +70,9 @@ export async function GET(
         connectedAt: record.connected_at,
         lastSyncedAt: record.last_synced_at,
       }
-    });
+    }, undefined, request);
   } catch (error: any) {
     console.error('[OAuth Status]', error);
-    return NextResponse.json({ success: false, error: error.message || 'Status check failed' }, { status: 500 });
+    return corsJsonResponse({ success: false, error: error.message || 'Status check failed' }, { status: 500 }, request);
   }
 }
-

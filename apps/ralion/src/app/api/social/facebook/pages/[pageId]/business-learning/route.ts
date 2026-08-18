@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { MariBusinessLearningService } from '@/lib/services/social/mariBusinessLearning.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 
+export const dynamic = 'force-dynamic';
+
 export async function generateStaticParams() {
   return [{ pageId: '477334159265235' }, { pageId: 'default' }];
 }

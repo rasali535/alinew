@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SocialPlatformType } from '@ralion/integrations';
 import { SocialWebhookService } from '@/lib/services/social/socialWebhook.service';
+import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
+
+export const dynamic = 'force-dynamic';
 
 const SUPPORTED_WEBHOOK_PROVIDERS = ['facebook', 'instagram', 'whatsapp', 'tiktok', 'linkedin', 'x'];
 
 export async function generateStaticParams() {
   return SUPPORTED_WEBHOOK_PROVIDERS.map((provider) => ({ provider }));
+}
+
+export async function OPTIONS(request: NextRequest) {
+  return handleCorsPreflight(request);
 }
 
 /**
@@ -35,10 +42,10 @@ export async function GET(
     const secret = process.env.TWITTER_CONSUMER_SECRET || 'secret';
     const crypto = require('crypto');
     const hmac = crypto.createHmac('sha256', secret).update(crcToken).digest('base64');
-    return NextResponse.json({ response_token: `sha256=${hmac}` });
+    return corsJsonResponse({ response_token: `sha256=${hmac}` }, undefined, request);
   }
 
-  return NextResponse.json({ error: 'Verification failed' }, { status: 403 });
+  return corsJsonResponse({ error: 'Verification failed' }, { status: 403 }, request);
 }
 
 /**
@@ -72,9 +79,9 @@ export async function POST(
       isValid
     );
 
-    return NextResponse.json({ success: true, received: true });
+    return corsJsonResponse({ success: true, received: true }, undefined, request);
   } catch (err: any) {
     console.error(`[Webhook] Error processing ${provider} webhook:`, err.message);
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return corsJsonResponse({ success: false, error: err.message }, { status: 500 }, request);
   }
 }
