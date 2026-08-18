@@ -244,11 +244,13 @@ export class SocialPublishingService {
         let res: PublishResponse;
 
         if (routing.provider === 'zernio') {
-          const zernioAccId = (conn.zernio_account_id && conn.zernio_account_id.length === 24)
-            ? conn.zernio_account_id
-            : '6a82df7277555aae018b92b4';
-          const targetPageId = params.pageId || conn.page_id || conn.metadata?.pageId || '477334159265235';
-          const zernioProfId = conn.zernio_profile_id || routing.zernioProfileId || '6a82deac1a69158ef81cb2cd';
+          const zernioAccId = conn.zernio_account_id;
+          const targetPageId = params.pageId || conn.provider_account_id || conn.page_id || conn.metadata?.pageId;
+          const zernioProfId = conn.zernio_profile_id;
+
+          if (!zernioAccId || !zernioProfId) {
+            throw new Error(`[SocialPublishing] Connected ${platform} account is missing valid Zernio account/profile binding.`);
+          }
 
           console.log('[PUBLISHER_IDENTITY]', JSON.stringify({
             platform,

@@ -104,31 +104,21 @@ export async function getCurrentRalionContext(
 
   let authUser: User | null = null;
 
-  // 1. Validate JWT Token if present
+  // 1. Authoritative JWT Token Verification
   if (token) {
     try {
       const { data, error } = await supabase.auth.getUser(token);
       if (!error && data?.user) {
         authUser = data.user;
+      } else if (error) {
+        console.warn('[ServerAuth] JWT validation rejected:', error.message);
       }
     } catch (e: any) {
       console.warn('[ServerAuth] Token verification warning:', e.message);
     }
   }
 
-  // 2. Fallback to headerUserId only if token is absent and header provided
-  if (!authUser && headerUserId && headerUserId !== 'default-user') {
-    try {
-      const { data, error } = await supabase.auth.admin.getUserById(headerUserId);
-      if (!error && data?.user) {
-        authUser = data.user;
-      }
-    } catch {
-      // Best effort user lookup
-    }
-  }
-
-  // If unauthenticated and auth is required, return null
+  // If unauthenticated, return null (never trust client header spoofing)
   if (!authUser) {
     if (options.requireAuth) {
       return null;
@@ -223,6 +213,13 @@ export async function getCurrentRalionContext(
     user_id: authUser.id,
     role: 'owner',
   };
+
+  console.log('[ServerAuth] Context verified:', {
+    userId: authUser.id,
+    userEmail: authUser.email ? authUser.email.replace(/(?<=.).(?=.*@)/g, '*') : 'hidden',
+    workspaceId: workspace.id,
+    role: membership.role,
+  });
 
   return {
     user: {

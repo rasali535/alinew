@@ -32,6 +32,8 @@ export interface FacebookPageDescriptor {
     canManagePosts: boolean;
     canManageMessages: boolean;
   };
+  zernioProfileId?: string;
+  zernioAccountId?: string;
   connectedAt?: string;
   isCurrentDestination?: boolean;
 }
@@ -264,7 +266,7 @@ export class FacebookPageManagementService {
       platform: 'facebook',
       infrastructure_provider: 'zernio',
       provider_account_id: params.pageData.id || params.pageId,
-      provider_profile_id: '6a82deac1a69158ef81cb2cd',
+      provider_profile_id: params.pageData.zernioProfileId || null,
       provider_page_id: params.pageId,
       page_name: params.pageData.name || 'Facebook Page',
       page_username: params.pageData.username || '@facebook_page',
@@ -304,7 +306,7 @@ export class FacebookPageManagementService {
         token_status: 'TOKEN_VALID',
         infrastructure_provider: 'zernio',
         followers_count: params.pageData.followersCount || 0,
-        zernio_profile_id: '6a82deac1a69158ef81cb2cd',
+        zernio_profile_id: params.pageData.zernioProfileId || null,
         zernio_account_id: params.pageData.id || params.pageId,
         updated_at: new Date().toISOString(),
       },
@@ -663,7 +665,7 @@ export class FacebookPageManagementService {
       : totalPosts > 0 ? Number(((totalEngagement / (totalPosts * 250)) * 100).toFixed(1)) : 4.2;
 
     return {
-      pageId: params.pageId || conn.provider_account_id || '477334159265235',
+      pageId: params.pageId || conn.provider_account_id || 'none',
       pageName,
       followers,
       followerGrowth30d: 142,
