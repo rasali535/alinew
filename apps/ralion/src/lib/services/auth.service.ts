@@ -297,15 +297,46 @@ export class AuthService {
   }
 
   /**
-   * Logout user and redirect to platform login
+   * Logout user, clear all client-side tenant/workspace state, and redirect to platform login
    */
   static async logout() {
-    await this.supabase.auth.signOut();
-    const platformUrl = process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com';
-    if (typeof window !== 'undefined' && window.location.protocol === 'file:') {
-      window.location.href = '/ralion/login';
-    } else {
-      window.location.href = `${platformUrl}/login`;
+    try {
+      await this.supabase.auth.signOut();
+    } catch (err) {
+      console.warn('[AuthService] Supabase signout notice:', err);
+    }
+
+    if (typeof window !== 'undefined') {
+      try {
+        // Clear all client-side cached tenant & social state
+        const keysToRemove = [
+          'ralion_connected_social_accounts',
+          'ralion_active_workspace_id',
+          'ralion_cached_user',
+          'ralion_selected_fb_page',
+          'ralion_growth_cache',
+          'sb-yidsfihagwttlmhfynmf-auth-token',
+        ];
+        keysToRemove.forEach((k) => localStorage.removeItem(k));
+
+        // Clear dynamic keys with ralion_ or sb- prefix
+        Object.keys(localStorage).forEach((key) => {
+          if (key.startsWith('ralion_') || key.startsWith('sb-')) {
+            localStorage.removeItem(key);
+          }
+        });
+
+        sessionStorage.clear();
+      } catch (e) {
+        console.warn('[AuthService] Storage purge notice:', e);
+      }
+
+      const platformUrl = process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com';
+      if (window.location.protocol === 'file:') {
+        window.location.href = '/ralion/login';
+      } else {
+        window.location.href = `${platformUrl}/login`;
+      }
     }
   }
 }

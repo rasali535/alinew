@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { FacebookCommentsService } from '@/lib/services/social/facebookComments.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
+import { getCurrentRalionContext } from '@/lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,9 +15,17 @@ export async function GET(request: NextRequest) {
     const postId = searchParams.get('postId') || undefined;
     const pageId = searchParams.get('pageId') || undefined;
 
+    const context = await getCurrentRalionContext(request, { requireAuth: false });
+    const orgId = context?.workspace.id || request.headers.get('x-organization-id') || undefined;
+    const userId = context?.user.id || request.headers.get('x-user-id') || undefined;
+    const workspaceId = context?.workspace.id || request.headers.get('x-workspace-id') || undefined;
+
     const comments = await FacebookCommentsService.getComments({
       postId,
       pageId,
+      organizationId: orgId,
+      workspaceId,
+      userId,
     });
 
     return corsJsonResponse({
@@ -52,14 +61,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const orgId = request.headers.get('x-organization-id') || 'default-org';
-    const activeUserId = request.headers.get('x-user-id') || userId || 'default-user';
+    const context = await getCurrentRalionContext(request, { requireAuth: false });
+    const orgId = context?.workspace.id || request.headers.get('x-organization-id') || body.organizationId || undefined;
+    const activeUserId = context?.user.id || request.headers.get('x-user-id') || userId || 'default-user';
+    const workspaceId = context?.workspace.id || request.headers.get('x-workspace-id') || body.workspaceId || undefined;
 
     const reply = await FacebookCommentsService.replyToComment({
       commentId,
       postId: postId || commentId.split('_')[0] || 'default_post',
       replyText: replyText.trim(),
       userId: activeUserId,
+      workspaceId,
       authorName,
       pageId,
       organizationId: orgId,

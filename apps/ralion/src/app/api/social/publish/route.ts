@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import * as crypto from 'crypto';
 import { SocialPublishingService } from '@/lib/services/social/socialPublishing.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
+import { getCurrentRalionContext } from '@/lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +25,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const context = await getCurrentRalionContext(request, { requireAuth: false });
+
     const {
       userId,
       workspaceId,
@@ -42,6 +45,10 @@ export async function POST(request: NextRequest) {
       idempotencyKey,
     } = body;
 
+    const actualUserId = context?.user.id || request.headers.get('x-user-id') || userId || 'default-user';
+    const actualWorkspaceId = context?.workspace.id || request.headers.get('x-workspace-id') || workspaceId || undefined;
+    const actualOrgId = context?.workspace.id || request.headers.get('x-organization-id') || organizationId || undefined;
+
     const actualContent = content || postBody;
 
     console.log('[SocialPublishAPI] Incoming publish request:', {
@@ -54,6 +61,8 @@ export async function POST(request: NextRequest) {
       isScheduled: Boolean(scheduledFor),
       hasPageId: Boolean(pageId),
       hasSocialConnectionId: Boolean(socialConnectionId),
+      workspaceId: actualWorkspaceId,
+      userId: actualUserId,
       timestamp: new Date().toISOString(),
     });
 
@@ -74,9 +83,9 @@ export async function POST(request: NextRequest) {
       : ['facebook'];
 
     const result = await SocialPublishingService.publish({
-      userId: userId || 'default-user',
-      workspaceId,
-      organizationId,
+      userId: actualUserId,
+      workspaceId: actualWorkspaceId,
+      organizationId: actualOrgId,
       title: title || 'Social Post',
       body: actualContent.trim(),
       mediaUrls: mediaUrls || mediaItems || [],

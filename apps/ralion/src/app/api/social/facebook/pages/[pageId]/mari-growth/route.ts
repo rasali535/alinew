@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { FacebookPageManagementService } from '@/lib/services/social/facebookPageManagement.service';
 import { MariFacebookGrowthService, MariPageContext } from '@/lib/services/social/mariFacebookGrowth.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
+import { getCurrentRalionContext } from '@/lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,14 +21,17 @@ export async function POST(
   try {
     const { pageId } = await params;
     const body = await request.json();
-    const orgId = request.headers.get('x-organization-id') || 'default-org';
-    const userId = request.headers.get('x-user-id') || 'default-user';
+    const serverCtx = await getCurrentRalionContext(request, { requireAuth: false });
+    const orgId = serverCtx?.workspace.id || request.headers.get('x-organization-id') || undefined;
+    const userId = serverCtx?.user.id || request.headers.get('x-user-id') || 'default-user';
+    const workspaceId = serverCtx?.workspace.id || request.headers.get('x-workspace-id') || undefined;
 
     // Retrieve normalized analytics
     const analytics = await FacebookPageManagementService.getPageAnalytics({
       organizationId: orgId,
+      workspaceId,
+      userId,
       pageId,
-      period: '30d',
     });
 
     const context: MariPageContext = {

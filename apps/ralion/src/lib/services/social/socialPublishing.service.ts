@@ -185,43 +185,30 @@ export class SocialPublishingService {
       };
     }
 
-    // 4. Find active connections for requested platforms
+    // 4. Find active connections for requested platforms strictly matching user or workspace
     let connections: any[] = [];
     try {
-      const { data } = await supabase
+      let connQuery = supabase
         .from('social_connections')
-        .select('id, provider, provider_account_id, connection_status, infrastructure_provider, zernio_account_id, zernio_profile_id, user_id, organization_id')
+        .select('id, provider, provider_account_id, connection_status, infrastructure_provider, zernio_account_id, zernio_profile_id, user_id, workspace_id, organization_id')
         .in('provider', params.platforms)
         .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected', 'active']);
+
+      if (params.workspaceId && params.workspaceId !== 'default' && params.workspaceId !== 'default-org') {
+        connQuery = connQuery.or(`workspace_id.eq.${params.workspaceId},user_id.eq.${params.userId || params.workspaceId}`);
+      } else if (params.userId && params.userId !== 'default-user') {
+        connQuery = connQuery.eq('user_id', params.userId);
+      }
+
+      const { data } = await connQuery;
       connections = data || [];
     } catch (dbErr: any) {
       console.warn('[SocialPublishing] Connection fetch notice:', dbErr.message);
     }
 
-    if (params.userId && params.userId !== 'default-user' && Array.isArray(connections)) {
-      const userConns = connections.filter((c) => c.user_id === params.userId);
-      if (userConns.length > 0) {
-        connections = userConns;
-      }
-    }
-
     const connMap = new Map<SocialPlatformType, any>();
     for (const c of connections || []) {
       connMap.set(c.provider as SocialPlatformType, c);
-    }
-
-    // Default verified fallback for Facebook (Zernio verified profile)
-    if (!connMap.has('facebook') && params.platforms.includes('facebook')) {
-      connMap.set('facebook', {
-        id: params.socialConnectionId || 'conn_fb_verified_default',
-        provider: 'facebook',
-        provider_account_id: '6a82df7277555aae018b92b4',
-        connection_status: 'CONNECTED',
-        infrastructure_provider: 'zernio',
-        zernio_profile_id: '6a82deac1a69158ef81cb2cd',
-        zernio_account_id: '6a82df7277555aae018b92b4',
-        page_id: params.pageId || '477334159265235',
-      });
     }
 
     const platformResults: Partial<Record<SocialPlatformType, PublishResponse>> = {};

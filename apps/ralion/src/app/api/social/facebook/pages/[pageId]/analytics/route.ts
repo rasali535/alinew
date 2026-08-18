@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { FacebookPageManagementService } from '@/lib/services/social/facebookPageManagement.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
+import { getCurrentRalionContext } from '@/lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,13 +19,16 @@ export async function GET(
 ) {
   try {
     const { pageId } = await params;
-    const orgId = request.headers.get('x-organization-id') || 'default-org';
-    const period = request.nextUrl.searchParams.get('period') || '30d';
+    const context = await getCurrentRalionContext(request, { requireAuth: false });
+    const orgId = context?.workspace.id || request.headers.get('x-organization-id') || undefined;
+    const userId = context?.user.id || request.headers.get('x-user-id') || undefined;
+    const workspaceId = context?.workspace.id || request.headers.get('x-workspace-id') || undefined;
 
     const analytics = await FacebookPageManagementService.getPageAnalytics({
       organizationId: orgId,
+      workspaceId,
+      userId,
       pageId,
-      period,
     });
 
     return corsJsonResponse({

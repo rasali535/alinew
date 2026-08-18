@@ -21,84 +21,102 @@ export class SocialInboxService {
   /**
    * Get all conversations and latest messages for a user/workspace from live Zernio & DB cache
    */
-  static async getConversations(userId: string, provider?: SocialPlatformType) {
+  static async getConversations(params: {
+    userId?: string;
+    workspaceId?: string;
+    organizationId?: string;
+    provider?: SocialPlatformType;
+  } | string, legacyProvider?: SocialPlatformType) {
     const supabase = getServiceSupabase();
 
-    // 1. Resolve connected tenant's Zernio profile and account mapping
-    let profileId = '6a82deac1a69158ef81cb2cd';
-    let accountId = '6a82df7277555aae018b92b4';
+    const userId = typeof params === 'string' ? params : params.userId;
+    const workspaceId = typeof params === 'object' ? params.workspaceId : undefined;
+    const provider = typeof params === 'object' ? params.provider : legacyProvider;
 
-    try {
-      const { data: conn } = await supabase
-        .from('social_connections')
-        .select('zernio_profile_id, zernio_account_id')
-        .eq('provider', provider || 'facebook')
-        .eq('connection_status', 'CONNECTED')
-        .maybeSingle();
+    // 1. Resolve connected tenant's Zernio profile and account mapping strictly for this workspace / user
+    let connQuery = supabase
+      .from('social_connections')
+      .select('zernio_profile_id, zernio_account_id, workspace_id, user_id')
+      .eq('provider', provider || 'facebook')
+      .eq('connection_status', 'CONNECTED');
 
-      if (conn?.zernio_profile_id) profileId = conn.zernio_profile_id;
-      if (conn?.zernio_account_id) accountId = conn.zernio_account_id;
-    } catch {
-      // Best effort profile resolution
+    if (workspaceId && workspaceId !== 'default' && workspaceId !== 'default-org') {
+      connQuery = connQuery.or(`workspace_id.eq.${workspaceId},user_id.eq.${userId || workspaceId}`);
+    } else if (userId && userId !== 'default-user') {
+      connQuery = connQuery.eq('user_id', userId);
+    } else {
+      // Unscoped request -> return empty conversations (zero tenant cross-leakage)
+      return [];
     }
+
+    const { data: conn } = await connQuery.maybeSingle();
+
+    if (!conn || !conn.zernio_profile_id) {
+      return [];
+    }
+
+    const profileId = conn.zernio_profile_id;
+    const accountId = conn.zernio_account_id;
 
     const conversationMap = new Map<string, any>();
 
     // 2. Query live conversations from Zernio
-    try {
-      const convData = await ZernioSocialService.getInboxConversations(profileId);
-      const convList = convData?.data || (Array.isArray(convData) ? convData : []);
+    if (profileId) {
+      try {
+        const convData = await ZernioSocialService.getInboxConversations(profileId);
+        const convList = convData?.data || (Array.isArray(convData) ? convData : []);
 
-      if (Array.isArray(convList) && convList.length > 0) {
-        // Fetch message threads for top conversations in parallel
-        await Promise.allSettled(
-          convList.slice(0, 6).map(async (conv: any) => {
-            const convId = conv.id;
-            let messages: any[] = [];
+        if (Array.isArray(convList) && convList.length > 0) {
+          // Fetch message threads for top conversations in parallel
+          await Promise.allSettled(
+            convList.slice(0, 6).map(async (conv: any) => {
+              const convId = conv.id;
+              let messages: any[] = [];
 
-            try {
-              const msgData = await ZernioSocialService.getConversationMessages(convId, accountId);
-              const rawMsgs = msgData?.messages || (Array.isArray(msgData) ? msgData : []);
-              if (Array.isArray(rawMsgs)) {
-                messages = rawMsgs.map((m: any) => ({
-                  id: m.id,
-                  direction: m.direction === 'outgoing' ? 'OUTBOUND' : 'INBOUND',
-                  sender_name: m.senderName || 'Facebook User',
-                  sender_id: m.senderId,
-                  message_text: m.message || '',
-                  timestamp: m.createdAt ? new Date(m.createdAt).toLocaleString() : 'Recent',
-                }));
+              try {
+                const msgData = await ZernioSocialService.getConversationMessages(convId, accountId);
+                const rawMsgs = msgData?.messages || (Array.isArray(msgData) ? msgData : []);
+                if (Array.isArray(rawMsgs)) {
+                  messages = rawMsgs.map((m: any) => ({
+                    id: m.id,
+                    direction: m.direction === 'outgoing' ? 'OUTBOUND' : 'INBOUND',
+                    sender_name: m.senderName || 'Facebook User',
+                    sender_id: m.senderId,
+                    message_text: m.message || '',
+                    timestamp: m.createdAt ? new Date(m.createdAt).toLocaleString() : 'Recent',
+                  }));
+                }
+              } catch {
+                // Messages fetch notice
               }
-            } catch {
-              // Messages fetch notice
-            }
 
-            if (messages.length === 0 && conv.lastMessage) {
-              messages.push({
-                id: `msg_${convId}_last`,
-                direction: 'INBOUND',
-                sender_name: conv.participantName || 'Facebook User',
-                message_text: conv.lastMessage,
-                timestamp: conv.updatedTime ? new Date(conv.updatedTime).toLocaleString() : 'Recent',
+              if (messages.length === 0 && conv.lastMessage) {
+                messages.push({
+                  id: `msg_${convId}_last`,
+                  direction: 'INBOUND',
+                  sender_name: conv.participantName || 'Facebook User',
+                  message_text: conv.lastMessage,
+                  timestamp: conv.updatedTime ? new Date(conv.updatedTime).toLocaleString() : 'Recent',
+                });
+              }
+
+              conversationMap.set(convId, {
+                conversationId: convId,
+                provider: (conv.platform || 'facebook').toLowerCase(),
+                participantName: conv.participantName || 'Facebook User',
+                participantId: conv.participantId || convId,
+                avatarUrl: conv.participantPicture || null,
+                lastMessage: conv.lastMessage || '',
+                lastTimestamp: conv.updatedTime ? new Date(conv.updatedTime).toLocaleString() : 'Recent',
+                unreadCount: Number(conv.unreadCount) || 0,
+                messages,
               });
-            }
-
-            conversationMap.set(convId, {
-              conversationId: convId,
-              provider: (conv.platform || 'facebook').toLowerCase(),
-              participantName: conv.participantName || 'Facebook User',
-              participantId: conv.participantId || convId,
-              avatarUrl: conv.participantPicture || null,
-              lastMessage: conv.lastMessage || '',
-              lastTimestamp: conv.updatedTime ? new Date(conv.updatedTime).toLocaleString() : 'Recent',
-              unreadCount: Number(conv.unreadCount) || 0,
-              messages,
-            });
-          })
-        );
+            })
+          );
+        }
+      } catch (zErr) {
+        console.warn('[SocialInboxService] Live inbox conversations fetch notice:', zErr);
       }
-    } catch (zErr) {
-      console.warn('[SocialInboxService] Live inbox conversations fetch notice:', zErr);
     }
 
     // 3. Query local database for any cached / local messages
