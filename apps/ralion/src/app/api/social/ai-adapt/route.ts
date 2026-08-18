@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { SocialAiService } from '@/lib/services/social/socialAi.service';
 import { SocialPlatformType } from '@ralion/integrations';
 
-export const dynamic = 'force-static';
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {

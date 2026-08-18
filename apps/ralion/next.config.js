@@ -33,8 +33,8 @@ const securityHeaders = [
 
 const nextConfig = {
   output: isStaticExport ? 'export' : 'standalone',
-  basePath: '/ralion',
-  trailingSlash: true,
+  basePath: isStaticExport ? '/ralion' : '',
+  trailingSlash: isStaticExport,
   images: {
     unoptimized: true,
   },

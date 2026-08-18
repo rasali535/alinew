@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { ZernioSocialService } from '@ralion/integrations';
 import { AuditLoggerService } from '@/lib/services/auditLogger.service';
 
-export const dynamic = 'force-static';
+export const dynamic = 'force-dynamic';
 
 function getServiceSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co';

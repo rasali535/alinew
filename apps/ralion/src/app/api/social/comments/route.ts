@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { FacebookCommentsService } from '@/lib/services/social/facebookComments.service';
 
-export const dynamic = 'force-static';
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {

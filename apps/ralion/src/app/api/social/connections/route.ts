@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { SocialProviderRegistry, SocialPlatformType, ZernioSocialService } from '@ralion/integrations';
 
-export const dynamic = 'force-static';
+export const dynamic = 'force-dynamic';
 import { SocialTokenManager } from '@/lib/services/social/socialTokenManager.service';
 import { SocialConnectionHealthService } from '@/lib/services/social/socialConnectionHealth.service';
 import { AuditLoggerService } from '@/lib/services/auditLogger.service';

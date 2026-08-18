@@ -13,7 +13,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as crypto from 'crypto';
 import { MetaCredentialService } from '@/lib/services/metaCredential.service';
 
-export const dynamic = 'force-static';
+export const dynamic = 'force-dynamic';
 
 function parseSignedRequest(signedRequest: string, appSecret: string): { user_id?: string; algorithm?: string } | null {
   try {
