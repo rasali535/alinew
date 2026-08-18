@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import * as crypto from 'crypto';
 import { SocialPublishingService } from '@/lib/services/social/socialPublishing.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 
@@ -16,8 +17,20 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const requestId = `req_post_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+
   try {
-    const body = await request.json();
+    let body: any = {};
+    try {
+      body = await request.json();
+    } catch {
+      return corsJsonResponse(
+        { success: false, error: 'Invalid JSON request body.', requestId },
+        { status: 400 },
+        request
+      );
+    }
+
     const {
       userId,
       workspaceId,
@@ -30,27 +43,34 @@ export async function POST(request: NextRequest) {
       mediaTypes,
       platforms,
       scheduledFor,
-      publishNow,
       socialConnectionId,
       pageId,
       authorName,
+      idempotencyKey,
     } = body;
 
     const actualContent = content || postBody;
 
-    console.log('[UI_PUBLISH_REQUEST_RECEIVED]', {
+    console.log('[SocialPostsAPI] Incoming post request:', {
+      requestId,
       endpoint: '/api/social/posts',
       platforms: platforms || ['facebook'],
       hasContent: Boolean(actualContent),
       contentLength: actualContent?.length || 0,
       hasMedia: Boolean((mediaUrls || mediaItems)?.length),
       isScheduled: Boolean(scheduledFor),
+      hasPageId: Boolean(pageId),
+      hasSocialConnectionId: Boolean(socialConnectionId),
       timestamp: new Date().toISOString(),
     });
 
-    if (!actualContent) {
+    if (!actualContent || typeof actualContent !== 'string' || actualContent.trim().length === 0) {
       return corsJsonResponse(
-        { success: false, error: 'Post content is required before publishing.' },
+        {
+          success: false,
+          error: 'Post content is required before publishing.',
+          requestId,
+        },
         { status: 400 },
         request
       );
@@ -65,35 +85,54 @@ export async function POST(request: NextRequest) {
       workspaceId,
       organizationId,
       title: title || 'Social Post',
-      body: actualContent,
+      body: actualContent.trim(),
       mediaUrls: mediaUrls || mediaItems || [],
       mediaTypes,
       platforms: targetPlatforms,
       scheduledFor: scheduledFor ? new Date(scheduledFor) : undefined,
       authorName: authorName || 'Ras Ali Labs',
+      pageId,
+      socialConnectionId,
+      idempotencyKey,
     });
 
     const isSuccess = result.overallStatus === 'PUBLISHED' || result.overallStatus === 'QUEUED';
+    const isPartial = result.overallStatus === 'PARTIALLY_PUBLISHED';
 
-    console.log('[ZERNIO_PUBLISH_RESPONSE]', {
+    console.log('[SocialPostsAPI] Dispatch result:', {
+      requestId,
       overallStatus: result.overallStatus,
       postId: result.postId,
-      platformResults: result.platformResults,
-      success: isSuccess,
+      success: isSuccess || isPartial,
+      errorsCount: result.errors?.length || 0,
     });
 
+    const httpStatus = isSuccess ? 200 : isPartial ? 200 : 422;
+
     return corsJsonResponse({
-      success: isSuccess,
+      success: isSuccess || isPartial,
       postId: result.postId,
       overallStatus: result.overallStatus,
       platformResults: result.platformResults,
       result,
-    }, { status: isSuccess ? 200 : 500 }, request);
+      requestId,
+      ...(result.errors?.length ? { errors: result.errors } : {}),
+    }, { status: httpStatus }, request);
   } catch (error: any) {
-    console.error('[UI_PUBLISH_REQUEST_ERROR]', error.message);
+    const statusCode = error.statusCode || 500;
+    console.error('[SocialPostsAPI] Execution error:', {
+      requestId,
+      statusCode,
+      message: error.message,
+    });
+
     return corsJsonResponse(
-      { success: false, error: error.message || 'Failed to publish post' },
-      { status: 500 },
+      {
+        success: false,
+        error: error.message || 'Failed to publish post',
+        requestId,
+      },
+      { status: statusCode },
       request
     );
   }
