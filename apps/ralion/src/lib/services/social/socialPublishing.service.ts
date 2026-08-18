@@ -257,11 +257,20 @@ export class SocialPublishingService {
         let res: PublishResponse;
 
         if (routing.provider === 'zernio') {
-          // Dispatch via Zernio Infrastructure
           const zernioAccId = (conn.zernio_account_id && conn.zernio_account_id.length === 24)
             ? conn.zernio_account_id
             : '6a82df7277555aae018b92b4';
           const targetPageId = params.pageId || conn.page_id || conn.metadata?.pageId || '477334159265235';
+          const zernioProfId = conn.zernio_profile_id || routing.zernioProfileId || '6a82deac1a69158ef81cb2cd';
+
+          console.log('[PUBLISHER_IDENTITY]', JSON.stringify({
+            platform,
+            pageId: targetPageId,
+            zernioProfileId: zernioProfId,
+            zernioAccountId: zernioAccId,
+            provider: 'zernio',
+            targetBranding: 'Ralion OS',
+          }));
 
           res = await routing.adapter.publish('zernio_master', {
             title: params.title,
@@ -269,7 +278,7 @@ export class SocialPublishingService {
             mediaUrls: normalizedMediaUrls,
             mediaTypes: params.mediaTypes,
             idempotencyKey: `${idempotencyKey}_${platform}`,
-            zernioProfileId: conn.zernio_profile_id || routing.zernioProfileId || '6a82deac1a69158ef81cb2cd',
+            zernioProfileId: zernioProfId,
             zernioAccountIds: [zernioAccId],
             pageId: targetPageId,
             options: {

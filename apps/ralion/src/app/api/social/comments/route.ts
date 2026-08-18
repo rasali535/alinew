@@ -38,32 +38,56 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { commentId, postId, replyText, userId, authorName, pageId } = body;
 
-    if (!commentId || !replyText) {
+    if (!commentId || !replyText?.trim()) {
       return corsJsonResponse(
-        { success: false, error: 'commentId and replyText are required.' },
+        {
+          success: false,
+          provider: 'zernio',
+          platform: 'facebook',
+          error: 'commentId and replyText are required.',
+          statusCode: 400,
+        },
         { status: 400 },
         request
       );
     }
 
+    const orgId = request.headers.get('x-organization-id') || 'default-org';
+    const activeUserId = request.headers.get('x-user-id') || userId || 'default-user';
+
     const reply = await FacebookCommentsService.replyToComment({
       commentId,
-      postId: postId || 'post_default',
-      replyText,
-      userId,
+      postId: postId || commentId.split('_')[0] || 'default_post',
+      replyText: replyText.trim(),
+      userId: activeUserId,
       authorName,
       pageId,
+      organizationId: orgId,
     });
 
     return corsJsonResponse({
       success: true,
+      provider: 'zernio',
+      platform: 'facebook',
+      postId: reply.postId,
+      commentId: reply.commentId,
+      replyId: reply.externalReplyId,
       reply,
-      message: 'Reply posted successfully.',
+      message: 'Reply posted successfully to Facebook.',
     }, undefined, request);
   } catch (error: any) {
+    const status = error.status || error.statusCode || 500;
+    const mappedStatus = (status >= 400 && status < 600) ? status : 500;
+
     return corsJsonResponse(
-      { success: false, error: error.message || 'Failed to post reply' },
-      { status: 500 },
+      {
+        success: false,
+        provider: 'zernio',
+        platform: 'facebook',
+        error: error.message || 'Failed to post reply to Facebook.',
+        statusCode: mappedStatus,
+      },
+      { status: mappedStatus },
       request
     );
   }

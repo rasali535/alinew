@@ -495,6 +495,53 @@ export class ZernioSocialService {
   }
 
   /**
+   * Post a reply to a Facebook/social comment via Zernio
+   */
+  static async replyToComment(params: {
+    postId: string;
+    commentId: string;
+    accountId: string;
+    message: string;
+  }): Promise<any> {
+    console.log('[COMMENT_REPLY_REQUEST]', JSON.stringify({
+      postId: params.postId,
+      commentId: params.commentId,
+      accountId: params.accountId,
+      provider: 'zernio',
+      platform: 'facebook',
+    }));
+
+    try {
+      const response = await this.request<any>(
+        `inbox/comments/${encodeURIComponent(params.postId)}`,
+        'POST',
+        {
+          accountId: params.accountId,
+          commentId: params.commentId,
+          message: params.message,
+        }
+      );
+
+      const externalReplyId = response?.data?.commentId || response?.commentId || response?.id;
+
+      console.log('[COMMENT_REPLY_RESPONSE]', JSON.stringify({
+        status: 200,
+        success: true,
+        externalReplyId,
+      }));
+
+      return response;
+    } catch (err: any) {
+      console.error('[COMMENT_REPLY_ERROR]', JSON.stringify({
+        status: err.status || 500,
+        message: err.message,
+        responseBody: err.response || null,
+      }));
+      throw err;
+    }
+  }
+
+  /**
    * Retrieve published/scheduled post details
    */
   static async getPost(postId: string): Promise<any> {

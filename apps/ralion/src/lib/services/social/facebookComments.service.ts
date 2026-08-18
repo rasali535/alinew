@@ -191,7 +191,7 @@ export class FacebookCommentsService {
   }
 
   /**
-   * Post a reply to a comment
+   * Post a real reply to a Facebook comment via Zernio & update local DB cache
    */
   static async replyToComment(params: {
     commentId: string;
@@ -200,33 +200,93 @@ export class FacebookCommentsService {
     userId?: string;
     authorName?: string;
     pageId?: string;
-  }): Promise<FacebookCommentReply> {
-    if (!params.replyText.trim()) {
+    organizationId?: string;
+  }): Promise<{
+    id: string;
+    commentId: string;
+    postId: string;
+    authorName: string;
+    replyText: string;
+    createdAt: string;
+    isPageOwner: boolean;
+    provider: string;
+    platform: string;
+    externalReplyId: string;
+  }> {
+    if (!params.replyText || !params.replyText.trim()) {
       throw new Error('Reply text is required.');
     }
+    if (!params.commentId) {
+      throw new Error('commentId is required.');
+    }
+    if (!params.postId) {
+      throw new Error('postId is required.');
+    }
 
-    const pageAuthor = params.authorName || 'Facebook Page';
+    const supabase = getServiceSupabase();
 
-    const reply: FacebookCommentReply = {
-      id: `rep_${Date.now()}`,
+    // 1. Resolve connected tenant's Zernio profile and account mapping
+    let accountId = '6a82df7277555aae018b92b4';
+    let pageAuthor = params.authorName || 'Ras Ali Labs';
+
+    try {
+      let connQuery = supabase
+        .from('social_connections')
+        .select('zernio_account_id, account_name')
+        .eq('provider', 'facebook')
+        .eq('connection_status', 'CONNECTED');
+
+      if (params.organizationId && params.organizationId !== 'default-org') {
+        connQuery = connQuery.eq('organization_id', params.organizationId);
+      }
+
+      const { data: conn } = await connQuery.maybeSingle();
+      if (conn?.zernio_account_id) accountId = conn.zernio_account_id;
+      if (conn?.account_name) pageAuthor = conn.account_name;
+    } catch {
+      // Best effort profile resolution
+    }
+
+    // 2. Publish reply directly to Facebook via Zernio
+    const zernioRes = await ZernioSocialService.replyToComment({
+      postId: params.postId,
       commentId: params.commentId,
+      accountId,
+      message: params.replyText.trim(),
+    });
+
+    const externalReplyId =
+      zernioRes?.data?.commentId ||
+      zernioRes?.commentId ||
+      zernioRes?.id ||
+      `rep_${Date.now()}`;
+
+    const reply = {
+      id: externalReplyId,
+      externalReplyId,
+      commentId: params.commentId,
+      postId: params.postId,
       authorName: pageAuthor,
       replyText: params.replyText.trim(),
       createdAt: 'Just now',
       isPageOwner: true,
+      provider: 'zernio',
+      platform: 'facebook',
     };
 
+    // 3. Best effort DB cache
     try {
-      const supabase = getServiceSupabase();
       await supabase.from('social_post_comment_replies').insert({
+        id: externalReplyId.startsWith('rep_') ? undefined : externalReplyId,
         comment_id: params.commentId,
         post_id: params.postId,
         reply_text: params.replyText.trim(),
         author_name: pageAuthor,
+        external_reply_id: externalReplyId,
         created_at: new Date().toISOString(),
       });
     } catch {
-      // Best-effort database cache
+      // Database cache optional
     }
 
     await AuditLoggerService.log({
@@ -237,6 +297,8 @@ export class FacebookCommentsService {
       resourceId: params.commentId,
       metadata: {
         postId: params.postId,
+        commentId: params.commentId,
+        externalReplyId,
         pageId: params.pageId || null,
         replyLength: params.replyText.length,
       },
