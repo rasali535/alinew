@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import * as crypto from 'crypto';
 import { SocialPublishingService } from '@/lib/services/social/socialPublishing.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
-import { getCurrentRalionContext } from '@/lib/auth/serverAuth';
+import { getCurrentRalionContext, authRequiredResponse } from '@/lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +14,11 @@ export async function POST(request: NextRequest) {
   const requestId = `req_pub_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
 
   try {
+    const context = await getCurrentRalionContext(request, { requireAuth: true });
+    if (!context) {
+      return authRequiredResponse(request);
+    }
+
     let body: any = {};
     try {
       body = await request.json();
@@ -25,12 +30,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const context = await getCurrentRalionContext(request, { requireAuth: false });
-
     const {
-      userId,
-      workspaceId,
-      organizationId,
       title,
       content,
       body: postBody,
@@ -45,9 +45,9 @@ export async function POST(request: NextRequest) {
       idempotencyKey,
     } = body;
 
-    const actualUserId = context?.user.id || request.headers.get('x-user-id') || userId || 'default-user';
-    const actualWorkspaceId = context?.workspace.id || request.headers.get('x-workspace-id') || workspaceId || undefined;
-    const actualOrgId = context?.workspace.id || request.headers.get('x-organization-id') || organizationId || undefined;
+    const actualUserId = context.user.id;
+    const actualWorkspaceId = context.workspace.id;
+    const actualOrgId = context.workspace.id;
 
     const actualContent = content || postBody;
 

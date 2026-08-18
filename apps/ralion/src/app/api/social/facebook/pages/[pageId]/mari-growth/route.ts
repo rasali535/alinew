@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { FacebookPageManagementService } from '@/lib/services/social/facebookPageManagement.service';
 import { MariFacebookGrowthService, MariPageContext } from '@/lib/services/social/mariFacebookGrowth.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
-import { getCurrentRalionContext } from '@/lib/auth/serverAuth';
+import { getCurrentRalionContext, authRequiredResponse, forbiddenResponse, getServiceSupabase } from '@/lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,22 +20,38 @@ export async function POST(
 ) {
   try {
     const { pageId } = await params;
+    const serverCtx = await getCurrentRalionContext(request, { requireAuth: true });
+    if (!serverCtx) {
+      return authRequiredResponse(request);
+    }
+
+    // If specific foreign pageId requested, verify ownership
+    if (pageId && pageId !== 'default') {
+      const supabase = getServiceSupabase();
+      const { data: conn } = await supabase
+        .from('social_connections')
+        .select('provider_account_id, zernio_account_id')
+        .eq('provider', 'facebook')
+        .or(`workspace_id.eq.${serverCtx.workspace.id},user_id.eq.${serverCtx.user.id}`)
+        .maybeSingle();
+
+      if (!conn || (conn.provider_account_id !== pageId && conn.zernio_account_id !== pageId)) {
+        return forbiddenResponse(request, 'You do not have access to this Facebook Page');
+      }
+    }
+
     const body = await request.json();
-    const serverCtx = await getCurrentRalionContext(request, { requireAuth: false });
-    const orgId = serverCtx?.workspace.id || request.headers.get('x-organization-id') || undefined;
-    const userId = serverCtx?.user.id || request.headers.get('x-user-id') || 'default-user';
-    const workspaceId = serverCtx?.workspace.id || request.headers.get('x-workspace-id') || undefined;
 
     // Retrieve normalized analytics
     const analytics = await FacebookPageManagementService.getPageAnalytics({
-      organizationId: orgId,
-      workspaceId,
-      userId,
+      organizationId: serverCtx.workspace.id,
+      workspaceId: serverCtx.workspace.id,
+      userId: serverCtx.user.id,
       pageId,
     });
 
     const context: MariPageContext = {
-      organizationId: orgId,
+      organizationId: serverCtx.workspace.id,
       pageId,
       pageName: analytics.pageName,
       followers: analytics.followers,
@@ -54,7 +70,7 @@ export async function POST(
     if (action === 'GET_PLAN') {
       const plan = await MariFacebookGrowthService.generate7DayGrowthPlan({
         context,
-        userId,
+        userId: serverCtx.user.id,
         focusObjective: body.objective,
       });
       return corsJsonResponse({ success: true, plan }, undefined, request);
@@ -64,7 +80,7 @@ export async function POST(
       const chatRes = await MariFacebookGrowthService.askMari({
         context,
         prompt: body.prompt || 'How is my page performing?',
-        userId,
+        userId: serverCtx.user.id,
       });
       return corsJsonResponse({ success: true, chat: chatRes }, undefined, request);
     }
@@ -72,7 +88,7 @@ export async function POST(
     // Default: Get Growth Score & Strategic Insights
     const insights = await MariFacebookGrowthService.generateGrowthInsights({
       context,
-      userId,
+      userId: serverCtx.user.id,
     });
 
     return corsJsonResponse({

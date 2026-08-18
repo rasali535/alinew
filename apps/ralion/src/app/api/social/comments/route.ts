@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { FacebookCommentsService } from '@/lib/services/social/facebookComments.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
-import { getCurrentRalionContext } from '@/lib/auth/serverAuth';
+import { getCurrentRalionContext, authRequiredResponse } from '@/lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,17 +15,17 @@ export async function GET(request: NextRequest) {
     const postId = searchParams.get('postId') || undefined;
     const pageId = searchParams.get('pageId') || undefined;
 
-    const context = await getCurrentRalionContext(request, { requireAuth: false });
-    const orgId = context?.workspace.id || request.headers.get('x-organization-id') || undefined;
-    const userId = context?.user.id || request.headers.get('x-user-id') || undefined;
-    const workspaceId = context?.workspace.id || request.headers.get('x-workspace-id') || undefined;
+    const context = await getCurrentRalionContext(request, { requireAuth: true });
+    if (!context) {
+      return authRequiredResponse(request);
+    }
 
     const comments = await FacebookCommentsService.getComments({
       postId,
       pageId,
-      organizationId: orgId,
-      workspaceId,
-      userId,
+      organizationId: context.workspace.id,
+      workspaceId: context.workspace.id,
+      userId: context.user.id,
     });
 
     return corsJsonResponse({
@@ -44,8 +44,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const context = await getCurrentRalionContext(request, { requireAuth: true });
+    if (!context) {
+      return authRequiredResponse(request);
+    }
+
     const body = await request.json();
-    const { commentId, postId, replyText, userId, authorName, pageId } = body;
+    const { commentId, postId, replyText, authorName, pageId } = body;
 
     if (!commentId || !replyText?.trim()) {
       return corsJsonResponse(
@@ -61,20 +66,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const context = await getCurrentRalionContext(request, { requireAuth: false });
-    const orgId = context?.workspace.id || request.headers.get('x-organization-id') || body.organizationId || undefined;
-    const activeUserId = context?.user.id || request.headers.get('x-user-id') || userId || 'default-user';
-    const workspaceId = context?.workspace.id || request.headers.get('x-workspace-id') || body.workspaceId || undefined;
-
     const reply = await FacebookCommentsService.replyToComment({
       commentId,
       postId: postId || commentId.split('_')[0] || 'default_post',
       replyText: replyText.trim(),
-      userId: activeUserId,
-      workspaceId,
+      userId: context.user.id,
+      workspaceId: context.workspace.id,
       authorName,
       pageId,
-      organizationId: orgId,
+      organizationId: context.workspace.id,
     });
 
     return corsJsonResponse({

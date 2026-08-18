@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { MariCompetitiveIntelligenceService } from '@/lib/services/social/mariCompetitiveIntelligence.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
+import { getCurrentRalionContext, authRequiredResponse, forbiddenResponse, getServiceSupabase } from '@/lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,16 +19,32 @@ export async function GET(
 ) {
   try {
     const { pageId } = await params;
-    const orgId = request.headers.get('x-organization-id') || 'default-org';
-    const userId = request.headers.get('x-user-id') || 'default-user';
+    const context = await getCurrentRalionContext(request, { requireAuth: true });
+    if (!context) {
+      return authRequiredResponse(request);
+    }
+
+    if (pageId && pageId !== 'default') {
+      const supabase = getServiceSupabase();
+      const { data: conn } = await supabase
+        .from('social_connections')
+        .select('provider_account_id, zernio_account_id')
+        .eq('provider', 'facebook')
+        .or(`workspace_id.eq.${context.workspace.id},user_id.eq.${context.user.id}`)
+        .maybeSingle();
+
+      if (!conn || (conn.provider_account_id !== pageId && conn.zernio_account_id !== pageId)) {
+        return forbiddenResponse(request, 'You do not have access to this Facebook Page');
+      }
+    }
 
     const report = MariCompetitiveIntelligenceService.getMarketResearchReport({
       pageId,
-      organizationId: orgId,
+      organizationId: context.workspace.id,
     });
 
     await MariCompetitiveIntelligenceService.auditMarketResearchAccess({
-      userId,
+      userId: context.user.id,
       pageId,
     });
 

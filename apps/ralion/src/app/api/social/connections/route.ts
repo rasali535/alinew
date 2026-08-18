@@ -4,7 +4,7 @@ import { SocialTokenManager } from '@/lib/services/social/socialTokenManager.ser
 import { SocialConnectionHealthService } from '@/lib/services/social/socialConnectionHealth.service';
 import { AuditLoggerService } from '@/lib/services/auditLogger.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
-import { getCurrentRalionContext, getServiceSupabase } from '@/lib/auth/serverAuth';
+import { getCurrentRalionContext, getServiceSupabase, authRequiredResponse } from '@/lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,16 +16,11 @@ export async function GET(request: NextRequest) {
   const supabase = getServiceSupabase();
 
   try {
-    const context = await getCurrentRalionContext(request, { requireAuth: false });
+    const context = await getCurrentRalionContext(request, { requireAuth: true });
 
-    // If no authenticated context is resolved, return empty list (never leak arbitrary tenant data)
+    // Enforce 401 Unauthorized for unauthenticated requests
     if (!context) {
-      return corsJsonResponse({
-        success: true,
-        authenticated: false,
-        connections: [],
-        allCapabilities: SocialProviderRegistry.getAllCapabilities(),
-      }, undefined, request);
+      return authRequiredResponse(request);
     }
 
     const { data: rawConnections, error } = await supabase

@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { SocialAnalyticsService } from '@/lib/services/social/socialAnalytics.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
+import { getCurrentRalionContext, authRequiredResponse } from '@/lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,8 +11,12 @@ export async function OPTIONS(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const userId = request.headers.get('x-user-id') || 'default-user';
-    const analytics = await SocialAnalyticsService.getAggregatedAnalytics(userId);
+    const context = await getCurrentRalionContext(request, { requireAuth: true });
+    if (!context) {
+      return authRequiredResponse(request);
+    }
+
+    const analytics = await SocialAnalyticsService.getAggregatedAnalytics(context.user.id);
 
     return corsJsonResponse({
       success: true,

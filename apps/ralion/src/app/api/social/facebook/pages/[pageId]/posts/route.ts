@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { FacebookPageManagementService } from '@/lib/services/social/facebookPageManagement.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
-import { getCurrentRalionContext } from '@/lib/auth/serverAuth';
+import { getCurrentRalionContext, authRequiredResponse, forbiddenResponse, getServiceSupabase } from '@/lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,15 +19,33 @@ export async function GET(
 ) {
   try {
     const { pageId } = await params;
-    const context = await getCurrentRalionContext(request, { requireAuth: false });
-    const orgId = context?.workspace.id || request.headers.get('x-organization-id') || undefined;
-    const userId = context?.user.id || request.headers.get('x-user-id') || undefined;
-    const workspaceId = context?.workspace.id || request.headers.get('x-workspace-id') || undefined;
+    const context = await getCurrentRalionContext(request, { requireAuth: true });
+
+    // 1. Enforce 401 Unauthorized for unauthenticated requests
+    if (!context) {
+      return authRequiredResponse(request);
+    }
+
+    // 2. If a specific non-default pageId is requested, verify tenant ownership
+    if (pageId && pageId !== 'default') {
+      const supabase = getServiceSupabase();
+      const { data: conn } = await supabase
+        .from('social_connections')
+        .select('provider_account_id, zernio_account_id')
+        .eq('provider', 'facebook')
+        .or(`workspace_id.eq.${context.workspace.id},user_id.eq.${context.user.id}`)
+        .maybeSingle();
+
+      // If tenant has no connection or the pageId does not match tenant's connection, return 403 Forbidden
+      if (!conn || (conn.provider_account_id !== pageId && conn.zernio_account_id !== pageId)) {
+        return forbiddenResponse(request, 'You do not have access to this Facebook Page');
+      }
+    }
 
     const posts = await FacebookPageManagementService.getPagePosts({
-      organizationId: orgId,
-      workspaceId,
-      userId,
+      organizationId: context.workspace.id,
+      workspaceId: context.workspace.id,
+      userId: context.user.id,
       pageId,
     });
 

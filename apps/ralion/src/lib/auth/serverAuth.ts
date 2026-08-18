@@ -24,6 +24,8 @@ export function getServiceSupabase() {
   });
 }
 
+import { corsJsonResponse } from '@/lib/cors';
+
 export interface RalionUserProfile {
   id: string;
   fullName: string;
@@ -55,6 +57,42 @@ export interface RalionSessionContext {
   profile: RalionUserProfile;
   workspace: RalionWorkspace;
   membership: RalionWorkspaceMembership;
+}
+
+export function authRequiredResponse(request: NextRequest) {
+  return corsJsonResponse(
+    {
+      success: false,
+      error: 'AUTHENTICATION_REQUIRED',
+      message: 'Authentication required',
+    },
+    { status: 401 },
+    request
+  );
+}
+
+export function forbiddenResponse(request: NextRequest, message = 'You do not have access to this resource') {
+  return corsJsonResponse(
+    {
+      success: false,
+      error: 'FORBIDDEN',
+      message,
+    },
+    { status: 403 },
+    request
+  );
+}
+
+export function notFoundResponse(request: NextRequest, message = 'Resource not found') {
+  return corsJsonResponse(
+    {
+      success: false,
+      error: 'NOT_FOUND',
+      message,
+    },
+    { status: 404 },
+    request
+  );
 }
 
 /**

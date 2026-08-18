@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import * as crypto from 'crypto';
 import { SocialPublishingService } from '@/lib/services/social/socialPublishing.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
+import { getCurrentRalionContext, authRequiredResponse } from '@/lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +11,11 @@ export async function OPTIONS(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
+  const context = await getCurrentRalionContext(request, { requireAuth: true });
+  if (!context) {
+    return authRequiredResponse(request);
+  }
+
   return corsJsonResponse({
     success: true,
     message: 'Ralion Unified Social Posts API ready.',
@@ -20,6 +26,11 @@ export async function POST(request: NextRequest) {
   const requestId = `req_post_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
 
   try {
+    const context = await getCurrentRalionContext(request, { requireAuth: true });
+    if (!context) {
+      return authRequiredResponse(request);
+    }
+
     let body: any = {};
     try {
       body = await request.json();
@@ -32,9 +43,6 @@ export async function POST(request: NextRequest) {
     }
 
     const {
-      userId,
-      workspaceId,
-      organizationId,
       title,
       content,
       body: postBody,
@@ -48,6 +56,10 @@ export async function POST(request: NextRequest) {
       authorName,
       idempotencyKey,
     } = body;
+
+    const actualUserId = context.user.id;
+    const actualWorkspaceId = context.workspace.id;
+    const actualOrgId = context.workspace.id;
 
     const actualContent = content || postBody;
 
@@ -81,9 +93,9 @@ export async function POST(request: NextRequest) {
       : ['facebook'];
 
     const result = await SocialPublishingService.publish({
-      userId: userId || 'default-user',
-      workspaceId,
-      organizationId,
+      userId: actualUserId,
+      workspaceId: actualWorkspaceId,
+      organizationId: actualOrgId,
       title: title || 'Social Post',
       body: actualContent.trim(),
       mediaUrls: mediaUrls || mediaItems || [],

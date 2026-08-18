@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { FacebookPageManagementService } from '@/lib/services/social/facebookPageManagement.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
-import { getCurrentRalionContext } from '@/lib/auth/serverAuth';
+import { getCurrentRalionContext, authRequiredResponse } from '@/lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,15 +11,15 @@ export async function OPTIONS(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const context = await getCurrentRalionContext(request, { requireAuth: false });
-    const orgId = context?.workspace.id || request.headers.get('x-organization-id') || undefined;
-    const userId = context?.user.id || request.headers.get('x-user-id') || undefined;
-    const workspaceId = context?.workspace.id || request.headers.get('x-workspace-id') || undefined;
+    const context = await getCurrentRalionContext(request, { requireAuth: true });
+    if (!context) {
+      return authRequiredResponse(request);
+    }
 
     const result = await FacebookPageManagementService.discoverAvailablePages({
-      organizationId: orgId,
-      workspaceId,
-      userId,
+      organizationId: context.workspace.id,
+      workspaceId: context.workspace.id,
+      userId: context.user.id,
     });
 
     return corsJsonResponse({
@@ -38,20 +38,21 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const context = await getCurrentRalionContext(request, { requireAuth: true });
+    if (!context) {
+      return authRequiredResponse(request);
+    }
+
     const body = await request.json();
-    const context = await getCurrentRalionContext(request, { requireAuth: false });
-    const orgId = context?.workspace.id || request.headers.get('x-organization-id') || body.organizationId || undefined;
-    const userId = context?.user.id || request.headers.get('x-user-id') || body.userId || undefined;
-    const workspaceId = context?.workspace.id || request.headers.get('x-workspace-id') || body.workspaceId || undefined;
 
     if (!body.pageId) {
       return corsJsonResponse({ success: false, error: 'pageId is required' }, { status: 400 }, request);
     }
 
     const result = await FacebookPageManagementService.connectPage({
-      organizationId: orgId,
-      workspaceId,
-      userId: userId || 'default-user',
+      organizationId: context.workspace.id,
+      workspaceId: context.workspace.id,
+      userId: context.user.id,
       pageId: body.pageId,
       pageData: body.pageData || {},
     });
