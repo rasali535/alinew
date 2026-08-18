@@ -63,6 +63,30 @@ export function getRalionApiUrl(path: string): string {
 }
 
 /**
+ * Extract active Supabase session token in browser environment for authenticated requests.
+ */
+export async function getRalionAuthHeaders(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = {};
+
+  if (typeof window !== 'undefined') {
+    try {
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data } = await supabase.auth.getSession();
+      const token = data?.session?.access_token;
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      if (data?.session?.user?.id) {
+        headers['x-user-id'] = data.session.user.id;
+      }
+    } catch {}
+  }
+
+  return headers;
+}
+
+/**
  * Type-safe fetch wrapper that automatically routes to the Ralion dynamic backend,
  * attaches credentials, and parses JSON responses safely.
  */
@@ -73,7 +97,15 @@ export async function fetchRalionApi<T = any>(
   const url = getRalionApiUrl(path);
 
   try {
+    const authHeaders = await getRalionAuthHeaders();
     const headers = new Headers(init?.headers);
+
+    if (!headers.has('Authorization') && authHeaders.Authorization) {
+      headers.set('Authorization', authHeaders.Authorization);
+    }
+    if (!headers.has('x-user-id') && authHeaders['x-user-id']) {
+      headers.set('x-user-id', authHeaders['x-user-id']);
+    }
     if (!headers.has('Content-Type') && init?.body && typeof init.body === 'string') {
       headers.set('Content-Type', 'application/json');
     }

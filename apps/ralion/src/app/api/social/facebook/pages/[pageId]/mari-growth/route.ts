@@ -30,12 +30,19 @@ export async function POST(
       const supabase = getServiceSupabase();
       const { data: conn } = await supabase
         .from('social_connections')
-        .select('provider_account_id, zernio_account_id')
+        .select('provider_account_id, zernio_account_id, metadata')
         .eq('provider', 'facebook')
         .or(`workspace_id.eq.${serverCtx.workspace.id},user_id.eq.${serverCtx.user.id}`)
         .maybeSingle();
 
-      if (!conn || (conn.provider_account_id !== pageId && conn.zernio_account_id !== pageId)) {
+      const pageMatched =
+        conn &&
+        (conn.provider_account_id === pageId ||
+          conn.zernio_account_id === pageId ||
+          conn.metadata?.pageId === pageId ||
+          conn.metadata?.zernioAccountId === pageId);
+
+      if (!pageMatched) {
         return forbiddenResponse(request, 'You do not have access to this Facebook Page');
       }
     }

@@ -15,7 +15,27 @@ import { AuthService } from '@/lib/services/auth.service';
 import { createClient } from '@/lib/supabase/client';
 import { callMariAiApi } from '@ralion/ai';
 import { TierAccessGate } from '@/components/TierAccessGate';
-import { getRalionApiUrl, fetchRalionApi } from '@/lib/api-config';
+import { getRalionApiUrl, fetchRalionApi, getRalionAuthHeaders } from '@/lib/api-config';
+
+async function authFetch(pathOrUrl: string, init?: RequestInit): Promise<Response> {
+  const url = pathOrUrl.startsWith('http') ? pathOrUrl : getRalionApiUrl(pathOrUrl);
+  const authHeaders = await getRalionAuthHeaders();
+  const headers = new Headers(init?.headers);
+  if (!headers.has('Authorization') && authHeaders.Authorization) {
+    headers.set('Authorization', authHeaders.Authorization);
+  }
+  if (!headers.has('x-user-id') && authHeaders['x-user-id']) {
+    headers.set('x-user-id', authHeaders['x-user-id']);
+  }
+  if (!headers.has('Content-Type') && init?.body && typeof init.body === 'string') {
+    headers.set('Content-Type', 'application/json');
+  }
+  return fetch(url, {
+    ...init,
+    headers,
+    credentials: init?.credentials || 'include',
+  });
+}
 
 // ── SVG Spline & Sparkline Mathematical Helpers ──────────────────────────────
 function getSplinePath(values: number[], width: number, height: number, padding: number = 20): string {
@@ -442,7 +462,7 @@ function GrowthPageContent() {
   const handleOpenPageSelection = async () => {
     setIsPageSelectionModalOpen(true);
     try {
-      const res = await fetch(getRalionApiUrl('/api/social/facebook/pages'), { credentials: 'include' });
+      const res = await authFetch('/api/social/facebook/pages');
       if (res.ok) {
         const data = await res.json();
         if (data.pages && Array.isArray(data.pages)) {
@@ -467,10 +487,9 @@ function GrowthPageContent() {
 
     setIsConnectingPage(true);
     try {
-      const res = await fetch(getRalionApiUrl('/api/social/facebook/pages'), {
+      const res = await authFetch('/api/social/facebook/pages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ pageId, pageData: targetPage }),
       });
 
@@ -498,10 +517,9 @@ function GrowthPageContent() {
     try {
       const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
       const pageId = activeFbPage?.pageId || selectedPageForConnect || 'default';
-      const res = await fetch(getRalionApiUrl(`/api/social/facebook/pages/${pageId}/mari-growth`), {
+      const res = await authFetch(`/api/social/facebook/pages/${pageId}/mari-growth`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ action: 'GET_PLAN' }),
       });
       if (res.ok) {
@@ -528,10 +546,9 @@ function GrowthPageContent() {
     try {
       const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
       const pageId = activeFbPage?.pageId || selectedPageForConnect || 'default';
-      const res = await fetch(getRalionApiUrl(`/api/social/facebook/pages/${pageId}/mari-growth`), {
+      const res = await authFetch(`/api/social/facebook/pages/${pageId}/mari-growth`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ action: 'ASK_MARI', prompt: userMsg }),
       });
       if (res.ok) {
@@ -616,18 +633,7 @@ function GrowthPageContent() {
 
       // 2. Query dynamic backend connections endpoint with authenticated session token
       try {
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
-        };
-        if (session.access_token) {
-          headers['Authorization'] = `Bearer ${session.access_token}`;
-        }
-        headers['x-user-id'] = user.id;
-
-        const res = await fetch(getRalionApiUrl('/api/social/connections'), {
-          headers,
-          credentials: 'include',
-        });
+        const res = await authFetch('/api/social/connections');
         if (res.ok) {
           const data = await res.json();
           if (data.success && Array.isArray(data.connections)) {
@@ -675,7 +681,7 @@ function GrowthPageContent() {
     try {
       const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
       const pageId = activeFbPage?.pageId || selectedPageForConnect || 'default';
-      const res = await fetch(getRalionApiUrl(`/api/social/facebook/pages/${pageId}/posts`), { credentials: 'include' });
+      const res = await authFetch(`/api/social/facebook/pages/${pageId}/posts`);
       if (res.ok) {
         const data = await res.json();
         if (data.posts && Array.isArray(data.posts)) {
@@ -753,7 +759,7 @@ function GrowthPageContent() {
     setIsLoadingComments(true);
     try {
       const url = postId ? `/api/social/comments?postId=${encodeURIComponent(postId)}` : '/api/social/comments';
-      const res = await fetch(getRalionApiUrl(url), { credentials: 'include' });
+      const res = await authFetch(url);
       if (res.ok) {
         const data = await res.json();
         setPostComments(data.comments || []);
@@ -778,10 +784,9 @@ function GrowthPageContent() {
     const targetPostId = postId || selectedCommentPost?.platformPostId || selectedCommentPost?.id || commentId.split('_')[0];
 
     try {
-      const res = await fetch(getRalionApiUrl('/api/social/comments'), {
+      const res = await authFetch('/api/social/comments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({
           commentId,
           postId: targetPostId,
@@ -831,7 +836,7 @@ function GrowthPageContent() {
   const fetchInboxConversations = useCallback(async () => {
     setIsLoadingInbox(true);
     try {
-      const res = await fetch(getRalionApiUrl('/api/social/inbox?provider=facebook'), { credentials: 'include' });
+      const res = await authFetch('/api/social/inbox?provider=facebook');
       if (res.ok) {
         const data = await res.json();
         if (data.conversations && Array.isArray(data.conversations)) {
@@ -858,10 +863,9 @@ function GrowthPageContent() {
     const activeConn = connectedAccounts.find(a => a.provider === 'facebook');
 
     try {
-      const res = await fetch(getRalionApiUrl('/api/social/inbox'), {
+      const res = await authFetch('/api/social/inbox', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({
           connectionId: activeFbPage?.id || activeConn?.id || undefined,
           provider: 'facebook',
@@ -912,10 +916,9 @@ function GrowthPageContent() {
     try {
       const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
       const pageId = activeFbPage?.pageId || selectedPageForConnect || 'default';
-      const res = await fetch(getRalionApiUrl(`/api/social/facebook/pages/${pageId}/mari-growth`), {
+      const res = await authFetch(`/api/social/facebook/pages/${pageId}/mari-growth`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ action: 'GET_DIAGNOSIS' }),
       });
       if (res.ok) {
@@ -936,7 +939,7 @@ function GrowthPageContent() {
     try {
       const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
       const pageId = activeFbPage?.pageId || selectedPageForConnect || 'default';
-      const res = await fetch(getRalionApiUrl(`/api/social/facebook/pages/${pageId}/market-research`), { credentials: 'include' });
+      const res = await authFetch(`/api/social/facebook/pages/${pageId}/market-research`);
       if (res.ok) {
         const data = await res.json();
         if (data.report && data.report.benchmarks) {
@@ -1464,10 +1467,9 @@ function GrowthPageContent() {
         pageId: activeFbPage?.pageId || undefined,
       };
 
-      const res = await fetch(getRalionApiUrl('/api/social/publish'), {
+      const res = await authFetch('/api/social/publish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify(payload),
       });
 
@@ -4130,10 +4132,9 @@ function GrowthPageContent() {
                 };
 
                 try {
-                  const res = await fetch(getRalionApiUrl('/api/social/publish'), {
+                  const res = await authFetch('/api/social/publish', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
                     body: JSON.stringify(payload),
                   });
 
