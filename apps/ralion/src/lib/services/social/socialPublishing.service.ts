@@ -130,62 +130,7 @@ export class SocialPublishingService {
     // 2. Pre-process media URLs (turn base64 data URLs into persistent public storage URLs)
     const normalizedMediaUrls = await this.processMediaUrls(params.mediaUrls);
 
-    // 3. If scheduled, save as QUEUED post and return
-    if (params.scheduledFor && params.scheduledFor.getTime() > Date.now() + 60000) {
-      let scheduledPostId = `sched_${Date.now()}`;
-      try {
-        const { data: post, error } = await supabase
-          .from('social_posts')
-          .insert({
-            user_id: params.userId,
-            workspace_id: params.workspaceId || null,
-            title: params.title || null,
-            body: params.body,
-            media_urls: normalizedMediaUrls,
-            media_types: params.mediaTypes || [],
-            platforms: params.platforms,
-            status: 'QUEUED',
-            scheduled_for: params.scheduledFor.toISOString(),
-            author_name: params.authorName || 'Ralion User',
-          })
-          .select()
-          .maybeSingle();
-
-        if (post?.id) {
-          scheduledPostId = post.id;
-        }
-      } catch (dbErr: any) {
-        console.warn('[SocialPublishing] Post schedule persistence notice:', dbErr.message);
-      }
-
-      try {
-        await AuditLoggerService.log({
-          eventType: 'SOCIAL_POST_SCHEDULED',
-          eventCategory: 'META',
-          userId: params.userId,
-          success: true,
-          resourceType: 'social_post',
-          resourceId: scheduledPostId,
-          metadata: {
-            action: 'post_scheduled',
-            platforms: params.platforms,
-            scheduled_for: params.scheduledFor,
-            idempotencyKey,
-          },
-        });
-      } catch (auditErr: any) {
-        console.warn('[SocialPublishing] Audit log notice:', auditErr.message);
-      }
-
-      return {
-        postId: scheduledPostId,
-        overallStatus: 'QUEUED',
-        platformResults: {} as any,
-        errors: [],
-      };
-    }
-
-    // 4. Find active connections for requested platforms strictly matching user or workspace
+    // 3. Find active connections for requested platforms strictly matching user or workspace
     let connections: any[] = [];
     try {
       let connQuery = supabase
@@ -272,6 +217,7 @@ export class SocialPublishingService {
             pageId: targetPageId,
             options: {
               pageId: targetPageId,
+              scheduledFor: params.scheduledFor ? params.scheduledFor.toISOString() : undefined,
             },
           });
         } else {
@@ -294,6 +240,9 @@ export class SocialPublishingService {
             mediaUrls: normalizedMediaUrls,
             mediaTypes: params.mediaTypes,
             pageId: params.pageId || conn.provider_account_id,
+            options: {
+              scheduledFor: params.scheduledFor ? params.scheduledFor.toISOString() : undefined,
+            },
           });
         }
 
@@ -319,12 +268,13 @@ export class SocialPublishingService {
     // 6. Calculate Overall Status & Response Status Code
     const total = params.platforms.length;
     const successes = Object.values(platformResults).filter((r) => r?.success).length;
+    const isScheduled = Boolean(params.scheduledFor);
 
-    let overallStatus: 'PUBLISHED' | 'PARTIALLY_PUBLISHED' | 'FAILED' = 'FAILED';
+    let overallStatus: 'PUBLISHED' | 'PARTIALLY_PUBLISHED' | 'FAILED' | 'QUEUED' = 'FAILED';
     if (successes === total) {
-      overallStatus = 'PUBLISHED';
+      overallStatus = isScheduled ? 'QUEUED' : 'PUBLISHED';
     } else if (successes > 0) {
-      overallStatus = 'PARTIALLY_PUBLISHED';
+      overallStatus = isScheduled ? 'QUEUED' : 'PARTIALLY_PUBLISHED';
     }
 
     let hasConflict = false;
@@ -344,7 +294,7 @@ export class SocialPublishingService {
     }
 
     const calculatedStatusCode =
-      overallStatus === 'PUBLISHED'
+      overallStatus === 'PUBLISHED' || overallStatus === 'QUEUED'
         ? 200
         : overallStatus === 'PARTIALLY_PUBLISHED'
         ? 200
@@ -367,10 +317,11 @@ export class SocialPublishingService {
           media_urls: normalizedMediaUrls,
           media_types: params.mediaTypes || [],
           platforms: params.platforms,
-          status: overallStatus,
+          status: isScheduled ? 'SCHEDULED' : overallStatus,
           platform_post_ids: platformPostIds,
           platform_results: platformResults,
-          published_at: new Date().toISOString(),
+          scheduled_for: isScheduled ? params.scheduledFor?.toISOString() : null,
+          published_at: isScheduled ? null : new Date().toISOString(),
           author_name: params.authorName || 'Ralion User',
         })
         .select()

@@ -54,6 +54,7 @@ export interface FacebookPagePostItem {
   mediaUrls?: string[];
   mediaType?: 'image' | 'video' | 'text';
   publishedAt: string;
+  scheduledFor?: string;
   status: 'published' | 'scheduled' | 'draft';
   permalink?: string;
   source: 'RALION' | 'FACEBOOK_DIRECT';
@@ -448,6 +449,7 @@ export class FacebookPageManagementService {
             mediaUrls: zp.mediaItems?.map((m: any) => typeof m === 'string' ? m : m.url) || zp.mediaUrls || [],
             mediaType: (zp.mediaItems && zp.mediaItems.length > 0) ? 'image' : 'text',
             publishedAt: zp.publishedAt || zp.scheduledFor || zp.createdAt || new Date().toISOString(),
+            scheduledFor: zp.scheduledFor || undefined,
             status: isPublished ? 'published' : zp.status === 'scheduled' ? 'scheduled' : 'draft',
             permalink,
             source: 'RALION',
