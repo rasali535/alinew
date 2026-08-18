@@ -245,7 +245,7 @@ export class SocialPublishingService {
 
         if (routing.provider === 'zernio') {
           const zernioAccId = conn.zernio_account_id;
-          const targetPageId = params.pageId || conn.provider_account_id || conn.page_id || conn.metadata?.pageId;
+          const targetPageId = (params.pageId && !params.pageId.startsWith('6a82') ? params.pageId : null) || conn.metadata?.pageId || conn.page_id || conn.provider_account_id;
           const zernioProfId = conn.zernio_profile_id;
 
           if (!zernioAccId || !zernioProfId) {
