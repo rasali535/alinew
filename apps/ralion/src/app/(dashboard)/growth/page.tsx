@@ -1330,6 +1330,40 @@ function GrowthPageContent() {
     }
   };
 
+  // ── Export Analytics Helpers ──────────────────────────────────────────────
+  const handleExportCsv = () => {
+    const headers = ['Post ID', 'Title', 'Body', 'Status', 'Platform', 'Published At', 'Scheduled At', 'Likes', 'Comments', 'Shares', 'Reach'];
+    const rows = posts.map(p => [
+      `"${p.id}"`,
+      `"${(p.title || '').replace(/"/g, '""')}"`,
+      `"${(p.body || '').replace(/"/g, '""')}"`,
+      `"${p.status}"`,
+      `"${p.platform}"`,
+      `"${p.publishedAt || ''}"`,
+      `"${p.scheduledAt || ''}"`,
+      p.engagement?.likes || 0,
+      p.engagement?.comments || 0,
+      p.engagement?.shares || 0,
+      p.engagement?.reach || 0
+    ]);
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `ralion_facebook_analytics_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setOauthAlert({ type: 'success', message: '📥 Exported Facebook Page Performance Report as CSV.' });
+    setTimeout(() => setOauthAlert(null), 4000);
+  };
+
+  const handleExportPdf = () => {
+    window.print();
+    setOauthAlert({ type: 'success', message: '📊 Initiated Executive PDF export.' });
+    setTimeout(() => setOauthAlert(null), 4000);
+  };
+
   const handleCopyText = (id: string, text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
@@ -1850,8 +1884,7 @@ function GrowthPageContent() {
                     <button
                       onClick={() => {
                         setIsExportDropdownOpen(false);
-                        setOauthAlert({ type: 'success', message: '📥 Exporting Facebook Page Performance Report as CSV...' });
-                        setTimeout(() => setOauthAlert(null), 4000);
+                        handleExportCsv();
                       }}
                       className="w-full text-left px-3 py-2 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-zinc-800 flex items-center gap-2"
                     >
@@ -1860,8 +1893,7 @@ function GrowthPageContent() {
                     <button
                       onClick={() => {
                         setIsExportDropdownOpen(false);
-                        setOauthAlert({ type: 'success', message: '📥 Generating Executive PDF Performance Dossier...' });
-                        setTimeout(() => setOauthAlert(null), 4000);
+                        handleExportPdf();
                       }}
                       className="w-full text-left px-3 py-2 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-zinc-800 flex items-center gap-2"
                     >
@@ -4001,18 +4033,75 @@ function GrowthPageContent() {
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-zinc-300">Schedule Date (Optional)</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-semibold text-zinc-300">Schedule Date (Optional)</label>
+                <span className="text-[10px] text-indigo-400 font-mono">
+                  Timezone: CAT (UTC+2) • Local
+                </span>
+              </div>
               <input 
                 type="datetime-local" 
                 value={newPost.scheduledAt} 
+                min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
                 onChange={e => setNewPost({ ...newPost, scheduledAt: e.target.value })}
-                className="w-full mt-1 px-3 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white focus:outline-none"
+                className="w-full mt-1 px-3 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
               />
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                <button
+                  type="button"
+                  onClick={() => setNewPost({ ...newPost, scheduledAt: '' })}
+                  className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold border transition-all ${
+                    !newPost.scheduledAt ? 'bg-indigo-600/30 border-indigo-500/50 text-indigo-200' : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  Post Immediately
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const inOneHour = new Date(Date.now() + 3600 * 1000);
+                    inOneHour.setMinutes(inOneHour.getMinutes() - inOneHour.getTimezoneOffset());
+                    setNewPost({ ...newPost, scheduledAt: inOneHour.toISOString().slice(0, 16) });
+                  }}
+                  className="px-2 py-0.5 rounded-lg bg-zinc-950 border border-zinc-800 hover:border-indigo-500/40 text-[10px] text-zinc-400 hover:text-white transition-all font-mono"
+                >
+                  +1 Hour
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const tomorrow = new Date();
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    tomorrow.setHours(9, 0, 0, 0);
+                    tomorrow.setMinutes(tomorrow.getMinutes() - tomorrow.getTimezoneOffset());
+                    setNewPost({ ...newPost, scheduledAt: tomorrow.toISOString().slice(0, 16) });
+                  }}
+                  className="px-2 py-0.5 rounded-lg bg-zinc-950 border border-zinc-800 hover:border-indigo-500/40 text-[10px] text-zinc-400 hover:text-white transition-all font-mono"
+                >
+                  Tomorrow 09:00
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const tomorrow = new Date();
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    tomorrow.setHours(15, 30, 0, 0);
+                    tomorrow.setMinutes(tomorrow.getMinutes() - tomorrow.getTimezoneOffset());
+                    setNewPost({ ...newPost, scheduledAt: tomorrow.toISOString().slice(0, 16) });
+                  }}
+                  className="px-2 py-0.5 rounded-lg bg-zinc-950 border border-zinc-800 hover:border-indigo-500/40 text-[10px] text-zinc-400 hover:text-white transition-all font-mono"
+                >
+                  Tomorrow 15:30 (Peak)
+                </button>
+              </div>
             </div>
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-zinc-300">Post Body Copy</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-semibold text-zinc-300">Post Body Copy</label>
+              <span className="text-[10px] text-zinc-500 font-mono">{newPost.body.length} / 5,000 chars</span>
+            </div>
             <textarea 
               rows={4} 
               value={newPost.body} 

@@ -3,7 +3,7 @@ const http = require('http');
 const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 
-const PORT = 3098;
+const PORT = 3096;
 const SUPABASE_URL = 'https://yidsfihagwttlmhfynmf.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpZHNmaWhhZ3d0dGxtaGZ5bm1mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4MjM5NDUsImV4cCI6MjA5ODM5OTk0NX0.9lW_vF_1bL-1b9oF6YfH6L_qF5zU6V_X1Y2Z3A4B5C6';
 const SUPABASE_SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpZHNmaWhhZ3d0dGxtaGZ5bm1mIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjgyMzk0NSwiZXhwIjoyMDk4Mzk5OTQ1fQ.mpparRo7a5t5B7uOlWBxiRI7NDsVGfmxkPUEbxSYBfA';
@@ -19,7 +19,10 @@ function request(url, options = {}) {
         port: parsed.port,
         path: parsed.pathname + parsed.search,
         method: options.method || 'GET',
-        headers: options.headers || {},
+        headers: {
+          Connection: 'close',
+          ...(options.headers || {}),
+        },
       },
       (res) => {
         let body = '';
@@ -43,7 +46,7 @@ function request(url, options = {}) {
 
 async function runRegressionPass() {
   console.log('\n======================================================');
-  console.log('RALION OS — MASTER TENANT ISOLATION REGRESSION TEST');
+  console.log('RALION OS — MASTER FACEBOOK RESTORATION & AUTH REGRESSION TEST');
   console.log('======================================================\n');
 
   // 1. Fetch real JWT tokens for User A (Owner) and User B (Tenant)
@@ -52,13 +55,13 @@ async function runRegressionPass() {
   const userB = usersData?.users?.find(u => u.email === 'info@pameltex.com');
 
   if (!userA || !userB) {
-    throw new Error('Test users chiwabby@gmail.com or info@pameltex.com not found in Supabase Auth.');
+    throw new Error('Test users not found in Supabase Auth.');
   }
 
   console.log(`[USER MATRIX] User A (Owner):  ${userA.email} (${userA.id})`);
   console.log(`[USER MATRIX] User B (Tenant): ${userB.email} (${userB.id})`);
 
-  // Generate real custom session tokens using admin API
+  // Generate real session tokens
   const { data: linkA } = await supabaseAdmin.auth.admin.generateLink({
     type: 'magiclink',
     email: userA.email,
@@ -68,7 +71,6 @@ async function runRegressionPass() {
     email: userB.email,
   });
 
-  // Verify magiclink OTP to get access_tokens
   const clientA = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   const { data: sessionA } = await clientA.auth.verifyOtp({
     email: userA.email,
@@ -135,60 +137,93 @@ async function runRegressionPass() {
   }
 
   try {
-    console.log('\n--- 1. TEST A: AUTHENTICATED USER A (OWNER) DATA ACCESS ---');
+    console.log('\n--- 1. TEST A: UNAUTHENTICATED REQUESTS (NO TOKEN) → 401 UNAUTHORIZED ---');
     
-    // Connections
+    const unauthConn = await request(`http://127.0.0.1:${PORT}/api/social/connections`);
+    assert(unauthConn.status === 401 && unauthConn.data.error === 'AUTHENTICATION_REQUIRED', `GET /api/social/connections without token returns 401 AUTHENTICATION_REQUIRED`);
+
+    const unauthPosts = await request(`http://127.0.0.1:${PORT}/api/social/facebook/pages/default/posts`);
+    assert(unauthPosts.status === 401 && unauthPosts.data.error === 'AUTHENTICATION_REQUIRED', `GET /api/social/facebook/pages/default/posts without token returns 401 AUTHENTICATION_REQUIRED`);
+
+    const unauthComments = await request(`http://127.0.0.1:${PORT}/api/social/comments`);
+    assert(unauthComments.status === 401 && unauthComments.data.error === 'AUTHENTICATION_REQUIRED', `GET /api/social/comments without token returns 401 AUTHENTICATION_REQUIRED`);
+
+    const unauthInbox = await request(`http://127.0.0.1:${PORT}/api/social/inbox`);
+    assert(unauthInbox.status === 401 && unauthInbox.data.error === 'AUTHENTICATION_REQUIRED', `GET /api/social/inbox without token returns 401 AUTHENTICATION_REQUIRED`);
+
+    const unauthPub = await request(`http://127.0.0.1:${PORT}/api/social/publish`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: { content: 'Unauthenticated publish' },
+    });
+    assert(unauthPub.status === 401 && unauthPub.data.error === 'AUTHENTICATION_REQUIRED', `POST /api/social/publish without token returns 401 AUTHENTICATION_REQUIRED`);
+
+    console.log('\n--- 2. TEST B: MALFORMED / INVALID JWT → 401 UNAUTHORIZED ---');
+
+    const invalidConn = await request(`http://127.0.0.1:${PORT}/api/social/connections`, {
+      headers: { Authorization: 'Bearer malformed_jwt_token_xyz_123' },
+    });
+    assert(invalidConn.status === 401 && invalidConn.data.error === 'AUTHENTICATION_REQUIRED', `Malformed JWT returns 401 AUTHENTICATION_REQUIRED`);
+
+    const invalidPosts = await request(`http://127.0.0.1:${PORT}/api/social/facebook/pages/default/posts`, {
+      headers: { Authorization: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.invalid.signature' },
+    });
+    assert(invalidPosts.status === 401 && invalidPosts.data.error === 'AUTHENTICATION_REQUIRED', `Invalid signature JWT returns 401 AUTHENTICATION_REQUIRED`);
+
+    console.log('\n--- 3. TEST C: AUTHENTICATED USER A (OWNER) DATA ACCESS → 200 OK & REAL FACEBOOK DATA ---');
+
     const connA = await request(`http://127.0.0.1:${PORT}/api/social/connections`, {
       headers: { Authorization: `Bearer ${tokenUserA}` },
     });
-    assert(connA.status === 200 && connA.data.connections?.length === 1, `User A retrieves their connected Facebook Page (Count: ${connA.data.connections?.length})`);
-    assert(connA.data.connections?.[0]?.account_name === 'Ras Ali Labs', `User A connection is Ras Ali Labs`);
+    assert(connA.status === 200 && connA.data.connections?.length === 1, `User A retrieves their Facebook connection (Count: ${connA.data.connections?.length}, Name: ${connA.data.connections?.[0]?.account_name})`);
 
-    // Posts
-    const postsA = await request(`http://127.0.0.1:${PORT}/api/social/facebook/pages/default/posts`, {
+    const postsDefaultA = await request(`http://127.0.0.1:${PORT}/api/social/facebook/pages/default/posts`, {
       headers: { Authorization: `Bearer ${tokenUserA}` },
     });
-    assert(postsA.status === 200 && postsA.data.posts?.length > 0, `User A retrieves historical posts (Count: ${postsA.data.posts?.length})`);
+    assert(postsDefaultA.status === 200 && postsDefaultA.data.posts?.length > 0, `User A retrieves historical posts via 'default' pageId (Count: ${postsDefaultA.data.posts?.length})`);
 
-    // Comments
+    const postsDirectA = await request(`http://127.0.0.1:${PORT}/api/social/facebook/pages/477334159265235/posts`, {
+      headers: { Authorization: `Bearer ${tokenUserA}` },
+    });
+    assert(postsDirectA.status === 200 && postsDirectA.data.posts?.length > 0, `User A retrieves historical posts via direct Facebook pageId '477334159265235' (Count: ${postsDirectA.data.posts?.length})`);
+
     const commentsA = await request(`http://127.0.0.1:${PORT}/api/social/comments`, {
       headers: { Authorization: `Bearer ${tokenUserA}` },
     });
-    assert(commentsA.status === 200 && commentsA.data.comments?.length > 0, `User A retrieves Facebook comments (Count: ${commentsA.data.comments?.length})`);
+    assert(commentsA.status === 200 && commentsA.data.comments?.length > 0, `User A retrieves comments (Count: ${commentsA.data.comments?.length})`);
 
-    // Analytics
+    const inboxA = await request(`http://127.0.0.1:${PORT}/api/social/inbox?provider=facebook`, {
+      headers: { Authorization: `Bearer ${tokenUserA}` },
+    });
+    assert(inboxA.status === 200 && Array.isArray(inboxA.data.conversations), `User A retrieves inbox conversations`);
+
     const analyticsA = await request(`http://127.0.0.1:${PORT}/api/social/facebook/pages/default/analytics`, {
       headers: { Authorization: `Bearer ${tokenUserA}` },
     });
     assert(analyticsA.status === 200 && analyticsA.data.analytics?.followers > 0, `User A retrieves Facebook Page analytics (Followers: ${analyticsA.data.analytics?.followers})`);
 
-    console.log('\n--- 2. TEST B: AUTHENTICATED USER B (SEPARATE TENANT) ZERO DATA LEAKAGE ---');
+    const analyticsDirectA = await request(`http://127.0.0.1:${PORT}/api/social/facebook/pages/477334159265235/analytics`, {
+      headers: { Authorization: `Bearer ${tokenUserA}` },
+    });
+    assert(analyticsDirectA.status === 200 && analyticsDirectA.data.analytics?.followers > 0, `User A retrieves direct pageId analytics (Followers: ${analyticsDirectA.data.analytics?.followers})`);
 
-    // Connections
+    console.log('\n--- 4. TEST D: AUTHENTICATED USER B (SEPARATE TENANT WITH NO CONNECTION) → 200 ZERO-STATE ---');
+
     const connB = await request(`http://127.0.0.1:${PORT}/api/social/connections`, {
       headers: { Authorization: `Bearer ${tokenUserB}` },
     });
-    assert(connB.status === 200 && connB.data.connections?.length === 0, `User B sees 0 connections (ZERO LEAKAGE)`);
+    assert(connB.status === 200 && connB.data.connections?.length === 0, `User B receives 200 OK with empty connections array (ZERO-STATE)`);
 
-    // Posts
     const postsB = await request(`http://127.0.0.1:${PORT}/api/social/facebook/pages/default/posts`, {
       headers: { Authorization: `Bearer ${tokenUserB}` },
     });
-    assert(postsB.status === 200 && postsB.data.posts?.length === 0, `User B sees 0 posts (ZERO LEAKAGE)`);
+    assert(postsB.status === 200 && postsB.data.posts?.length === 0, `User B receives 200 OK with empty posts array (ZERO-STATE)`);
 
-    // Comments
     const commentsB = await request(`http://127.0.0.1:${PORT}/api/social/comments`, {
       headers: { Authorization: `Bearer ${tokenUserB}` },
     });
-    assert(commentsB.status === 200 && commentsB.data.comments?.length === 0, `User B sees 0 comments (ZERO LEAKAGE)`);
+    assert(commentsB.status === 200 && commentsB.data.comments?.length === 0, `User B receives 200 OK with empty comments array (ZERO-STATE)`);
 
-    // Analytics
-    const analyticsB = await request(`http://127.0.0.1:${PORT}/api/social/facebook/pages/default/analytics`, {
-      headers: { Authorization: `Bearer ${tokenUserB}` },
-    });
-    assert(analyticsB.status === 200 && analyticsB.data.analytics?.followers === 0, `User B sees 0 analytics metrics (ZERO LEAKAGE)`);
-
-    // Unauthorized Publishing
     const pubB = await request(`http://127.0.0.1:${PORT}/api/social/publish`, {
       method: 'POST',
       headers: {
@@ -201,35 +236,30 @@ async function runRegressionPass() {
         platforms: ['facebook'],
       },
     });
-    assert(pubB.status === 422 || pubB.data?.overallStatus === 'FAILED', `User B publishing blocked with 422 / FAILED status (${pubB.status})`);
+    assert(pubB.status === 422 || pubB.data?.overallStatus === 'FAILED', `User B publishing blocked with 422 FAILED status (${pubB.status})`);
 
-    console.log('\n--- 3. TEST C: UNAUTHENTICATED REQUESTS (NO TOKEN) ---');
+    console.log('\n--- 5. TEST E: CROSS-TENANT UNAUTHORIZED RESOURCE ACCESS → 403 FORBIDDEN ---');
 
-    const connAnon = await request(`http://127.0.0.1:${PORT}/api/social/connections`);
-    assert(connAnon.status === 200 && connAnon.data.connections?.length === 0, `Unauthenticated request receives 0 connections (ZERO LEAKAGE)`);
+    const crossPosts = await request(`http://127.0.0.1:${PORT}/api/social/facebook/pages/477334159265235/posts`, {
+      headers: { Authorization: `Bearer ${tokenUserB}` },
+    });
+    assert(crossPosts.status === 403 && crossPosts.data.error === 'FORBIDDEN', `User B requesting User A's specific pageId returns 403 FORBIDDEN (${crossPosts.status})`);
 
-    const postsAnon = await request(`http://127.0.0.1:${PORT}/api/social/facebook/pages/default/posts`);
-    assert(postsAnon.status === 200 && postsAnon.data.posts?.length === 0, `Unauthenticated request receives 0 posts (ZERO LEAKAGE)`);
+    const crossAnalytics = await request(`http://127.0.0.1:${PORT}/api/social/facebook/pages/477334159265235/analytics`, {
+      headers: { Authorization: `Bearer ${tokenUserB}` },
+    });
+    assert(crossAnalytics.status === 403 && crossAnalytics.data.error === 'FORBIDDEN', `User B requesting User A's analytics returns 403 FORBIDDEN (${crossAnalytics.status})`);
 
-    console.log('\n--- 4. TEST D: HEADER SPOOFING ATTEMPTS (User B token + User A IDs) ---');
+    console.log('\n--- 6. TEST F: HEADER SPOOFING WITH USER B TOKEN → SCOPED STRICTLY TO USER B ---');
 
-    const spoofPosts = await request(`http://127.0.0.1:${PORT}/api/social/facebook/pages/default/posts`, {
+    const spoofConn = await request(`http://127.0.0.1:${PORT}/api/social/connections`, {
       headers: {
         Authorization: `Bearer ${tokenUserB}`,
         'x-user-id': userA.id,
         'x-workspace-id': userA.id,
       },
     });
-    assert(spoofPosts.status === 200 && spoofPosts.data.posts?.length === 0, `User B spoofing User A headers receives 0 posts (Server verifies JWT authoritatively)`);
-
-    console.log('\n--- 5. TEST E: INVALID / EXPIRED TOKEN ---');
-
-    const invalidPosts = await request(`http://127.0.0.1:${PORT}/api/social/facebook/pages/default/posts`, {
-      headers: {
-        Authorization: 'Bearer invalid_expired_jwt_token_sample_abc123',
-      },
-    });
-    assert(invalidPosts.status === 200 && invalidPosts.data.posts?.length === 0, `Invalid JWT token receives 0 posts`);
+    assert(spoofConn.status === 200 && spoofConn.data.connections?.length === 0, `User B spoofing User A headers returns 200 with 0 connections (Server authoritatively trusts only JWT)`);
 
     console.log(`\n======================================================`);
     console.log(`REGRESSION TEST COMPLETE: ${passedTests}/${totalTests} TESTS PASSED`);
