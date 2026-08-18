@@ -458,11 +458,40 @@ export class ZernioSocialService {
   }
 
   /**
-   * Retrieve list of all posts from Zernio
+   * Retrieve list of all posts from Zernio (includes published, scheduled, and historical external posts)
    */
-  static async getPosts(profileId?: string): Promise<any> {
-    const query = profileId ? `?profileId=${encodeURIComponent(profileId)}` : '';
+  static async getPosts(
+    profileId?: string,
+    options?: { includeExternal?: boolean; platform?: string; status?: string; limit?: number }
+  ): Promise<any> {
+    const params = new URLSearchParams();
+    if (profileId) params.append('profileId', profileId);
+    if (options?.includeExternal !== false) params.append('includeExternal', 'true');
+    if (options?.platform) params.append('platform', options.platform);
+    if (options?.status) params.append('status', options.status);
+    if (options?.limit) params.append('limit', String(options.limit));
+
+    const query = params.toString() ? `?${params.toString()}` : '';
     return this.request<any>(`posts${query}`, 'GET');
+  }
+
+  /**
+   * Retrieve live Facebook Page posts feed (including historical posts created directly on Facebook)
+   */
+  static async getHistoricalFacebookPosts(profileId?: string, accountId?: string): Promise<any> {
+    const params = new URLSearchParams();
+    if (profileId) params.append('profileId', profileId);
+    if (accountId) params.append('accountId', accountId);
+
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return this.request<any>(`inbox/comments${query}`, 'GET');
+  }
+
+  /**
+   * Retrieve comments for a specific Facebook post
+   */
+  static async getPostComments(postId: string, accountId: string): Promise<any> {
+    return this.request<any>(`inbox/comments/${encodeURIComponent(postId)}?accountId=${encodeURIComponent(accountId)}`, 'GET');
   }
 
   /**
@@ -485,6 +514,15 @@ export class ZernioSocialService {
   // =====================================================================
 
   /**
+   * Get workspace-level analytics overview for a profile (totalPosts, publishedPosts, etc.)
+   */
+  static async getAnalyticsOverview(profileId: string, accountId?: string): Promise<any> {
+    const params = new URLSearchParams({ profileId });
+    if (accountId) params.append('accountId', accountId);
+    return this.request<any>(`analytics?${params.toString()}`, 'GET');
+  }
+
+  /**
    * Get workspace-level analytics summary for a profile
    */
   static async getAnalyticsSummary(profileId: string, period: string = '30d'): Promise<any> {
@@ -503,7 +541,27 @@ export class ZernioSocialService {
   // =====================================================================
 
   /**
-   * Get direct messages for a profile or specific account
+   * Get direct messaging conversations for a profile or specific account
+   */
+  static async getInboxConversations(profileId: string, accountId?: string): Promise<any> {
+    const params = new URLSearchParams({ profileId });
+    if (accountId) params.append('accountId', accountId);
+
+    return this.request<any>(`inbox/conversations?${params.toString()}`, 'GET');
+  }
+
+  /**
+   * Get message history for a specific conversation thread
+   */
+  static async getConversationMessages(conversationId: string, accountId: string): Promise<any> {
+    return this.request<any>(
+      `inbox/conversations/${encodeURIComponent(conversationId)}/messages?accountId=${encodeURIComponent(accountId)}`,
+      'GET'
+    );
+  }
+
+  /**
+   * Get direct messages for a profile or specific account (legacy wrapper)
    */
   static async getInboxMessages(profileId: string, accountId?: string): Promise<any[]> {
     const params = new URLSearchParams({ profileId });

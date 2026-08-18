@@ -42,16 +42,119 @@ function getServiceSupabase() {
 
 export class FacebookCommentsService {
   /**
-   * Fetch all comments for a Facebook Page or specific post
+   * Fetch all comments for a Facebook Page or specific post from live Zernio infrastructure & DB cache
    */
   static async getComments(params: {
     pageId?: string;
     postId?: string;
     userId?: string;
+    organizationId?: string;
   }): Promise<FacebookComment[]> {
     const supabase = getServiceSupabase();
 
-    // Check database for real comments
+    // 1. Resolve connected tenant's Zernio profile and account mapping
+    let profileId = '6a82deac1a69158ef81cb2cd';
+    let accountId = '6a82df7277555aae018b92b4';
+
+    try {
+      let connQuery = supabase
+        .from('social_connections')
+        .select('zernio_profile_id, zernio_account_id')
+        .eq('provider', 'facebook')
+        .eq('connection_status', 'CONNECTED');
+
+      if (params.organizationId && params.organizationId !== 'default-org') {
+        connQuery = connQuery.eq('organization_id', params.organizationId);
+      }
+
+      const { data: conn } = await connQuery.maybeSingle();
+      if (conn?.zernio_profile_id) profileId = conn.zernio_profile_id;
+      if (conn?.zernio_account_id) accountId = conn.zernio_account_id;
+    } catch {
+      // Best effort profile resolution
+    }
+
+    const comments: FacebookComment[] = [];
+    const seenIds = new Set<string>();
+
+    const addCommentIfUnique = (c: FacebookComment) => {
+      if (!c.id || seenIds.has(c.id)) return;
+      seenIds.add(c.id);
+      comments.push(c);
+    };
+
+    // 2. Query live comments from Zernio
+    try {
+      if (params.postId) {
+        // Specific post requested
+        const res = await ZernioSocialService.getPostComments(params.postId, accountId);
+        const list = res?.comments || (Array.isArray(res) ? res : []);
+
+        list.forEach((cm: any) => {
+          addCommentIfUnique({
+            id: cm.id,
+            postId: params.postId!,
+            authorName: cm.from?.name || cm.authorName || 'Facebook User',
+            authorId: cm.from?.id || cm.authorId,
+            authorAvatarUrl: cm.from?.picture || cm.authorAvatarUrl,
+            commentText: cm.message || cm.commentText || '',
+            createdAt: cm.createdTime ? new Date(cm.createdTime).toLocaleString() : (cm.createdAt || 'Recent'),
+            likesCount: Number(cm.likeCount || cm.likesCount || 0),
+            isPageOwner: Boolean(cm.from?.isOwner || cm.isPageOwner),
+            replies: cm.replies?.map((r: any) => ({
+              id: r.id,
+              commentId: cm.id,
+              authorName: r.from?.name || r.authorName || 'Page Reply',
+              authorAvatarUrl: r.from?.picture || r.authorAvatarUrl,
+              replyText: r.message || r.replyText || '',
+              createdAt: r.createdTime ? new Date(r.createdTime).toLocaleString() : (r.createdAt || 'Recent'),
+              isPageOwner: true,
+            })),
+          });
+        });
+      } else {
+        // General page comments request: inspect feed posts that have comments
+        const feedData = await ZernioSocialService.getHistoricalFacebookPosts(profileId, accountId);
+        const feedPosts = feedData?.data || (Array.isArray(feedData) ? feedData : []);
+
+        const postsWithComments = feedPosts.filter((p: any) => Number(p.commentCount) > 0).slice(0, 8);
+
+        await Promise.allSettled(
+          postsWithComments.map(async (p: any) => {
+            try {
+              const res = await ZernioSocialService.getPostComments(p.id, accountId);
+              const list = res?.comments || (Array.isArray(res) ? res : []);
+              list.forEach((cm: any) => {
+                addCommentIfUnique({
+                  id: cm.id,
+                  postId: p.id,
+                  authorName: cm.from?.name || cm.authorName || 'Facebook User',
+                  authorId: cm.from?.id || cm.authorId,
+                  authorAvatarUrl: cm.from?.picture || cm.authorAvatarUrl,
+                  commentText: cm.message || cm.commentText || '',
+                  createdAt: cm.createdTime ? new Date(cm.createdTime).toLocaleString() : (cm.createdAt || 'Recent'),
+                  likesCount: Number(cm.likeCount || cm.likesCount || 0),
+                  isPageOwner: Boolean(cm.from?.isOwner || cm.isPageOwner),
+                  replies: cm.replies?.map((r: any) => ({
+                    id: r.id,
+                    commentId: cm.id,
+                    authorName: r.from?.name || r.authorName || 'Page Reply',
+                    authorAvatarUrl: r.from?.picture || r.authorAvatarUrl,
+                    replyText: r.message || r.replyText || '',
+                    createdAt: r.createdTime ? new Date(r.createdTime).toLocaleString() : (r.createdAt || 'Recent'),
+                    isPageOwner: true,
+                  })),
+                });
+              });
+            } catch {}
+          })
+        );
+      }
+    } catch (zErr) {
+      console.warn('[FacebookCommentsService] Live comments fetch notice:', zErr);
+    }
+
+    // 3. Merge with database cached comments
     try {
       const query = supabase
         .from('social_post_comments')
@@ -66,13 +169,25 @@ export class FacebookCommentsService {
 
       const { data, error } = await query;
       if (!error && Array.isArray(data)) {
-        return data as FacebookComment[];
+        data.forEach((c: any) => {
+          addCommentIfUnique({
+            id: c.id,
+            postId: c.post_id || params.postId || 'fb_post',
+            authorName: c.author_name || 'Facebook User',
+            authorId: c.author_id,
+            authorAvatarUrl: c.author_avatar_url,
+            commentText: c.comment_text || c.message || '',
+            createdAt: c.created_at ? new Date(c.created_at).toLocaleString() : 'Recent',
+            likesCount: Number(c.likes_count || 0),
+            isPageOwner: Boolean(c.is_page_owner),
+          });
+        });
       }
     } catch {
-      // Table optional in schema cache
+      // Database query optional
     }
 
-    return [];
+    return comments;
   }
 
   /**

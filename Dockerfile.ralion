@@ -65,6 +65,7 @@ COPY --from=builder /app/apps/ralion/.next/standalone ./
 COPY --from=builder /app/apps/ralion/.next/static ./apps/ralion/.next/static
 COPY --from=builder /app/apps/ralion/.next/static ./.next/static
 COPY --from=builder /app/apps/ralion/public ./apps/ralion/public
+COPY --from=builder /app/apps/ralion/public ./public
 
 EXPOSE 3000
 

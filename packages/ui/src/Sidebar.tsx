@@ -170,8 +170,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Brand Header */}
       <div className="p-3.5 border-b border-zinc-800/80 flex items-center justify-between">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-7 h-7 rounded-lg overflow-hidden flex items-center justify-center bg-indigo-600/20 border border-indigo-500/30 shrink-0">
-            <img src="/logo.png" alt="Ralion OS" className="w-full h-full object-cover" />
+          <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center bg-black/80 border border-zinc-800 shrink-0 shadow-sm">
+            <img src="/logo.png" alt="Ralion OS" className="w-full h-full object-contain" />
           </div>
           {!isCollapsed && (
             <div className="flex flex-col min-w-0">
