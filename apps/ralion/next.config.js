@@ -1,8 +1,9 @@
 /** @type {import('next').NextConfig} */
 
-// Default to standalone server mode to support full dynamic API routes and OAuth endpoints.
-// Set NEXT_STATIC_EXPORT=1 only when building for a static HTML host.
-const isStaticExport = process.env.NEXT_STATIC_EXPORT === '1';
+// NEXT_STANDALONE=1 is set in Dockerfile.ralion for Render dynamic backend.
+// For static web / Hostinger distribution, basePath '/ralion' ensures all asset URLs
+// are emitted as /ralion/_next/static/... matching the sub-path deployment.
+const isStandalone = process.env.NEXT_STANDALONE === '1';
 
 const securityHeaders = [
   {
@@ -32,14 +33,14 @@ const securityHeaders = [
 ];
 
 const nextConfig = {
-  output: isStaticExport ? 'export' : 'standalone',
-  basePath: isStaticExport ? '/ralion' : '',
-  trailingSlash: isStaticExport,
+  ...(isStandalone ? { output: 'standalone' } : {}),
+  basePath: isStandalone ? '' : '/ralion',
+  trailingSlash: true,
   images: {
     unoptimized: true,
   },
   reactStrictMode: true,
-  ...(!isStaticExport
+  ...(isStandalone
     ? {
         async headers() {
           return [

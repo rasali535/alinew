@@ -4,24 +4,23 @@ DirectoryIndex index.html
   RewriteEngine On
   RewriteBase /
 
-  # Exclude executable installers and binary assets from SPA index.html rewrites
-  RewriteCond %{REQUEST_URI} \.(exe|dmg|AppImage|deb|zip|tar\.gz)$ [NC]
+  # 1. Do NOT rewrite static assets (JS, CSS, images, fonts, binaries, maps) to index.html
+  RewriteCond %{REQUEST_URI} \.(js|css|png|jpg|jpeg|gif|ico|svg|webp|woff2?|ttf|eot|otf|wasm|json|map|exe|dmg|AppImage|deb|zip|tar\.gz)$ [NC]
   RewriteRule ^ - [L]
 
-  # Sub-application SPA Rewrites:
-  # 1. Ralion Application (/ralion/...)
-  RewriteCond %{REQUEST_URI} ^/ralion/ [NC]
+  # 2. Ralion Next.js Sub-application (/ralion/...)
+  RewriteCond %{REQUEST_URI} ^/ralion [NC]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule ^ralion/.*$ /ralion/index.html [L]
+  RewriteRule ^ralion/?.*$ /ralion/index.html [L]
 
-  # 2. Admin Application (/admin/...)
-  RewriteCond %{REQUEST_URI} ^/admin/ [NC]
+  # 3. Admin Next.js Sub-application (/admin/...)
+  RewriteCond %{REQUEST_URI} ^/admin [NC]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule ^admin/.*$ /admin/index.html [L]
+  RewriteRule ^admin/?.*$ /admin/index.html [L]
 
-  # 3. Root Marketing SPA Rewrite Rules
+  # 4. Root Marketing SPA Rewrite Rules
   RewriteRule ^index\.html$ - [L]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
@@ -29,12 +28,18 @@ DirectoryIndex index.html
   RewriteRule . /index.html [L]
 </IfModule>
 
-# Enforce Binary Download Headers for Installer Files
+# Content-Type and Cache Headers
 <IfModule mod_headers.c>
   <FilesMatch "\.(exe|dmg|AppImage|deb|zip)$">
     Header set Content-Type "application/octet-stream"
     Header set Content-Disposition "attachment"
     Header set Cache-Control "public, max-age=31536000, immutable"
     SetEnv no-gzip 1
+  </FilesMatch>
+  <FilesMatch "\.(js|mjs)$">
+    Header set Content-Type "application/javascript; charset=utf-8"
+  </FilesMatch>
+  <FilesMatch "\.css$">
+    Header set Content-Type "text/css; charset=utf-8"
   </FilesMatch>
 </IfModule>

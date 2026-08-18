@@ -43,7 +43,7 @@ try {
     const publicDir = path.join(appDir, 'public');
     const outDir = path.join(appDir, 'out');
 
-    // If pre-rendered pages exist in .next/server/app, extract the full Next.js application
+    // 1. Prioritize fresh pre-rendered pages and chunks in .next
     if (fs.existsSync(serverAppDir)) {
       console.log(`Copying pre-rendered Next.js pages for ${appName} from ${serverAppDir} -> ${destDir}`);
 
@@ -90,15 +90,18 @@ try {
       copyHtmlPages(serverAppDir);
 
       // Ensure root index.html is the rich dashboard entry page
+      const indexSrc = path.join(serverAppDir, 'index.html');
       const dashboardSrc = path.join(serverAppDir, 'dashboard.html');
-      if (fs.existsSync(dashboardSrc)) {
+      if (fs.existsSync(indexSrc)) {
+        fs.copyFileSync(indexSrc, path.join(destDir, 'index.html'));
+      } else if (fs.existsSync(dashboardSrc)) {
         fs.copyFileSync(dashboardSrc, path.join(destDir, 'index.html'));
       }
       console.log(`Successfully populated full Next.js static application for ${appName}`);
       return;
     }
 
-    // Fallback: Check for standard 'out' directory
+    // 2. Fallback: Check for standard 'out' directory
     if (fs.existsSync(outDir)) {
       console.log(`Copying ${appName} from static export: ${outDir} -> ${destDir}`);
       fs.cpSync(outDir, destDir, { recursive: true });
