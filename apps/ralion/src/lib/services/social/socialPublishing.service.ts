@@ -47,6 +47,9 @@ export interface MultiPublishResult {
   postId: string;
   overallStatus: 'PUBLISHED' | 'PARTIALLY_PUBLISHED' | 'FAILED' | 'QUEUED';
   platformResults: Record<SocialPlatformType, PublishResponse>;
+  statusCode?: number;
+  conflict?: boolean;
+  conflictDetails?: any;
   errors: string[];
 }
 
@@ -315,7 +318,7 @@ export class SocialPublishingService {
 
     await Promise.all(publishPromises);
 
-    // 6. Calculate Overall Status
+    // 6. Calculate Overall Status & Response Status Code
     const total = params.platforms.length;
     const successes = Object.values(platformResults).filter((r) => r?.success).length;
 
@@ -325,6 +328,33 @@ export class SocialPublishingService {
     } else if (successes > 0) {
       overallStatus = 'PARTIALLY_PUBLISHED';
     }
+
+    let hasConflict = false;
+    let conflictDetails: any = null;
+    let highestStatusCode = 200;
+
+    for (const res of Object.values(platformResults)) {
+      if (res && res.statusCode) {
+        if (res.statusCode === 409) {
+          hasConflict = true;
+          conflictDetails = res.details || conflictDetails;
+        }
+        if (!res.success && res.statusCode > highestStatusCode) {
+          highestStatusCode = res.statusCode;
+        }
+      }
+    }
+
+    const calculatedStatusCode =
+      overallStatus === 'PUBLISHED'
+        ? 200
+        : overallStatus === 'PARTIALLY_PUBLISHED'
+        ? 200
+        : hasConflict
+        ? 409
+        : highestStatusCode > 200
+        ? highestStatusCode
+        : 422;
 
     // 7. Record Post in Database (Graceful Non-Blocking Persistence)
     let postRecord: any = null;
@@ -365,6 +395,8 @@ export class SocialPublishingService {
           action: 'multi_platform_publish',
           platforms: params.platforms,
           status: overallStatus,
+          statusCode: calculatedStatusCode,
+          conflict: hasConflict,
           success_count: successes,
           total_count: total,
           idempotencyKey,
@@ -378,6 +410,9 @@ export class SocialPublishingService {
       postId: postRecord?.id || `post_${Date.now()}`,
       overallStatus,
       platformResults: platformResults as Record<SocialPlatformType, PublishResponse>,
+      statusCode: calculatedStatusCode,
+      conflict: hasConflict,
+      conflictDetails,
       errors,
     };
   }

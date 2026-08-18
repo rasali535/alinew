@@ -275,9 +275,19 @@ export class ZernioProvider extends SocialProvider {
         },
       };
     } catch (err: any) {
+      const isConflict = err.status === 409 || err.code === 'HTTP_409' || (typeof err.message === 'string' && err.message.includes('409'));
+      const statusCode = isConflict ? 409 : (err.status || 422);
+
+      let cleanError = err.message || 'Failed to publish via Zernio';
+      if (isConflict) {
+        cleanError = 'Publishing conflict: This exact content is already scheduled, publishing, or was posted to this account within the last 24 hours.';
+      }
+
       return {
         success: false,
-        error: err.message || 'Failed to publish via Zernio',
+        error: cleanError,
+        statusCode,
+        details: err.details || null,
         platform: 'facebook',
         publishedAt: new Date().toISOString(),
         provider: 'zernio',

@@ -107,20 +107,24 @@ export class ZernioSocialService {
         const data = await response.json().catch(() => ({}));
 
         if (!response.ok) {
+          const rawError = data?.error;
           const errorMessage =
-            data?.error?.message ||
+            (typeof rawError === 'string' ? rawError : rawError?.message) ||
             data?.message ||
             `Zernio API request failed with status ${response.status}`;
-          const errorCode = data?.error?.code || `HTTP_${response.status}`;
+          const errorCode = (typeof rawError === 'object' ? rawError?.code : null) || `HTTP_${response.status}`;
           const err = new Error(`[ZernioSocialService] ${errorCode}: ${errorMessage}`);
           (err as any).status = response.status;
           (err as any).code = errorCode;
+          (err as any).details = data?.details || null;
           throw err;
         }
 
         return data as T;
       } catch (err: any) {
-        if (attempt >= maxRetries || err.name === 'AbortError') {
+        // Do NOT retry client errors (400, 401, 403, 404, 409, 422). Only retry 5xx server errors or transient network failures.
+        const isClientError = typeof err.status === 'number' && err.status >= 400 && err.status < 500 && err.status !== 429;
+        if (isClientError || attempt >= maxRetries || err.name === 'AbortError') {
           throw err;
         }
         attempt++;

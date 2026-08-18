@@ -98,28 +98,32 @@ export async function POST(request: NextRequest) {
 
     const isSuccess = result.overallStatus === 'PUBLISHED' || result.overallStatus === 'QUEUED';
     const isPartial = result.overallStatus === 'PARTIALLY_PUBLISHED';
+    const httpStatus = result.statusCode || (isSuccess ? 200 : isPartial ? 200 : 422);
 
     console.log('[SocialPostsAPI] Dispatch result:', {
       requestId,
       overallStatus: result.overallStatus,
+      httpStatus,
       postId: result.postId,
       success: isSuccess || isPartial,
+      conflict: result.conflict || false,
       errorsCount: result.errors?.length || 0,
     });
-
-    const httpStatus = isSuccess ? 200 : isPartial ? 200 : 422;
 
     return corsJsonResponse({
       success: isSuccess || isPartial,
       postId: result.postId,
       overallStatus: result.overallStatus,
+      statusCode: httpStatus,
+      ...(result.conflict ? { conflict: true, error: result.errors?.[0] || 'Publishing conflict' } : {}),
+      ...(result.conflictDetails ? { conflictDetails: result.conflictDetails } : {}),
       platformResults: result.platformResults,
       result,
       requestId,
       ...(result.errors?.length ? { errors: result.errors } : {}),
     }, { status: httpStatus }, request);
   } catch (error: any) {
-    const statusCode = error.statusCode || 500;
+    const statusCode = error.statusCode || error.status || 500;
     console.error('[SocialPostsAPI] Execution error:', {
       requestId,
       statusCode,

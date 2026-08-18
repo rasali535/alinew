@@ -1350,11 +1350,37 @@ function GrowthPageContent() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok || data.success === false) {
-        const errorMsg = data.error || `Publishing returned HTTP ${res.status}`;
+        const status = res.status;
+        let alertMessage: string;
+        let allowRetry = false;
+
+        if (status === 409 || data.conflict === true) {
+          // Duplicate content — do NOT show retry, user must change content
+          alertMessage = `⚠️ Publish conflict: This content was already posted to this account within the last 24 hours. Please edit the post before publishing again.`;
+          if (data.conflictDetails?.existingPostId) {
+            alertMessage += ` (existing post ID: ${data.conflictDetails.existingPostId})`;
+          }
+        } else if (status === 400) {
+          alertMessage = `✕ Validation error: ${data.error || 'The publish request was invalid. Please check your post content.'}. Please correct the content and try again.`;
+          allowRetry = false;
+        } else if (status === 401) {
+          alertMessage = `✕ Authentication required: Your Facebook session has expired. Please reconnect your account in the Accounts tab.`;
+        } else if (status === 403) {
+          alertMessage = `✕ Authorization error: Ralion does not have permission to publish to this Facebook Page. Please reconnect your account.`;
+        } else if (status === 422) {
+          alertMessage = `✕ Platform error: ${data.error || 'Facebook could not process this post. Please check your media or content.'}. The platform rejected the content.`;
+        } else if (status === 500) {
+          alertMessage = `✕ Unexpected server error — please try again in a moment. If the problem persists, contact support. (Request ID: ${data.requestId || 'N/A'})`;
+          allowRetry = true;
+        } else {
+          alertMessage = `✕ Facebook publishing failed (HTTP ${status}): ${data.error || 'Unknown error'}.`;
+          allowRetry = true;
+        }
+
         setOauthAlert({
           type: 'error',
-          message: `✕ Facebook publishing failed: ${errorMsg}`,
-          onRetry: () => publishPostNow(postId),
+          message: alertMessage,
+          ...(allowRetry ? { onRetry: () => publishPostNow(postId) } : {}),
         });
         return;
       }
@@ -3988,10 +4014,31 @@ function GrowthPageContent() {
                   const data = await res.json().catch(() => ({}));
 
                   if (!res.ok || data.success === false) {
-                    const errorMsg = data.error || `Publishing returned HTTP ${res.status}`;
+                    const status = res.status;
+                    let alertMessage: string;
+
+                    if (status === 409 || data.conflict === true) {
+                      alertMessage = `⚠️ Publish conflict: This exact content is already scheduled or was posted to this account within the last 24 hours. Please edit the post text before publishing again.`;
+                      if (data.conflictDetails?.existingPostId) {
+                        alertMessage += ` (existing post ID: ${data.conflictDetails.existingPostId})`;
+                      }
+                    } else if (status === 400) {
+                      alertMessage = `✕ Validation error: ${data.error || 'The publish request was invalid. Please check your post content.'}. Please correct the content and try again.`;
+                    } else if (status === 401) {
+                      alertMessage = `✕ Authentication required: Your Facebook session has expired. Please reconnect your account in the Accounts tab.`;
+                    } else if (status === 403) {
+                      alertMessage = `✕ Authorization error: Ralion does not have permission to publish to this Facebook Page. Please reconnect your account.`;
+                    } else if (status === 422) {
+                      alertMessage = `✕ Platform error: ${data.error || 'Facebook could not process this post.'}. Please check your media or content format.`;
+                    } else if (status === 500) {
+                      alertMessage = `✕ Unexpected server error — please try again in a moment. (Request ID: ${data.requestId || 'N/A'})`;
+                    } else {
+                      alertMessage = `✕ Facebook publishing failed (HTTP ${status}): ${data.error || 'Unknown error'}.`;
+                    }
+
                     setOauthAlert({
                       type: 'error',
-                      message: `✕ Facebook publishing failed: ${errorMsg}`,
+                      message: alertMessage,
                     });
                     setIsConnecting(false);
                     return;

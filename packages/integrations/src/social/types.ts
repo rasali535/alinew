@@ -80,6 +80,8 @@ export interface PublishResponse {
   postId?: string;
   postUrl?: string;
   error?: string;
+  statusCode?: number;
+  details?: any;
   platform: SocialPlatformType;
   publishedAt: string;
   provider?: InfrastructureProviderType;

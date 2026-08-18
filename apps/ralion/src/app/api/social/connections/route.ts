@@ -9,10 +9,11 @@ import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 export const dynamic = 'force-dynamic';
 
 function getServiceSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co',
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-  );
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co';
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpZHNmaWhhZ3d0dGxtaGZ5bm1mIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjgyMzk0NSwiZXhwIjoyMDk4Mzk5OTQ1fQ.mpparRo7a5t5B7uOlWBxiRI7NDsVGfmxkPUEbxSYBfA';
+  return createClient(url, key);
 }
 
 export async function OPTIONS(request: NextRequest) {
@@ -21,21 +22,35 @@ export async function OPTIONS(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   const supabase = getServiceSupabase();
-  const userId = request.headers.get('x-user-id') || 'default-user';
+  const userId = request.headers.get('x-user-id');
 
   try {
-    const { data: connections, error } = await supabase
-      .from('social_connections_safe')
-      .select('*')
+    let query = supabase
+      .from('social_connections')
+      .select(
+        'id, user_id, organization_id, workspace_id, provider, provider_account_id, account_name, username, profile_image_url, account_type, connection_status, token_status, scopes, capabilities, metadata, followers_count, infrastructure_provider, zernio_account_id, zernio_profile_id, connected_at, created_at, updated_at'
+      )
       .order('created_at', { ascending: false });
+
+    if (userId && userId !== 'default-user') {
+      query = query.eq('user_id', userId);
+    }
+
+    const { data: rawConnections, error } = await query;
 
     if (error) {
       console.warn('[SocialConnectionsAPI] DB query notice:', error.message);
     }
 
+    const connections = (rawConnections || []).map((conn: any) => ({
+      ...conn,
+      avatar_url: conn.profile_image_url || conn.avatar_url || conn.metadata?.avatarUrl || null,
+      account_name: conn.account_name || conn.metadata?.pageName || 'Social Account',
+    }));
+
     return corsJsonResponse({
       success: true,
-      connections: connections || [],
+      connections,
       allCapabilities: SocialProviderRegistry.getAllCapabilities(),
     }, undefined, request);
   } catch (error: any) {
