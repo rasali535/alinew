@@ -26,10 +26,10 @@ RUN npm install --legacy-peer-deps 2>/dev/null || npm install --legacy-peer-deps
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/ralion/node_modules ./apps/ralion/node_modules
+# Copy all node_modules and package structures from deps stage
+COPY --from=deps /app ./
 
-# Copy source
+# Copy fresh source
 COPY apps/ralion ./apps/ralion
 COPY packages ./packages
 COPY tsconfig.json ./
