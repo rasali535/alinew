@@ -246,12 +246,17 @@ export class AuthService {
    * Get current authenticated user session
    */
   static async getSession() {
-    const { data: { session }, error } = await this.supabase.auth.getSession();
-    if (error) {
-      console.error('[AuthService] Error fetching session:', error.message);
+    try {
+      const { data: { session }, error } = await this.supabase.auth.getSession();
+      if (error) {
+        console.error('[AuthService] Error fetching session:', error.message);
+        return null;
+      }
+      return session;
+    } catch (err) {
+      console.error('[AuthService] Unexpected error fetching session:', err);
       return null;
     }
-    return session;
   }
 
   /**

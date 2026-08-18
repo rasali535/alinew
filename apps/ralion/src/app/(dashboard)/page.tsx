@@ -1,5 +1,7 @@
-import { redirect } from 'next/navigation';
+'use client';
+
+import DashboardPage from './dashboard/page';
 
 export default function RalionIndexPage() {
-  redirect('/ralion/dashboard');
+  return <DashboardPage />;
 }

@@ -24,7 +24,7 @@ export class ProductService {
         .in('status', ['active', 'trialing'])
         .order('created_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (sub && !subError) {
         return {
@@ -40,7 +40,7 @@ export class ProductService {
         .select('status, products(slug)')
         .eq('organization_id', orgId)
         .eq('status', 'active')
-        .single();
+        .maybeSingle();
 
       if (userProd) {
         return {
@@ -57,7 +57,7 @@ export class ProductService {
         status: 'active',
       };
     } catch (err: any) {
-      console.warn('[ProductService] Access check warning:', err.message);
+      console.warn('[ProductService] Access check warning:', err?.message || err);
       return {
         hasAccess: true,
         edition: 'community',
