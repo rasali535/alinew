@@ -51,6 +51,10 @@ export function getCorsHeaders(request?: NextRequest | Request): Record<string, 
     'Access-Control-Allow-Headers': ALLOWED_HEADERS,
     'Access-Control-Allow-Credentials': 'true',
     'Access-Control-Max-Age': '86400',
+    // Required so caches store separate responses per Origin value.
+    // Without Vary: Origin a cached non-CORS response may be served to
+    // browser cross-origin requests, causing CORS failures.
+    'Vary': 'Origin',
   };
 }
 

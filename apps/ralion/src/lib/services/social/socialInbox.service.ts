@@ -34,7 +34,13 @@ export class SocialInboxService {
     }
 
     const { data, error } = await query;
-    if (error) throw error;
+
+    // Gracefully degrade when the inbox table has not been created yet or schema cache is missing it.
+    // Return empty conversations rather than throwing and causing HTTP 500.
+    if (error) {
+      console.warn('[SocialInboxService] social_inbox_messages DB notice (returning empty conversations):', error.message);
+      return [];
+    }
 
     // Group messages by conversation_id
     const conversationMap = new Map<string, any>();
@@ -113,18 +119,26 @@ export class SocialInboxService {
       throw new Error(`[SocialInboxService] Message send failed: ${result.error || 'Unknown error'}`);
     }
 
-    await supabase.from('social_inbox_messages').insert({
-      connection_id: params.connectionId,
-      provider: params.provider,
-      conversation_id: params.conversationId,
-      sender_id: params.userId,
-      sender_name: 'Ras Ali Labs Support',
-      recipient_id: params.recipientId,
-      message_text: params.messageText,
-      direction: 'OUTBOUND',
-      status: 'SENT',
-      timestamp: new Date().toISOString(),
-    });
+    // Persist outbound message to inbox log — non-fatal if table not yet created
+    try {
+      const { error: insertErr } = await supabase.from('social_inbox_messages').insert({
+        connection_id: params.connectionId,
+        provider: params.provider,
+        conversation_id: params.conversationId,
+        sender_id: params.userId,
+        sender_name: 'Ras Ali Labs Support',
+        recipient_id: params.recipientId,
+        message_text: params.messageText,
+        direction: 'OUTBOUND',
+        status: 'SENT',
+        timestamp: new Date().toISOString(),
+      });
+      if (insertErr) {
+        console.warn('[SocialInboxService] Inbox message log write notice:', insertErr.message);
+      }
+    } catch (logErr: any) {
+      console.warn('[SocialInboxService] Inbox message log write skipped:', logErr.message);
+    }
 
     return result;
   }
