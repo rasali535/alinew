@@ -239,7 +239,10 @@ export class ZernioProvider extends SocialProvider {
     const accountIds = (params.zernioAccountIds && params.zernioAccountIds.length > 0)
       ? params.zernioAccountIds
       : ['6a82df7277555aae018b92b4'];
-    const pageId = params.pageId || params.options?.pageId || '477334159265235';
+    const pageId =
+      (params.pageId && !params.pageId.startsWith('6a82') ? params.pageId : null) ||
+      (params.options?.pageId && !params.options.pageId.startsWith('6a82') ? params.options.pageId : null) ||
+      '477334159265235';
 
     try {
       const res = await ZernioSocialService.createPost(
