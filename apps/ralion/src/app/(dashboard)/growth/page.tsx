@@ -1125,7 +1125,16 @@ function GrowthPageContent() {
     try {
       // Check if custom OAuth endpoint is available and returns JSON
       try {
-        const res = await fetch(getRalionApiUrl(`/api/oauth/${providerKey}/connect/`), { credentials: 'include' });
+        const session = await AuthService.getSession();
+        const headers: Record<string, string> = {};
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`;
+        }
+
+        const res = await fetch(getRalionApiUrl(`/api/oauth/${providerKey}/connect/`), {
+          credentials: 'include',
+          headers,
+        });
         const contentType = res.headers.get('content-type') || '';
         if (res.ok && contentType.includes('application/json')) {
           const data = await res.json();

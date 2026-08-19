@@ -54,8 +54,14 @@ export class SocialProviderRouter {
     return platformEnabled;
   }
 
+  private static provisioningLocks = new Map<string, Promise<string | null>>();
+
   /**
-   * Resolve or provision a Zernio Profile for a Ralion Workspace/Organization
+   * Resolve or provision a dedicated Zernio Profile for a Ralion Workspace/Organization.
+   * Strictly enforces 1:1 workspace isolation:
+   * - Never reuses another workspace's Zernio profile.
+   * - Never selects existingZProfiles[0] or array position.
+   * - Always calls ZernioSocialService.createProfile for new workspaces.
    */
   static async getOrCreateZernioProfile(params: {
     workspaceId?: string;
@@ -65,88 +71,109 @@ export class SocialProviderRouter {
   }): Promise<string | null> {
     if (!ZernioSocialService.isConfigured()) return null;
 
-    const supabase = getServiceSupabase();
+    const targetWorkspaceId = params.workspaceId || params.organizationId || params.userId;
+    const lockKey = `zernio_profile_${targetWorkspaceId}`;
 
-    // 1. Check existing mapping in database
-    try {
-      let query = supabase
-        .from('social_provider_profiles')
-        .select('provider_profile_id')
-        .eq('provider', 'zernio')
-        .eq('status', 'ACTIVE');
-
-      if (params.workspaceId) {
-        query = query.eq('workspace_id', params.workspaceId);
-      } else if (params.organizationId) {
-        query = query.eq('organization_id', params.organizationId);
-      } else {
-        query = query.eq('user_id', params.userId);
-      }
-
-      const { data: existing } = await query.maybeSingle();
-      if (existing?.provider_profile_id) {
-        return existing.provider_profile_id;
-      }
-    } catch (dbErr: any) {
-      console.warn('[SocialProviderRouter] DB check error:', dbErr.message);
+    if (this.provisioningLocks.has(lockKey)) {
+      return this.provisioningLocks.get(lockKey)!;
     }
 
-    // 2. Check if Zernio already has active profiles
-    try {
-      const existingZProfiles = await ZernioSocialService.listProfiles();
-      if (existingZProfiles.length > 0 && existingZProfiles[0].id) {
-        const defaultId = existingZProfiles[0].id;
-        // Attempt to persist mapping
-        try {
-          await supabase.from('social_provider_profiles').upsert({
-            workspace_id: params.workspaceId || null,
-            organization_id: params.organizationId || null,
-            user_id: params.userId,
-            provider: 'zernio',
-            provider_profile_id: defaultId,
-            profile_name: existingZProfiles[0].name || 'Default Workspace Profile',
-            status: 'ACTIVE',
-          }, { onConflict: 'provider_profile_id' });
-        } catch {
-          // Continue even if DB write is pending migration
+    const provisioningPromise = (async () => {
+      const supabase = getServiceSupabase();
+
+      // 1. Check existing mapping in database for this specific workspace / user
+      try {
+        let query = supabase
+          .from('social_provider_profiles')
+          .select('provider_profile_id')
+          .eq('provider', 'zernio')
+          .eq('status', 'ACTIVE');
+
+        if (params.workspaceId) {
+          query = query.eq('workspace_id', params.workspaceId);
+        } else if (params.organizationId) {
+          query = query.eq('organization_id', params.organizationId);
+        } else {
+          query = query.eq('user_id', params.userId);
         }
-        return defaultId;
+
+        const { data: existing } = await query.maybeSingle();
+        if (existing?.provider_profile_id) {
+          return existing.provider_profile_id;
+        }
+      } catch (dbErr: any) {
+        console.warn('[SocialProviderRouter] DB check error:', dbErr.message);
       }
-    } catch (listErr: any) {
-      console.warn('[SocialProviderRouter] List profiles error:', listErr.message);
-    }
 
-    // 3. Create new profile in Zernio
-    try {
-      const profileName = params.workspaceName || `Ralion Workspace ${params.workspaceId || params.userId}`;
-      const zProfile = await ZernioSocialService.createProfile(
-        profileName,
-        `Ralion Workspace Profile (${params.workspaceId || params.userId})`
-      );
+      // 2. Create or find dedicated profile in Zernio for this specific workspace
+      const uniqueProfileName = params.workspaceName 
+        ? `${params.workspaceName} (${targetWorkspaceId.slice(0, 8)})`
+        : `Ralion Workspace (${targetWorkspaceId})`;
 
-      if (zProfile?.id) {
+      let zProfileId: string | null = null;
+
+      try {
+        const zProfile = await ZernioSocialService.createProfile(
+          uniqueProfileName,
+          `Dedicated Ralion Workspace Profile for ${targetWorkspaceId}`
+        );
+        if (zProfile?.id) {
+          zProfileId = zProfile.id;
+        }
+      } catch (createErr: any) {
+        // If profile with this unique workspace name already exists on Zernio, resolve ONLY that exact match
+        if (createErr?.message?.includes('409') || createErr?.message?.includes('already exists')) {
+          try {
+            const zProfiles = await ZernioSocialService.listProfiles();
+            const exactMatch = zProfiles.find(
+              (p: any) => p.name === uniqueProfileName || p.name?.includes(targetWorkspaceId)
+            );
+            if (exactMatch?.id) {
+              zProfileId = exactMatch.id;
+            }
+          } catch (listErr: any) {
+            console.warn('[SocialProviderRouter] List profiles error on 409 resolution:', listErr.message);
+          }
+        }
+
+        if (!zProfileId) {
+          console.error('[SocialProviderRouter] Failed to auto-provision dedicated Zernio profile:', createErr.message);
+          throw new Error(`Failed to provision dedicated Zernio social profile for workspace ${targetWorkspaceId}: ${createErr.message}`);
+        }
+      }
+
+      if (zProfileId) {
         // Save mapping in database
         try {
-          await supabase.from('social_provider_profiles').insert({
-            workspace_id: params.workspaceId || null,
+          await supabase.from('social_provider_profiles').upsert({
+            workspace_id: params.workspaceId || targetWorkspaceId,
             organization_id: params.organizationId || null,
             user_id: params.userId,
             provider: 'zernio',
-            provider_profile_id: zProfile.id,
-            profile_name: profileName,
+            provider_profile_id: zProfileId,
+            profile_name: uniqueProfileName,
             status: 'ACTIVE',
-          });
-        } catch {
-          // Continue even if DB write is pending migration
+            metadata: {
+              provisionedAt: new Date().toISOString(),
+              workspaceId: targetWorkspaceId,
+            },
+          }, { onConflict: 'workspace_id,provider' });
+        } catch (dbInsertErr: any) {
+          console.warn('[SocialProviderRouter] DB insert warning for new profile:', dbInsertErr.message);
         }
 
-        return zProfile.id;
+        return zProfileId;
       }
-    } catch (err: any) {
-      console.warn('[SocialProviderRouter] Failed to auto-provision Zernio profile:', err.message);
-    }
 
-    return null;
+      return null;
+    })();
+
+    this.provisioningLocks.set(lockKey, provisioningPromise);
+    try {
+      return await provisioningPromise;
+    } finally {
+      this.provisioningLocks.delete(lockKey);
+    }
   }
 
   /**

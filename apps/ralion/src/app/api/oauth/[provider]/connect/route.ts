@@ -1,5 +1,4 @@
 import { NextRequest } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import {
   linkedinAdapter, metaAdapter, xAdapter, tiktokAdapter, youtubeAdapter,
   generateCodeVerifier, generateCodeChallenge,
@@ -8,6 +7,7 @@ import {
 import { generateOAuthState, ZernioSocialService } from '@ralion/integrations';
 import { SocialProviderRouter } from '@/lib/services/social/socialProviderRouter.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
+import { getCurrentRalionContext, authRequiredResponse } from '@/lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,14 +33,16 @@ export async function GET(
   try {
     const { provider } = await params;
 
-    // Verify user is authenticated
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { global: { headers: { cookie: request.headers.get('cookie') || '' } } }
-    );
-    const { data: { user } } = await supabase.auth.getUser();
-    const userId = user?.id || 'anonymous';
+    // Verify user is authenticated with server-authoritative context
+    const context = await getCurrentRalionContext(request, { requireAuth: true });
+    if (!context) {
+      return authRequiredResponse(request);
+    }
+
+    const userId = context.user.id;
+    const workspaceId = context.workspace.id;
+    const orgId = context.workspace.organization_id || context.workspace.id;
+    const workspaceName = context.workspace.name;
 
     // Generate PKCE code verifier + challenge (for X and TikTok)
     const codeVerifier = generateCodeVerifier();
@@ -53,6 +55,8 @@ export async function GET(
     const normalizedPlatform = (provider === 'twitter' ? 'x' : provider) as any;
     const routing = await SocialProviderRouter.resolveRouting({
       platform: normalizedPlatform,
+      workspaceId,
+      organizationId: orgId,
       userId,
     });
 
