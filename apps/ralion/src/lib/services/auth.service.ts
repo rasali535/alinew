@@ -100,11 +100,18 @@ export class AuthService {
    */
   static async resetPassword(email: string) {
     const isDesktop = typeof window !== 'undefined' && ((window as any).__RALION_DESKTOP__ || window.location.protocol === 'file:');
+    
+    let baseUrl = 'https://rasalilabs.com/ralion';
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      const isSubpath = window.location.pathname.startsWith('/ralion');
+      baseUrl = isSubpath ? `${window.location.origin}/ralion` : window.location.origin;
+    } else if (process.env.NEXT_PUBLIC_APP_URL) {
+      baseUrl = process.env.NEXT_PUBLIC_APP_URL;
+    }
+
     const redirectUrl = isDesktop
       ? 'ralion://reset-password'
-      : typeof window !== 'undefined'
-      ? `${window.location.origin}/ralion/login`
-      : 'https://rasalilabs.com/ralion/login';
+      : `${baseUrl.replace(/\/$/, '')}/reset-password`;
 
     const { error } = await this.supabase.auth.resetPasswordForEmail(email, {
       redirectTo: redirectUrl,
@@ -115,6 +122,47 @@ export class AuthService {
     }
 
     return true;
+  }
+
+  /**
+   * Update password for the current authenticated recovery session
+   */
+  static async updatePassword(password: string) {
+    if (!password || password.length < 8) {
+      throw new Error('Password must be at least 8 characters.');
+    }
+
+    const { data, error } = await this.supabase.auth.updateUser({
+      password,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    return data;
+  }
+
+  /**
+   * Exchange PKCE authorization code for session
+   */
+  static async exchangeCodeForSession(code: string) {
+    const { data, error } = await this.supabase.auth.exchangeCodeForSession(code);
+    if (error) {
+      throw error;
+    }
+    return data;
+  }
+
+  /**
+   * Set auth session explicitly from tokens
+   */
+  static async setSession(tokens: { access_token: string; refresh_token: string }) {
+    const { data, error } = await this.supabase.auth.setSession(tokens);
+    if (error) {
+      throw error;
+    }
+    return data;
   }
 
   /**
