@@ -39,7 +39,7 @@ export default function DashboardLayout({
     setIsMobileSidebarOpen(false);
   }, [pathname]);
 
-  const organizationName = currentUser?.orgName || 'Ras Ali Labs Workspace';
+  const organizationName = currentUser?.orgName || (currentUser?.fullName ? `${currentUser.fullName}'s Workspace` : (currentUser?.email ? `${currentUser.email.split('@')[0]}'s Workspace` : 'Ralion Workspace'));
   const branchName = currentUser?.branchName || 'Main HQ Branch';
 
   const handleNavigate = (href: string) => {

@@ -49,13 +49,34 @@ export async function POST(
 
     const body = await request.json();
 
-    // Retrieve normalized analytics
+    // Retrieve normalized analytics strictly for this tenant
     const analytics = await FacebookPageManagementService.getPageAnalytics({
       organizationId: serverCtx.workspace.id,
       workspaceId: serverCtx.workspace.id,
       userId: serverCtx.user.id,
       pageId,
     });
+
+    if (analytics.pageName === 'No Connected Page' && analytics.followers === 0 && analytics.totalPosts30d === 0) {
+      const action = body.action || 'GET_INSIGHTS';
+      if (action === 'GET_PLAN') {
+        return corsJsonResponse({ success: true, plan: null }, undefined, request);
+      }
+      if (action === 'ASK_MARI') {
+        return corsJsonResponse({
+          success: true,
+          chat: {
+            text: 'Connect your Facebook Page to unlock real-time Mari AI audience growth intelligence.',
+            action: 'CONNECT_PAGE',
+          },
+        }, undefined, request);
+      }
+      return corsJsonResponse({
+        success: true,
+        score: null,
+        insights: [],
+      }, undefined, request);
+    }
 
     const context: MariPageContext = {
       organizationId: serverCtx.workspace.id,

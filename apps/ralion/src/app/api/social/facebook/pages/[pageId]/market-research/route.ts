@@ -24,15 +24,16 @@ export async function GET(
       return authRequiredResponse(request);
     }
 
-    if (pageId && pageId !== 'default') {
-      const supabase = getServiceSupabase();
-      const { data: conn } = await supabase
-        .from('social_connections')
-        .select('provider_account_id, zernio_account_id, metadata')
-        .eq('provider', 'facebook')
-        .or(`workspace_id.eq.${context.workspace.id},user_id.eq.${context.user.id}`)
-        .maybeSingle();
+    const supabase = getServiceSupabase();
+    const { data: conn } = await supabase
+      .from('social_connections')
+      .select('provider_account_id, zernio_account_id, account_name, metadata')
+      .eq('provider', 'facebook')
+      .eq('connection_status', 'CONNECTED')
+      .or(`workspace_id.eq.${context.workspace.id},user_id.eq.${context.user.id}`)
+      .maybeSingle();
 
+    if (pageId && pageId !== 'default') {
       const pageMatched =
         conn &&
         (conn.provider_account_id === pageId ||
@@ -45,14 +46,21 @@ export async function GET(
       }
     }
 
+    if (!conn) {
+      return corsJsonResponse({
+        success: true,
+        report: null,
+      }, undefined, request);
+    }
+
     const report = MariCompetitiveIntelligenceService.getMarketResearchReport({
-      pageId,
+      pageId: conn.provider_account_id || pageId,
       organizationId: context.workspace.id,
     });
 
     await MariCompetitiveIntelligenceService.auditMarketResearchAccess({
       userId: context.user.id,
-      pageId,
+      pageId: conn.provider_account_id || pageId,
     });
 
     return corsJsonResponse({

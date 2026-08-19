@@ -24,15 +24,16 @@ export async function GET(
       return authRequiredResponse(request);
     }
 
-    if (pageId && pageId !== 'default') {
-      const supabase = getServiceSupabase();
-      const { data: conn } = await supabase
-        .from('social_connections')
-        .select('provider_account_id, zernio_account_id, metadata')
-        .eq('provider', 'facebook')
-        .or(`workspace_id.eq.${context.workspace.id},user_id.eq.${context.user.id}`)
-        .maybeSingle();
+    const supabase = getServiceSupabase();
+    const { data: conn } = await supabase
+      .from('social_connections')
+      .select('provider_account_id, zernio_account_id, account_name, created_at, metadata')
+      .eq('provider', 'facebook')
+      .eq('connection_status', 'CONNECTED')
+      .or(`workspace_id.eq.${context.workspace.id},user_id.eq.${context.user.id}`)
+      .maybeSingle();
 
+    if (pageId && pageId !== 'default') {
       const pageMatched =
         conn &&
         (conn.provider_account_id === pageId ||
@@ -45,10 +46,18 @@ export async function GET(
       }
     }
 
+    if (!conn) {
+      return corsJsonResponse({
+        success: true,
+        knowledge: null,
+      }, undefined, request);
+    }
+
     const knowledge = MariBusinessLearningService.getBusinessKnowledge({
       organizationId: context.workspace.id,
-      pageId,
-      pageName: 'Business Knowledge',
+      pageId: conn.provider_account_id || pageId,
+      pageName: conn.account_name || conn.metadata?.pageName || context.workspace.name || 'Business Knowledge',
+      connectedAt: conn.created_at || undefined,
     });
 
     return corsJsonResponse({
