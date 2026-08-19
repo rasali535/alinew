@@ -2793,7 +2793,7 @@ function GrowthPageContent() {
                           </Badge>
                         </div>
                         <p className="text-xs text-zinc-300 mt-1">
-                          During Facebook connection, Mari AI calibrated your business identity ({businessKnowledge.businessName}), historical engagement, and regional audience to calibrate custom copy and growth angles.
+                          During Facebook connection, Mari AI calibrated your business identity ({businessKnowledge?.businessName || activeFbPage?.name || fbConn?.label || 'Your Business'}), historical engagement, and regional audience to calibrate custom copy and growth angles.
                         </p>
                       </div>
 
@@ -4869,7 +4869,7 @@ function GrowthPageContent() {
               <Sparkles className="w-4 h-4 text-purple-400" /> Learned Brand Identity Guidelines
             </p>
             <p className="mt-1 text-zinc-300">
-              Fine-tune the tone of voice and technical vocabulary Mari AI uses when generating 7-day plans, post captions, and marketing strategies for <strong>{businessKnowledge.businessName}</strong>.
+              Fine-tune the tone of voice and technical vocabulary Mari AI uses when generating 7-day plans, post captions, and marketing strategies for <strong>{businessKnowledge?.businessName || activeFbPage?.name || fbConn?.label || 'Your Business'}</strong>.
             </p>
           </div>
 

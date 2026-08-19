@@ -50,7 +50,7 @@ export class MariBusinessLearningService {
     pageName?: string;
     connectedAt?: string;
   }): BusinessKnowledgeProfile {
-    const pageName = params.pageName || 'Ras Ali Labs';
+    const pageName = params.pageName || 'Your Business';
     const connectedDate = params.connectedAt ? new Date(params.connectedAt) : new Date(Date.now() - 6 * 60 * 1000);
     const elapsedMinutes = Math.min(5, Math.max(1, Math.floor((Date.now() - connectedDate.getTime()) / (60 * 1000))));
 

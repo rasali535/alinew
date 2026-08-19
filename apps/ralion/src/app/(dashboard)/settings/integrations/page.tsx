@@ -382,10 +382,10 @@ export default function IntegrationHubPage() {
               </div>
 
               <div className="w-full p-4 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-left flex flex-col gap-2 font-mono">
-                <span className="text-zinc-400">Organization: <strong className="text-white">{learnedProfileSummary.businessName}</strong></span>
-                <span className="text-zinc-400">Brand Voice: <strong className="text-purple-400">{learnedProfileSummary.brandVoice}</strong></span>
-                <span className="text-zinc-400">Target Audience: <strong className="text-blue-400">{learnedProfileSummary.targetAudience}</strong></span>
-                <span className="text-zinc-400">Knowledge Graph: <strong className="text-emerald-400">{learnedProfileSummary.nodeCount} Active Nodes</strong></span>
+                <span className="text-zinc-400">Organization: <strong className="text-white">{learnedProfileSummary?.businessName || 'Your Workspace'}</strong></span>
+                <span className="text-zinc-400">Brand Voice: <strong className="text-purple-400">{learnedProfileSummary?.brandVoice || 'Professional'}</strong></span>
+                <span className="text-zinc-400">Target Audience: <strong className="text-blue-400">{learnedProfileSummary?.targetAudience || 'Target Audience'}</strong></span>
+                <span className="text-zinc-400">Knowledge Graph: <strong className="text-emerald-400">{learnedProfileSummary?.nodeCount || 0} Active Nodes</strong></span>
               </div>
 
               <Button
