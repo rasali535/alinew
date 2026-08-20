@@ -10,6 +10,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { ZernioSocialService, SocialPlatformType } from '@ralion/integrations';
 import { AuditLoggerService } from '../auditLogger.service';
+import { SocialProviderRouter } from './socialProviderRouter.service';
 
 function getServiceSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co';
@@ -144,7 +145,7 @@ export class FacebookPageManagementService {
     profileId?: string;
   }): Promise<{ pages: FacebookPageDescriptor[]; entitlement: EntitlementStatus }> {
     const supabase = getServiceSupabase();
-    const entitlement = await this.getOrganizationEntitlement(params.organizationId);
+    const entitlement = await this.getOrganizationEntitlement(params.organizationId || params.workspaceId, params.userId);
 
     // Query currently connected social accounts strictly for this user/workspace
     let connQuery = supabase
@@ -162,7 +163,25 @@ export class FacebookPageManagementService {
       return { pages: [], entitlement };
     }
 
-    const { data: existingConnections } = await connQuery;
+    let existingConnections = (await connQuery).data || [];
+
+    if (existingConnections.length === 0 && (params.workspaceId || params.userId)) {
+      try {
+        const synced = await SocialProviderRouter.syncAccountsFromZernio({
+          userId: params.userId || params.workspaceId || '',
+          workspaceId: params.workspaceId,
+          organizationId: params.organizationId,
+        });
+        if (synced && synced.length > 0) {
+          const { data: refreshed } = await connQuery;
+          if (refreshed && refreshed.length > 0) {
+            existingConnections = refreshed;
+          }
+        }
+      } catch (syncErr: any) {
+        console.warn('[FacebookPageManagement] Auto-sync on discovery notice:', syncErr.message);
+      }
+    }
 
     if (!existingConnections || existingConnections.length === 0) {
       return { pages: [], entitlement };
@@ -200,7 +219,7 @@ export class FacebookPageManagementService {
     pageData: Partial<FacebookPageDescriptor>;
   }): Promise<{ success: boolean; destination: any; entitlement: EntitlementStatus }> {
     const supabase = getServiceSupabase();
-    const entitlement = await this.getOrganizationEntitlement(params.organizationId);
+    const entitlement = await this.getOrganizationEntitlement(params.organizationId || params.workspaceId, params.userId);
 
     // 1. Check if this exact page is already connected (reconnect / recovery)
     let existingQuery = supabase

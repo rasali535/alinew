@@ -1189,7 +1189,18 @@ function GrowthPageContent() {
       localStorage.setItem('ralion_connected_social_accounts', JSON.stringify(filtered));
     } catch {}
 
+    if (providerKey === 'facebook') {
+      setAvailableFacebookPages([]);
+      setFacebookPagePosts([]);
+      setFacebookEntitlement(prev => ({ ...prev, current: 0, remaining: prev.limit }));
+    }
+
     setConnectedAccounts(prev => prev.filter(a => a.provider !== providerKey));
+    setOauthAlert({
+      type: 'info',
+      message: `✅ Disconnected ${providerKey.charAt(0).toUpperCase() + providerKey.slice(1)} account.`
+    });
+    setTimeout(() => setOauthAlert(null), 4000);
   };
 
   // ── Sync analytics from real platform APIs ────────────────────────────────
@@ -1384,6 +1395,11 @@ function GrowthPageContent() {
     };
     setPosts(prev => [newPostObj, ...prev]);
     setActiveTab('CONTENT');
+    setOauthAlert({
+      type: 'success',
+      message: '✅ Draft post created and loaded into Content Library!'
+    });
+    setTimeout(() => setOauthAlert(null), 4000);
   };
 
   // ── Real Publish: POST to platform API ───────────────────────────────────
@@ -3343,8 +3359,13 @@ function GrowthPageContent() {
                       <Button 
                         variant="outline" 
                         size="sm" 
-                        onClick={() => setPosts(prev => prev.filter(p => p.id !== post.id))}
+                        onClick={() => {
+                          setPosts(prev => prev.filter(p => p.id !== post.id));
+                          setOauthAlert({ type: 'info', message: 'Post draft deleted.' });
+                          setTimeout(() => setOauthAlert(null), 3000);
+                        }}
                         className="text-xs text-red-400 border-red-900/40 hover:bg-red-950"
+                        title="Delete Post Draft"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
@@ -3952,14 +3973,31 @@ function GrowthPageContent() {
                         <div className="text-[10px] text-zinc-500">{conn ? `Connected: ${conn.handle}` : 'Not Connected'}</div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-xs font-bold text-white">{conn?.followers || '10,000+'} Reach</div>
-                      <div className="text-[10px] text-emerald-400 font-semibold">Active Sync</div>
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <div className="text-xs font-bold text-white">{conn?.followers || '0'} Reach</div>
+                          <div className={`text-[10px] font-semibold ${conn ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                            {conn ? 'Active Sync' : 'Standby'}
+                          </div>
+                        </div>
+                        {!conn && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedConnectPlatform(k);
+                              setIsConnectModalOpen(true);
+                            }}
+                            className="text-[11px] py-1 px-2.5 border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white bg-zinc-950"
+                          >
+                            Connect
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
           </Card>
         </div>
       )}
@@ -4701,7 +4739,25 @@ function GrowthPageContent() {
               {selectedCampaignDetail.strategyOutput || 'Mari AI Strategy generated for campaign.'}
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex items-center justify-end gap-2">
+              <Button 
+                variant="primary" 
+                size="sm" 
+                onClick={() => {
+                  setNewPost({
+                    title: selectedCampaignDetail.name,
+                    body: selectedCampaignDetail.strategyOutput || '',
+                    platform: (selectedCampaignDetail.platforms[0] as any) || 'facebook',
+                    hashtags: '#RalionGrowth #CampaignLaunch #EnterpriseOS',
+                    scheduledAt: '',
+                  });
+                  setSelectedCampaignDetail(null);
+                  setIsCreateOpen(true);
+                }}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs"
+              >
+                <Send className="w-3.5 h-3.5 mr-1" /> Use Strategy in Composer
+              </Button>
               <Button variant="outline" size="sm" onClick={() => setSelectedCampaignDetail(null)}>Close</Button>
             </div>
           </div>
@@ -4722,70 +4778,99 @@ function GrowthPageContent() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3">
-            {availableFacebookPages.map((page) => {
-              const isConnected = page.status === 'CONNECTED' || page.isCurrentDestination;
-              const isLocked = page.status === 'LOCKED';
+          {availableFacebookPages.length === 0 ? (
+            <div className="p-6 rounded-2xl bg-zinc-950 border border-zinc-800/80 flex flex-col items-center text-center gap-4 py-8">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                <Globe className="w-6 h-6" />
+              </div>
+              <div className="max-w-xs">
+                <h4 className="text-sm font-bold text-white">No Facebook Pages Discovered</h4>
+                <p className="text-xs text-zinc-400 mt-1">
+                  Authenticate your Facebook account to link and manage your business pages in this workspace.
+                </p>
+              </div>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  setIsPageSelectionModalOpen(false);
+                  handleConnectSocialAccount('facebook');
+                }}
+                disabled={isConnecting}
+                className="gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 font-bold text-xs shadow-lg shadow-indigo-600/30"
+              >
+                <Plus className="w-4 h-4" /> {isConnecting ? 'Connecting...' : 'Authenticate & Link Facebook'}
+              </Button>
+              <div className="p-3 rounded-xl bg-amber-950/20 border border-amber-500/20 text-[11px] text-amber-300 text-left max-w-sm">
+                💡 <strong>Meta Permission Notice:</strong> Ensure you are logged into Facebook with an account that has Admin or Editor access to the target Facebook Page. If testing in Development mode, ensure your Facebook account is added to the Meta Developer app.
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {availableFacebookPages.map((page) => {
+                const isConnected = page.status === 'CONNECTED' || page.isCurrentDestination;
+                const isLocked = page.status === 'LOCKED';
 
-              return (
-                <div 
-                  key={page.pageId}
-                  className={`p-4 rounded-2xl border transition-all flex items-center justify-between gap-4 ${
-                    isConnected 
-                      ? 'bg-indigo-950/30 border-indigo-500/40 shadow-md' 
-                      : isLocked 
-                        ? 'bg-zinc-950/50 border-zinc-800 opacity-75' 
-                        : 'bg-zinc-950 border-zinc-800 hover:border-zinc-700'
-                  }`}
-                >
-                  <div className="flex items-center gap-3.5">
-                    <div className="w-12 h-12 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center font-bold text-indigo-400">
-                      fb
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-bold text-white">{page.name}</h4>
-                        {isConnected && <Badge variant="success" className="text-[10px]">ACTIVE</Badge>}
-                        {isLocked && <Badge variant="default" className="text-[10px]">🔒 UPGRADE</Badge>}
+                return (
+                  <div 
+                    key={page.pageId}
+                    className={`p-4 rounded-2xl border transition-all flex items-center justify-between gap-4 ${
+                      isConnected 
+                        ? 'bg-indigo-950/30 border-indigo-500/40 shadow-md' 
+                        : isLocked 
+                          ? 'bg-zinc-950/50 border-zinc-800 opacity-75' 
+                          : 'bg-zinc-950 border-zinc-800 hover:border-zinc-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-12 h-12 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center font-bold text-indigo-400">
+                        fb
                       </div>
-                      <p className="text-xs text-zinc-400 font-mono mt-0.5">{page.username || '@facebook_page'}</p>
-                      <p className="text-[11px] text-zinc-500 mt-0.5">{page.followersCount || 0} followers • {page.category || 'Business'}</p>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-bold text-white">{page.name}</h4>
+                          {isConnected && <Badge variant="success" className="text-[10px]">ACTIVE</Badge>}
+                          {isLocked && <Badge variant="default" className="text-[10px]">🔒 UPGRADE</Badge>}
+                        </div>
+                        <p className="text-xs text-zinc-400 font-mono mt-0.5">{page.username || '@facebook_page'}</p>
+                        <p className="text-[11px] text-zinc-500 mt-0.5">{page.followersCount || 0} followers • {page.category || 'Business'}</p>
+                      </div>
+                    </div>
+
+                    <div>
+                      {isConnected ? (
+                        <Button variant="outline" size="sm" disabled className="text-xs text-emerald-400 border-emerald-500/30 bg-emerald-950/20">
+                          <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Active
+                        </Button>
+                      ) : isLocked ? (
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => {
+                            setIsPageSelectionModalOpen(false);
+                            setIsUpgradeModalOpen(true);
+                          }}
+                          className="text-xs text-amber-300 border-amber-500/40 hover:bg-amber-950/40"
+                        >
+                          <Lock className="w-3.5 h-3.5 mr-1 text-amber-400" /> Unlock
+                        </Button>
+                      ) : (
+                        <Button 
+                          variant="primary" 
+                          size="sm" 
+                          onClick={() => handleConnectSelectedPage(page.pageId)}
+                          disabled={isConnectingPage}
+                          className="text-xs bg-indigo-600 hover:bg-indigo-700 font-bold"
+                        >
+                          {isConnectingPage ? 'Connecting...' : 'Connect'}
+                        </Button>
+                      )}
                     </div>
                   </div>
-
-                  <div>
-                    {isConnected ? (
-                      <Button variant="outline" size="sm" disabled className="text-xs text-emerald-400 border-emerald-500/30 bg-emerald-950/20">
-                        <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Active
-                      </Button>
-                    ) : isLocked ? (
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => {
-                          setIsPageSelectionModalOpen(false);
-                          setIsUpgradeModalOpen(true);
-                        }}
-                        className="text-xs text-amber-300 border-amber-500/40 hover:bg-amber-950/40"
-                      >
-                        <Lock className="w-3.5 h-3.5 mr-1 text-amber-400" /> Unlock
-                      </Button>
-                    ) : (
-                      <Button 
-                        variant="primary" 
-                        size="sm" 
-                        onClick={() => handleConnectSelectedPage(page.pageId)}
-                        disabled={isConnectingPage}
-                        className="text-xs bg-indigo-600 hover:bg-indigo-700 font-bold"
-                      >
-                        {isConnectingPage ? 'Connecting...' : 'Connect'}
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
 
           <div className="flex items-center justify-between pt-3 border-t border-zinc-800 text-xs">
             <span className="text-zinc-500">Need to manage multiple Pages?</span>
@@ -4832,8 +4917,12 @@ function GrowthPageContent() {
                 variant="primary" 
                 size="sm" 
                 onClick={() => {
-                  alert('Redirecting to secure checkout...');
                   setIsUpgradeModalOpen(false);
+                  router.push('/billing?tier=professional');
+                  setOauthAlert({
+                    type: 'info',
+                    message: 'Redirecting to plan selection & checkout...'
+                  });
                 }}
                 className="w-full bg-indigo-600 hover:bg-indigo-700 font-bold text-xs"
               >
@@ -4856,8 +4945,12 @@ function GrowthPageContent() {
                 variant="outline" 
                 size="sm" 
                 onClick={() => {
-                  alert('Our enterprise team will reach out within 2 hours.');
                   setIsUpgradeModalOpen(false);
+                  window.location.href = 'mailto:sales@rasalilabs.com?subject=Ralion%20Enterprise%20Plan%20Inquiry';
+                  setOauthAlert({
+                    type: 'success',
+                    message: '📧 Opened enterprise sales inquiry. Our team will contact you within 2 hours.'
+                  });
                 }}
                 className="w-full text-xs font-semibold"
               >
