@@ -9,3 +9,4 @@ export * from './mariBriefing.service';
 export * from './businessGrowthProfile.service';
 export * from './mariOrchestrator.service';
 export * from './websiteIngestion.service';
+export * from './creativeAsset.service';

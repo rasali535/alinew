@@ -1374,7 +1374,7 @@ function GrowthPageContent() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Media Generators — Connected to Black Forest Labs FLUX.1 & CogVideoX
+  // Media Generators — Real Server-Side Generation Pipeline & Durable Storage
   const generateMedia = async (type: 'poster' | 'video') => {
     const prompt = type === 'poster' ? posterPrompt : videoPrompt;
     if (!prompt.trim()) return;
@@ -1388,52 +1388,84 @@ function GrowthPageContent() {
     }
 
     try {
-      if (type === 'poster') {
-        const fullPrompt = `${prompt}, ${posterStyle} style, ${posterFormat} format, high-resolution commercial asset`;
-        const res = await generateHfImage({ prompt: fullPrompt, quality: 'fast' });
-        const imageUrl = res.success && res.url 
-          ? res.url 
-          : `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?model=flux&width=1024&height=768&nologo=true`;
+      const endpoint = window.location.pathname.startsWith('/ralion') 
+        ? '/ralion/api/creatives/generate' 
+        : '/api/creatives/generate';
 
-        setGeneratedPoster(imageUrl);
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: type === 'poster' ? 'POSTER_IMAGE' : 'VIDEO_REEL',
+          prompt: prompt.trim(),
+          style: type === 'poster' ? posterStyle : videoVoiceover,
+          format: type === 'poster' ? posterFormat : videoLength,
+          organizationId: 'default-org',
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data.success || !data.asset) {
+        const errorMsg = data.error || `Creative generation failed (HTTP ${res.status})`;
+        setOauthAlert({
+          type: 'error',
+          message: `❌ ${errorMsg}`,
+        });
+        setIsGeneratingPoster(false);
+        setIsGeneratingVideo(false);
+        return;
+      }
+
+      const asset = data.asset;
+
+      if (type === 'poster') {
+        setGeneratedPoster(asset.publicUrl || asset.previewUrl);
         setIsGeneratingPoster(false);
 
         const newItem: GeneratedContentItem = {
-          id: `gen-${Date.now()}`,
+          id: asset.id,
           type: 'POSTER_IMAGE',
-          title: prompt.substring(0, 32) + '...',
-          prompt: prompt,
-          output: imageUrl,
-          previewUrl: imageUrl,
-          modelUsed: `Black Forest Labs FLUX.1 (${posterFormat}, ${posterStyle})`,
+          title: asset.title,
+          prompt: asset.prompt,
+          output: asset.publicUrl || asset.previewUrl,
+          previewUrl: asset.previewUrl || asset.publicUrl,
+          modelUsed: `FLUX.1 Studio (${posterFormat}, ${posterStyle})`,
           createdAt: 'Just now'
         };
         setGeneratedGallery(prev => [newItem, ...prev]);
+        setOauthAlert({
+          type: 'success',
+          message: '🎨 Real FLUX.1 high-resolution poster generated and saved to library!',
+        });
+        setTimeout(() => setOauthAlert(null), 4000);
       } else {
-        const fullVideoPrompt = `${prompt}, cinematic commercial video reel, ${videoLength}, ${videoVoiceover}`;
-        const res = await generateHfVideo({ prompt: fullVideoPrompt, quality: 'fast' });
-        const vidUrl = res.success && res.url 
-          ? res.url 
-          : 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
-        const posterUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(fullVideoPrompt)}?model=flux-realism&width=1024&height=576&nologo=true`;
-
-        setGeneratedVideo(vidUrl);
+        setGeneratedVideo(asset.publicUrl);
         setIsGeneratingVideo(false);
 
         const newItem: GeneratedContentItem = {
-          id: `gen-${Date.now()}`,
+          id: asset.id,
           type: 'VIDEO_REEL',
-          title: prompt.substring(0, 32) + '...',
-          prompt: prompt,
-          output: vidUrl,
-          previewUrl: posterUrl,
-          modelUsed: `CogVideoX Animation (${videoLength}, ${videoVoiceover})`,
+          title: asset.title,
+          prompt: asset.prompt,
+          output: asset.publicUrl,
+          previewUrl: asset.previewUrl,
+          modelUsed: `CogVideoX Motion Studio (${videoLength})`,
           createdAt: 'Just now'
         };
         setGeneratedGallery(prev => [newItem, ...prev]);
+        setOauthAlert({
+          type: 'success',
+          message: '🎥 Real CogVideoX video reel generated and ready for review!',
+        });
+        setTimeout(() => setOauthAlert(null), 4000);
       }
     } catch (e: any) {
       console.error('[Growth Studio Media Gen Error]:', e);
+      setOauthAlert({
+        type: 'error',
+        message: '❌ Connection error while generating creative media.',
+      });
       setIsGeneratingPoster(false);
       setIsGeneratingVideo(false);
     }

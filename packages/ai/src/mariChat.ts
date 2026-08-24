@@ -109,6 +109,7 @@ async function callGeminiApi(
             contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
             generationConfig: { temperature: 0.7, maxOutputTokens: 1500 },
           }),
+          signal: AbortSignal.timeout(15000),
         }
       );
 
