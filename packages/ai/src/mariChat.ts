@@ -158,7 +158,7 @@ export async function callMariAiApi(
   try {
     const selection = selectBestAimlModel(prompt);
 
-    // ── 🎥 Video — HuggingFace CogVideoX (sole engine) ─────────────────────
+    // ── 🎥 Video — CogVideoX / Prompt Animation Stream ───────────────────
     if (selection.endpoint === 'video') {
       const hfVid = await generateHfVideo({ prompt, quality: 'fast' });
       const videoUrl = hfVid.success && hfVid.url
@@ -166,7 +166,7 @@ export async function callMariAiApi(
         : 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
       const vidModel = hfVid.model?.split('/')[1] || 'CogVideoX-2b';
       return {
-        text: `🎥 Video Generated:\n\nPrompt: "${prompt}"\n\n[Watch Video](${videoUrl})\n\n*(HuggingFace · ${vidModel})*`,
+        text: `🎥 Video Generated:\n\nPrompt: "${prompt}"\n\n[Watch Video](${videoUrl})\n\n*(CogVideoX · ${vidModel})*`,
         modelInfo: {
           model: 'mari-video-generator',
           category: 'Mari Video Generator',
@@ -175,15 +175,16 @@ export async function callMariAiApi(
       };
     }
 
-    // ── 🎨 Image — HuggingFace FLUX (sole engine) ───────────────────────────
+    // ── 🎨 Image — Black Forest Labs FLUX.1 (Real-Time Generation) ──────────
     if (selection.endpoint === 'image') {
       const hfImg = await generateHfImage({ prompt, quality: 'fast' });
+      const seed = Math.floor(Math.random() * 1000000);
       const imgUrl = hfImg.success && hfImg.url
         ? hfImg.url
-        : 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop';
+        : `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt.trim())}?model=flux&width=1024&height=768&nologo=true&seed=${seed}`;
       const imgModel = hfImg.model?.split('/')[1] || 'FLUX.1-schnell';
       return {
-        text: `🎨 Image Generated:\n\n![Generated Image](${imgUrl})\n\n*(HuggingFace · ${imgModel})*`,
+        text: `🎨 Image Generated:\n\n![Generated Image](${imgUrl})\n\n*(Black Forest Labs · ${imgModel})*`,
         modelInfo: {
           model: 'mari-image-generator',
           category: 'Mari Image Generator',
