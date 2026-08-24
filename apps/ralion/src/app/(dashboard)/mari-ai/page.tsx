@@ -32,22 +32,28 @@ import {
   CheckSquare, 
   FolderPlus, 
   X, 
-  ExternalLink,
   ChevronRight,
   Activity,
   Layers,
   Settings,
   Flame,
-  CornerDownLeft,
-  Bot
+  Bot,
+  Info,
+  Sliders,
+  DollarSign
 } from 'lucide-react';
 import { 
-  processMariQuery, 
+  BusinessContextService, 
+  MariBriefingService, 
+  MariBriefing, 
+  BusinessContext, 
   callMariAiApi, 
+  processMariQuery, 
   executeMariAction, 
   mariKnowledgeManager, 
   MariActionPayload, 
-  KnowledgeDocument 
+  KnowledgeDocument,
+  DataProvenance
 } from '@ralion/ai';
 
 interface ChatMessage {
@@ -78,22 +84,12 @@ export default function MariAiPage() {
   // Context & live telemetry states
   const [userName, setUserName] = useState('RAS ALI');
   const [userTier, setUserTier] = useState('COMMUNITY');
-  const [activeFbPage, setActiveFbPage] = useState<any>(null);
-  const [pipelineTotal, setPipelineTotal] = useState(84500);
+  const [businessContext, setBusinessContext] = useState<BusinessContext | null>(null);
+  const [briefing, setBriefing] = useState<MariBriefing | null>(null);
+  const [isBriefingLoading, setIsBriefingLoading] = useState(true);
 
   // Chat conversation state
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 'm-welcome',
-      sender: 'MARI',
-      text: 'Good day! I have analyzed your workspace, active CRM pipeline, and Facebook Page telemetry. Your business is gaining positive momentum this week. How can I assist your strategy today?',
-      timestamp: 'Just now',
-      actionsSuggested: [
-        { type: 'NAVIGATE', label: 'Open Growth Studio', payload: { route: '/growth' } },
-        { type: 'NAVIGATE', label: 'Review CRM Pipeline', payload: { route: '/crm' } }
-      ]
-    }
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputQuery, setInputQuery] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -103,14 +99,76 @@ export default function MariAiPage() {
   const [newDoc, setNewDoc] = useState({ title: '', category: 'SOP' as const, content: '' });
 
   // Recent Action History
-  const [recentActions, setRecentActions] = useState<string[]>([
-    'Synced Facebook Page live follower metrics (107 fans)',
-    'Evaluated monthly CRM revenue pipeline ($84,500)',
-    'Optimized short-form video engagement suggestions',
-    'Verified POPIA/Meta privacy compliance trail',
+  const [recentActions, setRecentActions] = useState<Array<{ id: string; action: string; timestamp: string }>>([
+    { id: 'a1', action: 'Synced live Facebook Page follower telemetry (107 fans)', timestamp: '10 mins ago' },
+    { id: 'a2', action: 'Evaluated monthly CRM revenue pipeline ($84,500)', timestamp: '25 mins ago' },
+    { id: 'a3', action: 'Optimized short-form video engagement suggestions', timestamp: '1 hour ago' },
+    { id: 'a4', action: 'Verified POPIA & Meta Platform privacy compliance', timestamp: '2 hours ago' },
   ]);
 
-  // Initial load
+  // Load Business Context & Proactive Briefing immediately when page opens
+  const loadBusinessContext = async (forceRefresh = false) => {
+    setIsBriefingLoading(true);
+    try {
+      let savedContacts: any[] = [];
+      let savedTasks: any[] = [];
+      let savedDocs: any[] = [];
+      let savedFbPage: any = null;
+
+      if (typeof window !== 'undefined') {
+        const rawC = localStorage.getItem('ralion_contacts');
+        if (rawC) savedContacts = JSON.parse(rawC);
+
+        const rawT = localStorage.getItem('ralion_tasks');
+        if (rawT) savedTasks = JSON.parse(rawT);
+
+        const rawD = localStorage.getItem('ralion_documents');
+        if (rawD) savedDocs = JSON.parse(rawD);
+
+        const rawP = localStorage.getItem('ralion_selected_fb_page');
+        if (rawP) savedFbPage = JSON.parse(rawP);
+      }
+
+      const context = await BusinessContextService.assembleContext('ras-ali-labs', {
+        activeScreen: { route: '/mari-ai', label: 'Mari Intelligence Command' },
+        forceRefresh,
+        localOverrides: {
+          contacts: savedContacts,
+          tasks: savedTasks,
+          documents: savedDocs,
+          fbPage: savedFbPage,
+          tier: userTier,
+        },
+      });
+
+      setBusinessContext(context);
+
+      const generatedBriefing = MariBriefingService.generateBriefing(context);
+      setBriefing(generatedBriefing);
+
+      // Set initial greeting message grounded in context
+      if (messages.length === 0) {
+        setMessages([
+          {
+            id: 'm-welcome',
+            sender: 'MARI',
+            text: `Good day, ${userName}! I have analyzed your workspace context (Version ${context.version}). Your CRM pipeline stands at $${context.layer2.crm.totalPipelineValue.value.toLocaleString()} and Facebook reach is surging +${context.layer2.social.reachGrowthPct?.value}%. What strategic goal should we tackle today?`,
+            timestamp: 'Just now',
+            actionsSuggested: generatedBriefing.whatMariRecommends.actions.map(a => ({
+              type: a.type as any,
+              label: a.label,
+              payload: { route: a.route },
+            })),
+          }
+        ]);
+      }
+    } catch (e) {
+      console.error('Failed to assemble proactive context:', e);
+    } finally {
+      setIsBriefingLoading(false);
+    }
+  };
+
   useEffect(() => {
     import('@/lib/services/auth.service').then(({ AuthService }) => {
       AuthService.getCurrentUser().then((user) => {
@@ -119,24 +177,7 @@ export default function MariAiPage() {
       });
     });
 
-    if (typeof window !== 'undefined') {
-      const savedContacts = localStorage.getItem('ralion_contacts');
-      if (savedContacts) {
-        try {
-          const list = JSON.parse(savedContacts);
-          const sum = list.reduce((acc: number, c: any) => acc + (Number(c.dealValue) || 0), 0);
-          if (sum > 0) setPipelineTotal(sum);
-        } catch {}
-      }
-
-      // Check selected FB page
-      const savedPage = localStorage.getItem('ralion_selected_fb_page');
-      if (savedPage) {
-        try {
-          setActiveFbPage(JSON.parse(savedPage));
-        } catch {}
-      }
-    }
+    loadBusinessContext();
   }, []);
 
   // Scroll to bottom when messages update
@@ -162,7 +203,7 @@ export default function MariAiPage() {
     try {
       const ragSearch = mariKnowledgeManager.searchKnowledgeBase(queryText);
       const ruleResponse = processMariQuery(queryText);
-      const apiResult = await callMariAiApi(queryText);
+      const apiResult = await callMariAiApi(queryText, undefined, businessContext);
 
       let answerText = '';
       let modelUsedStr = '';
@@ -185,12 +226,12 @@ export default function MariAiPage() {
       };
 
       setMessages(prev => [...prev, mariMsg]);
-      setRecentActions(prev => [`Answered inquiry: "${queryText.slice(0, 40)}..."`, ...prev.slice(0, 7)]);
+      setRecentActions(prev => [{ id: `act-${Date.now()}`, action: `Answered query: "${queryText.slice(0, 45)}..."`, timestamp: 'Just now' }, ...prev.slice(0, 6)]);
     } catch (err: any) {
       const errorMsg: ChatMessage = {
         id: `mari-err-${Date.now()}`,
         sender: 'MARI',
-        text: `I encountered an unexpected connection issue: ${err.message || 'Please retry your query.'}`,
+        text: `I encountered a connection notice: ${err.message || 'Please retry your query.'}`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       setMessages(prev => [...prev, errorMsg]);
@@ -204,7 +245,7 @@ export default function MariAiPage() {
     const res = await executeMariAction(action);
     const actionLabel = action.label || action.title || action.type;
     if (res.success) {
-      setRecentActions(prev => [`Executed: ${actionLabel}`, ...prev.slice(0, 7)]);
+      setRecentActions(prev => [{ id: `act-${Date.now()}`, action: `Executed: ${actionLabel}`, timestamp: 'Just now' }, ...prev.slice(0, 6)]);
       if (action.type === 'NAVIGATE' && (res.outputData?.route || (action.payload as any)?.route)) {
         const targetRoute = res.outputData?.route || (action.payload as any)?.route;
         router.push(targetRoute);
@@ -226,7 +267,23 @@ export default function MariAiPage() {
     setDocumentsList(mariKnowledgeManager.getDocuments());
     setNewDoc({ title: '', category: 'SOP', content: '' });
     setIsUploadModalOpen(false);
-    setRecentActions(prev => [`Added knowledge source: ${newDoc.title}`, ...prev.slice(0, 7)]);
+    setRecentActions(prev => [{ id: `act-${Date.now()}`, action: `Added knowledge source: ${newDoc.title}`, timestamp: 'Just now' }, ...prev.slice(0, 6)]);
+    loadBusinessContext(true);
+  };
+
+  const getProvenanceBadge = (prov: DataProvenance) => {
+    switch (prov) {
+      case 'VERIFIED':
+        return <Badge variant="success" className="text-[9px] font-mono">Verified</Badge>;
+      case 'USER_PROVIDED':
+        return <Badge variant="primary" className="text-[9px] font-mono">User Specified</Badge>;
+      case 'INFERRED':
+        return <Badge variant="purple" className="text-[9px] font-mono">AI Inferred</Badge>;
+      case 'AI_RECOMMENDATION':
+        return <Badge variant="warning" className="text-[9px] font-mono">Recommendation</Badge>;
+      default:
+        return null;
+    }
   };
 
   const promptSuggestions = [
@@ -257,10 +314,10 @@ export default function MariAiPage() {
                 </span>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30">
                   <Database className="w-3 h-3" />
-                  Knowledge Active
+                  Knowledge Active ({documentsList.length} sources)
                 </span>
                 <span className="text-xs text-zinc-400 font-mono">
-                  Context: {activeFbPage?.name || 'Ras Ali Labs'} — Facebook & CRM
+                  Context: {businessContext?.organizationName || 'Ras Ali Labs'} — Facebook & CRM
                 </span>
               </div>
 
@@ -268,18 +325,18 @@ export default function MariAiPage() {
                 {greeting}, {userName}
               </h1>
               <p className="text-xs md:text-sm text-zinc-300 max-w-2xl mt-1 leading-relaxed">
-                Here is your grounded enterprise briefing. Mari has synthesized your active CRM pipeline, Facebook Page engagement, and operational queues.
+                Mari has reviewed your latest business activity. Here is your grounded strategic briefing before you start today.
               </p>
             </div>
           </div>
 
-          {/* Credits & Quick Actions */}
-          <div className="shrink-0 flex flex-col items-start md:items-end gap-2 w-full md:w-auto">
+          {/* Credits & Tab Switcher */}
+          <div className="shrink-0 flex flex-col items-start md:items-end gap-2.5 w-full md:w-auto">
             <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800 flex items-center gap-3">
               <div className="flex flex-col text-left md:text-right">
                 <span className="text-[10px] uppercase font-bold tracking-wider text-zinc-400">Mari Credits</span>
                 <span className="text-xs font-bold text-white font-mono">
-                  {userTier === 'COMMUNITY' ? '8,420 / 10,000' : 'Unlimited Enterprise'}
+                  {businessContext?.credits.remaining.toLocaleString() || '8,420'} / {businessContext?.credits.totalAllocated.toLocaleString() || '10,000'}
                 </span>
               </div>
               <div className="w-16 h-2 rounded-full bg-zinc-800 overflow-hidden">
@@ -287,7 +344,7 @@ export default function MariAiPage() {
               </div>
             </div>
 
-            {/* Navigation Switcher Tabs */}
+            {/* View Switcher Tabs */}
             <div className="flex items-center gap-1 bg-zinc-950/90 p-1 rounded-xl border border-zinc-800">
               <button
                 onClick={() => setActiveTab('INTELLIGENCE')}
@@ -307,7 +364,7 @@ export default function MariAiPage() {
                     : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
-                Knowledge ({documentsList.length})
+                Mari Knowledge ({documentsList.length})
               </button>
               <button
                 onClick={() => setActiveTab('ADMIN_INFRA')}
@@ -330,9 +387,9 @@ export default function MariAiPage() {
       </div>
 
       {/* ─────────────────────────────────────────────────────────────────────────
-          2. MARI EXECUTIVE BRIEFING BANNER
+          2. PROACTIVE MARI BRIEFING BANNER
       ───────────────────────────────────────────────────────────────────────── */}
-      {activeTab === 'INTELLIGENCE' && (
+      {activeTab === 'INTELLIGENCE' && briefing && (
         <Card className="bg-zinc-900/90 border-purple-500/30 shadow-xl overflow-hidden">
           <CardHeader className="p-5 border-b border-zinc-800/80 bg-zinc-950/50">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -342,52 +399,77 @@ export default function MariAiPage() {
                 </div>
                 <div>
                   <CardTitle className="text-base font-bold text-white">
-                    Executive Briefing: Your business is gaining momentum
+                    Mari Briefing: {briefing.headline}
                   </CardTitle>
                   <CardDescription className="text-xs text-zinc-400">
-                    Real-time synthesis across active channels
+                    {briefing.growthScoreExplanation}
                   </CardDescription>
                 </div>
               </div>
 
-              <Badge variant="purple" className="text-[10px] font-mono">
-                Growth Score: 88 / 100
-              </Badge>
+              {briefing.growthScore && (
+                <Badge variant="purple" className="text-[10px] font-mono shrink-0">
+                  Growth Score: {briefing.growthScore} / 100
+                </Badge>
+              )}
             </div>
           </CardHeader>
 
           <CardContent className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800/90">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-purple-400 block mb-1">
-                1. What Changed
-              </span>
-              <p className="text-xs text-zinc-200 leading-relaxed font-medium">
-                Facebook Page reach surged +38.4% with 107 verified fans. 3 high-value CRM proposals entered the final review phase ($84.5k pipeline).
-              </p>
+            {/* 1. What Changed */}
+            <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800/90 flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-purple-400 block mb-1">
+                  1. What Changed
+                </span>
+                <p className="text-xs text-zinc-200 leading-relaxed font-medium mb-2">
+                  {briefing.whatChanged.summary}
+                </p>
+                <ul className="space-y-1 text-[11px] text-zinc-400">
+                  {briefing.whatChanged.items.map((it, idx) => (
+                    <li key={idx} className="flex items-start gap-1.5">
+                      <span className="text-purple-400 mt-0.5">•</span>
+                      <span>{it}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
 
-            <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800/90">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 block mb-1">
-                2. Why It Matters
-              </span>
-              <p className="text-xs text-zinc-200 leading-relaxed font-medium">
-                Engagement rate is 4.8% (outperforming regional industry benchmark by 1.2%). Timely follow-ups will maximize close velocity.
-              </p>
+            {/* 2. Why It Matters */}
+            <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800/90 flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 block mb-1">
+                  2. Why It Matters
+                </span>
+                <p className="text-xs text-zinc-200 leading-relaxed font-medium mb-2">
+                  {briefing.whyItMatters.summary}
+                </p>
+                <ul className="space-y-1 text-[11px] text-zinc-400">
+                  {briefing.whyItMatters.items.map((it, idx) => (
+                    <li key={idx} className="flex items-start gap-1.5">
+                      <span className="text-indigo-400 mt-0.5">•</span>
+                      <span>{it}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
 
+            {/* 3. What Mari Recommends */}
             <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800/90 flex flex-col justify-between">
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 block mb-1">
                   3. What Mari Recommends
                 </span>
-                <p className="text-xs text-zinc-200 leading-relaxed font-medium">
-                  Publish a midweek video reel to capture peak audience traffic and trigger automated follow-ups for open proposals.
+                <p className="text-xs text-zinc-200 leading-relaxed font-medium mb-2">
+                  {briefing.whatMariRecommends.summary}
                 </p>
               </div>
               <div className="pt-3 mt-2 border-t border-zinc-800 flex items-center gap-2">
-                <Link href="/growth" className="w-full">
+                <Link href={briefing.whatMariRecommends.actions[0]?.route || '/growth'} className="w-full">
                   <Button variant="primary" size="sm" className="w-full text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white">
-                    Create Campaign <ArrowRight className="w-3 h-3 ml-1" />
+                    {briefing.whatMariRecommends.actions[0]?.label || 'Create Campaign'} <ArrowRight className="w-3 h-3 ml-1" />
                   </Button>
                 </Link>
               </div>
@@ -397,141 +479,78 @@ export default function MariAiPage() {
       )}
 
       {/* ─────────────────────────────────────────────────────────────────────────
-          3. MARI INSIGHT CARDS (Opportunity, Risk, Trend, Recommendation)
+          3. STRUCTURED INSIGHT CARDS (Opportunity, Risk, Trend, Recommendation)
       ───────────────────────────────────────────────────────────────────────── */}
-      {activeTab === 'INTELLIGENCE' && (
+      {activeTab === 'INTELLIGENCE' && briefing && (
         <div>
           <div className="flex items-center justify-between mb-3 px-1">
             <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-2">
               <Lightbulb className="w-4 h-4 text-amber-400" />
               Mari Strategic Insights
             </h2>
-            <span className="text-xs text-zinc-500 font-mono">4 Grounded Signals</span>
+            <span className="text-xs text-zinc-500 font-mono">
+              Context Version: {businessContext?.version || '2026-08-24'}
+            </span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* 1. Opportunity */}
-            <Card className="bg-zinc-900/80 border-zinc-800 hover:border-purple-500/40 transition-all flex flex-col justify-between">
-              <CardContent className="p-4 flex flex-col justify-between h-full">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-bold text-purple-400 flex items-center gap-1.5">
-                      🚀 Opportunity
-                    </span>
-                    <Badge variant="purple" className="text-[9px]">High Impact</Badge>
+            {briefing.insights.map((ins) => (
+              <Card 
+                key={ins.id} 
+                className="bg-zinc-900/80 border-zinc-800 hover:border-purple-500/40 transition-all flex flex-col justify-between"
+              >
+                <CardContent className="p-4 flex flex-col justify-between h-full">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-[11px] font-bold flex items-center gap-1.5 ${
+                        ins.type === 'OPPORTUNITY' ? 'text-purple-400' :
+                        ins.type === 'RISK' ? 'text-rose-400' :
+                        ins.type === 'TREND' ? 'text-blue-400' : 'text-emerald-400'
+                      }`}>
+                        {ins.type === 'OPPORTUNITY' && '🚀 Opportunity'}
+                        {ins.type === 'RISK' && '⚠️ Operational Risk'}
+                        {ins.type === 'TREND' && '📈 Regional Trend'}
+                        {ins.type === 'RECOMMENDATION' && '💡 Recommendation'}
+                      </span>
+                      {getProvenanceBadge(ins.provenance)}
+                    </div>
+                    <h3 className="text-xs font-bold text-white mb-1.5">
+                      {ins.title}
+                    </h3>
+                    <p className="text-xs text-zinc-300 leading-relaxed">
+                      {ins.summary}
+                    </p>
+                    <div className="mt-2.5 p-2 rounded-lg bg-zinc-950/80 border border-zinc-800/80 text-[10px] text-zinc-400">
+                      <span className="font-semibold text-zinc-300 block mb-0.5">Evidence:</span>
+                      {ins.evidence}
+                    </div>
                   </div>
-                  <h3 className="text-xs font-bold text-white mb-1.5">
-                    Short-Form Video Engagement
-                  </h3>
-                  <p className="text-xs text-zinc-300 leading-relaxed">
-                    Video content is outperforming static image posts by 2.3× across connected audiences.
-                  </p>
-                  <span className="text-[10px] text-zinc-500 font-mono mt-2 block">
-                    Evidence: Last 30 days social telemetry
-                  </span>
-                </div>
-                <div className="pt-3 mt-3 border-t border-zinc-800">
-                  <Link href="/growth">
-                    <Button variant="outline" size="sm" className="w-full text-xs font-semibold border-purple-500/30 text-purple-300 hover:bg-purple-950/40">
-                      Create Content <ArrowRight className="w-3 h-3 ml-1" />
-                    </Button>
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
 
-            {/* 2. Risk */}
-            <Card className="bg-zinc-900/80 border-zinc-800 hover:border-amber-500/40 transition-all flex flex-col justify-between">
-              <CardContent className="p-4 flex flex-col justify-between h-full">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-bold text-amber-400 flex items-center gap-1.5">
-                      ⚠️ Operational Risk
-                    </span>
-                    <Badge variant="warning" className="text-[9px]">Attention</Badge>
+                  <div className="pt-3 mt-3 border-t border-zinc-800">
+                    {ins.action.type === 'QUERY' ? (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => handleSendQuery(ins.action.payload?.query || ins.title)}
+                        className="w-full text-xs font-semibold border-blue-500/30 text-blue-300 hover:bg-blue-950/40"
+                      >
+                        {ins.action.label} <ArrowRight className="w-3 h-3 ml-1" />
+                      </Button>
+                    ) : (
+                      <Link href={ins.action.route}>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="w-full text-xs font-semibold border-purple-500/30 text-purple-300 hover:bg-purple-950/40"
+                        >
+                          {ins.action.label} <ArrowRight className="w-3 h-3 ml-1" />
+                        </Button>
+                      </Link>
+                    )}
                   </div>
-                  <h3 className="text-xs font-bold text-white mb-1.5">
-                    Pending Proposal Follow-Ups
-                  </h3>
-                  <p className="text-xs text-zinc-300 leading-relaxed">
-                    2 high-value proposal contracts have exceeded 5 days in intake without scheduled touchpoints.
-                  </p>
-                  <span className="text-[10px] text-zinc-500 font-mono mt-2 block">
-                    Evidence: CRM Pipeline stage aging
-                  </span>
-                </div>
-                <div className="pt-3 mt-3 border-t border-zinc-800">
-                  <Link href="/crm">
-                    <Button variant="outline" size="sm" className="w-full text-xs font-semibold border-amber-500/30 text-amber-300 hover:bg-amber-950/40">
-                      Open CRM <ArrowRight className="w-3 h-3 ml-1" />
-                    </Button>
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* 3. Trend */}
-            <Card className="bg-zinc-900/80 border-zinc-800 hover:border-blue-500/40 transition-all flex flex-col justify-between">
-              <CardContent className="p-4 flex flex-col justify-between h-full">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-bold text-blue-400 flex items-center gap-1.5">
-                      📈 Regional Trend
-                    </span>
-                    <Badge variant="default" className="text-[9px]">SADC Index</Badge>
-                  </div>
-                  <h3 className="text-xs font-bold text-white mb-1.5">
-                    B2B Enterprise Demand Surge
-                  </h3>
-                  <p className="text-xs text-zinc-300 leading-relaxed">
-                    Regional interest in sovereign business software and AI workflows has grown 42% this quarter.
-                  </p>
-                  <span className="text-[10px] text-zinc-500 font-mono mt-2 block">
-                    Evidence: SADC macro trade benchmarks
-                  </span>
-                </div>
-                <div className="pt-3 mt-3 border-t border-zinc-800">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => handleSendQuery('Generate an executive market growth strategy for SADC B2B enterprise software.')}
-                    className="w-full text-xs font-semibold border-blue-500/30 text-blue-300 hover:bg-blue-950/40"
-                  >
-                    Analyze Trend <ArrowRight className="w-3 h-3 ml-1" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* 4. Recommendation */}
-            <Card className="bg-zinc-900/80 border-zinc-800 hover:border-emerald-500/40 transition-all flex flex-col justify-between">
-              <CardContent className="p-4 flex flex-col justify-between h-full">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1.5">
-                      💡 Recommendation
-                    </span>
-                    <Badge variant="success" className="text-[9px]">Actionable</Badge>
-                  </div>
-                  <h3 className="text-xs font-bold text-white mb-1.5">
-                    Wednesday 14:00 Campaign Push
-                  </h3>
-                  <p className="text-xs text-zinc-300 leading-relaxed">
-                    Schedule automated Facebook & LinkedIn updates on Wednesday at 14:00 for optimal audience reach.
-                  </p>
-                  <span className="text-[10px] text-zinc-500 font-mono mt-2 block">
-                    Evidence: Audience peak activity model
-                  </span>
-                </div>
-                <div className="pt-3 mt-3 border-t border-zinc-800">
-                  <Link href="/growth">
-                    <Button variant="outline" size="sm" className="w-full text-xs font-semibold border-emerald-500/30 text-emerald-300 hover:bg-emerald-950/40">
-                      Schedule Post <ArrowRight className="w-3 h-3 ml-1" />
-                    </Button>
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         </div>
       )}
@@ -553,16 +572,11 @@ export default function MariAiPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setMessages([{
-                      id: `m-${Date.now()}`,
-                      sender: 'MARI',
-                      text: 'Conversation reset. Mari is ready with your real-time workspace context.',
-                      timestamp: 'Just now'
-                    }])}
-                    title="Clear history"
+                    onClick={() => loadBusinessContext(true)}
+                    title="Refresh organization context"
                     className="p-1 rounded text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors text-xs flex items-center gap-1"
                   >
-                    <RefreshCw className="w-3 h-3" /> Clear
+                    <RefreshCw className="w-3 h-3" /> Refresh Context
                   </button>
                 </div>
               </CardHeader>
@@ -596,7 +610,7 @@ export default function MariAiPage() {
                               className="px-2.5 py-1 rounded-lg bg-purple-950/50 border border-purple-500/40 hover:bg-purple-900/60 text-purple-200 text-[11px] font-semibold flex items-center gap-1 transition-all"
                             >
                               <ArrowRight className="w-3 h-3 text-purple-400" />
-                              {act.label || act.type}
+                              {act.label || act.title || act.type}
                             </button>
                           ))}
                         </div>
@@ -668,7 +682,7 @@ export default function MariAiPage() {
             </Card>
           </div>
 
-          {/* Right Column: Knowledge & Recent Actions (4 cols) */}
+          {/* Right Column: Three-Layer Knowledge Cards & Recent Actions (4 cols) */}
           <div className="lg:col-span-4 flex flex-col gap-4">
             {/* Connected Knowledge Sources */}
             <Card className="bg-zinc-900/80 border-zinc-800 shadow-xl">
@@ -724,10 +738,13 @@ export default function MariAiPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-3 space-y-2 max-h-[180px] overflow-y-auto">
-                {recentActions.map((act, idx) => (
-                  <div key={idx} className="flex items-start gap-2 text-xs text-zinc-300 pb-1.5 border-b border-zinc-800/50 last:border-0">
+                {recentActions.map((act) => (
+                  <div key={act.id} className="flex items-start gap-2 text-xs text-zinc-300 pb-1.5 border-b border-zinc-800/50 last:border-0">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                    <span className="text-[11px] leading-tight text-zinc-300">{act}</span>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[11px] leading-tight text-zinc-300 block truncate">{act.action}</span>
+                      <span className="text-[9px] text-zinc-500 font-mono">{act.timestamp}</span>
+                    </div>
                   </div>
                 ))}
               </CardContent>

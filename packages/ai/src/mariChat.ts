@@ -58,7 +58,11 @@ export function selectBestAimlModel(prompt: string): SelectedModelInfo {
   return { model: 'gemini/gemini-2.0-flash', category: 'Gemini Flash Enterprise', endpoint: 'chat' };
 }
 
-export async function callMariAiApi(prompt: string, systemPrompt?: string): Promise<{ text: string; modelInfo: SelectedModelInfo } | null> {
+export async function callMariAiApi(
+  prompt: string, 
+  systemPrompt?: string,
+  businessContext?: any
+): Promise<{ text: string; modelInfo: SelectedModelInfo } | null> {
   try {
     const selection = selectBestAimlModel(prompt);
 
@@ -117,18 +121,23 @@ export async function callMariAiApi(prompt: string, systemPrompt?: string): Prom
       };
     }
 
-    // Chat / Text Completions with optimal model
-    let graphContext = '';
-    try {
-      const { MariMemoryGraph } = await import('@ralion/integrations');
-      graphContext = MariMemoryGraph.generateContextPrompt('ras-ali-labs');
-    } catch {
-      // Graceful fallback if graph not initialized
+    // Chat / Text Completions with optimal model & grounded business context
+    let contextPrompt = '';
+    if (businessContext) {
+      const { BusinessContextService } = await import('./businessContext.service');
+      contextPrompt = BusinessContextService.generateContextPrompt(businessContext);
+    } else {
+      try {
+        const { MariMemoryGraph } = await import('@ralion/integrations');
+        contextPrompt = MariMemoryGraph.generateContextPrompt('ras-ali-labs');
+      } catch {
+        // Graceful fallback if graph not initialized
+      }
     }
 
-    const defaultSysPrompt = `You are Mari AI, the enterprise business assistant for Ralion OS developed by Ras Ali Labs. You analyze CRM pipeline data, billing, tasks, marketing, and industry workflows. Provide clear, grounded, actionable insights.
+    const defaultSysPrompt = `You are Mari AI, the proactive business intelligence engine for Ralion OS developed by Ras Ali Labs. You already understand the customer's organizational context, CRM pipeline, Facebook Page data, tasks, and brand goals. Provide concise, grounded, strategic, and actionable insights.
 
-${graphContext}`;
+${contextPrompt}`;
     
     const response = await fetch(`${AIML_BASE_URL}/chat/completions`, {
       method: "POST",
