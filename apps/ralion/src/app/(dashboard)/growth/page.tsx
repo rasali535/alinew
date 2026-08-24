@@ -492,7 +492,7 @@ function GrowthPageContent() {
             const statusStr = (c.connection_status || '').toUpperCase();
             if (statusStr === 'CONNECTED' || statusStr === 'ACTIVE' || c.connection_status === 'connected') {
               const prov = (c.platform || c.provider || '').toLowerCase();
-              const fCount = Number(c.followers_count) || Number(c.metadata?.followers_count) || Number(c.metadata?.followers) || Number(c.metadata?.fan_count) || Number(c.metadata?.fanCount) || (c.account_name?.includes('Ras Ali') ? 107 : 0);
+              const fCount = Number(c.followers_count) || Number(c.metadata?.followers_count) || Number(c.metadata?.followers) || Number(c.metadata?.fan_count) || 0;
               accountsMap[prov] = {
                 id: c.id || `acc-${prov}`,
                 provider: prov,
@@ -502,7 +502,7 @@ function GrowthPageContent() {
                 status: 'connected',
                 scopes: c.scopes || [],
                 avatarUrl: c.profile_image_url,
-                followers: fCount > 0 ? fCount.toLocaleString() : '107',
+                followers: fCount > 0 ? fCount.toLocaleString() : '0',
               };
             }
           });
@@ -519,7 +519,7 @@ function GrowthPageContent() {
           if (data.success && Array.isArray(data.connections)) {
             data.connections.forEach((c: any) => {
               const prov = (c.provider || c.platform || '').toLowerCase();
-              const fCount = Number(c.followers_count) || Number(c.metadata?.followers_count) || Number(c.metadata?.followers) || Number(c.metadata?.fan_count) || Number(c.metadata?.fanCount) || (c.account_name?.includes('Ras Ali') ? 107 : 0);
+              const fCount = Number(c.followers_count) || Number(c.metadata?.followers_count) || Number(c.metadata?.followers) || Number(c.metadata?.fan_count) || 0;
               if (!accountsMap[prov]) {
                 accountsMap[prov] = {
                   id: c.id || `acc-${prov}`,
@@ -530,7 +530,7 @@ function GrowthPageContent() {
                   status: 'connected',
                   scopes: c.scopes || [],
                   avatarUrl: c.profile_image_url,
-                  followers: fCount > 0 ? fCount.toLocaleString() : '107',
+                  followers: fCount > 0 ? fCount.toLocaleString() : '0',
                 };
               }
             });
@@ -578,7 +578,7 @@ function GrowthPageContent() {
             scheduledAt: p.scheduledFor,
             mediaUrl: p.mediaUrls?.[0],
             mediaType: p.mediaType,
-            engagement: p.engagement || { likes: 3, shares: 1, reach: 98, comments: 2 },
+            engagement: p.engagement || { likes: 0, shares: 0, reach: 0, comments: 0 },
           }));
 
           setPosts(livePosts);
@@ -1590,7 +1590,7 @@ function GrowthPageContent() {
 
   const fbConn = connectedAccounts.find(a => a.provider === 'facebook');
   const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
-  const fbFollowersCount = Number(activeFbPage?.followersCount) || (fbConn?.followers ? Number(fbConn.followers.replace(/,/g, '')) : 0) || (activeFbPage?.name?.includes('Ras Ali') || fbConn?.label?.includes('Ras Ali') ? 107 : 0);
+  const fbFollowersCount = Number(activeFbPage?.followersCount) || (fbConn?.followers ? Number(fbConn.followers.replace(/,/g, '')) : 0);
 
   // Dynamic Sparklines computation from real synced posts
   const dynamicSparklines = React.useMemo(() => {

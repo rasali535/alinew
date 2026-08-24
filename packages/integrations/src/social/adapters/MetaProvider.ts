@@ -127,13 +127,15 @@ export class MetaProvider extends SocialProvider {
 
   async getProfile(accessToken: string, options?: { pageId?: string }): Promise<SocialProfile> {
     const target = options?.pageId || 'me';
-    const fields = 'id,name,email,picture.type(large)';
+    const fields = 'id,name,email,picture.type(large),followers_count,fan_count';
     const res = await fetch(`https://graph.facebook.com/v19.0/${target}?fields=${fields}&access_token=${encodeURIComponent(accessToken)}`);
     const data = await res.json();
 
     if (data.error) {
       throw new Error(`[MetaProvider] Profile fetch failed: ${data.error.message}`);
     }
+
+    const followers = Number(data.followers_count ?? data.fan_count ?? 0);
 
     return {
       provider: 'facebook',
@@ -143,6 +145,7 @@ export class MetaProvider extends SocialProvider {
       avatarUrl: data.picture?.data?.url,
       accountType: options?.pageId ? 'PAGE' : 'PERSONAL',
       email: data.email,
+      followersCount: followers,
       scopes: this.defaultScopes
     };
   }

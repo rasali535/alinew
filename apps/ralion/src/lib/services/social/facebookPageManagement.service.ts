@@ -186,8 +186,39 @@ export class FacebookPageManagementService {
 
     if (!existingConnections || existingConnections.length === 0) {
       return { pages: [], entitlement };
-    }    const pages: FacebookPageDescriptor[] = existingConnections.map((c) => {
-      const followers = Number(c.followers_count) || Number(c.metadata?.followers_count) || Number(c.metadata?.followers) || Number(c.metadata?.fan_count) || Number(c.metadata?.fanCount) || (c.account_name?.includes('Ras Ali') ? 107 : 0);
+    }
+
+    // Pull real live follower count from Zernio / Meta if needed
+    for (const c of existingConnections) {
+      if (!c.followers_count || Number(c.followers_count) === 0) {
+        let liveFollowers = 0;
+
+        if (c.zernio_profile_id) {
+          try {
+            const zAccs = await ZernioSocialService.getAccounts(c.zernio_profile_id);
+            const matched = zAccs.find((a: any) => a.id === c.zernio_account_id || a.id === c.provider_account_id);
+            if (matched && Number(matched.followersCount || 0) > 0) {
+              liveFollowers = Number(matched.followersCount);
+            }
+          } catch (e: any) {
+            console.warn('[FacebookPageManagement] Live Zernio followers query notice:', e.message);
+          }
+        }
+
+        if (liveFollowers > 0) {
+          c.followers_count = liveFollowers;
+          try {
+            await supabase.from('social_connections').update({
+              followers_count: liveFollowers,
+              updated_at: new Date().toISOString(),
+            }).eq('id', c.id);
+          } catch {}
+        }
+      }
+    }
+
+    const pages: FacebookPageDescriptor[] = existingConnections.map((c) => {
+      const followers = Number(c.followers_count) || Number(c.metadata?.followers_count) || Number(c.metadata?.followers) || Number(c.metadata?.fan_count) || Number(c.metadata?.fanCount) || 0;
       return {
         id: c.id,
         pageId: c.provider_account_id || c.metadata?.pageId || c.id,
@@ -449,8 +480,7 @@ export class FacebookPageManagementService {
           const isPublished = zp.status === 'published' || fbPlatform?.status === 'published';
           const eng = zp.engagement || fbPlatform?.engagement || {};
 
-          const rawComments = commentCountsByPostId[rawId] ?? commentCountsByPostId[zp._id] ?? commentCountsByPostId[zp.id] ?? Number(eng.comments) ?? Number(eng.commentCount) ?? Number(zp.commentsCount);
-          const finalComments = rawComments > 0 ? rawComments : ((zp.content && (zp.content.includes('Infrastructure') || zp.content.includes('Autonomous'))) ? 2 : 0);
+          const rawComments = commentCountsByPostId[rawId] ?? commentCountsByPostId[zp._id] ?? commentCountsByPostId[zp.id] ?? Number(eng.comments || eng.commentCount || zp.commentsCount || 0);
 
           addPostIfUnique({
             id: zp._id || zp.id || rawId,
@@ -465,10 +495,10 @@ export class FacebookPageManagementService {
             permalink,
             source: 'RALION',
             engagement: {
-              likes: Number(eng.likes) || Number(eng.likeCount) || 3,
-              comments: finalComments,
-              shares: Number(eng.shares) || Number(eng.shareCount) || 1,
-              reach: Number(eng.reach) || (Number(eng.likes || 3) * 12 + Number(finalComments) * 25 + 48),
+              likes: Number(eng.likes || eng.likeCount || eng.like_count || 0),
+              comments: Number(rawComments || 0),
+              shares: Number(eng.shares || eng.shareCount || eng.share_count || 0),
+              reach: Number(eng.reach || eng.impressions || eng.post_impressions || (Number(eng.likes || 0) * 8 + Number(rawComments || 0) * 15)),
             },
           });
         });
@@ -490,8 +520,7 @@ export class FacebookPageManagementService {
             const bodyText = fp.content || fp.message || '';
             const hasPicture = Boolean(fp.picture);
 
-            const rawComments = commentCountsByPostId[rawId] ?? Number(fp.commentCount) ?? Number(fp.comments);
-            const finalComments = rawComments > 0 ? rawComments : ((bodyText.includes('Infrastructure') || bodyText.includes('Autonomous')) ? 2 : 0);
+            const rawComments = commentCountsByPostId[rawId] ?? Number(fp.commentCount || fp.comments || 0);
 
             addPostIfUnique({
               id: rawId,
@@ -505,10 +534,10 @@ export class FacebookPageManagementService {
               permalink,
               source: 'FACEBOOK_DIRECT',
               engagement: {
-                likes: Number(fp.likeCount) || 3,
-                comments: finalComments,
-                shares: Number(fp.shares || 1),
-                reach: Number(fp.reach) || ((Number(fp.likeCount || 3) * 12) + (Number(finalComments) * 25) + 48),
+                likes: Number(fp.likeCount || fp.likes || 0),
+                comments: Number(rawComments || 0),
+                shares: Number(fp.shares || fp.shareCount || 0),
+                reach: Number(fp.reach || fp.impressions || (Number(fp.likeCount || 0) * 8 + Number(rawComments || 0) * 15)),
               },
             });
           });
@@ -541,8 +570,7 @@ export class FacebookPageManagementService {
           const eng = p.engagement || fbResult?.engagement || {};
           const pid = p.platform_post_ids?.facebook || fbResult?.postId || p.id;
 
-          const rawComments = commentCountsByPostId[pid] ?? commentCountsByPostId[p.id] ?? Number(eng.comments);
-          const finalComments = rawComments > 0 ? rawComments : ((p.body && (p.body.includes('Infrastructure') || p.body.includes('Autonomous'))) ? 2 : 0);
+          const rawComments = commentCountsByPostId[pid] ?? commentCountsByPostId[p.id] ?? Number(eng.comments || eng.commentCount || 0);
 
           addPostIfUnique({
             id: p.id,
@@ -556,10 +584,10 @@ export class FacebookPageManagementService {
             permalink: fbResult?.postUrl || undefined,
             source: 'RALION',
             engagement: {
-              likes: Number(eng.likes) || 3,
-              comments: finalComments,
-              shares: Number(eng.shares) || 1,
-              reach: Number(eng.reach) || ((Number(eng.likes || 3) * 12) + (Number(finalComments) * 25) + 48),
+              likes: Number(eng.likes || eng.likeCount || 0),
+              comments: Number(rawComments || 0),
+              shares: Number(eng.shares || eng.shareCount || 0),
+              reach: Number(eng.reach || eng.impressions || (Number(eng.likes || 0) * 8 + Number(rawComments || 0) * 15)),
             },
           });
         });
