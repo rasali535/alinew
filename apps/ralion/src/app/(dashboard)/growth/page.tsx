@@ -11,9 +11,10 @@ import {
   ShieldCheck, Flame, Award, Zap, ThumbsUp, Radio, HelpCircle, Activity, ChevronDown,
   Upload, Paperclip, MessageSquare, Inbox, CornerDownRight, X
 } from 'lucide-react';
+import Link from 'next/link';
 import { AuthService } from '@/lib/services/auth.service';
 import { createClient } from '@/lib/supabase/client';
-import { callMariAiApi } from '@ralion/ai';
+import { callMariAiApi, MariOrchestrationService, MariRecommendationContract } from '@ralion/ai';
 import { TierAccessGate } from '@/components/TierAccessGate';
 import { getRalionApiUrl, fetchRalionApi, getRalionAuthHeaders } from '@/lib/api-config';
 
@@ -241,6 +242,29 @@ function GrowthPageContent() {
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Mari Orchestration Recommendation Context
+  const [mariRecommendation, setMariRecommendation] = useState<MariRecommendationContract | null>(null);
+
+  useEffect(() => {
+    const rec = MariOrchestrationService.getPendingRecommendation();
+    if (rec) setMariRecommendation(rec);
+  }, []);
+
+  const applyMariRecommendation = (rec: MariRecommendationContract) => {
+    if (rec.parameters.topic || rec.parameters.campaignName) {
+      setNewCampaign(prev => ({
+        ...prev,
+        name: rec.parameters.campaignName || 'Commercial Growth Campaign',
+        prompt: `Strategic focus: ${rec.objective}. ${rec.reasoning}`,
+        objective: 'Lead Generation',
+        audience: rec.parameters.targetAudience || 'B2B Decision-Makers',
+      }));
+      setAiPrompt(`Create a 3-part strategic campaign around: ${rec.parameters.topic || rec.parameters.campaignName}. Target audience: ${rec.parameters.targetAudience}. Objective: ${rec.objective}`);
+      setVideoPrompt(`Short-form 60s B2B highlight: ${rec.parameters.topic || rec.parameters.campaignName} focusing on commercial benefits and ROI.`);
+      setActiveTab('AI_STUDIO');
+    }
+  };
 
   // Post Creator State with Image & Video File Upload Support
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -1758,6 +1782,43 @@ function GrowthPageContent() {
               </button>
             )}
             <button onClick={() => setOauthAlert(null)} className="text-zinc-400 hover:text-white ml-1 px-1">✕</button>
+          </div>
+        </div>
+      )}
+
+      {/* Mari Recommendation Orchestration Continuity Banner */}
+      {mariRecommendation && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-950/70 via-zinc-900 to-indigo-950/70 border border-purple-500/40 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-in fade-in">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-purple-600/30 border border-purple-500/40 flex items-center justify-center text-purple-300 shrink-0 mt-0.5">
+              <Sparkles className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30 uppercase font-mono">
+                  Mari Recommendation
+                </span>
+                <span className="text-xs font-bold text-white">{mariRecommendation.objective}</span>
+              </div>
+              <p className="text-xs text-zinc-300 mt-1 leading-relaxed max-w-3xl">
+                {mariRecommendation.reasoning}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 w-full md:w-auto">
+            <Button 
+              variant="primary" 
+              size="sm" 
+              onClick={() => applyMariRecommendation(mariRecommendation)}
+              className="w-full md:w-auto text-xs bg-purple-600 hover:bg-purple-500 text-white font-semibold flex items-center justify-center gap-1.5 shadow-md"
+            >
+              <Zap className="w-3.5 h-3.5" /> Apply Strategy Context
+            </Button>
+            <Link href="/mari-ai" className="w-full md:w-auto">
+              <Button variant="outline" size="sm" className="w-full text-xs border-zinc-700 text-zinc-300 hover:text-white">
+                Back to Mari
+              </Button>
+            </Link>
           </div>
         </div>
       )}

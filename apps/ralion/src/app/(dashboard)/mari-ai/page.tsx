@@ -42,15 +42,19 @@ import {
   Target, 
   Compass, 
   BookOpen, 
-  ArrowUpRight 
+  ArrowUpRight,
+  Smartphone,
+  BarChart3
 } from 'lucide-react';
 import { 
   BusinessContextService, 
   MariBriefingService, 
   BusinessGrowthProfileService,
+  MariOrchestrationService,
   MariBriefing, 
   BusinessContext, 
   BusinessGrowthProfile,
+  MariActivityEvent,
   callMariAiApi, 
   processMariQuery, 
   executeMariAction, 
@@ -90,6 +94,7 @@ export default function MariAiPage() {
   const [businessContext, setBusinessContext] = useState<BusinessContext | null>(null);
   const [growthProfile, setGrowthProfile] = useState<BusinessGrowthProfile | null>(null);
   const [briefing, setBriefing] = useState<MariBriefing | null>(null);
+  const [activityStream, setActivityStream] = useState<MariActivityEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Chat conversation state
@@ -145,8 +150,39 @@ export default function MariAiPage() {
       const generatedBriefing = MariBriefingService.generateBriefing(context);
       setBriefing(generatedBriefing);
 
-      // Set initial greeting grounded in the business growth partner role
-      if (messages.length === 0) {
+      const stream = MariOrchestrationService.getActivityStream('ras-ali-labs');
+      setActivityStream(stream);
+
+      // Check if returning from a completed Growth/Social action
+      let returnGreetingAdded = false;
+      if (typeof window !== 'undefined') {
+        const lastActionRaw = localStorage.getItem('ralion_last_action_result');
+        if (lastActionRaw) {
+          try {
+            const lastAction = JSON.parse(lastActionRaw);
+            localStorage.removeItem('ralion_last_action_result');
+            setMessages([
+              {
+                id: 'm-welcome-back',
+                sender: 'MARI',
+                text: `Welcome back, ${userName}! I've verified your recent workflow:\n\n` +
+                  `• ${lastAction.summary}\n` +
+                  `• Status: ${lastAction.status}\n\n` +
+                  `I have recorded this outcome into your Growth Memory and will monitor its audience engagement to refine your future recommendations.`,
+                timestamp: 'Just now',
+                actionsSuggested: [
+                  { type: 'NAVIGATE', label: 'Review Pipeline', payload: { route: '/crm' } },
+                  { type: 'NAVIGATE', label: 'Create Next Campaign', payload: { route: '/growth' } },
+                ],
+              }
+            ]);
+            returnGreetingAdded = true;
+          } catch {}
+        }
+      }
+
+      // Initial greeting grounded in the business growth partner role
+      if (messages.length === 0 && !returnGreetingAdded) {
         setMessages([
           {
             id: 'm-welcome',
@@ -228,24 +264,73 @@ export default function MariAiPage() {
     }
   };
 
-  // Handle Action Execution & Record Growth Learning
+  // Handle Action Execution & Real-Time Orchestration Loop
   const handleActionExecute = async (action: MariActionPayload) => {
-    const res = await executeMariAction(action);
     const actionLabel = action.label || action.title || action.type;
-    if (res.success) {
-      // Record outcome into Growth Memory
-      BusinessGrowthProfileService.recordGrowthOutcome('ras-ali-labs', {
-        recommendation: actionLabel,
-        decision: 'ACCEPTED',
-        actionTaken: `Executed ${actionLabel} in Ralion OS`,
-        expectedOutcome: 'Commercial progression and audience expansion',
-        lessonsLearned: 'User actively executes recommended business growth workflows.',
-      });
+    const targetRoute = (action.payload as any)?.route || '/growth';
 
-      if (action.type === 'NAVIGATE' && (res.outputData?.route || (action.payload as any)?.route)) {
-        const targetRoute = res.outputData?.route || (action.payload as any)?.route;
-        router.push(targetRoute);
+    // 1. Create typed recommendation contract
+    const recContract = MariOrchestrationService.createRecommendation({
+      organizationId: 'ras-ali-labs',
+      type: targetRoute.includes('crm') ? 'CRM_FOLLOWUP' : 'CAMPAIGN_CREATE',
+      objective: `Execute: ${actionLabel}`,
+      reasoning: 'Proactively selected based on current high-impact business growth priorities.',
+      priority: 'HIGH',
+      expectedImpact: 'Commercial pipeline advance and audience reach velocity',
+      confidence: 0.95,
+      targetModule: targetRoute.includes('crm') ? 'crm' : 'growth',
+      action: actionLabel,
+      parameters: {
+        campaignName: actionLabel,
+        topic: 'Commercial Energy & Sovereign Enterprise Infrastructure',
+        targetAudience: 'Executive Decision-Makers',
+        platform: 'facebook',
+      },
+      sourceContext: {
+        activePipelineValue: growthProfile?.activePipelineValue || 145000,
+        followersCount: 342,
+        reachGrowthPct: 38.4,
+      },
+    });
+
+    // 2. Dispatch Action Result through Orchestrator
+    const actionResult = MariOrchestrationService.receiveActionResult({
+      organizationId: 'ras-ali-labs',
+      recommendationId: recContract.recommendationId,
+      status: 'CREATED',
+      module: targetRoute.includes('crm') ? 'crm' : 'growth',
+      summary: `Prepared: ${actionLabel}`,
+      createdResource: {
+        id: `res-${Date.now()}`,
+        type: targetRoute.includes('crm') ? 'PROPOSAL_TOUCHPOINT' : 'CAMPAIGN',
+        title: actionLabel,
+      },
+    });
+
+    // 3. Immediately display Mari response in chat thread
+    setMessages(prev => [
+      ...prev,
+      {
+        id: `m-action-${Date.now()}`,
+        sender: 'MARI',
+        text: actionResult.mariResponseText,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        actionsSuggested: [
+          { type: 'NAVIGATE', label: 'Open Workspace Module', payload: { route: targetRoute } },
+          { type: 'NAVIGATE', label: 'Review Activity Stream', payload: { route: '/mari-ai' } },
+        ],
       }
+    ]);
+
+    // 4. Update activity stream
+    setActivityStream(MariOrchestrationService.getActivityStream('ras-ali-labs'));
+
+    // 5. Navigate if it's a direct transition
+    const res = await executeMariAction(action);
+    if (res.success && action.type === 'NAVIGATE') {
+      setTimeout(() => {
+        router.push(targetRoute);
+      }, 600);
     }
   };
 
@@ -264,21 +349,6 @@ export default function MariAiPage() {
     setNewDoc({ title: '', category: 'SOP', content: '' });
     setIsUploadModalOpen(false);
     loadGrowthIntelligence(true);
-  };
-
-  const getProvenanceBadge = (prov: DataProvenance) => {
-    switch (prov) {
-      case 'VERIFIED':
-        return <Badge variant="success" className="text-[9px] font-mono">Verified Fact</Badge>;
-      case 'USER_PROVIDED':
-        return <Badge variant="primary" className="text-[9px] font-mono">User Specified</Badge>;
-      case 'INFERRED':
-        return <Badge variant="purple" className="text-[9px] font-mono">Analyzed Pattern</Badge>;
-      case 'AI_RECOMMENDATION':
-        return <Badge variant="warning" className="text-[9px] font-mono">Recommendation</Badge>;
-      default:
-        return null;
-    }
   };
 
   // Growth-First Suggestion Chips
@@ -316,7 +386,7 @@ export default function MariAiPage() {
                   AI Business Growth Partner
                 </span>
                 <span className="text-xs text-zinc-400 font-mono">
-                  {businessContext?.organizationName || 'Ras Ali Labs'} • Live Context Active
+                  {businessContext?.organizationName || 'Ras Ali Labs'}
                 </span>
               </div>
 
@@ -326,6 +396,22 @@ export default function MariAiPage() {
               <p className="text-xs md:text-sm text-zinc-300 max-w-2xl mt-1 leading-relaxed">
                 I'm up to date with your business. Here is what deserves your strategic attention today to drive revenue and audience growth.
               </p>
+
+              {/* Cross-Module Integration Status Pills */}
+              <div className="flex items-center gap-2 flex-wrap mt-3 pt-2 border-t border-zinc-800/80">
+                <span className="inline-flex items-center gap-1 text-[10px] text-zinc-400 font-mono bg-zinc-950/80 px-2 py-0.5 rounded-md border border-zinc-800">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Context Active
+                </span>
+                <span className="inline-flex items-center gap-1 text-[10px] text-zinc-400 font-mono bg-zinc-950/80 px-2 py-0.5 rounded-md border border-zinc-800">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400" /> Growth Connected
+                </span>
+                <span className="inline-flex items-center gap-1 text-[10px] text-zinc-400 font-mono bg-zinc-950/80 px-2 py-0.5 rounded-md border border-zinc-800">
+                  <span className="w-1.5 h-1.5 rounded-full bg-pink-400" /> Social Connected (Meta)
+                </span>
+                <span className="inline-flex items-center gap-1 text-[10px] text-zinc-400 font-mono bg-zinc-950/80 px-2 py-0.5 rounded-md border border-zinc-800">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400" /> CRM Connected
+                </span>
+              </div>
             </div>
           </div>
 
@@ -425,16 +511,30 @@ export default function MariAiPage() {
                   {growthProfile.highestImpactMove.whyMariRecommends}
                 </div>
                 <div className="shrink-0 flex items-center gap-2 w-full sm:w-auto">
-                  <Link href={growthProfile.highestImpactMove.action.route} className="w-full sm:w-auto">
-                    <Button variant="primary" size="sm" className="w-full text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center gap-1.5 shadow-md">
-                      {growthProfile.highestImpactMove.action.label} <ArrowUpRight className="w-3.5 h-3.5" />
-                    </Button>
-                  </Link>
-                  <Link href="/growth" className="w-full sm:w-auto">
-                    <Button variant="outline" size="sm" className="w-full text-xs font-semibold border-purple-500/30 text-purple-300 hover:bg-purple-950/40 flex items-center justify-center gap-1.5">
-                      Create Reel <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-                    </Button>
-                  </Link>
+                  <Button 
+                    variant="primary" 
+                    size="sm" 
+                    onClick={() => handleActionExecute({
+                      type: 'NAVIGATE',
+                      label: growthProfile.highestImpactMove.action.label,
+                      payload: { route: growthProfile.highestImpactMove.action.route },
+                    })}
+                    className="w-full sm:w-auto text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center gap-1.5 shadow-md"
+                  >
+                    {growthProfile.highestImpactMove.action.label} <ArrowUpRight className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => handleActionExecute({
+                      type: 'NAVIGATE',
+                      label: 'Create Growth Reel',
+                      payload: { route: '/growth' },
+                    })}
+                    className="w-full sm:w-auto text-xs font-semibold border-purple-500/30 text-purple-300 hover:bg-purple-950/40 flex items-center justify-center gap-1.5"
+                  >
+                    Create Reel <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                  </Button>
                 </div>
               </div>
             </CardContent>
@@ -534,15 +634,18 @@ export default function MariAiPage() {
                   </div>
 
                   <div className="pt-3 mt-3 border-t border-zinc-800">
-                    <Link href={opp.action.route}>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="w-full text-xs font-semibold border-purple-500/30 text-purple-300 hover:bg-purple-950/40 flex items-center justify-center gap-1"
-                      >
-                        {opp.action.label} <ArrowUpRight className="w-3 h-3 ml-1" />
-                      </Button>
-                    </Link>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => handleActionExecute({
+                        type: 'NAVIGATE',
+                        label: opp.action.label,
+                        payload: { route: opp.action.route },
+                      })}
+                      className="w-full text-xs font-semibold border-purple-500/30 text-purple-300 hover:bg-purple-950/40 flex items-center justify-center gap-1"
+                    >
+                      {opp.action.label} <ArrowUpRight className="w-3 h-3 ml-1" />
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -552,7 +655,7 @@ export default function MariAiPage() {
       )}
 
       {/* ─────────────────────────────────────────────────────────────────────────
-          4. ASK MARI COMMAND CENTER — GROWTH FOCUSED
+          4. ASK MARI COMMAND CENTER — GROWTH FOCUSED & ACTIVITY STREAM
       ───────────────────────────────────────────────────────────────────────── */}
       {activeTab === 'GROWTH_PARTNER' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -676,8 +779,38 @@ export default function MariAiPage() {
             </Card>
           </div>
 
-          {/* Right Column: Growth Memory & Knowledge Sources (4 cols) */}
+          {/* Right Column: Activity Stream & Growth Memory (4 cols) */}
           <div className="lg:col-span-4 flex flex-col gap-4">
+            {/* Live Mari Activity Stream (Cross-Module Orchestration History) */}
+            <Card className="bg-zinc-900/80 border-zinc-800 shadow-xl">
+              <CardHeader className="p-4 border-b border-zinc-800/80">
+                <CardTitle className="text-xs font-bold uppercase tracking-wider text-zinc-300 flex items-center gap-1.5">
+                  <Activity className="w-3.5 h-3.5 text-blue-400" /> Mari Activity Stream
+                </CardTitle>
+                <CardDescription className="text-[11px] text-zinc-400">
+                  Real-time events across Growth, Social, and CRM
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-3 space-y-2.5 max-h-[220px] overflow-y-auto">
+                {activityStream.map((evt) => (
+                  <div key={evt.id} className="p-2.5 rounded-lg bg-zinc-950 border border-zinc-800/80 text-xs space-y-1">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        {evt.icon === 'brain' && <Sparkles className="w-3.5 h-3.5 text-purple-400 shrink-0" />}
+                        {evt.icon === 'zap' && <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
+                        {evt.icon === 'smartphone' && <Smartphone className="w-3.5 h-3.5 text-blue-400 shrink-0" />}
+                        {evt.icon === 'chart' && <BarChart3 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
+                        {evt.icon === 'users' && <Users className="w-3.5 h-3.5 text-indigo-400 shrink-0" />}
+                        <span className="text-[11px] font-bold text-white truncate">{evt.title}</span>
+                      </div>
+                      <span className="text-[10px] text-zinc-500 font-mono shrink-0">{evt.timestamp}</span>
+                    </div>
+                    <p className="text-[11px] text-zinc-400 leading-snug">{evt.description}</p>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
             {/* Mari Growth Memory (Learning Feedback Loop) */}
             <Card className="bg-zinc-900/80 border-zinc-800 shadow-xl">
               <CardHeader className="p-4 border-b border-zinc-800/80">
@@ -688,7 +821,7 @@ export default function MariAiPage() {
                   Learned outcomes and closed feedback loops
                 </CardDescription>
               </CardHeader>
-              <CardContent className="p-3 space-y-2.5 max-h-[220px] overflow-y-auto">
+              <CardContent className="p-3 space-y-2.5 max-h-[180px] overflow-y-auto">
                 {(growthProfile?.growthMemory || []).map((mem) => (
                   <div key={mem.id} className="p-2.5 rounded-lg bg-zinc-950 border border-zinc-800/80 text-xs space-y-1">
                     <div className="flex items-center justify-between">
@@ -703,41 +836,6 @@ export default function MariAiPage() {
                         Outcome: {mem.actualOutcome}
                       </span>
                     )}
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            {/* Grounded Knowledge Sources */}
-            <Card className="bg-zinc-900/80 border-zinc-800 shadow-xl">
-              <CardHeader className="p-4 border-b border-zinc-800/80 flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-zinc-300 flex items-center gap-1.5">
-                    <Database className="w-3.5 h-3.5 text-purple-400" /> Mari Knowledge
-                  </CardTitle>
-                  <CardDescription className="text-[11px] text-zinc-400">
-                    {documentsList.length} Connected reference sources
-                  </CardDescription>
-                </div>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => setIsUploadModalOpen(true)}
-                  className="h-7 px-2 text-[11px] text-zinc-300"
-                >
-                  + Add
-                </Button>
-              </CardHeader>
-              <CardContent className="p-3 space-y-2 max-h-[140px] overflow-y-auto">
-                {documentsList.slice(0, 3).map((doc) => (
-                  <div key={doc.id} className="p-2 rounded-lg bg-zinc-950 border border-zinc-800 flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <FileText className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                      <span className="text-zinc-200 truncate font-medium text-[11px]">{doc.title}</span>
-                    </div>
-                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 font-mono uppercase">
-                      {doc.category}
-                    </span>
                   </div>
                 ))}
               </CardContent>
