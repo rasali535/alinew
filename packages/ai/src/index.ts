@@ -6,3 +6,4 @@ export * from './knowledgeBase';
 export * from './aimlClient';
 export * from './businessContext.service';
 export * from './mariBriefing.service';
+export * from './businessGrowthProfile.service';

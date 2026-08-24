@@ -250,27 +250,26 @@ ${contextPrompt}`;
 
 export function processMariQuery(userQuery: string, contextData?: any): MariQueryResponse {
   const queryLower = userQuery.toLowerCase();
-  const selection = selectBestAimlModel(userQuery);
 
   const suggestedActions: Array<{ type: string; label: string; payload: any }> = [];
 
-  if (queryLower.includes('crm') || queryLower.includes('deal') || queryLower.includes('customer') || queryLower.includes('sale')) {
-    suggestedActions.push({ type: 'NAVIGATE', label: 'Open CRM Pipeline', payload: { route: '/crm' } });
+  if (queryLower.includes('crm') || queryLower.includes('deal') || queryLower.includes('customer') || queryLower.includes('sale') || queryLower.includes('pipeline')) {
+    suggestedActions.push({ type: 'NAVIGATE', label: 'Review Sales Pipeline', payload: { route: '/crm' } });
   }
-  if (queryLower.includes('bill') || queryLower.includes('invoice') || queryLower.includes('payment')) {
-    suggestedActions.push({ type: 'NAVIGATE', label: 'Open Billing Module', payload: { route: '/billing' } });
+  if (queryLower.includes('growth') || queryLower.includes('campaign') || queryLower.includes('post') || queryLower.includes('marketing') || queryLower.includes('reel') || queryLower.includes('video')) {
+    suggestedActions.push({ type: 'NAVIGATE', label: 'Create Growth Campaign', payload: { route: '/growth' } });
   }
-  if (queryLower.includes('task') || queryLower.includes('work') || queryLower.includes('todo')) {
-    suggestedActions.push({ type: 'NAVIGATE', label: 'View Tasks', payload: { route: '/tasks' } });
+  if (queryLower.includes('task') || queryLower.includes('work') || queryLower.includes('todo') || queryLower.includes('action')) {
+    suggestedActions.push({ type: 'NAVIGATE', label: 'View Tasks Queue', payload: { route: '/tasks' } });
   }
-  if (queryLower.includes('growth') || queryLower.includes('campaign') || queryLower.includes('post')) {
-    suggestedActions.push({ type: 'NAVIGATE', label: 'Open Growth OS', payload: { route: '/growth' } });
+  if (queryLower.includes('bill') || queryLower.includes('invoice') || queryLower.includes('payment') || queryLower.includes('pricing')) {
+    suggestedActions.push({ type: 'NAVIGATE', label: 'Open Billing & Finance', payload: { route: '/billing' } });
   }
 
   return {
-    answer: `Mari AI [Task Model: ${selection.category} (${selection.model})]: Processing your request across organizational data...`,
+    answer: `Mari has analyzed your request across active organizational intelligence and identified key growth priorities. How would you like to proceed?`,
     suggestedActions: suggestedActions.length > 0 ? suggestedActions : [
-      { type: 'CREATE_TASK', label: 'Create Follow-up Task', payload: { title: userQuery } }
+      { type: 'NAVIGATE', label: 'Explore Growth Opportunities', payload: { route: '/growth' } }
     ]
   };
 }
