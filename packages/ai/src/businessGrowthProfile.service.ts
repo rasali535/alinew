@@ -120,8 +120,10 @@ export class BusinessGrowthProfileService {
     const reachGrowth = l2.social.reachGrowthPct?.value || 38.4;
     const pendingTasks = l2.operations.pendingTasksCount.value;
 
-    // Existing memory records or seed initial verified history
-    const existingMemories: GrowthMemoryRecord[] = profileStore[orgId]?.growthMemory || [
+    const isRasAli = orgId === 'ras-ali-labs' || orgId === 'org-default';
+
+    // Existing memory records or seed initial verified history for Ras Ali Labs
+    const existingMemories: GrowthMemoryRecord[] = profileStore[orgId]?.growthMemory || (isRasAli ? [
       {
         id: 'gm-1',
         recommendation: 'Launch short-form video demonstration series',
@@ -141,7 +143,7 @@ export class BusinessGrowthProfileService {
         timestamp: '2026-08-18',
         lessonsLearned: 'Organization prioritizes organic authority and direct sales over generic paid boosts.',
       },
-    ];
+    ] : []);
 
     // Evaluate Growth Score Drivers
     const positiveDrivers: string[] = [

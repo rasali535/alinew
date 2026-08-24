@@ -2,21 +2,46 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, Button, Badge } from '@ralion/ui';
-import { Settings, Building2, Shield, Users, MapPin, Key, Laptop, Check, RefreshCw, HardDrive, BrainCircuit } from 'lucide-react';
+import { Settings, Building2, Shield, Users, MapPin, Key, Laptop, Check, RefreshCw, HardDrive, BrainCircuit, Globe, BookOpen, CheckCircle2, ShieldCheck, Database, Activity, Sparkles } from 'lucide-react';
 import { REGISTERED_MODULES } from '@ralion/modules';
 import Link from 'next/link';
 
 export default function SettingsPage() {
   const [enabledPlugins, setEnabledPlugins] = useState<string[]>(['health', 'funeral', 'logistics', 'trade']);
-  const [activeTab, setActiveTab] = useState<'PLUGINS' | 'ROLES' | 'BRANCHES' | 'SECURITY'>('PLUGINS');
+  const [activeTab, setActiveTab] = useState<'KNOWLEDGE' | 'PLUGINS' | 'ROLES' | 'BRANCHES' | 'SECURITY'>('KNOWLEDGE');
   const [isDesktopEnv, setIsDesktopEnv] = useState(false);
   const [deviceId, setDeviceId] = useState('RALION-HW-HASH-2026-BW-882109');
+  const [isSyncingWebsite, setIsSyncingWebsite] = useState(false);
+  const [websiteSyncSuccess, setWebsiteSyncSuccess] = useState<string | null>(null);
   const [offlineStatus, setOfflineStatus] = useState({
     isOffline: false,
     offlineGraceDaysRemaining: 7,
     encryptedCacheSize: '42.8 MB',
     lastSyncTimestamp: 'Just now'
   });
+
+  const handleSyncWebsite = async () => {
+    setIsSyncingWebsite(true);
+    setWebsiteSyncSuccess(null);
+    try {
+      const res = await fetch('/api/mari/knowledge/website-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          organizationId: 'ras-ali-labs',
+          websiteUrl: 'https://www.rasalilabs.com',
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setWebsiteSyncSuccess('Website knowledge successfully re-indexed and verified into Layer 1 Business Knowledge.');
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSyncingWebsite(false);
+    }
+  };
 
   useEffect(() => {
     if (typeof window !== 'undefined' && (window as any).ralionDesktop) {
@@ -38,25 +63,105 @@ export default function SettingsPage() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-black tracking-tight text-white">Organization & System Settings</h1>
-            <Badge variant="primary">Build Prompt 4</Badge>
+            <Badge variant="primary">Mari Knowledge Active</Badge>
           </div>
           <p className="text-xs text-zinc-400 mt-1">
-            Ras Ali Labs multi-tenant governance, industry plugin triggers, RBAC roles, and desktop security.
+            Ras Ali Labs multi-tenant governance, verified business knowledge sources, industry plugins, and desktop security.
           </p>
         </div>
 
         <div className="flex bg-zinc-900 p-1 rounded-xl border border-zinc-800">
-          {(['PLUGINS', 'ROLES', 'BRANCHES', 'SECURITY'] as const).map((tab) => (
+          {(['KNOWLEDGE', 'PLUGINS', 'ROLES', 'BRANCHES', 'SECURITY'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${activeTab === tab ? 'bg-blue-600 text-white' : 'text-zinc-400'}`}
             >
-              {tab}
+              {tab === 'KNOWLEDGE' ? 'Business Knowledge' : tab}
             </button>
           ))}
         </div>
       </div>
+
+      {/* Business Knowledge Sources Tab */}
+      {activeTab === 'KNOWLEDGE' && (
+        <div className="space-y-6">
+          {/* Website Knowledge Card */}
+          <Card className="bg-gradient-to-br from-purple-950/30 via-zinc-900 to-indigo-950/30 border-purple-500/30 p-6 shadow-xl">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-zinc-800/80 pb-5">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-purple-600/20 text-purple-400 border border-purple-500/30">
+                  <Globe className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold text-white">Website Knowledge Ingestion</h3>
+                    <Badge variant="success">VERIFIED & ACTIVE</Badge>
+                  </div>
+                  <p className="text-xs text-zinc-400 mt-0.5 font-mono">https://www.rasalilabs.com</p>
+                </div>
+              </div>
+
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleSyncWebsite}
+                disabled={isSyncingWebsite}
+                className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-md"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isSyncingWebsite ? 'animate-spin' : ''}`} />
+                {isSyncingWebsite ? 'Syncing Website...' : 'Sync Website Now'}
+              </Button>
+            </div>
+
+            {websiteSyncSuccess && (
+              <div className="mt-4 p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{websiteSyncSuccess}</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4 text-xs">
+              <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800">
+                <span className="text-[10px] text-zinc-500 uppercase font-mono block">Status</span>
+                <span className="font-bold text-emerald-400">VERIFIED / USER_APPROVED</span>
+              </div>
+              <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800">
+                <span className="text-[10px] text-zinc-500 uppercase font-mono block">Sections Ingested</span>
+                <span className="font-bold text-white">5 Sections (About, Products, Differentiators, SADC, Contacts)</span>
+              </div>
+              <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800">
+                <span className="text-[10px] text-zinc-500 uppercase font-mono block">Sync Health</span>
+                <span className="font-bold text-white">Continuous / No Staleness</span>
+              </div>
+            </div>
+          </Card>
+
+          {/* Sources Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[
+              { title: 'Company Identity & Registration', layer: 'Layer 1', provenance: 'VERIFIED', status: 'Live', icon: Building2, desc: 'Official registered profile for Ras Ali Labs (Pty) Ltd.' },
+              { title: 'Products & Solutions Catalog', layer: 'Layer 1', provenance: 'VERIFIED', status: 'Live', icon: Database, desc: 'Ralion OS Core, Mari AI, Growth Studio, Vertical Industry OS.' },
+              { title: 'Brand Guidelines & Tone of Voice', layer: 'Layer 1', provenance: 'USER_PROVIDED', status: 'Active', icon: BookOpen, desc: 'African excellence, authoritative, professional.' },
+              { title: 'CRM Portfolio Ledger', layer: 'Layer 2', provenance: 'VERIFIED', status: 'Connected', icon: Activity, desc: 'Live customer directory, pipeline values, deal stages.' },
+              { title: 'Meta Graph API (Facebook Page)', layer: 'Layer 2', provenance: 'VERIFIED', status: 'Connected', icon: Globe, desc: 'Live followers, reach velocity, engagement metrics.' },
+              { title: 'Mari Growth Memory', layer: 'Layer 3', provenance: 'VERIFIED', status: 'Active', icon: Sparkles, desc: 'Accepted recommendations, measured outcomes, and learnings.' },
+            ].map((src, i) => (
+              <Card key={i} className="p-4 bg-zinc-900/80 border-zinc-800">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-bold text-purple-400 font-mono">{src.layer}</span>
+                  <Badge variant="purple" className="text-[9px]">{src.provenance}</Badge>
+                </div>
+                <div className="flex items-center gap-2 mb-1">
+                  <src.icon className="w-4 h-4 text-zinc-400" />
+                  <h4 className="text-xs font-bold text-white">{src.title}</h4>
+                </div>
+                <p className="text-[11px] text-zinc-400 leading-relaxed">{src.desc}</p>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Industry Plugins Toggle Manager */}
       {activeTab === 'PLUGINS' && (

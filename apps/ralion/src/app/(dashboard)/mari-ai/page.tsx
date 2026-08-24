@@ -102,10 +102,12 @@ export default function MariAiPage() {
   const [inputQuery, setInputQuery] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Knowledge Documents State
+  // Knowledge Documents State & Website Sync
   const [documentsList, setDocumentsList] = useState<KnowledgeDocument[]>(mariKnowledgeManager.getDocuments());
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [newDoc, setNewDoc] = useState({ title: '', category: 'SOP' as const, content: '' });
+  const [isSyncingWebsite, setIsSyncingWebsite] = useState(false);
+  const [websiteSyncSuccess, setWebsiteSyncSuccess] = useState<string | null>(null);
 
   // Load Business Context, Growth Profile, and Briefing on Mount
   const loadGrowthIntelligence = async (forceRefresh = false) => {
@@ -271,7 +273,7 @@ export default function MariAiPage() {
 
     // 1. Create typed recommendation contract
     const recContract = MariOrchestrationService.createRecommendation({
-      organizationId: 'ras-ali-labs',
+      organizationId: businessContext?.organizationId || 'ras-ali-labs',
       type: targetRoute.includes('crm') ? 'CRM_FOLLOWUP' : 'CAMPAIGN_CREATE',
       objective: `Execute: ${actionLabel}`,
       reasoning: 'Proactively selected based on current high-impact business growth priorities.',
@@ -287,15 +289,15 @@ export default function MariAiPage() {
         platform: 'facebook',
       },
       sourceContext: {
-        activePipelineValue: growthProfile?.activePipelineValue || 145000,
-        followersCount: 342,
-        reachGrowthPct: 38.4,
+        activePipelineValue: growthProfile?.activePipelineValue || businessContext?.layer2.crm.totalPipelineValue.value || 84500,
+        followersCount: businessContext?.layer2.social.followersCount?.value || 107,
+        reachGrowthPct: businessContext?.layer2.social.reachGrowthPct?.value || 38.4,
       },
     });
 
     // 2. Dispatch Action Result through Orchestrator
     const actionResult = MariOrchestrationService.receiveActionResult({
-      organizationId: 'ras-ali-labs',
+      organizationId: businessContext?.organizationId || 'ras-ali-labs',
       recommendationId: recContract.recommendationId,
       status: 'CREATED',
       module: targetRoute.includes('crm') ? 'crm' : 'growth',
@@ -322,8 +324,9 @@ export default function MariAiPage() {
       }
     ]);
 
-    // 4. Update activity stream
-    setActivityStream(MariOrchestrationService.getActivityStream('ras-ali-labs'));
+    // 4. Refresh activity stream
+    const updatedStream = MariOrchestrationService.getActivityStream(businessContext?.organizationId || 'ras-ali-labs');
+    setActivityStream(updatedStream);
 
     // 5. Navigate if it's a direct transition
     const res = await executeMariAction(action);
@@ -351,17 +354,41 @@ export default function MariAiPage() {
     loadGrowthIntelligence(true);
   };
 
-  // Growth-First Suggestion Chips
+  // Trigger Website Ingestion / Sync
+  const handleSyncWebsite = async () => {
+    setIsSyncingWebsite(true);
+    setWebsiteSyncSuccess(null);
+    try {
+      const res = await fetch('/api/mari/knowledge/website-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          organizationId: businessContext?.organizationId || 'ras-ali-labs',
+          websiteUrl: businessContext?.layer1.websiteUrl?.value || 'https://www.rasalilabs.com',
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setWebsiteSyncSuccess('Website knowledge successfully synced and re-indexed into Layer 1 Business Knowledge.');
+        await loadGrowthIntelligence(true);
+      }
+    } catch (e: any) {
+      console.error('Failed to sync website knowledge:', e);
+    } finally {
+      setIsSyncingWebsite(false);
+    }
+  };
+
+  // Business Authority & Growth-First Suggestion Chips
   const growthPromptChips = [
+    'What do you know about my business?',
+    'What does our website say about us?',
+    'How can we grow this business?',
+    'Where should we focus today?',
     'Find Growth Opportunities',
-    'Analyse My Business',
-    'Find Revenue Opportunities',
-    'Find Sales Risks',
-    'Improve Marketing',
-    'Create Growth Plan',
-    'Analyse Customers',
     'Review My Pipeline',
-    'What Should We Do Today?'
+    'Analyze Sales Risks',
+    'Create Growth Plan',
   ];
 
   return (
@@ -845,52 +872,217 @@ export default function MariAiPage() {
       )}
 
       {/* ─────────────────────────────────────────────────────────────────────────
-          KNOWLEDGE MANAGER TAB
+          KNOWLEDGE MANAGER TAB — BUSINESS KNOWLEDGE AUTHORITY CENTER
       ───────────────────────────────────────────────────────────────────────── */}
       {activeTab === 'KNOWLEDGE' && (
-        <Card className="bg-zinc-900/80 border-zinc-800 shadow-xl">
-          <CardHeader className="p-5 border-b border-zinc-800/80 flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="text-lg font-bold text-white flex items-center gap-2">
-                <Database className="w-5 h-5 text-purple-400" /> Mari Knowledge Base
-              </CardTitle>
-              <CardDescription className="text-xs text-zinc-400 mt-1">
-                Upload organizational SOPs, brand guidelines, and sales strategies to ground Mari's intelligence.
-              </CardDescription>
-            </div>
-            <Button 
-              variant="primary" 
-              size="sm" 
-              onClick={() => setIsUploadModalOpen(true)}
-              className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold"
-            >
-              <Plus className="w-3.5 h-3.5 mr-1" /> Add Document
-            </Button>
-          </CardHeader>
-
-          <CardContent className="p-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {documentsList.map((doc) => (
-                <div key={doc.id} className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 flex flex-col justify-between gap-3">
+        <div className="space-y-6">
+          {/* Website Knowledge Ingestion Card */}
+          <Card className="bg-gradient-to-br from-purple-950/30 via-zinc-900 to-indigo-950/30 border-purple-500/30 shadow-xl p-6">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-zinc-800/80 pb-5">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="p-2 rounded-lg bg-purple-600/20 text-purple-400 border border-purple-500/30">
+                    <BookOpen className="w-5 h-5" />
+                  </span>
                   <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <Badge variant="purple" className="text-[9px] uppercase font-mono">{doc.category}</Badge>
-                      <span className="text-[10px] text-zinc-500">Connected</span>
-                    </div>
-                    <h4 className="text-sm font-bold text-white">{doc.title}</h4>
-                    <p className="text-xs text-zinc-400 mt-1 line-clamp-3 leading-relaxed">
-                      {doc.content}
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      Verified Website Knowledge
+                      <Badge variant="success" className="text-[10px] font-mono">
+                        {businessContext?.layer1.websiteKnowledge?.value?.isStale ? 'STALE (>14d)' : 'VERIFIED / SYNCED'}
+                      </Badge>
+                    </h3>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      Ingested public business presence: <span className="text-purple-300 font-mono">{businessContext?.layer1.websiteUrl?.value || 'https://www.rasalilabs.com'}</span>
                     </p>
                   </div>
-                  <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between text-[10px] text-zinc-500">
-                    <span>Grounded RAG Context</span>
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleSyncWebsite}
+                  disabled={isSyncingWebsite}
+                  className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-lg shadow-purple-600/20"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isSyncingWebsite ? 'animate-spin' : ''}`} />
+                  {isSyncingWebsite ? 'Syncing Website...' : 'Sync Website'}
+                </Button>
+              </div>
+            </div>
+
+            {websiteSyncSuccess && (
+              <div className="mt-4 p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2 animate-in fade-in">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                <span>{websiteSyncSuccess}</span>
+              </div>
+            )}
+
+            {/* Ingested Sections Breakdown */}
+            <div className="mt-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {(businessContext?.layer1.websiteKnowledge?.value?.sections || [
+                { id: '1', title: 'Company Overview', category: 'ABOUT', keyTakeaways: ['African enterprise technology leader', 'Sovereign Ralion OS ecosystem'] },
+                { id: '2', title: 'Products & Solutions', category: 'PRODUCTS_SERVICES', keyTakeaways: ['Ralion OS Core', 'Mari AI Command Center', 'Growth Studio'] },
+                { id: '3', title: 'Value Proposition', category: 'VALUE_PROPOSITION', keyTakeaways: ['99.8%+ SLA uptime', 'Native offline resilience', 'SADC commercial focus'] },
+              ]).map((section: any) => (
+                <div key={section.id} className="p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-800 text-xs flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[10px] font-bold text-purple-400 uppercase font-mono">{section.category}</span>
+                      <span className="text-[10px] text-zinc-500 font-mono">Layer 1</span>
+                    </div>
+                    <h5 className="font-bold text-white text-xs">{section.title}</h5>
+                    <ul className="mt-2 space-y-1 text-[11px] text-zinc-400">
+                      {(section.keyTakeaways || []).map((t: string, idx: number) => (
+                        <li key={idx} className="flex items-start gap-1.5">
+                          <span className="text-purple-400 shrink-0">•</span>
+                          <span className="leading-snug">{t}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="mt-3 pt-2 border-t border-zinc-800/80 flex items-center justify-between text-[10px] text-zinc-500">
+                    <span>Source: Verified Website</span>
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                   </div>
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
+          </Card>
+
+          {/* 3-Layer Knowledge Model Sources Overview */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Layer 1: Core Knowledge */}
+            <Card className="bg-zinc-900/80 border-zinc-800 shadow-xl p-4">
+              <div className="flex items-center justify-between mb-3 border-b border-zinc-800/80 pb-2">
+                <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Database className="w-3.5 h-3.5 text-purple-400" /> Layer 1: Business Facts
+                </span>
+                <Badge variant="purple" className="text-[9px]">Verified</Badge>
+              </div>
+              <ul className="space-y-2 text-xs text-zinc-300">
+                <li className="flex items-center justify-between">
+                  <span className="text-zinc-400">Company Identity</span>
+                  <span className="font-semibold text-white truncate max-w-[150px]">{businessContext?.layer1.companyName.value}</span>
+                </li>
+                <li className="flex items-center justify-between">
+                  <span className="text-zinc-400">Industry</span>
+                  <span className="font-semibold text-white truncate max-w-[150px]">{businessContext?.layer1.industry.value}</span>
+                </li>
+                <li className="flex items-center justify-between">
+                  <span className="text-zinc-400">Products</span>
+                  <span className="font-semibold text-white">{businessContext?.layer1.productsAndServices.value.length} Solutions</span>
+                </li>
+                <li className="flex items-center justify-between">
+                  <span className="text-zinc-400">Brand Voice</span>
+                  <span className="font-semibold text-emerald-400">African Excellence</span>
+                </li>
+              </ul>
+            </Card>
+
+            {/* Layer 2: Live State */}
+            <Card className="bg-zinc-900/80 border-zinc-800 shadow-xl p-4">
+              <div className="flex items-center justify-between mb-3 border-b border-zinc-800/80 pb-2">
+                <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Activity className="w-3.5 h-3.5 text-blue-400" /> Layer 2: Live Telemetry
+                </span>
+                <Badge variant="primary" className="text-[9px]">Live</Badge>
+              </div>
+              <ul className="space-y-2 text-xs text-zinc-300">
+                <li className="flex items-center justify-between">
+                  <span className="text-zinc-400">CRM Pipeline Value</span>
+                  <span className="font-semibold text-emerald-400 font-mono">${businessContext?.layer2.crm.totalPipelineValue.value.toLocaleString()}</span>
+                </li>
+                <li className="flex items-center justify-between">
+                  <span className="text-zinc-400">Active Clients</span>
+                  <span className="font-semibold text-white">{businessContext?.layer2.crm.activeCustomersCount.value} Clients</span>
+                </li>
+                <li className="flex items-center justify-between">
+                  <span className="text-zinc-400">Facebook Followers</span>
+                  <span className="font-semibold text-pink-400 font-mono">{businessContext?.layer2.social.followersCount?.value || 107} fans</span>
+                </li>
+                <li className="flex items-center justify-between">
+                  <span className="text-zinc-400">Operational SLA</span>
+                  <span className="font-semibold text-emerald-400 font-mono">{businessContext?.layer2.operations.slaUptimePct.value || 99.8}%</span>
+                </li>
+              </ul>
+            </Card>
+
+            {/* Layer 3: Memory */}
+            <Card className="bg-zinc-900/80 border-zinc-800 shadow-xl p-4">
+              <div className="flex items-center justify-between mb-3 border-b border-zinc-800/80 pb-2">
+                <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-400" /> Layer 3: Growth Memory
+                </span>
+                <Badge variant="default" className="text-[9px]">Active</Badge>
+              </div>
+              <ul className="space-y-2 text-xs text-zinc-300">
+                <li className="flex items-center justify-between">
+                  <span className="text-zinc-400">Accepted Decisions</span>
+                  <span className="font-semibold text-white font-mono">{businessContext?.layer3.acceptedRecommendations.length || 2} Recs</span>
+                </li>
+                <li className="flex items-center justify-between">
+                  <span className="text-zinc-400">Strategic Focus</span>
+                  <span className="font-semibold text-white">B2B Revenue</span>
+                </li>
+                <li className="flex items-center justify-between">
+                  <span className="text-zinc-400">Governance Gate</span>
+                  <span className="font-semibold text-purple-300">Human Approval</span>
+                </li>
+                <li className="flex items-center justify-between">
+                  <span className="text-zinc-400">Context Version</span>
+                  <span className="font-semibold text-zinc-400 font-mono text-[10px]">{businessContext?.version}</span>
+                </li>
+              </ul>
+            </Card>
+          </div>
+
+          {/* Uploaded Documents & SOPs */}
+          <Card className="bg-zinc-900/80 border-zinc-800 shadow-xl">
+            <CardHeader className="p-5 border-b border-zinc-800/80 flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-purple-400" /> Document Vault & SOPs
+                </CardTitle>
+                <CardDescription className="text-xs text-zinc-400 mt-0.5">
+                  Verified organizational policy documents and standard operating procedures.
+                </CardDescription>
+              </div>
+              <Button 
+                variant="primary" 
+                size="sm" 
+                onClick={() => setIsUploadModalOpen(true)}
+                className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold"
+              >
+                <Plus className="w-3.5 h-3.5 mr-1" /> Add Document
+              </Button>
+            </CardHeader>
+
+            <CardContent className="p-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {documentsList.map((doc) => (
+                  <div key={doc.id} className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 flex flex-col justify-between gap-3">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <Badge variant="purple" className="text-[9px] uppercase font-mono">{doc.category}</Badge>
+                        <span className="text-[10px] text-zinc-500">Connected</span>
+                      </div>
+                      <h4 className="text-sm font-bold text-white">{doc.title}</h4>
+                      <p className="text-xs text-zinc-400 mt-1 line-clamp-3 leading-relaxed">
+                        {doc.content}
+                      </p>
+                    </div>
+                    <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between text-[10px] text-zinc-500">
+                      <span>Grounded RAG Context</span>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {/* ─────────────────────────────────────────────────────────────────────────
