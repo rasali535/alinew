@@ -187,7 +187,7 @@ function GrowthPageContent() {
   const [postStatusFilter, setPostStatusFilter] = useState<'all' | 'draft' | 'scheduled' | 'published'>('all');
 
   // Interactive Dashboard States
-  const [dateRange, setDateRange] = useState<'7D' | '28D' | '30D' | 'QTD'>('28D');
+  const [dateRange, setDateRange] = useState<'7D' | '30D' | '90D' | 'YEARLY' | 'ALL'>('30D');
   const [activeChartMetric, setActiveChartMetric] = useState<'reach' | 'engagement' | 'audience'>('reach');
   const [chartGranularity, setChartGranularity] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('daily');
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
@@ -1258,7 +1258,15 @@ function GrowthPageContent() {
   // ── Export Analytics Helpers ──────────────────────────────────────────────
   const handleExportCsv = () => {
     const headers = ['Post ID', 'Title', 'Body', 'Status', 'Platform', 'Published At', 'Scheduled At', 'Likes', 'Comments', 'Shares', 'Reach'];
-    const rows = posts.map(p => [
+    const now = Date.now();
+    const days = dateRange === '7D' ? 7 : dateRange === '30D' ? 30 : dateRange === '90D' ? 90 : dateRange === 'YEARLY' ? 365 : Infinity;
+    const cutoff = now - (days * 24 * 60 * 60 * 1000);
+    const exportSubset = dateRange === 'ALL' ? posts : posts.filter(p => {
+      const ts = p.publishedAt ? new Date(p.publishedAt).getTime() : (p.scheduledAt ? new Date(p.scheduledAt).getTime() : now);
+      return !isNaN(ts) ? ts >= cutoff : true;
+    });
+
+    const rows = exportSubset.map(p => [
       `"${p.id}"`,
       `"${(p.title || '').replace(/"/g, '""')}"`,
       `"${(p.body || '').replace(/"/g, '""')}"`,
@@ -1275,11 +1283,11 @@ function GrowthPageContent() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `ralion_facebook_analytics_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `ralion_social_growth_${dateRange.toLowerCase()}_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    setOauthAlert({ type: 'success', message: '📥 Exported Facebook Page Performance Report as CSV.' });
+    setOauthAlert({ type: 'success', message: `📥 Exported ${exportSubset.length} posts (${dateRange}) as CSV spreadsheet.` });
     setTimeout(() => setOauthAlert(null), 4000);
   };
 
@@ -1578,47 +1586,77 @@ function GrowthPageContent() {
     return p.status === postStatusFilter;
   });
 
-  // Calculate dynamic analytics from real live posts and connections
-  const totalReach = posts.reduce((sum, p) => sum + (p.engagement?.reach || 0), 0);
-  const totalLikes = posts.reduce((sum, p) => sum + (p.engagement?.likes || 0), 0);
-  const totalShares = posts.reduce((sum, p) => sum + (p.engagement?.shares || 0), 0);
-  const totalComments = posts.reduce((sum, p) => sum + (p.engagement?.comments || 0), 0);
+  // Filter posts based on active date range selection (7D, 30D, 90D, YEARLY, ALL)
+  const dateFilteredPosts = React.useMemo(() => {
+    if (dateRange === 'ALL') return posts;
+    const now = Date.now();
+    const days = dateRange === '7D' ? 7 : dateRange === '30D' ? 30 : dateRange === '90D' ? 90 : 365;
+    const cutoff = now - (days * 24 * 60 * 60 * 1000);
+
+    return posts.filter(p => {
+      const ts = p.publishedAt ? new Date(p.publishedAt).getTime() : (p.scheduledAt ? new Date(p.scheduledAt).getTime() : now);
+      return !isNaN(ts) ? ts >= cutoff : true;
+    });
+  }, [posts, dateRange]);
+
+  // Calculate dynamic analytics from real live posts filtered by date range
+  const totalReach = dateFilteredPosts.reduce((sum, p) => sum + (p.engagement?.reach || 0), 0);
+  const totalLikes = dateFilteredPosts.reduce((sum, p) => sum + (p.engagement?.likes || 0), 0);
+  const totalShares = dateFilteredPosts.reduce((sum, p) => sum + (p.engagement?.shares || 0), 0);
+  const totalComments = dateFilteredPosts.reduce((sum, p) => sum + (p.engagement?.comments || 0), 0);
   const totalEngagement = totalLikes + totalShares + totalComments;
-  const publishedCount = posts.filter(p => p.status === 'published').length;
-  const scheduledCount = posts.filter(p => p.status === 'scheduled').length;
+  const publishedCount = dateFilteredPosts.filter(p => p.status === 'published').length;
+  const scheduledCount = dateFilteredPosts.filter(p => p.status === 'scheduled').length;
   const activeCampaignsCount = campaigns.filter(c => c.status === 'active').length;
 
   const fbConn = connectedAccounts.find(a => a.provider === 'facebook');
   const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
   const fbFollowersCount = Number(activeFbPage?.followersCount) || (fbConn?.followers ? Number(fbConn.followers.replace(/,/g, '')) : 0);
 
-  // Dynamic Sparklines computation from real synced posts
+  // Dynamic Sparklines computation from real synced posts filtered by date range
   const dynamicSparklines = React.useMemo(() => {
-    const reachArr = posts.map(p => p.engagement?.reach || 0);
-    const engArr = posts.map(p => (p.engagement?.likes || 0) + (p.engagement?.comments || 0) + (p.engagement?.shares || 0));
+    const reachArr = dateFilteredPosts.map(p => p.engagement?.reach || 0);
+    const engArr = dateFilteredPosts.map(p => (p.engagement?.likes || 0) + (p.engagement?.comments || 0) + (p.engagement?.shares || 0));
     return {
-      reach: reachArr.length >= 2 ? reachArr : reachArr.length === 1 ? [0, reachArr[0]] : [],
-      engagement: engArr.length >= 2 ? engArr : engArr.length === 1 ? [0, engArr[0]] : [],
-      fans: fbFollowersCount > 0 ? [fbFollowersCount, fbFollowersCount] : [],
+      reach: reachArr.length >= 2 ? reachArr : reachArr.length === 1 ? [0, reachArr[0]] : [0, 0],
+      engagement: engArr.length >= 2 ? engArr : engArr.length === 1 ? [0, engArr[0]] : [0, 0],
+      fans: fbFollowersCount > 0 ? [fbFollowersCount, fbFollowersCount] : [0, 0],
       viral: engArr.map(e => Math.min(100, e * 10)),
       views: reachArr,
       video: reachArr,
     };
-  }, [posts, fbFollowersCount]);
+  }, [dateFilteredPosts, fbFollowersCount]);
 
-  // Dynamic Spline Series computation from real synced posts
+  // Dynamic date labels based on selected dateRange
+  const dynamicDateLabels = React.useMemo(() => {
+    if (dateRange === '7D') {
+      return ['Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5', 'Day 6', 'Today'];
+    } else if (dateRange === '30D') {
+      return ['Day 1', 'Day 5', 'Day 10', 'Day 15', 'Day 20', 'Day 25', 'Today'];
+    } else if (dateRange === '90D') {
+      return ['Month 1', 'Month 2', 'Month 3', 'Today'];
+    } else if (dateRange === 'YEARLY') {
+      return ['Q1', 'Q2', 'Q3', 'Q4', 'Current'];
+    } else {
+      return ['Start', 'Mid', 'Recent', 'Today'];
+    }
+  }, [dateRange]);
+
+  // Dynamic Spline Series computation from real synced posts and granularity
   const splineChartSeries = React.useMemo(() => {
-    const reachValues = posts.map(p => p.engagement?.reach || 0);
-    const likesValues = posts.map(p => p.engagement?.likes || 0);
-    const sharesValues = posts.map(p => p.engagement?.shares || 0);
+    const reachValues = dateFilteredPosts.map(p => p.engagement?.reach || 0);
+    const likesValues = dateFilteredPosts.map(p => p.engagement?.likes || 0);
+    const sharesValues = dateFilteredPosts.map(p => p.engagement?.shares || 0);
 
     const safeReach = reachValues.length >= 2 ? reachValues : reachValues.length === 1 ? [0, reachValues[0]] : [0, 0];
     const safeLikes = likesValues.length >= 2 ? likesValues : likesValues.length === 1 ? [0, likesValues[0]] : [0, 0];
     const safeShares = sharesValues.length >= 2 ? sharesValues : sharesValues.length === 1 ? [0, sharesValues[0]] : [0, 0];
 
+    const rangeLabel = dateRange === '7D' ? 'Last 7 Days' : dateRange === '30D' ? 'Last 30 Days' : dateRange === '90D' ? 'Last 90 Days' : dateRange === 'YEARLY' ? 'Past 12 Months' : 'All Time';
+
     return {
       reach: {
-        title: 'Audience Reach & Impressions',
+        title: `Audience Reach & Impressions (${rangeLabel})`,
         primaryLabel: 'Organic Reach',
         primaryValues: safeReach,
         primaryColor: '#3b82f6',
@@ -1627,7 +1665,7 @@ function GrowthPageContent() {
         secondaryColor: '#06b6d4',
       },
       engagement: {
-        title: 'Engagement & Reactions Growth',
+        title: `Engagement & Reactions Growth (${rangeLabel})`,
         primaryLabel: 'Post Likes & Reactions',
         primaryValues: safeLikes,
         primaryColor: '#ec4899',
@@ -1636,16 +1674,16 @@ function GrowthPageContent() {
         secondaryColor: '#a855f7',
       },
       audience: {
-        title: 'Audience Growth (Fans by Like vs Unlike)',
-        primaryLabel: 'Fans by Like',
-        primaryValues: safeLikes,
+        title: `Audience Growth (${rangeLabel})`,
+        primaryLabel: 'Followers / Page Fans',
+        primaryValues: fbFollowersCount > 0 ? [fbFollowersCount, fbFollowersCount] : safeLikes,
         primaryColor: '#10b981',
         secondaryLabel: 'Fans by Unlike',
         secondaryValues: [0, 0],
         secondaryColor: '#f43f5e',
       },
     };
-  }, [posts]);
+  }, [dateFilteredPosts, dateRange, fbFollowersCount, chartGranularity]);
 
   return (
     <div className="flex flex-col gap-6 max-w-7xl mx-auto pb-12">
@@ -1782,18 +1820,24 @@ function GrowthPageContent() {
 
             <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto justify-start lg:justify-end">
               {/* Date Range Selector Pills */}
-              <div className="flex bg-zinc-950 p-1 rounded-xl border border-zinc-800">
-                {(['7D', '28D', '30D', 'QTD'] as const).map(range => (
+              <div className="flex flex-wrap bg-zinc-950 p-1 rounded-xl border border-zinc-800 gap-0.5">
+                {([
+                  { id: '7D', label: '7 Days' },
+                  { id: '30D', label: '30 Days' },
+                  { id: '90D', label: '90 Days' },
+                  { id: 'YEARLY', label: 'Yearly' },
+                  { id: 'ALL', label: 'All Time' },
+                ] as const).map(range => (
                   <button
-                    key={range}
-                    onClick={() => setDateRange(range)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                      dateRange === range
+                    key={range.id}
+                    onClick={() => setDateRange(range.id)}
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      dateRange === range.id
                         ? 'bg-blue-600 text-white shadow-md'
-                        : 'text-zinc-400 hover:text-white'
+                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
                     }`}
                   >
-                    {range === '28D' ? 'Last 28 Days (Meta)' : range === '7D' ? 'Last 7 Days' : range === '30D' ? 'Last 30 Days' : 'QTD'}
+                    {range.label}
                   </button>
                 ))}
               </div>
@@ -2124,7 +2168,7 @@ function GrowthPageContent() {
                     <div
                       className="absolute top-4 right-4 bg-zinc-900 border border-zinc-700 shadow-2xl rounded-xl p-3 z-20 pointer-events-none animate-in fade-in"
                     >
-                      <div className="text-[10px] text-zinc-400 font-mono">{splineChartDates[hoveredPointIndex] || 'Data Point'}</div>
+                      <div className="text-[10px] text-zinc-400 font-mono">{dynamicDateLabels[hoveredPointIndex] || 'Data Point'}</div>
                       <div className="text-xs font-bold text-white mt-1 flex items-center gap-2">
                         <span
                           className="w-2.5 h-2.5 rounded-full"
@@ -2135,6 +2179,13 @@ function GrowthPageContent() {
                       </div>
                     </div>
                   )}
+                </div>
+
+                {/* Dynamic X-Axis Date Labels */}
+                <div className="flex justify-between items-center px-4 pt-3 text-[11px] text-zinc-400 font-mono">
+                  {dynamicDateLabels.map((lbl, i) => (
+                    <span key={i} className="hover:text-white transition-colors">{lbl}</span>
+                  ))}
                 </div>
               </Card>
 
@@ -3931,6 +3982,53 @@ function GrowthPageContent() {
       {/* ==================================== */}
       {activeTab === 'ANALYTICS' && (
         <div className="flex flex-col gap-6">
+          {/* Analytics Top Control Bar */}
+          <div className="p-4 rounded-2xl bg-zinc-900/90 border border-zinc-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
+            <div>
+              <h3 className="text-base font-black text-white flex items-center gap-2">
+                <BarChart2 className="w-4 h-4 text-emerald-400" /> Executive Analytics & Growth Reporting
+              </h3>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Real-time performance analytics calibrated by Meta Social Engine & Ralion AI
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-start sm:justify-end">
+              {/* Date Range Selector Pills */}
+              <div className="flex flex-wrap bg-zinc-950 p-1 rounded-xl border border-zinc-800 gap-0.5">
+                {([
+                  { id: '7D', label: '7 Days' },
+                  { id: '30D', label: '30 Days' },
+                  { id: '90D', label: '90 Days' },
+                  { id: 'YEARLY', label: 'Yearly' },
+                  { id: 'ALL', label: 'All Time' },
+                ] as const).map(range => (
+                  <button
+                    key={range.id}
+                    onClick={() => setDateRange(range.id)}
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      dateRange === range.id
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+                    }`}
+                  >
+                    {range.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Export Buttons */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportCsv}
+                className="gap-1.5 text-xs border-zinc-800 text-zinc-300 hover:text-white bg-zinc-950 hover:bg-zinc-800"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-400" /> Export CSV
+              </Button>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {[
               { label: 'Total Audience Reach', value: totalReach.toLocaleString(), change: '+24% this week', icon: '👁️', color: 'text-blue-400' },
