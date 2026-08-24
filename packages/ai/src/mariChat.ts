@@ -172,6 +172,35 @@ ${graphContext}`;
           modelInfo: { model: 'gpt-4o-mini', category: 'Fallback Intelligence', endpoint: 'chat' }
         };
       }
+      // Fallback 2: Direct Google Gemini API using configured key
+      try {
+        const GEMINI_API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY || "AQ.Ab8RN6LHIgVR8Zti6ifRmdpEKXKguMi1mbTZ951Mdn0mFzBhxA";
+        const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [
+              {
+                role: "user",
+                parts: [{ text: `${systemPrompt || defaultSysPrompt}\n\nUser Request: ${prompt}` }]
+              }
+            ]
+          })
+        });
+        if (geminiRes.ok) {
+          const gData = await geminiRes.json();
+          const gText = gData.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (gText) {
+            return {
+              text: gText,
+              modelInfo: { model: 'gemini-2.0-flash', category: 'Gemini Direct Intelligence', endpoint: 'chat' }
+            };
+          }
+        }
+      } catch (gemErr) {
+        console.warn("Gemini Direct fallback note:", gemErr);
+      }
+
       return null;
     }
 
@@ -180,7 +209,32 @@ ${graphContext}`;
     return text ? { text, modelInfo: selection } : null;
 
   } catch (err) {
-    console.warn("Failed to reach AIML API endpoint:", err);
+    console.warn("Failed to reach AIML API endpoint, trying Gemini direct fallback:", err);
+    try {
+      const GEMINI_API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY || "AQ.Ab8RN6LHIgVR8Zti6ifRmdpEKXKguMi1mbTZ951Mdn0mFzBhxA";
+      const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: prompt }]
+            }
+          ]
+        })
+      });
+      if (geminiRes.ok) {
+        const gData = await geminiRes.json();
+        const gText = gData.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (gText) {
+          return {
+            text: gText,
+            modelInfo: { model: 'gemini-2.0-flash', category: 'Gemini Direct Intelligence', endpoint: 'chat' }
+          };
+        }
+      }
+    } catch {}
     return null;
   }
 }
