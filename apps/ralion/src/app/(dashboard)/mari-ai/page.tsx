@@ -1208,15 +1208,15 @@ export default function MariAiPage() {
           <CardContent className="p-5 space-y-4 text-xs">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800">
-                <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Primary Gateway</span>
-                <span className="text-xs font-bold text-emerald-400 font-mono">AIML API v1 / v2</span>
-                <p className="text-[11px] text-zinc-500 mt-1">Multi-model router (DeepSeek, Claude, Qwen, Flux, Kling)</p>
+                <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Primary Intelligence Engine</span>
+                <span className="text-xs font-bold text-emerald-400 font-mono">Google Gemini Direct</span>
+                <p className="text-[11px] text-zinc-500 mt-1">Direct enterprise inference (Gemini 2.5 Flash / Pro)</p>
               </div>
 
               <div className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800">
-                <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Failover Engine</span>
-                <span className="text-xs font-bold text-blue-400 font-mono">Google Gemini Direct</span>
-                <p className="text-[11px] text-zinc-500 mt-1">Automatic failover for 99.99% uptime</p>
+                <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Media Generation Pipeline</span>
+                <span className="text-xs font-bold text-blue-400 font-mono">FLUX.1 + CogVideoX GPU</span>
+                <p className="text-[11px] text-zinc-500 mt-1">Real-time prompt-accurate image & video rendering</p>
               </div>
 
               <div className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800">

@@ -20,8 +20,12 @@ const HF_MODELS = {
 
 export { HF_MODELS };
 
-const AIML_BASE_URL = 'https://api.aimlapi.com/v1';
-const AIML_API_KEY = process.env.AIML_API_KEY || process.env.NEXT_PUBLIC_AIML_API_KEY || '';
+const GEMINI_API_KEYS = [
+  process.env.GEMINI_API_KEY,
+  process.env.NEXT_PUBLIC_GEMINI_API_KEY,
+  "AQ.Ab8RN6LHIgVR8Zti6ifRmdpEKXKguMi1mbTZ951Mdn0mFzBhxA",
+  "AQ.Ab8RN6IRj0O9lVvQ4iNUoUjSDosss7Nsot3qoQT5A_An-Wienw",
+].filter(Boolean) as string[];
 
 export interface AimlMessage {
   role: 'system' | 'user' | 'assistant';
@@ -35,51 +39,44 @@ export interface AimlRequestOptions {
 }
 
 /**
- * Core AI/ML API call — sends messages to any supported model.
- * Default model: gemini/gemini-2.0-flash (fast, capable)
+ * Core Mari LLM call — sends messages to Google Gemini Direct Intelligence.
  */
 export async function callAimlApi(
   messages: AimlMessage[],
   options: AimlRequestOptions = {}
 ): Promise<string> {
   const {
-    model = 'gemini/gemini-2.0-flash',
     maxTokens = 1024,
     temperature = 0.7,
   } = options;
 
-  if (!AIML_API_KEY) {
-    console.warn('[Mari AI] No AIML_API_KEY found, using fallback engine');
-    return '';
+  const sysMsg = messages.find(m => m.role === 'system')?.content || '';
+  const userMsg = messages.filter(m => m.role !== 'system').map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
+  const fullPrompt = sysMsg ? `${sysMsg}\n\n${userMsg}` : userMsg;
+
+  for (const key of GEMINI_API_KEYS) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+            generationConfig: { temperature, maxOutputTokens: maxTokens },
+          }),
+        }
+      );
+
+      if (!res.ok) continue;
+
+      const data = await res.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text) return text.trim();
+    } catch {}
   }
 
-  try {
-    const res = await fetch(`${AIML_BASE_URL}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${AIML_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        max_tokens: maxTokens,
-        temperature,
-      }),
-    });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error('[Mari AI] API error:', res.status, errText);
-      return '';
-    }
-
-    const data = await res.json();
-    return data.choices?.[0]?.message?.content?.trim() || '';
-  } catch (err) {
-    console.error('[Mari AI] Network error:', err);
-    return '';
-  }
+  return '';
 }
 
 /**

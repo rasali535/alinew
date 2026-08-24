@@ -11,9 +11,6 @@ export interface MariQueryResponse {
   relatedData?: any;
 }
 
-const AIML_API_KEY = process.env.NEXT_PUBLIC_AIML_API_KEY || process.env.AIML_API_KEY || "37d9bb3553feb58ff0ec6ed0b8e86975";
-const AIML_BASE_URL = process.env.NEXT_PUBLIC_AIML_API_BASE_URL || "https://api.aimlapi.com/v1";
-
 export interface SelectedModelInfo {
   model: string;
   category: string;
@@ -225,39 +222,7 @@ export async function callMariAiApi(
       };
     }
 
-    // ── TIER 2: AIML API (Secondary Chat Fallback) ────────────────────────
-    try {
-      const aimlRes = await fetch(`${AIML_BASE_URL}/chat/completions`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${AIML_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: selection.model,
-          messages: [
-            { role: 'system', content: activeSysPrompt },
-            { role: 'user', content: prompt },
-          ],
-          temperature: 0.7,
-          max_tokens: 1024,
-        }),
-      });
-      if (aimlRes.ok) {
-        const aimlData = await aimlRes.json();
-        let aimlText = aimlData.choices?.[0]?.message?.content;
-        if (aimlText) {
-          aimlText = sanitizeWebRefusalText(aimlText, prompt);
-          return {
-            text: aimlText,
-            modelInfo: {
-              model: 'mari-intelligence',
-              category: 'Mari Enterprise Intelligence',
-              endpoint: 'chat',
-            },
-          };
-        }
-      }
-    } catch {}
-
-    // ── TIER 3: Local Grounded Strategic Engine (Hard Fallback) ────────────
+    // ── TIER 2: Local Grounded Strategic Engine (Direct Reliable Fallback) ──
     return generateLocalStrategicResponse(prompt, businessContext);
 
   } catch (err) {
