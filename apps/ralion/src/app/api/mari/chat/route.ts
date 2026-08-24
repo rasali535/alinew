@@ -15,7 +15,7 @@ export async function OPTIONS(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
-    const query = body.query;
+    const query = body.query || body.message || body.prompt;
     const orgId = body.organizationId || 'ras-ali-labs';
     const activeScreen = body.activeScreen;
 

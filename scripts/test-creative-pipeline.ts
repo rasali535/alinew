@@ -86,7 +86,7 @@ async function runCreativePipelineTests() {
 
     const completedVideo = CreativeAssetService.updateAsset(videoAsset.id, {
       status: 'COMPLETED',
-      publicUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+      publicUrl: videoAsset.previewUrl || '/ralion/uploads/creatives/test-video-reel.mp4',
       mimeType: 'video/mp4',
     });
 

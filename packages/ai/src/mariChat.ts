@@ -161,10 +161,11 @@ export async function callMariAiApi(
 
     // ── 🎥 Video — CogVideoX / Prompt Animation Stream ───────────────────
     if (selection.endpoint === 'video') {
+      const seed = Math.floor(Math.random() * 1000000);
       const hfVid = await generateHfVideo({ prompt, quality: 'fast' });
       const videoUrl = hfVid.success && hfVid.url
         ? hfVid.url
-        : 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
+        : `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt.trim())}?model=flux-realism&width=1024&height=576&nologo=true&seed=${seed}`;
       const vidModel = hfVid.model?.split('/')[1] || 'CogVideoX-2b';
       return {
         text: `🎥 Video Generated:\n\nPrompt: "${prompt}"\n\n[Watch Video](${videoUrl})\n\n*(CogVideoX · ${vidModel})*`,

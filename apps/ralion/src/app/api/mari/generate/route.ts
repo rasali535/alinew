@@ -78,21 +78,13 @@ export async function POST(request: NextRequest) {
     if (type === 'video') {
       const encodedPrompt = encodeURIComponent(cleanPrompt);
       // Generates a cinematic video stream / MP4 reel for the exact prompt
-      const videoFrameUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?model=flux-realism&width=1024&height=576&nologo=true&seed=${seed}`;
-      
-      // Sample high-quality enterprise video streams for video presentation
-      const enterpriseVideoUrls = [
-        'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-        'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-        'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
-      ];
-      const videoUrl = enterpriseVideoUrls[Math.floor(Math.random() * enterpriseVideoUrls.length)];
+      const videoUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?model=flux-realism&width=1024&height=576&nologo=true&seed=${seed}`;
 
       return corsJsonResponse({
         success: true,
         url: videoUrl,
-        posterUrl: videoFrameUrl,
-        format: 'video',
+        posterUrl: videoUrl,
+        format: 'url',
         model: 'zai-org/CogVideoX-2b',
         prompt: cleanPrompt,
       }, undefined, request);

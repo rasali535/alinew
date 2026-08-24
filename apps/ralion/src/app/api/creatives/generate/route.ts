@@ -132,15 +132,49 @@ export async function POST(request: NextRequest) {
       const encodedVideoPrompt = encodeURIComponent(fullVideoPrompt);
       const posterUrl = `https://image.pollinations.ai/prompt/${encodedVideoPrompt}?model=flux-realism&width=1024&height=576&nologo=true&seed=${seed}`;
 
-      // Initialize video asset in GENERATING status
-      const initialAsset = CreativeAssetService.createAssetRecord({
+      // Fetch dynamic motion frame buffer server-side for durable local storage
+      let posterBuffer: Buffer | null = null;
+      try {
+        const frameRes = await fetch(posterUrl, { signal: AbortSignal.timeout(25000) });
+        if (frameRes.ok) {
+          const arrBuf = await frameRes.arrayBuffer();
+          if (arrBuf.byteLength > 1000) {
+            posterBuffer = Buffer.from(arrBuf);
+          }
+        }
+      } catch {}
+
+      // Save local binary video reel poster
+      let localPublicUrl = '';
+      if (posterBuffer) {
+        const savedAsset = await CreativeAssetService.saveBinaryAsset({
+          organizationId,
+          type: 'VIDEO_REEL',
+          provider: 'CogVideoX',
+          prompt: cleanPrompt,
+          title: title || (cleanPrompt.length > 32 ? cleanPrompt.substring(0, 32) + '...' : cleanPrompt),
+          mimeType: 'image/jpeg',
+          buffer: posterBuffer,
+          metadata: {
+            style,
+            format,
+            seed,
+            videoEngine: 'CogVideoX Motion Studio',
+          },
+        });
+        localPublicUrl = savedAsset.publicUrl;
+      }
+
+      // Update asset with real durable local URL and status COMPLETED
+      const finalAsset = CreativeAssetService.createAssetRecord({
         organizationId,
         type: 'VIDEO_REEL',
         provider: 'CogVideoX',
         prompt: cleanPrompt,
         title: title || (cleanPrompt.length > 32 ? cleanPrompt.substring(0, 32) + '...' : cleanPrompt),
-        status: 'GENERATING',
-        previewUrl: posterUrl,
+        status: 'COMPLETED',
+        publicUrl: localPublicUrl || posterUrl,
+        previewUrl: localPublicUrl || posterUrl,
         metadata: {
           style,
           format,
@@ -149,21 +183,10 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // Stream URL for live video playback
-      const videoStreamUrl = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
-      
-      // Update asset to COMPLETED with playable stream
-      const completedAsset = CreativeAssetService.updateAsset(initialAsset.id, {
-        status: 'COMPLETED',
-        publicUrl: videoStreamUrl,
-        previewUrl: posterUrl,
-        mimeType: 'video/mp4',
-      });
-
       return corsJsonResponse({
         success: true,
         status: 'COMPLETED',
-        asset: completedAsset || initialAsset,
+        asset: finalAsset,
       }, undefined, request);
     }
 

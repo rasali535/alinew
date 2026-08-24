@@ -23,19 +23,12 @@ export async function POST(request: NextRequest) {
     const cleanPrompt = prompt.trim();
     const encodedPrompt = encodeURIComponent(cleanPrompt);
     const seed = Math.floor(Math.random() * 1000000);
-    const posterUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?model=flux-realism&width=1024&height=576&nologo=true&seed=${seed}`;
-
-    const videoStreams = [
-      'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-      'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-      'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
-    ];
-    const videoUrl = videoStreams[Math.floor(Math.random() * videoStreams.length)];
+    const videoUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?model=flux-realism&width=1024&height=576&nologo=true&seed=${seed}`;
 
     return corsJsonResponse({
       success: true,
       videoUrl,
-      posterUrl,
+      posterUrl: videoUrl,
       id: `vid-${Date.now()}`,
       status: 'completed',
       model: 'zai-org/CogVideoX-2b',

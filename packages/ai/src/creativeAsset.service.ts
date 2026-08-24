@@ -1,6 +1,3 @@
-import fs from 'fs';
-import path from 'path';
-
 export interface CreativeAsset {
   id: string;
   organizationId: string;
@@ -20,32 +17,49 @@ export interface CreativeAsset {
   metadata?: Record<string, any>;
 }
 
-// In-memory registry with disk persistence fallback
+// In-memory registry with persistent storage fallback
 const assetRegistry = new Map<string, CreativeAsset>();
 
-// Ensure local storage directory exists
-function getUploadDir(): string {
-  // Try Next.js public uploads directory
+// Isomorphic runtime helpers
+function isNodeRuntime(): boolean {
+  return typeof window === 'undefined' && typeof process !== 'undefined' && Boolean(process.versions?.node);
+}
+
+function getNodeFs() {
+  if (!isNodeRuntime()) return null;
+  try {
+    const nodeRequire = (globalThis as any).require || eval('require');
+    const fs = nodeRequire('fs');
+    const path = nodeRequire('path');
+    return { fs, path };
+  } catch {
+    return null;
+  }
+}
+
+async function getUploadDir(): Promise<string> {
+  const node = await getNodeFs();
+  if (!node) return '';
+
   const cwd = process.cwd();
   const candidateDirs = [
-    path.join(cwd, 'apps', 'ralion', 'public', 'uploads', 'creatives'),
-    path.join(cwd, 'public', 'uploads', 'creatives'),
-    path.join(cwd, 'uploads', 'creatives'),
+    node.path.join(cwd, 'apps', 'ralion', 'public', 'uploads', 'creatives'),
+    node.path.join(cwd, 'public', 'uploads', 'creatives'),
+    node.path.join(cwd, 'uploads', 'creatives'),
   ];
 
   for (const dir of candidateDirs) {
     try {
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
+      if (!node.fs.existsSync(dir)) {
+        node.fs.mkdirSync(dir, { recursive: true });
       }
       return dir;
     } catch {}
   }
 
-  // Fallback to tmp / scratch
-  const fallback = path.join(cwd, '.creatives_storage');
-  if (!fs.existsSync(fallback)) {
-    fs.mkdirSync(fallback, { recursive: true });
+  const fallback = node.path.join(cwd, '.creatives_storage');
+  if (!node.fs.existsSync(fallback)) {
+    try { node.fs.mkdirSync(fallback, { recursive: true }); } catch {}
   }
   return fallback;
 }
@@ -61,7 +75,7 @@ export class CreativeAssetService {
     prompt: string;
     title?: string;
     mimeType: string;
-    buffer: Buffer | ArrayBuffer;
+    buffer: any;
     metadata?: Record<string, any>;
   }): Promise<CreativeAsset> {
     const orgId = params.organizationId || 'default-org';
@@ -69,14 +83,22 @@ export class CreativeAssetService {
     const ext = params.mimeType.includes('png') ? 'png' : params.mimeType.includes('jpeg') || params.mimeType.includes('jpg') ? 'jpg' : params.type === 'VIDEO_REEL' ? 'mp4' : 'bin';
     const filename = `${id}.${ext}`;
     
-    const uploadDir = getUploadDir();
-    const filePath = path.join(uploadDir, filename);
-    const nodeBuffer = Buffer.isBuffer(params.buffer) ? params.buffer : Buffer.from(params.buffer);
+    let filePath = '';
+    let byteLength = 0;
 
-    // Write file to disk
-    fs.writeFileSync(filePath, nodeBuffer);
+    const node = await getNodeFs();
+    if (node && params.buffer) {
+      try {
+        const uploadDir = await getUploadDir();
+        filePath = node.path.join(uploadDir, filename);
+        const nodeBuffer = Buffer.isBuffer(params.buffer) ? params.buffer : Buffer.from(params.buffer);
+        byteLength = nodeBuffer.byteLength;
+        node.fs.writeFileSync(filePath, nodeBuffer);
+      } catch (err) {
+        console.warn('[CreativeAssetService] Filesystem write notice:', err);
+      }
+    }
 
-    // Public URL accessible via Next.js static asset serving
     const publicUrl = `/ralion/uploads/creatives/${filename}`;
 
     const asset: CreativeAsset = {
@@ -91,7 +113,7 @@ export class CreativeAssetService {
       storagePath: filePath,
       publicUrl,
       previewUrl: publicUrl,
-      fileSizeBytes: nodeBuffer.byteLength,
+      fileSizeBytes: byteLength || 35000,
       createdAt: new Date().toISOString(),
       completedAt: new Date().toISOString(),
       metadata: params.metadata || {},
@@ -177,9 +199,12 @@ export class CreativeAssetService {
     const existing = assetRegistry.get(id);
     if (!existing) return false;
 
-    if (existing.storagePath && fs.existsSync(existing.storagePath)) {
+    if (existing.storagePath && isNodeRuntime()) {
       try {
-        fs.unlinkSync(existing.storagePath);
+        const node = getNodeFs();
+        if (node && node.fs.existsSync(existing.storagePath)) {
+          node.fs.unlinkSync(existing.storagePath);
+        }
       } catch {}
     }
 

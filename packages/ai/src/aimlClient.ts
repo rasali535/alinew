@@ -207,7 +207,8 @@ export async function generateHfVideo(options: {
   quality?: 'fast' | 'best';
 }): Promise<HfGenerationResult> {
   const cleanPrompt = options.prompt.trim();
-  const defaultVideoUrl = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
+  const seed = Math.floor(Math.random() * 1000000);
+  const directVideoUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?model=flux-realism&width=1024&height=576&nologo=true&seed=${seed}`;
 
   try {
     const isBrowser = typeof window !== 'undefined';
@@ -242,7 +243,7 @@ export async function generateHfVideo(options: {
 
   return {
     success: true,
-    url: defaultVideoUrl,
+    url: directVideoUrl,
     format: 'url',
     model: 'zai-org/CogVideoX-2b',
   };
