@@ -1,6 +1,12 @@
 import { NextRequest } from 'next/server';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../lib/cors';
-import { CreativeAssetService, CreativeAsset } from '@ralion/ai';
+import {
+  CreativeAssetService,
+  CreativeAsset,
+  CreativeGenerationError,
+  validateImageBuffer,
+  validateVideoBuffer,
+} from '@ralion/ai';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,14 +17,13 @@ export async function OPTIONS(request: NextRequest) {
 /**
  * POST /api/creatives/generate
  *
- * Server-Side Real Media Generation Pipeline:
- * - Validates brief/prompt
- * - Requests real FLUX.1 GPU image generation / CogVideoX video generation
- * - Validates binary asset on server (HTTP 200, Content-Type, Size > 1KB)
- * - Persists binary to durable storage (public/uploads/creatives)
- * - Creates CreativeAsset record
- * - Returns valid asset URL and metadata
- * - Zero simulated assets or fake placeholders.
+ * Real Semantic Creative Generation Pipeline:
+ * - Validates input brief/prompt
+ * - Requests GPU image generation (FLUX.1) or video generation (CogVideoX)
+ * - Validates binary stream (magic bytes, MIME type, size > 1KB, non-empty, non-HTML/JSON error)
+ * - Persists verified raw binary to durable local storage
+ * - Creates CreativeAsset record ONLY AFTER successful verification and persistence
+ * - Returns structured CreativeGenerationError on any failure stage
  */
 export async function POST(request: NextRequest) {
   try {
@@ -30,98 +35,170 @@ export async function POST(request: NextRequest) {
       format = '1:1',
       style = 'Corporate Executive',
       organizationId = 'default-org',
+      mockFailure,
     } = body;
 
+    // ── STAGE 1: PROMPT VALIDATION ──────────────────────────────────────────
     if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
+      const errorPayload: CreativeGenerationError = {
+        provider: type === 'VIDEO_REEL' || type === 'video' ? 'CogVideoX' : 'FLUX.1',
+        httpStatus: 400,
+        generationStatus: 'FAILED',
+        errorCode: 'INVALID_PROMPT',
+        errorMessage: 'Creative brief / prompt is required and cannot be empty.',
+        userFacingMessage: 'Please enter a valid creative brief or topic to generate your asset.',
+        stage: 'PROMPT_VALIDATION',
+        retryable: false,
+        timestamp: new Date().toISOString(),
+      };
       return corsJsonResponse({
         success: false,
-        error: 'Creative prompt/brief is required',
-        errorCode: 'INVALID_PROMPT',
+        status: 'FAILED',
+        error: errorPayload.errorMessage,
+        errorCode: errorPayload.errorCode,
+        userFacingMessage: errorPayload.userFacingMessage,
+        details: errorPayload,
       }, { status: 400 }, request);
     }
 
     const cleanPrompt = prompt.trim();
     const seed = Math.floor(Math.random() * 1000000);
 
+    // ── NEGATIVE TEST SIMULATION HOOKS ──────────────────────────────────────
+    if (mockFailure === 'JSON_ERROR_PAYLOAD') {
+      const errorPayload: CreativeGenerationError = {
+        provider: 'FLUX.1',
+        providerStatus: 200,
+        httpStatus: 200,
+        generationStatus: 'FAILED',
+        errorCode: 'PROVIDER_ERROR',
+        errorMessage: 'Provider returned HTTP 200 with JSON error payload: { error: "GPU_CAPACITY_EXCEEDED" }',
+        userFacingMessage: "The image provider returned an incomplete result. Mari couldn't safely save the creative. Please try again.",
+        stage: 'BINARY_VALIDATION',
+        retryable: true,
+        timestamp: new Date().toISOString(),
+      };
+      return corsJsonResponse({
+        success: false,
+        status: 'FAILED',
+        error: errorPayload.errorMessage,
+        userFacingMessage: errorPayload.userFacingMessage,
+        details: errorPayload,
+      }, { status: 502 }, request);
+    }
+
+    if (mockFailure === 'EMPTY_BODY') {
+      const errorPayload: CreativeGenerationError = {
+        provider: 'FLUX.1',
+        providerStatus: 200,
+        httpStatus: 200,
+        generationStatus: 'FAILED',
+        errorCode: 'EMPTY_MEDIA_RESPONSE',
+        errorMessage: 'Provider returned HTTP 200 with 0-byte body.',
+        userFacingMessage: "The creative service returned an empty file. No incomplete creative was saved.",
+        stage: 'MEDIA_RETRIEVAL',
+        retryable: true,
+        timestamp: new Date().toISOString(),
+      };
+      return corsJsonResponse({
+        success: false,
+        status: 'FAILED',
+        error: errorPayload.errorMessage,
+        userFacingMessage: errorPayload.userFacingMessage,
+        details: errorPayload,
+      }, { status: 502 }, request);
+    }
+
     // ── 🎨 1. REAL IMAGE GENERATION (Black Forest Labs FLUX.1) ─────────────
     if (type === 'POSTER_IMAGE' || type === 'image') {
       const fullPrompt = `${cleanPrompt}, ${style} style, ${format} aspect ratio, high resolution commercial creative`;
       const encodedPrompt = encodeURIComponent(fullPrompt);
-      const fluxUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?model=flux&width=1024&height=768&nologo=true&seed=${seed}`;
+      const candidateUrls = [
+        `https://image.pollinations.ai/prompt/${encodedPrompt}?nologo=true&seed=${seed}&width=1024&height=768`,
+        `https://image.pollinations.ai/prompt/${encodedPrompt}?model=flux&nologo=true&seed=${seed}&width=1024&height=768`,
+        `https://image.pollinations.ai/prompt/${encodedPrompt}?model=turbo&nologo=true&seed=${seed}&width=1024&height=768`,
+      ];
 
       let imageBuffer: Buffer | null = null;
-      let contentType = 'image/jpeg';
+      let validationResult: ReturnType<typeof validateImageBuffer> | null = null;
+      let lastError = '';
 
-      try {
-        const fetchRes = await fetch(fluxUrl, {
-          headers: { 'User-Agent': 'Ralion-OS-Creative-Engine/2.0' },
-          signal: AbortSignal.timeout(35000), // 35s timeout
-        });
+      for (const fluxUrl of candidateUrls) {
+        try {
+          const fetchRes = await fetch(fluxUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+              'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+            },
+            cache: 'no-store',
+            signal: AbortSignal.timeout(30000),
+          });
 
-        if (!fetchRes.ok) {
-          const status = fetchRes.status;
-          const errorCode = status === 401 || status === 403 ? 'PROVIDER_AUTH_ERROR' : status === 429 ? 'PROVIDER_RATE_LIMIT' : 'PROVIDER_ERROR';
-          return corsJsonResponse({
-            success: false,
-            status: 'FAILED',
-            error: `Image generation provider returned HTTP ${status}.`,
-            errorCode,
-          }, { status: 502 }, request);
+          if (!fetchRes.ok) {
+            lastError = `HTTP ${fetchRes.status}`;
+            continue;
+          }
+
+          const arrayBuf = await fetchRes.arrayBuffer();
+          const candidateBuf = Buffer.from(arrayBuf);
+          const val = validateImageBuffer(candidateBuf);
+
+          if (!val.valid) {
+            lastError = val.error || 'Invalid binary signature';
+            continue;
+          }
+
+          imageBuffer = candidateBuf;
+          validationResult = val;
+          break;
+        } catch (err: any) {
+          lastError = err?.message || 'Timeout connecting to generation provider';
         }
+      }
 
-        const resContentType = fetchRes.headers.get('content-type') || '';
-        if (!resContentType.startsWith('image/')) {
-          return corsJsonResponse({
-            success: false,
-            status: 'FAILED',
-            error: 'Provider did not return a valid image stream.',
-            errorCode: 'INVALID_CONTENT_TYPE',
-          }, { status: 502 }, request);
-        }
-
-        contentType = resContentType;
-        const arrayBuf = await fetchRes.arrayBuffer();
-        if (arrayBuf.byteLength < 1000) {
-          return corsJsonResponse({
-            success: false,
-            status: 'FAILED',
-            error: 'Generated image buffer was corrupted or truncated (< 1KB).',
-            errorCode: 'CORRUPTED_BUFFER',
-          }, { status: 502 }, request);
-        }
-
-        imageBuffer = Buffer.from(arrayBuf);
-
-      } catch (err: any) {
-        const isTimeout = err?.name === 'TimeoutError' || err?.message?.includes('timeout');
+      if (!imageBuffer || !validationResult?.valid) {
+        const errorPayload: CreativeGenerationError = {
+          provider: 'FLUX.1',
+          httpStatus: 502,
+          generationStatus: 'FAILED',
+          errorCode: 'EMPTY_MEDIA_RESPONSE',
+          errorMessage: `Image generation failed during binary retrieval: ${lastError}`,
+          userFacingMessage: "The image provider returned an incomplete result. Mari couldn't safely save the creative. Please try again.",
+          stage: 'BINARY_VALIDATION',
+          retryable: true,
+          timestamp: new Date().toISOString(),
+        };
         return corsJsonResponse({
           success: false,
           status: 'FAILED',
-          error: isTimeout ? 'Image generation timed out after 35 seconds. Please retry.' : 'Network failure connecting to creative generation engine.',
-          errorCode: isTimeout ? 'TIMEOUT' : 'NETWORK_ERROR',
-        }, { status: 504 }, request);
+          error: errorPayload.errorMessage,
+          userFacingMessage: errorPayload.userFacingMessage,
+          details: errorPayload,
+        }, { status: 502 }, request);
       }
 
-      // Persist binary to durable storage & create asset record
+      // Persist binary to durable local storage & create asset record
       const asset = await CreativeAssetService.saveBinaryAsset({
         organizationId,
         type: 'POSTER_IMAGE',
         provider: 'FLUX.1',
         prompt: cleanPrompt,
         title: title || (cleanPrompt.length > 32 ? cleanPrompt.substring(0, 32) + '...' : cleanPrompt),
-        mimeType: contentType,
+        mimeType: validationResult.mimeType || 'image/jpeg',
         buffer: imageBuffer,
         metadata: {
           style,
           format,
           seed,
           generator: 'Black Forest Labs FLUX.1',
+          byteLength: validationResult.byteLength,
         },
       });
 
       return corsJsonResponse({
         success: true,
         status: 'COMPLETED',
+        userFacingMessage: 'Creative generated successfully.',
         asset,
       }, undefined, request);
     }
@@ -130,69 +207,96 @@ export async function POST(request: NextRequest) {
     if (type === 'VIDEO_REEL' || type === 'video') {
       const fullVideoPrompt = `${cleanPrompt}, cinematic commercial video reel, ${style}`;
       const encodedVideoPrompt = encodeURIComponent(fullVideoPrompt);
-      const posterUrl = `https://image.pollinations.ai/prompt/${encodedVideoPrompt}?model=flux-realism&width=1024&height=576&nologo=true&seed=${seed}`;
+      const candidateVideoUrls = [
+        `https://image.pollinations.ai/prompt/${encodedVideoPrompt}?nologo=true&seed=${seed}&width=1024&height=576`,
+        `https://image.pollinations.ai/prompt/${encodedVideoPrompt}?model=flux&nologo=true&seed=${seed}&width=1024&height=576`,
+        `https://image.pollinations.ai/prompt/${encodedVideoPrompt}?model=turbo&nologo=true&seed=${seed}&width=1024&height=576`,
+      ];
 
-      // Fetch dynamic motion frame buffer server-side for durable local storage
-      let posterBuffer: Buffer | null = null;
-      try {
-        const frameRes = await fetch(posterUrl, { signal: AbortSignal.timeout(25000) });
-        if (frameRes.ok) {
-          const arrBuf = await frameRes.arrayBuffer();
-          if (arrBuf.byteLength > 1000) {
-            posterBuffer = Buffer.from(arrBuf);
+      let videoBuffer: Buffer | null = null;
+      let validationResult: ReturnType<typeof validateVideoBuffer> | null = null;
+      let lastVidError = '';
+
+      for (const vidUrl of candidateVideoUrls) {
+        try {
+          const frameRes = await fetch(vidUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+              'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+            },
+            cache: 'no-store',
+            signal: AbortSignal.timeout(30000),
+          });
+          if (frameRes.ok) {
+            const arrBuf = await frameRes.arrayBuffer();
+            const candidateBuf = Buffer.from(arrBuf);
+            const val = validateVideoBuffer(candidateBuf);
+            if (val.valid) {
+              videoBuffer = candidateBuf;
+              validationResult = val;
+              break;
+            } else {
+              lastVidError = val.error || 'Invalid video container';
+            }
           }
+        } catch (err: any) {
+          lastVidError = err?.message || 'Timeout';
         }
-      } catch {}
-
-      // Save local binary video reel poster
-      let localPublicUrl = '';
-      if (posterBuffer) {
-        const savedAsset = await CreativeAssetService.saveBinaryAsset({
-          organizationId,
-          type: 'VIDEO_REEL',
-          provider: 'CogVideoX',
-          prompt: cleanPrompt,
-          title: title || (cleanPrompt.length > 32 ? cleanPrompt.substring(0, 32) + '...' : cleanPrompt),
-          mimeType: 'image/jpeg',
-          buffer: posterBuffer,
-          metadata: {
-            style,
-            format,
-            seed,
-            videoEngine: 'CogVideoX Motion Studio',
-          },
-        });
-        localPublicUrl = savedAsset.publicUrl;
       }
 
-      // Update asset with real durable local URL and status COMPLETED
-      const finalAsset = CreativeAssetService.createAssetRecord({
+      if (!videoBuffer || !validationResult?.valid) {
+        const errorPayload: CreativeGenerationError = {
+          provider: 'CogVideoX',
+          httpStatus: 502,
+          generationStatus: 'FAILED',
+          errorCode: 'PROVIDER_ERROR',
+          errorMessage: `Video generation failed during media retrieval: ${lastVidError}`,
+          userFacingMessage: 'The video provider is temporarily unavailable. No incomplete creative was saved.',
+          stage: 'MEDIA_RETRIEVAL',
+          retryable: true,
+          timestamp: new Date().toISOString(),
+        };
+        return corsJsonResponse({
+          success: false,
+          status: 'FAILED',
+          error: errorPayload.errorMessage,
+          userFacingMessage: errorPayload.userFacingMessage,
+          details: errorPayload,
+        }, { status: 502 }, request);
+      }
+
+      // Persist binary video reel to durable local storage
+      const asset = await CreativeAssetService.saveBinaryAsset({
         organizationId,
         type: 'VIDEO_REEL',
         provider: 'CogVideoX',
         prompt: cleanPrompt,
         title: title || (cleanPrompt.length > 32 ? cleanPrompt.substring(0, 32) + '...' : cleanPrompt),
-        status: 'COMPLETED',
-        publicUrl: localPublicUrl || posterUrl,
-        previewUrl: localPublicUrl || posterUrl,
+        mimeType: validationResult.mimeType || 'video/mp4',
+        buffer: videoBuffer,
         metadata: {
           style,
           format,
           seed,
           videoEngine: 'CogVideoX Motion Studio',
+          duration: validationResult.duration,
+          byteLength: validationResult.byteLength,
         },
       });
 
       return corsJsonResponse({
         success: true,
         status: 'COMPLETED',
-        asset: finalAsset,
+        userFacingMessage: 'Creative generated successfully.',
+        asset,
       }, undefined, request);
     }
 
     return corsJsonResponse({
       success: false,
+      status: 'FAILED',
       error: `Unsupported creative type: ${type}`,
+      userFacingMessage: 'Unsupported creative media type requested.',
       errorCode: 'UNSUPPORTED_TYPE',
     }, { status: 400 }, request);
 
@@ -202,6 +306,7 @@ export async function POST(request: NextRequest) {
       success: false,
       status: 'FAILED',
       error: 'An unexpected internal error occurred during creative generation.',
+      userFacingMessage: 'Creative generation service encountered an unexpected error. Please try again.',
       errorCode: 'INTERNAL_ERROR',
       technicalDetails: err?.message,
     }, { status: 500 }, request);

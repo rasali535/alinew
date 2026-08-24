@@ -1407,7 +1407,11 @@ function GrowthPageContent() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok || !data.success || !data.asset) {
-        const errorMsg = data.error || `Creative generation failed (HTTP ${res.status})`;
+        const errorMsg = data.userFacingMessage || data.error || (
+          type === 'poster'
+            ? "The image provider returned an incomplete result. Mari couldn't safely save the creative. Please try again."
+            : 'The video provider is temporarily unavailable. No incomplete creative was saved.'
+        );
         setOauthAlert({
           type: 'error',
           message: `❌ ${errorMsg}`,

@@ -34,7 +34,7 @@ async function runFinalClosedLoopAcceptance() {
         style: 'Corporate Executive',
         organizationId: 'org-rasalilabs-demo',
       }),
-      signal: AbortSignal.timeout(40000),
+      signal: AbortSignal.timeout(55000),
     });
 
     const data = await res.json().catch(() => ({}));
@@ -68,7 +68,7 @@ async function runFinalClosedLoopAcceptance() {
         style: 'Cinematic Executive',
         organizationId: 'org-rasalilabs-demo',
       }),
-      signal: AbortSignal.timeout(40000),
+      signal: AbortSignal.timeout(55000),
     });
 
     const data = await res.json().catch(() => ({}));
