@@ -7,12 +7,15 @@ import {
   nativeImage,
   Notification,
   shell,
-  dialog
+  dialog,
+  protocol,
+  net
 } from 'electron';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
+import { pathToFileURL } from 'url';
 import Store from 'electron-store';
 
 import { OllamaManager } from './ai/ollama-manager';
@@ -53,6 +56,20 @@ if (process.defaultApp) {
 } else {
   app.setAsDefaultProtocolClient('ralion');
 }
+
+// Register standard privileged 'app' scheme for Next.js renderer
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'app',
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      allowServiceWorkers: true,
+    },
+  },
+]);
 
 // ─── Globals ───────────────────────────────────────────────────────────────────
 let mainWindow: BrowserWindow | null = null;
@@ -167,8 +184,8 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: true,
-      webSecurity: false,
+      sandbox: false,
+      webSecurity: true,
     },
   });
 
@@ -183,60 +200,11 @@ function createWindow() {
   });
 
   const loadStaticRenderer = () => {
-    try {
-      const { protocol } = require('electron');
-      if (typeof protocol.interceptFileProtocol === 'function') {
-        protocol.interceptFileProtocol('file', (request: any, callback: any) => {
-          let urlPath = request.url.replace(/^file:\/\//i, '');
-          if (process.platform === 'win32' && urlPath.match(/^\/[a-zA-Z]:\//)) {
-            urlPath = urlPath.substring(1);
-          }
-          urlPath = decodeURIComponent(urlPath);
-          
-          const driveRootRegex = process.platform === 'win32' ? /^[a-zA-Z]:[\\/]ralion[\\/]/i : /^\/ralion\//i;
-          
-          if (driveRootRegex.test(urlPath)) {
-            const parts = urlPath.split(/[\\/]/);
-            const folderIndex = parts.findIndex((p: any) => p.toLowerCase() === 'ralion');
-            const relativePath = parts.slice(folderIndex + 1).join(path.sep);
-            let targetPath = path.join(__dirname, 'renderer', relativePath);
-            
-            if (fs.existsSync(targetPath)) {
-              try {
-                if (fs.statSync(targetPath).isDirectory()) {
-                  targetPath = path.join(targetPath, 'index.html');
-                }
-              } catch (e) {}
-            } else {
-              const fallbackPath = path.join(__dirname, 'renderer', 'ralion', relativePath);
-              if (fs.existsSync(fallbackPath)) {
-                targetPath = fallbackPath;
-                try {
-                  if (fs.statSync(targetPath).isDirectory()) {
-                    targetPath = path.join(targetPath, 'index.html');
-                  }
-                } catch (e) {}
-              }
-            }
-            return callback({ path: targetPath });
-          }
-          callback({ path: urlPath });
-        });
-      }
-    } catch (e) {
-      log.warn('[Protocol Intercept Warning]', e);
-    }
-
-    let rendererPath = path.join(__dirname, 'renderer', 'dashboard', 'index.html');
-    if (!fs.existsSync(rendererPath)) {
-      rendererPath = path.join(__dirname, 'renderer', 'index.html');
-    }
-    if (!fs.existsSync(rendererPath)) {
-      rendererPath = path.join(__dirname, 'renderer', 'login', 'index.html');
-    }
-    log.info('[Renderer] Loading Production Static HTML:', rendererPath);
-    mainWindow?.loadFile(rendererPath).catch(err => {
-      log.error('[Renderer Load Failure] Local index.html missing or unreadable:', rendererPath, err);
+    const targetUrl = 'app://localhost/ralion/dashboard';
+    log.info('[Renderer] Loading Production Static URL:', targetUrl);
+    mainWindow?.loadURL(targetUrl).catch(err => {
+      log.error('[Renderer Load Failure] app:// URL load failed, falling back to root index:', err);
+      mainWindow?.loadURL('app://localhost/index.html');
     });
   };
 
@@ -253,40 +221,11 @@ function createWindow() {
     loadStaticRenderer();
   }
 
-  // Intercept navigation to load local subfolder index.html for Next static export routes
+  // Intercept navigation to ensure external links open in default system browser
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (url.startsWith('file://')) {
-      try {
-        const parsedUrl = new URL(url);
-        let pathname = parsedUrl.pathname;
-        if (!pathname.includes('renderer')) {
-          event.preventDefault();
-          let cleanPath = pathname.replace(/^\/[A-Z]:/i, '').replace(/^\//, '');
-          if (cleanPath.toLowerCase().startsWith('ralion/')) {
-            cleanPath = cleanPath.substring(7);
-          } else if (cleanPath.toLowerCase() === 'ralion') {
-            cleanPath = '';
-          }
-          let targetHtml = path.join(__dirname, 'renderer', cleanPath, 'index.html');
-          
-          if (!fs.existsSync(targetHtml)) {
-            const fallbackHtml = path.join(__dirname, 'renderer', 'ralion', cleanPath, 'index.html');
-            if (fs.existsSync(fallbackHtml)) {
-              targetHtml = fallbackHtml;
-            }
-          }
-
-          if (fs.existsSync(targetHtml)) {
-            log.info('[Renderer Navigation] Redirecting file:// route to static HTML:', targetHtml);
-            mainWindow?.loadFile(targetHtml);
-          } else {
-            log.warn(`[Renderer Navigation] Subfolder index.html not found for ${cleanPath}, falling back to login index.html`);
-            mainWindow?.loadFile(path.join(__dirname, 'renderer', 'login', 'index.html'));
-          }
-        }
-      } catch (e: any) {
-        log.error('[Renderer Navigation Error]', e?.message || e);
-      }
+    if (!url.startsWith('app://') && !url.startsWith('http://localhost:6509')) {
+      event.preventDefault();
+      shell.openExternal(url);
     }
   });
 
@@ -698,6 +637,74 @@ if (!gotLock) {
 
   app.whenReady().then(async () => {
     console.log('[BOOT LOG 0] App ready callback started');
+    
+    // Register 'app' protocol handler to serve Next.js static renderer
+    try {
+      protocol.handle('app', async (request) => {
+        try {
+          const parsedUrl = new URL(request.url);
+          let pathname = decodeURIComponent(parsedUrl.pathname);
+
+          if (pathname.startsWith('/ralion/')) {
+            pathname = pathname.substring(7);
+          } else if (pathname === '/ralion') {
+            pathname = '/';
+          }
+
+          if (pathname === '/' || pathname === '') {
+            pathname = '/index.html';
+          }
+
+          let filePath = path.join(__dirname, 'renderer', pathname);
+
+          if (fs.existsSync(filePath)) {
+            try {
+              if (fs.statSync(filePath).isDirectory()) {
+                const indexSubPath = path.join(filePath, 'index.html');
+                if (fs.existsSync(indexSubPath)) {
+                  filePath = indexSubPath;
+                }
+              }
+            } catch (e) {}
+          } else {
+            if (fs.existsSync(filePath + '.html')) {
+              filePath = filePath + '.html';
+            } else if (fs.existsSync(path.join(filePath, 'index.html'))) {
+              filePath = path.join(filePath, 'index.html');
+            } else if (fs.existsSync(path.join(__dirname, 'renderer', 'ralion', pathname))) {
+              filePath = path.join(__dirname, 'renderer', 'ralion', pathname);
+            }
+          }
+
+          if (!fs.existsSync(filePath)) {
+            if (
+              pathname.endsWith('.js') ||
+              pathname.endsWith('.css') ||
+              pathname.endsWith('.json') ||
+              pathname.endsWith('.png') ||
+              pathname.endsWith('.ico') ||
+              pathname.endsWith('.svg') ||
+              pathname.endsWith('.woff') ||
+              pathname.endsWith('.woff2')
+            ) {
+              return new Response('Not Found', { status: 404 });
+            }
+            const fallback = path.join(__dirname, 'renderer', 'index.html');
+            if (fs.existsSync(fallback)) {
+              filePath = fallback;
+            }
+          }
+
+          return net.fetch(pathToFileURL(filePath).toString());
+        } catch (err) {
+          log.error('[App Protocol Error]', err);
+          return new Response('Error loading resource', { status: 500 });
+        }
+      });
+      console.log('[BOOT LOG 0] App protocol handler registered');
+    } catch (e) {
+      console.error('[BOOT LOG 0 Error registering protocol handler]', e);
+    }
     
     try {
       console.log('[BOOT LOG 1] Ollama check starting');

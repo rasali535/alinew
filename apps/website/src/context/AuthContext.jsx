@@ -122,7 +122,7 @@ export const AuthProvider = ({ children }) => {
         : 'https://rasalilabs.com/account';
 
       const defaultScopes = {
-        facebook: 'public_profile,email,pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_engagement,business_management',
+        facebook: 'public_profile,email',
         google: 'email profile'
       };
 

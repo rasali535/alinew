@@ -17,7 +17,7 @@
     "ralion:dev": "npm run dev --workspace=@ralion/web",
     "ralion:build": "npm run build --workspace=@ralion/web",
     "desktop:build": "npm run build --workspace=@ralion/desktop",
-    "desktop:dist:win": "npm run desktop:dist:win --workspace=@ralion/desktop",
+    "desktop:dist:win": "npm run dist:win --workspace=@ralion/desktop",
     "lint": "npm run lint --workspaces --if-present",
     "test": "node ./scripts/test-social.js",
     "test:e2e": "node ./scripts/production-e2e-readiness.js",
