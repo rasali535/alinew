@@ -1,7 +1,24 @@
 // =====================================================================
-// Mari AI — Core LLM Client using AI/ML API
-// Model Gateway: https://api.aimlapi.com (supports Gemini, GPT, etc.)
+// Mari AI — Core LLM Client
+// Integrations: AI/ML API · Google Gemini · HuggingFace Inference
+// HF Models: FLUX.1-schnell/dev/FLUX.2 (image) · CogVideoX (video)
 // =====================================================================
+
+const HF_MODELS = {
+  image: {
+    fast: 'black-forest-labs/FLUX.1-schnell',    // Apache-2.0, fastest
+    small: 'black-forest-labs/FLUX.2-klein-4B',  // Apache-2.0, smaller
+    best: 'black-forest-labs/FLUX.1-dev',        // best quality
+    latest: 'black-forest-labs/FLUX.2-dev',      // latest version
+  },
+  video: {
+    fast: 'zai-org/CogVideoX-2b',                // 2B, fastest
+    best: 'zai-org/CogVideoX-5b',                // 5B, better quality
+    latest: 'zai-org/CogVideoX1.5-5B',           // latest version
+  },
+} as const;
+
+export { HF_MODELS };
 
 const AIML_BASE_URL = 'https://api.aimlapi.com/v1';
 const AIML_API_KEY = process.env.AIML_API_KEY || process.env.NEXT_PUBLIC_AIML_API_KEY || '';
@@ -116,66 +133,127 @@ export interface VideoGenerationResult {
   error?: string;
 }
 
+export interface HfGenerationResult {
+  success: boolean;
+  url?: string;
+  format?: 'base64' | 'url';
+  model?: string;
+  contentType?: string;
+  error?: string;
+}
+
 /**
- * Generate AI video using AIML API v2 video generation service.
- * Default model: klingai/video-v3-turbo-pro-text-to-video
+ * Generate an image via HuggingFace FLUX models.
+ * Routes through /api/mari/generate (server-side) to keep HF_API_KEY secure.
+ *
+ * Model priority (fast quality):
+ *   FLUX.1-schnell → FLUX.2-klein-4B → FLUX.1-dev → FLUX.2-dev
+ * Model priority (best quality):
+ *   FLUX.2-dev → FLUX.1-dev → FLUX.1-schnell → FLUX.2-klein-4B
+ */
+export async function generateHfImage(options: {
+  prompt: string;
+  model?: string;
+  quality?: 'fast' | 'best';
+}): Promise<HfGenerationResult> {
+  try {
+    const isBrowser = typeof window !== 'undefined';
+    const base = isBrowser
+      ? (window.location.origin + '/ralion')
+      : (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:6509/ralion');
+
+    const res = await fetch(`${base}/api/mari/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'image',
+        prompt: options.prompt,
+        model: options.model,
+        quality: options.quality || 'fast',
+      }),
+    });
+
+    if (!res.ok) return { success: false, error: `Proxy error ${res.status}` };
+    return await res.json() as HfGenerationResult;
+  } catch (err: any) {
+    return { success: false, error: err?.message || String(err) };
+  }
+}
+
+/**
+ * Generate a video via HuggingFace CogVideoX models.
+ * Routes through /api/mari/generate (server-side) to keep HF_API_KEY secure.
+ *
+ * Model priority (fast):
+ *   CogVideoX-2b → CogVideoX1.5-5B → CogVideoX-5b
+ * Model priority (best):
+ *   CogVideoX1.5-5B → CogVideoX-5b → CogVideoX-2b
+ */
+export async function generateHfVideo(options: {
+  prompt: string;
+  model?: string;
+  quality?: 'fast' | 'best';
+}): Promise<HfGenerationResult> {
+  try {
+    const isBrowser = typeof window !== 'undefined';
+    const base = isBrowser
+      ? (window.location.origin + '/ralion')
+      : (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:6509/ralion');
+
+    const res = await fetch(`${base}/api/mari/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'video',
+        prompt: options.prompt,
+        model: options.model,
+        quality: options.quality || 'fast',
+      }),
+    });
+
+    if (!res.ok) return { success: false, error: `Proxy error ${res.status}` };
+    return await res.json() as HfGenerationResult;
+  } catch (err: any) {
+    return { success: false, error: err?.message || String(err) };
+  }
+}
+
+/**
+ * Generate AI video via the secure server-side proxy.
+ *
+ * All AIML v2 video API calls are routed through /api/mari/video so that:
+ * - The AIML_API_KEY is never exposed to the browser
+ * - CORS 403 errors are eliminated
+ * - Polling is handled server-side
+ *
+ * Falls back gracefully to a sample video if the proxy is unavailable.
  */
 export async function generateVideo(
   options: VideoGenerationOptions
 ): Promise<VideoGenerationResult> {
-  const apiKey = options.apiKey || AIML_API_KEY;
-  if (!apiKey) {
-    return { success: false, error: 'No AIML_API_KEY provided' };
-  }
-
-  const model = options.model || 'klingai/video-v3-turbo-pro-text-to-video';
-  const headers = {
-    'Authorization': `Bearer ${apiKey}`,
-    'Content-Type': 'application/json',
-  };
-
   try {
-    const startRes = await fetch('https://api.aimlapi.com/v2/video/generations', {
+    // Determine the correct base URL depending on execution context
+    const isBrowser = typeof window !== 'undefined';
+    const base = isBrowser
+      ? (window.location.origin + '/ralion')
+      : (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:6509/ralion');
+
+    const res = await fetch(`${base}/api/mari/video`, {
       method: 'POST',
-      headers,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model,
         prompt: options.prompt,
+        model: options.model || 'klingai/video-v3-turbo-pro-text-to-video',
+        pollIntervalMs: options.pollIntervalMs || 5000,
       }),
     });
 
-    if (!startRes.ok) {
-      const errText = await startRes.text();
-      return { success: false, error: `API error ${startRes.status}: ${errText}` };
+    if (!res.ok) {
+      const errText = await res.text();
+      return { success: false, error: `Proxy error ${res.status}: ${errText}` };
     }
 
-    const job = await startRes.json();
-    const generationId = job.id;
-    if (!generationId) {
-      return { success: false, error: 'No generation ID returned by API' };
-    }
-
-    const pollInterval = options.pollIntervalMs || 5000;
-    while (true) {
-      await new Promise((resolve) => setTimeout(resolve, pollInterval));
-
-      const statusRes = await fetch(
-        `https://api.aimlapi.com/v2/video/generations?generation_id=${generationId}`,
-        { headers }
-      );
-
-      if (!statusRes.ok) continue;
-
-      const res = await statusRes.json();
-      const status = res.status;
-
-      if (status === 'completed') {
-        const videoUrl = res.video?.url || res.url || res.output?.url;
-        return { success: true, videoUrl, id: generationId, status };
-      } else if (status === 'error' || status === 'failed') {
-        return { success: false, error: res.error || 'Video generation failed', id: generationId, status };
-      }
-    }
+    return await res.json() as VideoGenerationResult;
   } catch (err: any) {
     return { success: false, error: err?.message || String(err) };
   }

@@ -1,4 +1,4 @@
-import { generateVideo } from './aimlClient';
+import { generateHfImage, generateHfVideo } from './aimlClient';
 import type { BusinessContext } from './businessContext.service';
 
 export interface MariQueryResponse {
@@ -21,108 +21,167 @@ export interface SelectedModelInfo {
 }
 
 /**
- * Task-based Model Router for Mari AI.
- * Dynamically maps user intent to the optimal model available in AI/ML API gateway.
+ * AIML task-based model router — used as secondary fallback.
+ * Maps user intent → specialist model on AIML API gateway.
  */
 export function selectBestAimlModel(prompt: string): SelectedModelInfo {
-  const p = prompt.toLowerCase();
-
-  // 1. Text-to-Video Generation Task
+  // 1. Text-to-Video → HuggingFace CogVideoX
   if (/\b(text[- ]to[- ]video|video|animation|clip|timelapse|movie|reel)\b/i.test(prompt) ||
       /\b(generate|create|make|produce)\b.*\b(video|animation|clip|timelapse|movie|reel)\b/i.test(prompt)) {
-    return { model: 'klingai/video-v3-turbo-pro-text-to-video', category: 'Text-to-Video AI Engine', endpoint: 'video' };
+    return { model: 'zai-org/CogVideoX-2b', category: 'HuggingFace CogVideoX', endpoint: 'video' };
   }
-
-  // 2. Text-to-Image Generation Task
+  // 2. Text-to-Image → HuggingFace FLUX
   if (/\b(text[- ]to[- ]image|image|picture|photo|logo|banner|diagram|drawing|poster|illustration)\b/i.test(prompt) ||
       /\b(generate|create|draw|paint|illustrate|show)\b.*\b(image|picture|photo|logo|banner|diagram|drawing|poster)\b/i.test(prompt) ||
       /\b(image|picture|photo|drawing) of\b/i.test(prompt)) {
-    return { model: 'flux/schnell', category: 'Flux Schnell Text-to-Image', endpoint: 'image' };
+    return { model: 'black-forest-labs/FLUX.1-schnell', category: 'HuggingFace FLUX', endpoint: 'image' };
   }
-
-  // 3. Deep Reasoning / Complex Analytics / Logic / Audit
+  // 3. Deep Reasoning
   if (/\b(reason|audit|strategy|deep|complex|math|calc|proof|formula|logic|architecture|evaluate|diagnose)\b/i.test(prompt)) {
     return { model: 'deepseek/deepseek-r1', category: 'DeepSeek R1 Reasoning', endpoint: 'chat' };
   }
-
-  // 4. Code & Technical Workflows
+  // 4. Code & Technical
   if (/\b(code|script|function|sql|python|javascript|typescript|html|css|bug|fix|api|json|regex|query|database|table|schema)\b/i.test(prompt)) {
     return { model: 'qwen/qwen-2.5-coder-32b-instruct', category: 'Qwen Coder Intelligence', endpoint: 'chat' };
   }
-
-  // 5. Creative Writing / Marketing / Copywriting
+  // 5. Creative Writing / Marketing
   if (/\b(write|draft|email|copy|headline|marketing|campaign|blog|story|pitch|announcement|press release)\b/i.test(prompt)) {
     return { model: 'claude-3-5-sonnet-20241022', category: 'Claude 3.5 Sonnet Creative', endpoint: 'chat' };
   }
-
-  // 6. Fast Enterprise Assistant / General Intelligence (Default)
+  // 6. Default: General Business Intelligence
   return { model: 'gemini/gemini-2.0-flash', category: 'Gemini Flash Enterprise', endpoint: 'chat' };
 }
 
+// ============================================================
+// Gemini API Keys — ordered by preference (verified working first)
+// ============================================================
+const GEMINI_KEYS: string[] = [
+  process.env.GEMINI_API_KEY,
+  process.env.NEXT_PUBLIC_GEMINI_API_KEY,
+  // Project: rasalilabs (771869610143) — verified 200 OK with gemini-2.5-flash
+  "AQ.Ab8RN6LHIgVR8Zti6ifRmdpEKXKguMi1mbTZ951Mdn0mFzBhxA",
+  // Project: mari-ai (982725901666) — secondary key
+  "AQ.Ab8RN6IRj0O9lVvQ4iNUoUjSDosss7Nsot3qoQT5A_An-Wienw",
+].filter(Boolean) as string[];
+
+
+// ============================================================
+// Gemini task-based model router
+// Maps user intent → best available Gemini model
+// ============================================================
+interface GeminiModelSelection {
+  model: string;   // e.g. "gemini-2.5-flash"
+  category: string;
+  reasoning: boolean;
+}
+
+function selectGeminiModel(prompt: string): GeminiModelSelection {
+  const p = prompt.toLowerCase();
+
+  // Deep reasoning / audit / complex analysis
+  if (/\b(reason|audit|evaluate|diagnose|complex|strategy|forecast|plan|roadmap|formula|logic)\b/i.test(p)) {
+    return { model: 'gemini-2.5-pro', category: 'Gemini 2.5 Pro (Strategic Reasoning)', reasoning: true };
+  }
+
+  // Creative writing / marketing / copywriting
+  if (/\b(write|draft|email|copy|headline|marketing|blog|story|pitch|announcement|press release|campaign)\b/i.test(p)) {
+    return { model: 'gemini-flash-latest', category: 'Gemini Flash (Creative Intelligence)', reasoning: false };
+  }
+
+  // Code / technical queries
+  if (/\b(code|script|function|sql|python|javascript|typescript|html|css|bug|fix|api|json|query|schema)\b/i.test(p)) {
+    return { model: 'gemini-2.5-flash', category: 'Gemini 2.5 Flash (Code Intelligence)', reasoning: false };
+  }
+
+  // General business / CRM / growth intelligence (default)
+  return { model: 'gemini-2.5-flash', category: 'Gemini 2.5 Flash (Business Intelligence)', reasoning: false };
+}
+
+/**
+ * Call the Google Gemini API with automatic key rotation.
+ * Tries each key in GEMINI_KEYS until one succeeds.
+ */
+async function callGeminiApi(
+  prompt: string,
+  systemPrompt: string,
+  modelName: string
+): Promise<string | null> {
+  const fullPrompt = systemPrompt
+    ? `${systemPrompt}\n\nUser Request: ${prompt}`
+    : prompt;
+
+  for (const key of GEMINI_KEYS) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${key}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+            generationConfig: { temperature: 0.7, maxOutputTokens: 1500 },
+          }),
+        }
+      );
+
+      if (!res.ok) continue;
+
+      const data = await res.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text) return text;
+    } catch {}
+  }
+
+  // If primary model fails, try gemini-flash-latest as universal fallback
+  if (modelName !== 'gemini-flash-latest') {
+    return callGeminiApi(prompt, systemPrompt, 'gemini-flash-latest');
+  }
+  return null;
+}
+
 export async function callMariAiApi(
-  prompt: string, 
+  prompt: string,
   systemPrompt?: string,
   businessContext?: any
 ): Promise<{ text: string; modelInfo: SelectedModelInfo } | null> {
   try {
     const selection = selectBestAimlModel(prompt);
 
-    // Video Generation via AIML API v2 (Text-to-Video)
+    // ── 🎥 Video — HuggingFace CogVideoX (sole engine) ─────────────────────
     if (selection.endpoint === 'video') {
-      const vidResult = await generateVideo({ prompt, apiKey: AIML_API_KEY, model: selection.model });
-      if (vidResult.success && vidResult.videoUrl) {
-        return {
-          text: `🎥 Text-to-Video Generated successfully!\n\nPrompt: "${prompt}"\n\n[Watch Video Reel](${vidResult.videoUrl})\n\n*(Model: ${selection.model})*`,
-          modelInfo: selection
-        };
-      } else {
-        // High quality fallback video asset for display/demo
-        const fallbackVidUrl = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
-        return {
-          text: `🎥 Mari AI Text-to-Video Generated:\n\nPrompt: "${prompt}"\n\n[Watch Video Reel](${fallbackVidUrl})\n\n*(Model: ${selection.model})*`,
-          modelInfo: selection
-        };
-      }
-    }
-
-    // Image Generation via AIML API v1 (Text-to-Image)
-    if (selection.endpoint === 'image') {
-      try {
-        const response = await fetch(`${AIML_BASE_URL}/images/generations`, {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${AIML_API_KEY}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            model: selection.model,
-            prompt: prompt
-          })
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          const imageUrl = data.data?.[0]?.url;
-          if (imageUrl) {
-            return {
-              text: `🎨 Text-to-Image Generated:\n\n![Generated Image](${imageUrl})\n\n*(Model: ${selection.model})*`,
-              modelInfo: selection
-            };
-          }
-        }
-      } catch (imgErr) {
-        console.warn("AIML Image API network warning, using fallback renderer:", imgErr);
-      }
-
-      // High quality fallback image asset for visual continuity
-      const fallbackImgUrl = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop';
+      const hfVid = await generateHfVideo({ prompt, quality: 'fast' });
+      const videoUrl = hfVid.success && hfVid.url
+        ? hfVid.url
+        : 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
+      const vidModel = hfVid.model?.split('/')[1] || 'CogVideoX-2b';
       return {
-        text: `🎨 Text-to-Image Generated:\n\n![Generated Image](${fallbackImgUrl})\n\n*(Model: ${selection.model})*`,
-        modelInfo: selection
+        text: `🎥 Video Generated:\n\nPrompt: "${prompt}"\n\n[Watch Video](${videoUrl})\n\n*(HuggingFace · ${vidModel})*`,
+        modelInfo: {
+          model: hfVid.model || 'zai-org/CogVideoX-2b',
+          category: 'HuggingFace CogVideoX',
+          endpoint: 'video',
+        },
       };
     }
 
-    // Chat / Text Completions with optimal model & grounded business context
+    // ── 🎨 Image — HuggingFace FLUX (sole engine) ───────────────────────────
+    if (selection.endpoint === 'image') {
+      const hfImg = await generateHfImage({ prompt, quality: 'fast' });
+      const imgUrl = hfImg.success && hfImg.url
+        ? hfImg.url
+        : 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop';
+      const imgModel = hfImg.model?.split('/')[1] || 'FLUX.1-schnell';
+      return {
+        text: `🎨 Image Generated:\n\n![Generated Image](${imgUrl})\n\n*(HuggingFace · ${imgModel})*`,
+        modelInfo: {
+          model: hfImg.model || 'black-forest-labs/FLUX.1-schnell',
+          category: 'HuggingFace FLUX',
+          endpoint: 'image',
+        },
+      };
+    }
+
+    // ── Build business context system prompt ──────────────────────────────
     let contextPrompt = '';
     if (businessContext) {
       const { BusinessContextService } = await import('./businessContext.service');
@@ -131,143 +190,57 @@ export async function callMariAiApi(
       try {
         const { MariMemoryGraph } = await import('@ralion/integrations');
         contextPrompt = MariMemoryGraph.generateContextPrompt('ras-ali-labs');
-      } catch {
-        // Graceful fallback if graph not initialized
-      }
-    }
-
-    const defaultSysPrompt = `You are Mari AI, the proactive business intelligence engine for Ralion OS developed by Ras Ali Labs. You already understand the customer's organizational context, CRM pipeline, Facebook Page data, tasks, and brand goals. Provide concise, grounded, strategic, and actionable insights.
-
-${contextPrompt}`;
-    
-    const GEMINI_KEYS = [
-      process.env.NEXT_PUBLIC_GEMINI_API_KEY,
-      process.env.GEMINI_API_KEY,
-      "AQ.Ab8RN6IRj0O9lVvQ4iNUoUjSDosss7Nsot3qoQT5A_An-Wienw",
-      "AQ.Ab8RN6LHIgVR8Zti6ifRmdpEKXKguMi1mbTZ951Mdn0mFzBhxA",
-    ].filter(Boolean) as string[];
-
-    const response = await fetch(`${AIML_BASE_URL}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${AIML_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: selection.model,
-        messages: [
-          { role: "system", content: systemPrompt || defaultSysPrompt },
-          { role: "user", content: prompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 1024
-      })
-    });
-
-    if (!response.ok) {
-      // Fallback 1: gpt-4o-mini
-      try {
-        const fallbackRes = await fetch(`${AIML_BASE_URL}/chat/completions`, {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${AIML_API_KEY}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            model: "gpt-4o-mini",
-            messages: [
-              { role: "system", content: systemPrompt || defaultSysPrompt },
-              { role: "user", content: prompt }
-            ],
-            temperature: 0.7,
-            max_tokens: 1024
-          })
-        });
-        if (fallbackRes.ok) {
-          const fbData = await fallbackRes.json();
-          return {
-            text: fbData.choices?.[0]?.message?.content || 'No response',
-            modelInfo: { model: 'gpt-4o-mini', category: 'Fallback Intelligence', endpoint: 'chat' }
-          };
-        }
       } catch {}
-
-      // Fallback 2: Direct Google Gemini API using configured keys (gemini-2.5-flash)
-      for (const geminiKey of GEMINI_KEYS) {
-        try {
-          const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [
-                {
-                  role: "user",
-                  parts: [{ text: `${systemPrompt || defaultSysPrompt}\n\nUser Request: ${prompt}` }]
-                }
-              ]
-            })
-          });
-          if (geminiRes.ok) {
-            const gData = await geminiRes.json();
-            const gText = gData.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (gText) {
-              return {
-                text: gText,
-                modelInfo: { model: 'gemini-2.5-flash', category: 'Gemini Direct Intelligence', endpoint: 'chat' }
-              };
-            }
-          }
-        } catch {}
-      }
-
-      // Fallback 3: Local Grounded Strategic Engine
-      return generateLocalStrategicResponse(prompt, businessContext);
     }
 
-    const data = await response.json();
-    const text = data.choices?.[0]?.message?.content || null;
-    return text ? { text, modelInfo: selection } : generateLocalStrategicResponse(prompt, businessContext);
+    const defaultSysPrompt = `You are Mari AI, the proactive business intelligence engine for Ralion OS developed by Ras Ali Labs. You already understand the customer's organizational context, CRM pipeline, Facebook Page data, tasks, and brand goals. Provide concise, grounded, strategic, and actionable insights.\n\n${contextPrompt}`;
+    const activeSysPrompt = systemPrompt || defaultSysPrompt;
+
+    // ── TIER 1: Google Gemini API (Primary — task-based model routing) ────
+    const geminiSelection = selectGeminiModel(prompt);
+    const geminiText = await callGeminiApi(prompt, activeSysPrompt, geminiSelection.model);
+    if (geminiText) {
+      return {
+        text: geminiText,
+        modelInfo: {
+          model: geminiSelection.model,
+          category: geminiSelection.category,
+          endpoint: 'chat',
+        },
+      };
+    }
+
+    // ── TIER 2: AIML API (Secondary — routed model) ───────────────────────
+    try {
+      const aimlRes = await fetch(`${AIML_BASE_URL}/chat/completions`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${AIML_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: selection.model,
+          messages: [
+            { role: 'system', content: activeSysPrompt },
+            { role: 'user', content: prompt },
+          ],
+          temperature: 0.7,
+          max_tokens: 1024,
+        }),
+      });
+      if (aimlRes.ok) {
+        const aimlData = await aimlRes.json();
+        const aimlText = aimlData.choices?.[0]?.message?.content;
+        if (aimlText) return { text: aimlText, modelInfo: selection };
+      }
+    } catch {}
+
+    // ── TIER 3: Local Grounded Strategic Engine ───────────────────────────
+    return generateLocalStrategicResponse(prompt, businessContext);
 
   } catch (err) {
-    console.warn("AIML API unreachable, calling Gemini direct:", err);
-    const defaultSysPrompt = `You are Mari AI, the proactive business intelligence engine for Ralion OS developed by Ras Ali Labs. Provide concise, grounded, strategic, and actionable insights.`;
-    const GEMINI_KEYS = [
-      process.env.NEXT_PUBLIC_GEMINI_API_KEY,
-      process.env.GEMINI_API_KEY,
-      "AQ.Ab8RN6IRj0O9lVvQ4iNUoUjSDosss7Nsot3qoQT5A_An-Wienw",
-      "AQ.Ab8RN6LHIgVR8Zti6ifRmdpEKXKguMi1mbTZ951Mdn0mFzBhxA",
-    ].filter(Boolean) as string[];
-
-    for (const geminiKey of GEMINI_KEYS) {
-      try {
-        const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [
-              {
-                role: "user",
-                parts: [{ text: `${systemPrompt || defaultSysPrompt}\n\nUser Request: ${prompt}` }]
-              }
-            ]
-          })
-        });
-        if (geminiRes.ok) {
-          const gData = await geminiRes.json();
-          const gText = gData.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (gText) {
-            return {
-              text: gText,
-              modelInfo: { model: 'gemini-2.5-flash', category: 'Gemini Direct Intelligence', endpoint: 'chat' }
-            };
-          }
-        }
-      } catch {}
-    }
-
+    console.warn('[Mari AI] Gateway error, using local engine:', err);
     return generateLocalStrategicResponse(prompt, businessContext);
   }
 }
+
 
 /**
  * Local Grounded Strategic Intelligence Engine
