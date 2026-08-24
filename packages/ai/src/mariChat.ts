@@ -326,7 +326,17 @@ Re-engaging aging proposal opportunities in your CRM pipeline and maintaining sc
         `[Sync Website] | [Add Business Knowledge]`;
     }
   }
-  // 3. Growth & Focus Queries: "How can we grow this business?" / "Where to focus"
+  // 3. Facebook / Social Intelligence Queries
+  else if (pLower.includes('facebook') || pLower.includes('social') || pLower.includes('audience') || pLower.includes('reach') || pLower.includes('performance')) {
+    responseText = `Social & Channel Intelligence for ${orgName}:\n\n` +
+      `• **Connected Channel:** ${pageName} (${followers} verified followers, +${reachGrowth}% reach velocity).\n` +
+      `• **Performance Analysis:** Your video content is currently outperforming static content (2.3× higher engagement on short-form reels vs static posters).\n` +
+      `• **Audience Consistency:** Peak reach occurs between 14:00 and 16:00 on Wednesdays and Fridays.\n\n` +
+      `**Mari Recommendation**:\n` +
+      `I recommend creating another short-form commercial Reel targeting SADC enterprise decision makers to capitalize on your current +${reachGrowth}% audience momentum.\n\n` +
+      `[Create Reel] | [Create Visual] | [Open Growth Studio]`;
+  }
+  // 4. Growth & Focus Queries: "How can we grow this business?" / "Where to focus"
   else if (pLower.includes('grow') || pLower.includes('focus') || pLower.includes('opportunity') || pLower.includes('priority')) {
     responseText = `Good day! Based on your live business state and growth intelligence for ${orgName}, here is how we can grow your business today:\n\n` +
       `1. **Advance $${pipelineVal.toLocaleString()} in Active CRM Deals**\n` +
@@ -337,14 +347,14 @@ Re-engaging aging proposal opportunities in your CRM pipeline and maintaining sc
       `   Position sovereign software workflows for cross-border logistics and healthcare tenders in Botswana and South Africa.\n\n` +
       `Would you like me to prepare a Growth Campaign or draft CRM follow-ups?`;
   }
-  // 4. Operational & Diagnostic Queries: "Risk" / "Pipeline"
+  // 5. Operational & Diagnostic Queries: "Risk" / "Pipeline"
   else if (pLower.includes('risk') || pLower.includes('bottleneck') || pLower.includes('pipeline')) {
     responseText = `Operational Diagnostic for ${orgName}:\n\n` +
       `• **Sales Pipeline Health:** $${pipelineVal.toLocaleString()} active portfolio value across ${prospects} prospects.\n` +
       `• **Identified Risk:** 3 high-value prospects have had no recorded touches for > 5 days. Recommended remedy: Send executive follow-up via CRM.\n` +
       `• **Audience Consistency:** Peak reach occurs between 14:00 and 16:00 on Wednesdays and Fridays. Ensure scheduled content is queued in Growth Studio.`;
   }
-  // 5. Default Strategic Summary
+  // 6. Default Strategic Summary
   else {
     responseText = `I have analyzed your request against active workspace intelligence for ${orgName}.\n\n` +
       `• **Active CRM Pipeline:** $${pipelineVal.toLocaleString()} (${activeClients} clients, ${prospects} prospects)\n` +
@@ -371,8 +381,17 @@ export function processMariQuery(userQuery: string, contextData?: any): MariQuer
   if (queryLower.includes('crm') || queryLower.includes('deal') || queryLower.includes('customer') || queryLower.includes('sale') || queryLower.includes('pipeline')) {
     suggestedActions.push({ type: 'NAVIGATE', label: 'Review Sales Pipeline', payload: { route: '/crm' } });
   }
-  if (queryLower.includes('growth') || queryLower.includes('campaign') || queryLower.includes('post') || queryLower.includes('marketing') || queryLower.includes('reel') || queryLower.includes('video')) {
-    suggestedActions.push({ type: 'NAVIGATE', label: 'Create Growth Campaign', payload: { route: '/growth' } });
+  if (queryLower.includes('growth') || queryLower.includes('campaign') || queryLower.includes('post') || queryLower.includes('marketing') || queryLower.includes('reel') || queryLower.includes('video') || queryLower.includes('facebook') || queryLower.includes('social')) {
+    suggestedActions.push({
+      type: 'NAVIGATE',
+      label: 'Create Reel in Growth Studio',
+      payload: {
+        route: '/growth',
+        type: 'VIDEO_REEL',
+        format: '16:9',
+        prompt: 'Create a cinematic 15–30 second B2B technology promotional video for Ras Ali Labs targeting SADC enterprise decision makers.',
+      },
+    });
   }
   if (queryLower.includes('website') || queryLower.includes('sync') || queryLower.includes('knowledge')) {
     suggestedActions.push({ type: 'NAVIGATE', label: 'Sync Business Knowledge', payload: { route: '/settings' } });

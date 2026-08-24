@@ -10,3 +10,6 @@ export * from './businessGrowthProfile.service';
 export * from './mariOrchestrator.service';
 export * from './websiteIngestion.service';
 export * from './creativeAsset.service';
+export * from './creativeProvider.interface';
+export * from './creativeProviders';
+export * from './creativeOrchestrator.service';
