@@ -187,6 +187,48 @@ export class CreativeAssetService {
    * List all assets for an organization.
    */
   static listAssets(organizationId?: string): CreativeAsset[] {
+    if (isNodeRuntime()) {
+      try {
+        const node = getNodeFs();
+        if (node) {
+          const cwd = process.cwd();
+          const candidateDirs = [
+            node.path.join(cwd, 'apps', 'ralion', 'public', 'uploads', 'creatives'),
+            node.path.join(cwd, 'public', 'uploads', 'creatives'),
+            node.path.join(cwd, 'uploads', 'creatives'),
+          ];
+          for (const dir of candidateDirs) {
+            if (node.fs.existsSync(dir)) {
+              const files = node.fs.readdirSync(dir);
+              for (const file of files) {
+                const id = file.replace(/\.[^/.]+$/, '');
+                if (!assetRegistry.has(id)) {
+                  const ext = node.path.extname(file).toLowerCase();
+                  const isVid = ext === '.mp4' || ext === '.webm';
+                  const publicUrl = `/ralion/uploads/creatives/${file}`;
+                  assetRegistry.set(id, {
+                    id,
+                    organizationId: 'default-org',
+                    type: isVid ? 'VIDEO_REEL' : 'POSTER_IMAGE',
+                    provider: isVid ? 'CogVideoX' : 'FLUX.1',
+                    status: 'COMPLETED',
+                    prompt: `Commercial creative asset (${file})`,
+                    title: `Creative Asset (${id.substring(0, 16)})`,
+                    mimeType: isVid ? 'video/mp4' : 'image/jpeg',
+                    storagePath: node.path.join(dir, file),
+                    publicUrl,
+                    previewUrl: publicUrl,
+                    createdAt: new Date().toISOString(),
+                    completedAt: new Date().toISOString(),
+                  });
+                }
+              }
+            }
+          }
+        }
+      } catch {}
+    }
+
     const all = Array.from(assetRegistry.values());
     if (!organizationId || organizationId === 'all') return all.reverse();
     return all.filter(a => a.organizationId === organizationId || a.organizationId === 'default-org').reverse();
