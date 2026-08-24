@@ -112,6 +112,7 @@ export interface ContentPost {
   status: 'draft' | 'scheduled' | 'published';
   scheduledAt?: string;
   publishedAt?: string;
+  rawPublishedAt?: string;
   mediaUrl?: string;
   mediaType?: 'image' | 'video';
   engagement?: { likes: number; shares: number; reach: number; comments: number };
@@ -575,6 +576,7 @@ function GrowthPageContent() {
             hashtags: p.hashtags || ['#RasAliLabs', '#RalionOS', '#EnterpriseAI'],
             status: p.status === 'published' ? 'published' : p.status === 'scheduled' ? 'scheduled' : 'draft',
             publishedAt: p.publishedAt ? new Date(p.publishedAt).toLocaleString() : undefined,
+            rawPublishedAt: p.publishedAt || p.createdAt || p.published_at || p.created_time || p.scheduledFor || new Date().toISOString(),
             scheduledAt: p.scheduledFor,
             mediaUrl: p.mediaUrls?.[0],
             mediaType: p.mediaType,
@@ -1594,7 +1596,9 @@ function GrowthPageContent() {
     const cutoff = now - (days * 24 * 60 * 60 * 1000);
 
     return posts.filter(p => {
-      const ts = p.publishedAt ? new Date(p.publishedAt).getTime() : (p.scheduledAt ? new Date(p.scheduledAt).getTime() : now);
+      const dateStr = p.rawPublishedAt || p.publishedAt || p.scheduledAt;
+      if (!dateStr) return true;
+      const ts = new Date(dateStr).getTime();
       return !isNaN(ts) ? ts >= cutoff : true;
     });
   }, [posts, dateRange]);
@@ -1613,77 +1617,112 @@ function GrowthPageContent() {
   const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
   const fbFollowersCount = Number(activeFbPage?.followersCount) || (fbConn?.followers ? Number(fbConn.followers.replace(/,/g, '')) : 0);
 
-  // Dynamic Sparklines computation from real synced posts filtered by date range
-  const dynamicSparklines = React.useMemo(() => {
-    const reachArr = dateFilteredPosts.map(p => p.engagement?.reach || 0);
-    const engArr = dateFilteredPosts.map(p => (p.engagement?.likes || 0) + (p.engagement?.comments || 0) + (p.engagement?.shares || 0));
-    return {
-      reach: reachArr.length >= 2 ? reachArr : reachArr.length === 1 ? [0, reachArr[0]] : [0, 0],
-      engagement: engArr.length >= 2 ? engArr : engArr.length === 1 ? [0, engArr[0]] : [0, 0],
-      fans: fbFollowersCount > 0 ? [fbFollowersCount, fbFollowersCount] : [0, 0],
-      viral: engArr.map(e => Math.min(100, e * 10)),
-      views: reachArr,
-      video: reachArr,
-    };
-  }, [dateFilteredPosts, fbFollowersCount]);
+  // Dynamic Spline Series & Timeframe Bucketed Computation
+  const { splineChartSeries, dynamicDateLabels } = React.useMemo(() => {
+    const now = Date.now();
+    let numBuckets = 7;
+    let bucketDurationMs = 24 * 60 * 60 * 1000;
+    let labels: string[] = [];
 
-  // Dynamic date labels based on selected dateRange
-  const dynamicDateLabels = React.useMemo(() => {
     if (dateRange === '7D') {
-      return ['Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5', 'Day 6', 'Today'];
+      numBuckets = 7;
+      bucketDurationMs = 24 * 60 * 60 * 1000;
+      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      labels = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(now - (6 - i) * 24 * 60 * 60 * 1000);
+        return i === 6 ? 'Today' : `${days[d.getDay()]} ${d.getDate()}`;
+      });
     } else if (dateRange === '30D') {
-      return ['Day 1', 'Day 5', 'Day 10', 'Day 15', 'Day 20', 'Day 25', 'Today'];
+      numBuckets = 6;
+      bucketDurationMs = 5 * 24 * 60 * 60 * 1000;
+      labels = ['1-5d', '6-10d', '11-15d', '16-20d', '21-25d', '26-30d'];
     } else if (dateRange === '90D') {
-      return ['Month 1', 'Month 2', 'Month 3', 'Today'];
+      numBuckets = 6;
+      bucketDurationMs = 15 * 24 * 60 * 60 * 1000;
+      labels = ['M1 (Early)', 'M1 (Late)', 'M2 (Early)', 'M2 (Late)', 'M3 (Early)', 'Today'];
     } else if (dateRange === 'YEARLY') {
-      return ['Q1', 'Q2', 'Q3', 'Q4', 'Current'];
+      numBuckets = 4;
+      bucketDurationMs = 91 * 24 * 60 * 60 * 1000;
+      labels = ['Q1', 'Q2', 'Q3', 'Q4 (Current)'];
     } else {
-      return ['Start', 'Mid', 'Recent', 'Today'];
+      numBuckets = Math.max(5, Math.min(8, posts.length || 5));
+      labels = Array.from({ length: numBuckets }, (_, i) => i === numBuckets - 1 ? 'Today' : `Phase ${i + 1}`);
+      bucketDurationMs = (30 * 24 * 60 * 60 * 1000);
     }
-  }, [dateRange]);
 
-  // Dynamic Spline Series computation from real synced posts and granularity
-  const splineChartSeries = React.useMemo(() => {
-    const reachValues = dateFilteredPosts.map(p => p.engagement?.reach || 0);
-    const likesValues = dateFilteredPosts.map(p => p.engagement?.likes || 0);
-    const sharesValues = dateFilteredPosts.map(p => p.engagement?.shares || 0);
+    const reachBuckets = new Array(numBuckets).fill(0);
+    const likesBuckets = new Array(numBuckets).fill(0);
+    const sharesBuckets = new Array(numBuckets).fill(0);
 
-    const safeReach = reachValues.length >= 2 ? reachValues : reachValues.length === 1 ? [0, reachValues[0]] : [0, 0];
-    const safeLikes = likesValues.length >= 2 ? likesValues : likesValues.length === 1 ? [0, likesValues[0]] : [0, 0];
-    const safeShares = sharesValues.length >= 2 ? sharesValues : sharesValues.length === 1 ? [0, sharesValues[0]] : [0, 0];
+    const totalWindowMs = numBuckets * bucketDurationMs;
+    const windowStartMs = now - totalWindowMs;
+
+    dateFilteredPosts.forEach((p) => {
+      const dateStr = p.rawPublishedAt || p.publishedAt || p.scheduledAt;
+      const pTime = dateStr ? new Date(dateStr).getTime() : now;
+      if (!isNaN(pTime) && pTime >= windowStartMs && pTime <= now) {
+        const offset = pTime - windowStartMs;
+        const bucketIndex = Math.min(numBuckets - 1, Math.max(0, Math.floor(offset / bucketDurationMs)));
+        reachBuckets[bucketIndex] += p.engagement?.reach || 0;
+        likesBuckets[bucketIndex] += p.engagement?.likes || 0;
+        sharesBuckets[bucketIndex] += p.engagement?.shares || 0;
+      } else {
+        const lastIdx = numBuckets - 1;
+        reachBuckets[lastIdx] += p.engagement?.reach || 0;
+        likesBuckets[lastIdx] += p.engagement?.likes || 0;
+        sharesBuckets[lastIdx] += p.engagement?.shares || 0;
+      }
+    });
 
     const rangeLabel = dateRange === '7D' ? 'Last 7 Days' : dateRange === '30D' ? 'Last 30 Days' : dateRange === '90D' ? 'Last 90 Days' : dateRange === 'YEARLY' ? 'Past 12 Months' : 'All Time';
 
     return {
-      reach: {
-        title: `Audience Reach & Impressions (${rangeLabel})`,
-        primaryLabel: 'Organic Reach',
-        primaryValues: safeReach,
-        primaryColor: '#3b82f6',
-        secondaryLabel: 'Paid Impressions',
-        secondaryValues: safeReach.map(v => Math.round(v * 0.2)),
-        secondaryColor: '#06b6d4',
-      },
-      engagement: {
-        title: `Engagement & Reactions Growth (${rangeLabel})`,
-        primaryLabel: 'Post Likes & Reactions',
-        primaryValues: safeLikes,
-        primaryColor: '#ec4899',
-        secondaryLabel: 'Shares & Reposts',
-        secondaryValues: safeShares,
-        secondaryColor: '#a855f7',
-      },
-      audience: {
-        title: `Audience Growth (${rangeLabel})`,
-        primaryLabel: 'Followers / Page Fans',
-        primaryValues: fbFollowersCount > 0 ? [fbFollowersCount, fbFollowersCount] : safeLikes,
-        primaryColor: '#10b981',
-        secondaryLabel: 'Fans by Unlike',
-        secondaryValues: [0, 0],
-        secondaryColor: '#f43f5e',
-      },
+      dynamicDateLabels: labels,
+      splineChartSeries: {
+        reach: {
+          title: `Audience Reach & Impressions (${rangeLabel})`,
+          primaryLabel: 'Organic Reach',
+          primaryValues: reachBuckets,
+          primaryColor: '#3b82f6',
+          secondaryLabel: 'Paid Impressions',
+          secondaryValues: reachBuckets.map(v => Math.round(v * 0.2)),
+          secondaryColor: '#06b6d4',
+        },
+        engagement: {
+          title: `Engagement & Reactions Growth (${rangeLabel})`,
+          primaryLabel: 'Post Likes & Reactions',
+          primaryValues: likesBuckets,
+          primaryColor: '#ec4899',
+          secondaryLabel: 'Shares & Reposts',
+          secondaryValues: sharesBuckets,
+          secondaryColor: '#a855f7',
+        },
+        audience: {
+          title: `Audience Growth (${rangeLabel})`,
+          primaryLabel: 'Followers / Page Fans',
+          primaryValues: fbFollowersCount > 0 ? new Array(numBuckets).fill(fbFollowersCount) : likesBuckets,
+          primaryColor: '#10b981',
+          secondaryLabel: 'Fans by Unlike',
+          secondaryValues: new Array(numBuckets).fill(0),
+          secondaryColor: '#f43f5e',
+        },
+      }
     };
-  }, [dateFilteredPosts, dateRange, fbFollowersCount, chartGranularity]);
+  }, [dateFilteredPosts, dateRange, fbFollowersCount, posts.length]);
+
+  // Dynamic Sparklines computation from real synced posts filtered by date range
+  const dynamicSparklines = React.useMemo(() => {
+    const reachSeries = splineChartSeries.reach.primaryValues;
+    const engSeries = splineChartSeries.engagement.primaryValues;
+    return {
+      reach: reachSeries.length >= 2 ? reachSeries : [0, reachSeries[0] || 0],
+      engagement: engSeries.length >= 2 ? engSeries : [0, engSeries[0] || 0],
+      fans: fbFollowersCount > 0 ? [fbFollowersCount, fbFollowersCount] : [0, 0],
+      viral: engSeries.map(e => Math.min(100, e * 10)),
+      views: reachSeries,
+      video: reachSeries,
+    };
+  }, [splineChartSeries, fbFollowersCount]);
 
   return (
     <div className="flex flex-col gap-6 max-w-7xl mx-auto pb-12">

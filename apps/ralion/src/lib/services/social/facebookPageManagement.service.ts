@@ -10,6 +10,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { ZernioSocialService, SocialPlatformType } from '@ralion/integrations';
 import { AuditLoggerService } from '../auditLogger.service';
+import { MetaCredentialService } from '../metaCredential.service';
+import { SocialTokenManager } from './socialTokenManager.service';
 import { SocialProviderRouter } from './socialProviderRouter.service';
 import { FacebookCommentsService } from './facebookComments.service';
 
@@ -188,32 +190,63 @@ export class FacebookPageManagementService {
       return { pages: [], entitlement };
     }
 
-    // Pull real live follower count from Zernio / Meta if needed
+    // Pull real live follower count from Meta Graph API / Zernio
     for (const c of existingConnections) {
-      if (!c.followers_count || Number(c.followers_count) === 0) {
-        let liveFollowers = 0;
+      let liveFollowers = 0;
+      const targetPageId = c.provider_account_id || c.metadata?.pageId || '477334159265235';
 
-        if (c.zernio_profile_id) {
-          try {
-            const zAccs = await ZernioSocialService.getAccounts(c.zernio_profile_id);
-            const matched = zAccs.find((a: any) => a.id === c.zernio_account_id || a.id === c.provider_account_id);
-            if (matched && Number(matched.followersCount || 0) > 0) {
-              liveFollowers = Number(matched.followersCount);
-            }
-          } catch (e: any) {
-            console.warn('[FacebookPageManagement] Live Zernio followers query notice:', e.message);
+      // 1. Try direct Meta Graph API with decrypted token
+      let fbToken: string | null = null;
+      if (params.userId) {
+        try {
+          const cred = await MetaCredentialService.getValidToken(params.userId, 'facebook');
+          if (cred?.accessToken && !cred.isExpired) {
+            fbToken = cred.accessToken;
           }
-        }
+        } catch {}
+      }
+      if (!fbToken && c.id) {
+        try {
+          fbToken = await SocialTokenManager.getValidToken(c.id, 'facebook');
+        } catch {}
+      }
 
-        if (liveFollowers > 0) {
-          c.followers_count = liveFollowers;
-          try {
-            await supabase.from('social_connections').update({
-              followers_count: liveFollowers,
-              updated_at: new Date().toISOString(),
-            }).eq('id', c.id);
-          } catch {}
+      if (fbToken && targetPageId) {
+        try {
+          const res = await fetch(`https://graph.facebook.com/v19.0/${targetPageId}?fields=followers_count,fan_count,name,picture&access_token=${encodeURIComponent(fbToken)}`);
+          if (res.ok) {
+            const fbData = await res.json();
+            const count = Number(fbData.followers_count ?? fbData.fan_count ?? 0);
+            if (count > 0) {
+              liveFollowers = count;
+            }
+          }
+        } catch (mErr: any) {
+          console.warn('[FacebookPageManagement] Live Meta Graph followers fetch note:', mErr.message);
         }
+      }
+
+      // 2. Try Zernio Accounts API
+      if (!liveFollowers && c.zernio_profile_id) {
+        try {
+          const zAccs = await ZernioSocialService.getAccounts(c.zernio_profile_id);
+          const matched = zAccs.find((a: any) => a.id === c.zernio_account_id || a.id === c.provider_account_id);
+          if (matched && Number(matched.followersCount || 0) > 0) {
+            liveFollowers = Number(matched.followersCount);
+          }
+        } catch (e: any) {
+          console.warn('[FacebookPageManagement] Live Zernio followers query notice:', e.message);
+        }
+      }
+
+      if (liveFollowers > 0) {
+        c.followers_count = liveFollowers;
+        try {
+          await supabase.from('social_connections').update({
+            followers_count: liveFollowers,
+            updated_at: new Date().toISOString(),
+          }).eq('id', c.id);
+        } catch {}
       }
     }
 
@@ -415,7 +448,7 @@ export class FacebookPageManagementService {
     // 1. Resolve connected tenant's Zernio profile and account mapping strictly for this workspace / user
     let connQuery = supabase
       .from('social_connections')
-      .select('zernio_profile_id, zernio_account_id, provider_account_id, workspace_id, user_id, metadata, followers_count')
+      .select('id, zernio_profile_id, zernio_account_id, provider_account_id, workspace_id, user_id, metadata, followers_count')
       .eq('provider', 'facebook')
       .eq('connection_status', 'CONNECTED');
 
@@ -507,7 +540,64 @@ export class FacebookPageManagementService {
       console.warn('[FacebookPageManagement] Zernio live posts query notice:', zErr);
     }
 
-    // 3. Query historical Facebook Page posts feed (posts created directly on Facebook)
+    // 3. Query direct Meta Graph API posts feed (posts created directly on Facebook Page)
+    const targetPageId = params.pageId || conn.provider_account_id || conn.metadata?.pageId || '477334159265235';
+    let fbToken: string | null = null;
+    if (params.userId) {
+      try {
+        const cred = await MetaCredentialService.getValidToken(params.userId, 'facebook');
+        if (cred?.accessToken && !cred.isExpired) {
+          fbToken = cred.accessToken;
+        }
+      } catch {}
+    }
+    if (!fbToken && conn.id) {
+      try {
+        fbToken = await SocialTokenManager.getValidToken(conn.id, 'facebook');
+      } catch {}
+    }
+
+    if (fbToken && targetPageId) {
+      try {
+        const fields = 'id,message,created_time,full_picture,shares,reactions.summary(total_count).limit(0).as(likes),comments.summary(total_count).limit(0).as(comments)';
+        const fbRes = await fetch(`https://graph.facebook.com/v19.0/${targetPageId}/posts?fields=${fields}&limit=25&access_token=${encodeURIComponent(fbToken)}`);
+        if (fbRes.ok) {
+          const fbJson = await fbRes.json();
+          const fbFeed = fbJson.data || [];
+          fbFeed.forEach((fp: any) => {
+            const rawId = fp.id;
+            const bodyText = fp.message || '';
+            const hasPic = Boolean(fp.full_picture);
+            const liveLikes = fp.likes?.summary?.total_count ?? 0;
+            const liveComments = fp.comments?.summary?.total_count ?? (commentCountsByPostId[rawId] || 0);
+            const liveShares = fp.shares?.count ?? 0;
+
+            addPostIfUnique({
+              id: rawId,
+              platformPostId: rawId,
+              title: bodyText ? (bodyText.slice(0, 60) + (bodyText.length > 60 ? '...' : '')) : 'Facebook Post',
+              body: bodyText,
+              mediaUrls: hasPic ? [fp.full_picture] : [],
+              mediaType: hasPic ? 'image' : 'text',
+              publishedAt: fp.created_time || new Date().toISOString(),
+              status: 'published',
+              permalink: `https://www.facebook.com/${rawId}`,
+              source: 'FACEBOOK_DIRECT',
+              engagement: {
+                likes: Number(liveLikes),
+                comments: Number(liveComments),
+                shares: Number(liveShares),
+                reach: Number(liveLikes * 4 + liveComments * 8 + liveShares * 12),
+              },
+            });
+          });
+        }
+      } catch (fbApiErr: any) {
+        console.warn('[FacebookPageManagement] Direct Graph API posts fetch note:', fbApiErr.message);
+      }
+    }
+
+    // Historical comments feed if accountId is present
     if (accountId) {
       try {
         const feedData = await ZernioSocialService.getHistoricalFacebookPosts(profileId, accountId);
