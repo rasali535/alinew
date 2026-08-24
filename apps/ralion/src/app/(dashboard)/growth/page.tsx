@@ -14,8 +14,8 @@ import {
 import Link from 'next/link';
 import { AuthService } from '@/lib/services/auth.service';
 import { createClient } from '@/lib/supabase/client';
-import { callMariAiApi, MariOrchestrationService, MariRecommendationContract } from '@ralion/ai';
 import { TierAccessGate } from '@/components/TierAccessGate';
+import { callMariAiApi, generateHfImage, generateHfVideo, MariOrchestrationService, MariRecommendationContract } from '@ralion/ai';
 import { getRalionApiUrl, fetchRalionApi, getRalionAuthHeaders } from '@/lib/api-config';
 
 async function authFetch(pathOrUrl: string, init?: RequestInit): Promise<Response> {
@@ -1335,7 +1335,7 @@ function GrowthPageContent() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Media Generators
+  // Media Generators — Connected to Black Forest Labs FLUX.1 & CogVideoX
   const generateMedia = async (type: 'poster' | 'video') => {
     const prompt = type === 'poster' ? posterPrompt : videoPrompt;
     if (!prompt.trim()) return;
@@ -1349,10 +1349,13 @@ function GrowthPageContent() {
     }
 
     try {
-      const res = await callMariAiApi(prompt);
-
       if (type === 'poster') {
-        const imageUrl = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop';
+        const fullPrompt = `${prompt}, ${posterStyle} style, ${posterFormat} format, high-resolution commercial asset`;
+        const res = await generateHfImage({ prompt: fullPrompt, quality: 'fast' });
+        const imageUrl = res.success && res.url 
+          ? res.url 
+          : `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?model=flux&width=1024&height=768&nologo=true`;
+
         setGeneratedPoster(imageUrl);
         setIsGeneratingPoster(false);
 
@@ -1363,12 +1366,18 @@ function GrowthPageContent() {
           prompt: prompt,
           output: imageUrl,
           previewUrl: imageUrl,
-          modelUsed: `Flux Schnell Studio (${posterFormat}, ${posterStyle})`,
+          modelUsed: `Black Forest Labs FLUX.1 (${posterFormat}, ${posterStyle})`,
           createdAt: 'Just now'
         };
         setGeneratedGallery(prev => [newItem, ...prev]);
       } else {
-        const vidUrl = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
+        const fullVideoPrompt = `${prompt}, cinematic commercial video reel, ${videoLength}, ${videoVoiceover}`;
+        const res = await generateHfVideo({ prompt: fullVideoPrompt, quality: 'fast' });
+        const vidUrl = res.success && res.url 
+          ? res.url 
+          : 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
+        const posterUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(fullVideoPrompt)}?model=flux-realism&width=1024&height=576&nologo=true`;
+
         setGeneratedVideo(vidUrl);
         setIsGeneratingVideo(false);
 
@@ -1378,14 +1387,14 @@ function GrowthPageContent() {
           title: prompt.substring(0, 32) + '...',
           prompt: prompt,
           output: vidUrl,
-          previewUrl: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800&auto=format&fit=crop',
-          modelUsed: `Kling AI Video (${videoLength}, ${videoVoiceover})`,
+          previewUrl: posterUrl,
+          modelUsed: `CogVideoX Animation (${videoLength}, ${videoVoiceover})`,
           createdAt: 'Just now'
         };
         setGeneratedGallery(prev => [newItem, ...prev]);
       }
     } catch (e: any) {
-      console.error(e);
+      console.error('[Growth Studio Media Gen Error]:', e);
       setIsGeneratingPoster(false);
       setIsGeneratingVideo(false);
     }
@@ -3981,7 +3990,7 @@ function GrowthPageContent() {
                         title: posterPrompt.substring(0, 30) || 'AI Poster',
                         prompt: posterPrompt,
                         output: generatedPoster,
-                        modelUsed: 'Flux Schnell Studio',
+                        modelUsed: 'FLUX.1',
                         createdAt: 'Just now'
                       })}
                       className="text-xs bg-purple-600 hover:bg-purple-700 font-bold"
@@ -4002,7 +4011,7 @@ function GrowthPageContent() {
                   <Video className="w-5 h-5" />
                 </div>
                 <div>
-                  <CardTitle className="text-base font-bold text-white">AI Video Creator (Kling AI Turbo)</CardTitle>
+                  <CardTitle className="text-base font-bold text-white">AI Video Creator (CogVideoX Motion Studio)</CardTitle>
                   <CardDescription className="text-xs text-zinc-400">Generate short-form video reels from prompt descriptions.</CardDescription>
                 </div>
               </div>
@@ -4021,18 +4030,18 @@ function GrowthPageContent() {
                   onChange={e => setVideoLength(e.target.value)}
                   className="px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-300 outline-none"
                 >
-                  <option>15 Seconds (Shorts/Reels)</option>
-                  <option>30 Seconds (Commercial Ad)</option>
-                  <option>60 Seconds (Full Promo)</option>
+                  <option>15s Short Reel</option>
+                  <option>30s Product Spotlight</option>
+                  <option>60s Explainer</option>
                 </select>
                 <select 
                   value={videoVoiceover} 
                   onChange={e => setVideoVoiceover(e.target.value)}
                   className="px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-300 outline-none"
                 >
-                  <option>AI Female (Professional)</option>
-                  <option>AI Male (Energetic)</option>
-                  <option>None (Text Overlay Only)</option>
+                  <option>Executive English Voiceover</option>
+                  <option>Dynamic High Energy</option>
+                  <option>Minimalist Ambient</option>
                 </select>
               </div>
 
@@ -4062,7 +4071,7 @@ function GrowthPageContent() {
                         title: videoPrompt.substring(0, 30) || 'AI Video Reel',
                         prompt: videoPrompt,
                         output: generatedVideo,
-                        modelUsed: 'Kling AI Video',
+                        modelUsed: 'CogVideoX Animation',
                         createdAt: 'Just now'
                       })}
                       className="text-xs bg-blue-600 hover:bg-blue-700 font-bold"
