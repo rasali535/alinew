@@ -158,11 +158,16 @@ export async function generateHfImage(options: {
 }): Promise<HfGenerationResult> {
   try {
     const isBrowser = typeof window !== 'undefined';
-    const base = isBrowser
-      ? (window.location.origin + '/ralion')
-      : (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:6509/ralion');
+    let endpoint = '/api/mari/generate';
+    if (isBrowser) {
+      const isRalionPath = window.location.pathname.startsWith('/ralion');
+      endpoint = isRalionPath ? '/ralion/api/mari/generate' : '/api/mari/generate';
+    } else {
+      const base = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:6509';
+      endpoint = `${base}/api/mari/generate`;
+    }
 
-    const res = await fetch(`${base}/api/mari/generate`, {
+    const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -181,13 +186,8 @@ export async function generateHfImage(options: {
 }
 
 /**
- * Generate a video via HuggingFace CogVideoX models.
- * Routes through /api/mari/generate (server-side) to keep HF_API_KEY secure.
- *
- * Model priority (fast):
- *   CogVideoX-2b → CogVideoX1.5-5B → CogVideoX-5b
- * Model priority (best):
- *   CogVideoX1.5-5B → CogVideoX-5b → CogVideoX-2b
+ * Generate a video via CogVideoX / prompt-specific animation stream.
+ * Routes through /api/mari/generate (server-side).
  */
 export async function generateHfVideo(options: {
   prompt: string;
@@ -196,11 +196,16 @@ export async function generateHfVideo(options: {
 }): Promise<HfGenerationResult> {
   try {
     const isBrowser = typeof window !== 'undefined';
-    const base = isBrowser
-      ? (window.location.origin + '/ralion')
-      : (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:6509/ralion');
+    let endpoint = '/api/mari/generate';
+    if (isBrowser) {
+      const isRalionPath = window.location.pathname.startsWith('/ralion');
+      endpoint = isRalionPath ? '/ralion/api/mari/generate' : '/api/mari/generate';
+    } else {
+      const base = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:6509';
+      endpoint = `${base}/api/mari/generate`;
+    }
 
-    const res = await fetch(`${base}/api/mari/generate`, {
+    const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

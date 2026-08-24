@@ -724,7 +724,113 @@ export default function MariAiPage() {
                         ? 'bg-indigo-600 text-white shadow-md' 
                         : 'bg-zinc-950 border border-zinc-800/90 text-zinc-200'
                     }`}>
-                      <p className="whitespace-pre-wrap">{m.text}</p>
+                      {/* Rich Media & Markdown Message Content */}
+                      {(() => {
+                        const text = m.text;
+                        // Image Regex: ![alt](url)
+                        const imgRegex = /!\[([^\]]*)\]\((.*?)\)/g;
+                        // Video Link Regex: \[Watch Video(?: Reel)?\]\((.*?)\)/gi
+                        const vidRegex = /\[Watch Video(?: Reel)?\]\((.*?)\)/gi;
+
+                        const elements: React.ReactNode[] = [];
+                        let lastIdx = 0;
+
+                        // Check for images
+                        let imgMatch;
+                        const hasImages = text.includes('![');
+                        const hasVideos = /\[Watch Video/i.test(text);
+
+                        if (!hasImages && !hasVideos) {
+                          return <p className="whitespace-pre-wrap">{text}</p>;
+                        }
+
+                        // Process images
+                        if (hasImages) {
+                          while ((imgMatch = imgRegex.exec(text)) !== null) {
+                            if (imgMatch.index > lastIdx) {
+                              elements.push(
+                                <p key={`t-${lastIdx}`} className="whitespace-pre-wrap my-1">
+                                  {text.substring(lastIdx, imgMatch.index)}
+                                </p>
+                              );
+                            }
+                            const imgUrl = imgMatch[2];
+                            const altText = imgMatch[1] || 'Generated Image';
+                            elements.push(
+                              <div key={`img-${imgMatch.index}`} className="my-3 overflow-hidden rounded-xl border border-purple-500/40 bg-zinc-950 shadow-2xl">
+                                <img
+                                  src={imgUrl}
+                                  alt={altText}
+                                  className="w-full max-h-[380px] object-cover rounded-xl transition-transform hover:scale-[1.01]"
+                                  loading="lazy"
+                                />
+                                <div className="p-2 flex items-center justify-between bg-zinc-900/90 text-[10px] text-zinc-400 border-t border-zinc-800">
+                                  <span className="font-mono text-purple-300">FLUX.1 High-Resolution Asset</span>
+                                  <a
+                                    href={imgUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="px-2 py-0.5 rounded bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 font-semibold"
+                                  >
+                                    View Full Size ↗
+                                  </a>
+                                </div>
+                              </div>
+                            );
+                            lastIdx = imgMatch.index + imgMatch[0].length;
+                          }
+                        }
+
+                        // Process videos
+                        if (hasVideos) {
+                          let vidMatch;
+                          while ((vidMatch = vidRegex.exec(text)) !== null) {
+                            if (vidMatch.index > lastIdx) {
+                              elements.push(
+                                <p key={`vt-${lastIdx}`} className="whitespace-pre-wrap my-1">
+                                  {text.substring(lastIdx, vidMatch.index)}
+                                </p>
+                              );
+                            }
+                            const vidUrl = vidMatch[1];
+                            elements.push(
+                              <div key={`vid-${vidMatch.index}`} className="my-3 overflow-hidden rounded-xl border border-purple-500/40 bg-zinc-950 shadow-2xl">
+                                <video
+                                  controls
+                                  autoPlay
+                                  loop
+                                  muted
+                                  playsInline
+                                  src={vidUrl}
+                                  className="w-full max-h-[340px] object-cover rounded-xl"
+                                />
+                                <div className="p-2 flex items-center justify-between bg-zinc-900/90 text-[10px] text-zinc-400 border-t border-zinc-800">
+                                  <span className="font-mono text-indigo-300">CogVideoX Animation Stream</span>
+                                  <a
+                                    href={vidUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="px-2 py-0.5 rounded bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 font-semibold"
+                                  >
+                                    Open Player ↗
+                                  </a>
+                                </div>
+                              </div>
+                            );
+                            lastIdx = vidMatch.index + vidMatch[0].length;
+                          }
+                        }
+
+                        if (lastIdx < text.length) {
+                          elements.push(
+                            <p key={`t-end-${lastIdx}`} className="whitespace-pre-wrap my-1">
+                              {text.substring(lastIdx)}
+                            </p>
+                          );
+                        }
+
+                        return <div>{elements}</div>;
+                      })()}
 
                       {/* Suggested Action Chips */}
                       {m.actionsSuggested && m.actionsSuggested.length > 0 && (
