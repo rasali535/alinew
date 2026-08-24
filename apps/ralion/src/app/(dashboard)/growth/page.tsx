@@ -650,6 +650,45 @@ function GrowthPageContent() {
     reader.readAsDataURL(file);
   };
 
+  const handleCreativeUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const isVideo = file.type.startsWith('video/') || /\.(mp4|mov|webm|m4v)$/i.test(file.name);
+    const isImage = file.type.startsWith('image/') || /\.(png|jpg|jpeg|webp|gif)$/i.test(file.name);
+
+    if (!isVideo && !isImage) {
+      setOauthAlert({
+        type: 'error',
+        message: 'Please upload an image (PNG, JPG, WebP) or video (MP4, MOV, WebM).',
+      });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (uploadEvent) => {
+      const dataUrl = uploadEvent.target?.result as string;
+      const newItem: GeneratedContentItem = {
+        id: `upload-${Date.now()}`,
+        type: isVideo ? 'VIDEO_REEL' : 'POSTER_IMAGE',
+        title: file.name,
+        prompt: `Uploaded Asset (${(file.size / (1024 * 1024)).toFixed(2)} MB)`,
+        output: dataUrl,
+        previewUrl: dataUrl,
+        modelUsed: isVideo ? 'Custom Video Asset' : 'Custom Image Asset',
+        createdAt: 'Just now',
+      };
+      setGeneratedGallery(prev => [newItem, ...prev]);
+      setOauthAlert({
+        type: 'success',
+        message: `✅ Successfully uploaded creative: ${file.name}`,
+      });
+      setTimeout(() => setOauthAlert(null), 4000);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
   const handleRemoveMedia = () => {
     setNewPost(prev => ({
       ...prev,
@@ -2633,8 +2672,20 @@ function GrowthPageContent() {
                 ))}
               </div>
             </div>
-            <div className="text-xs text-zinc-500 font-mono">
-              Total Assets Output: <span className="text-purple-400 font-bold">{filteredGallery.length} Items</span>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold cursor-pointer transition-all shadow-md active:scale-95">
+                <Upload className="w-3.5 h-3.5" />
+                Upload Creative
+                <input
+                  type="file"
+                  accept="image/*,video/*"
+                  onChange={handleCreativeUpload}
+                  className="hidden"
+                />
+              </label>
+              <div className="text-xs text-zinc-500 font-mono hidden sm:block">
+                Total Assets: <span className="text-purple-400 font-bold">{filteredGallery.length} Items</span>
+              </div>
             </div>
           </div>
 
@@ -3922,9 +3973,33 @@ function GrowthPageContent() {
       {/* 6. CREATIVES MEDIA GENERATOR TAB */}
       {/* ==================================== */}
       {activeTab === 'CREATIVES' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* AI Poster Generator */}
-          <Card className="border-zinc-800 bg-zinc-900/80">
+        <div className="flex flex-col gap-6">
+          {/* Quick Creative Upload Banner */}
+          <div className="p-4 rounded-2xl bg-zinc-900/80 border border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white shadow-md">
+                <Upload className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-white">Have your own creative asset?</h4>
+                <p className="text-xs text-zinc-400">Upload custom graphics, brand posters, or video clips directly to your creative gallery and social publisher.</p>
+              </div>
+            </div>
+            <label className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold cursor-pointer transition-all shadow-md active:scale-95 shrink-0">
+              <Upload className="w-4 h-4" />
+              Upload Creative (Image / Video)
+              <input
+                type="file"
+                accept="image/*,video/*"
+                onChange={handleCreativeUpload}
+                className="hidden"
+              />
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* AI Poster Generator */}
+            <Card className="border-zinc-800 bg-zinc-900/80">
             <CardHeader>
               <div className="flex items-center gap-3">
                 <div className="p-2.5 rounded-xl bg-gradient-to-tr from-pink-600 to-purple-600 text-white shadow-md">
@@ -4084,7 +4159,8 @@ function GrowthPageContent() {
             </CardContent>
           </Card>
         </div>
-      )}
+      </div>
+    )}
 
       {/* ==================================== */}
       {/* 7. ANALYTICS TAB */}

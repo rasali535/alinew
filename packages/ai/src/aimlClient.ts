@@ -243,7 +243,7 @@ export async function generateHfVideo(options: {
   return {
     success: true,
     url: defaultVideoUrl,
-    format: 'video',
+    format: 'url',
     model: 'zai-org/CogVideoX-2b',
   };
 }
