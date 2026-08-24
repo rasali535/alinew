@@ -107,6 +107,18 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="text-[9px] text-zinc-500 font-mono mt-0.5 truncate max-w-[120px]">{displayRole}</span>
           </div>
         </div>
+
+        {/* Sign Out Button */}
+        {onLogout && (
+          <button
+            onClick={onLogout}
+            title="Sign Out of Ralion OS"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-rose-400 hover:border-rose-500/30 hover:bg-rose-500/10 text-xs font-medium transition-all"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Sign Out</span>
+          </button>
+        )}
       </div>
     </header>
   );

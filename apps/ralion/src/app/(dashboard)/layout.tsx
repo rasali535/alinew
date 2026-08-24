@@ -65,6 +65,10 @@ export default function DashboardLayout({
             onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
             onNavigate={handleNavigate}
             onOpenMariAI={() => setIsMariDrawerOpen(true)}
+            onLogout={async () => {
+              const { AuthService } = await import('@/lib/services/auth.service');
+              await AuthService.logout();
+            }}
           />
         </div>
 
@@ -85,6 +89,10 @@ export default function DashboardLayout({
                 onOpenMariAI={() => {
                   setIsMobileSidebarOpen(false);
                   setIsMariDrawerOpen(true);
+                }}
+                onLogout={async () => {
+                  const { AuthService } = await import('@/lib/services/auth.service');
+                  await AuthService.logout();
                 }}
               />
             </div>
@@ -109,6 +117,10 @@ export default function DashboardLayout({
             }}
             onOpenMariAI={() => setIsMariDrawerOpen(true)}
             onToggleMobileSidebar={() => setIsMobileSidebarOpen(prev => !prev)}
+            onLogout={async () => {
+              const { AuthService } = await import('@/lib/services/auth.service');
+              await AuthService.logout();
+            }}
           />
 
           <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-zinc-950">

@@ -28,6 +28,7 @@ import {
   Grid,
   Layers,
   Lock,
+  LogOut,
   PanelLeftClose,
   PanelLeftOpen,
   Briefcase
@@ -43,30 +44,32 @@ export interface SidebarItem {
   badge?: string;
   badgeVariant?: 'primary' | 'secondary' | 'purple' | 'warning' | 'default';
   isIndustryPlugin?: boolean;
+  isLocked?: boolean;
 }
 
 export interface SidebarProps {
-  currentPath: string;
+  currentPath?: string;
+  tier?: string;
   orgName?: string;
-  onNavigate: (href: string) => void;
-  onOpenMariAI?: () => void;
-  enabledModules?: string[];
-  tier?: 'COMMUNITY' | 'PROFESSIONAL' | 'ENTERPRISE' | string;
+  platformUrl?: string;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  onNavigate?: (href: string) => void;
+  onOpenMariAI?: () => void;
+  onLogout?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
-  currentPath,
-  orgName = "Ralion Workspace",
-  onNavigate,
-  onOpenMariAI,
-  enabledModules = ['workspace', 'security', 'mari', 'demos', 'customers', 'leads', 'crm', 'tasks', 'calendar', 'documents', 'reports', 'workflows', 'billing', 'growth', 'health', 'funeral', 'logistics', 'trade', 'marketplace', 'developer', 'enterprise', 'government'],
+  currentPath = '/ralion/dashboard',
   tier = 'COMMUNITY',
+  orgName = 'Ras Ali Labs Workspace',
+  platformUrl = 'https://portal.rasalilabs.com',
   isCollapsed = false,
   onToggleCollapse,
+  onNavigate = (href) => { window.location.href = href; },
+  onOpenMariAI,
+  onLogout,
 }) => {
-  const platformUrl = process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com';
   const userTier = (tier || 'COMMUNITY').toUpperCase();
 
   // State for collapsible sections
@@ -86,10 +89,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return false;
   };
 
-  // 1. CORE OS Navigation Items
+  // 1. CORE OS Navigation Items (Active & In-Use)
   const coreNav: SidebarItem[] = [
     { id: 'dashboard', label: 'Home', href: '/ralion/dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
-    { id: 'growth', label: 'Growth & Social', href: '/ralion/growth', icon: <TrendingUp className="w-4 h-4 text-indigo-400" />, badge: 'Command' },
+    { id: 'mari-ai', label: 'Mari AI Command', href: '/ralion/mari-ai', icon: <Sparkles className="w-4 h-4 text-purple-400" />, badge: 'Live AI', badgeVariant: 'purple' },
+    { id: 'growth', label: 'Growth & Social', href: '/ralion/growth', icon: <TrendingUp className="w-4 h-4 text-indigo-400" />, badge: 'Command', badgeVariant: 'primary' },
     { id: 'crm', label: 'CRM & Pipeline', href: '/ralion/crm', icon: <UserCheck className="w-4 h-4 text-blue-400" /> },
     { id: 'workflows', label: 'Workflows', href: '/ralion/workflows', icon: <Zap className="w-4 h-4 text-amber-400" /> },
     { id: 'calendar', label: 'Calendar', href: '/ralion/calendar', icon: <Calendar className="w-4 h-4 text-cyan-400" /> },
@@ -101,18 +105,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // 2. ECOSYSTEM Navigation Items
   const ecosystemNav: SidebarItem[] = [
     { id: 'integrations', label: 'Integrations Hub', href: '/ralion/settings/integrations', icon: <Globe className="w-4 h-4 text-indigo-400" />, badge: 'Meta/OAuth' },
-    { id: 'marketplace', label: 'Marketplace & AI', href: '/ralion/marketplace', icon: <Store className="w-4 h-4 text-purple-400" /> },
-    { id: 'developer', label: 'Developer Platform', href: '/ralion/developer', icon: <Code className="w-4 h-4 text-emerald-400" />, badge: 'API' },
+    { id: 'marketplace', label: 'Marketplace & AI', href: '/ralion/marketplace', icon: <Store className="w-4 h-4 text-zinc-400" />, badge: 'Coming Soon', isLocked: true },
+    { id: 'developer', label: 'Developer Platform', href: '/ralion/developer', icon: <Code className="w-4 h-4 text-zinc-400" />, badge: 'Coming Soon', isLocked: true },
   ];
 
-  // 3. INDUSTRY SOLUTIONS Items
+  // 3. INDUSTRY SOLUTIONS Items (Locked with Coming Soon for Early Access)
   const industryNav: SidebarItem[] = [
-    { id: 'industry-hub', label: 'Solutions Hub', href: '/ralion/industry', icon: <Building2 className="w-4 h-4 text-zinc-300" /> },
-    { id: 'health', label: 'Healthcare OS', href: '/ralion/industry/health', icon: <HeartPulse className="w-4 h-4 text-rose-400" />, isIndustryPlugin: true },
-    { id: 'funeral', label: 'Funeral Services OS', href: '/ralion/industry/funeral', icon: <Shield className="w-4 h-4 text-purple-400" />, isIndustryPlugin: true },
-    { id: 'logistics', label: 'Logistics & Fleet OS', href: '/ralion/industry/logistics', icon: <Truck className="w-4 h-4 text-amber-400" />, isIndustryPlugin: true },
-    { id: 'trade', label: 'Trade & Retail OS', href: '/ralion/industry/trade', icon: <ShoppingBag className="w-4 h-4 text-emerald-400" />, isIndustryPlugin: true },
-    { id: 'government', label: 'Government Edition', href: '/ralion/government', icon: <Layers className="w-4 h-4 text-blue-400" />, isIndustryPlugin: true },
+    { id: 'industry-hub', label: 'Solutions Hub', href: '/ralion/industry', icon: <Building2 className="w-4 h-4 text-zinc-400" />, badge: 'Coming Soon', isLocked: true },
+    { id: 'health', label: 'Healthcare OS', href: '/ralion/industry/health', icon: <HeartPulse className="w-4 h-4 text-zinc-400" />, badge: 'Coming Soon', isLocked: true, isIndustryPlugin: true },
+    { id: 'funeral', label: 'Funeral Services OS', href: '/ralion/industry/funeral', icon: <Shield className="w-4 h-4 text-zinc-400" />, badge: 'Coming Soon', isLocked: true, isIndustryPlugin: true },
+    { id: 'logistics', label: 'Logistics & Fleet OS', href: '/ralion/industry/logistics', icon: <Truck className="w-4 h-4 text-zinc-400" />, badge: 'Coming Soon', isLocked: true, isIndustryPlugin: true },
+    { id: 'trade', label: 'Trade & Retail OS', href: '/ralion/industry/trade', icon: <ShoppingBag className="w-4 h-4 text-zinc-400" />, badge: 'Coming Soon', isLocked: true, isIndustryPlugin: true },
+    { id: 'government', label: 'Government Edition', href: '/ralion/government', icon: <Layers className="w-4 h-4 text-zinc-400" />, badge: 'Coming Soon', isLocked: true, isIndustryPlugin: true },
   ];
 
   // 4. ADMINISTRATION Items
@@ -131,7 +135,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <button
           key={item.id}
           onClick={() => onNavigate(item.href)}
-          title={isCollapsed ? item.label : undefined}
+          title={isCollapsed ? (item.isLocked ? `${item.label} (Coming Soon)` : item.label) : undefined}
           className={cn(
             "w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs transition-all duration-150 group relative",
             active
@@ -147,11 +151,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {item.icon}
             </span>
             {!isCollapsed && (
-              <span className="truncate text-left">{item.label}</span>
+              <span className={cn(
+                "truncate text-left",
+                item.isLocked && "text-zinc-400 group-hover:text-zinc-300"
+              )}>
+                {item.label}
+              </span>
             )}
           </div>
-          {!isCollapsed && item.badge && (
-            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-zinc-800 text-zinc-300 border border-zinc-700/60 shrink-0">
+          {!isCollapsed && item.isLocked && (
+            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[8.5px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 shrink-0 shadow-sm">
+              <Lock className="w-2.5 h-2.5" />
+              Soon
+            </span>
+          )}
+          {!isCollapsed && !item.isLocked && item.badge && (
+            <span className={cn(
+              "px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0",
+              item.badgeVariant === 'purple' ? "bg-purple-950/60 text-purple-300 border border-purple-500/40 shadow-sm shadow-purple-500/10" :
+              item.badgeVariant === 'primary' ? "bg-indigo-950/60 text-indigo-300 border border-indigo-500/40 shadow-sm shadow-indigo-500/10" :
+              "bg-zinc-800 text-zinc-300 border border-zinc-700/60"
+            )}>
               {item.badge}
             </span>
           )}
@@ -321,10 +341,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* User Footer */}
-      {!isCollapsed && (
+      {!isCollapsed ? (
         <div className="p-2.5 border-t border-zinc-800/80 flex items-center justify-between bg-zinc-950 text-zinc-400">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-300 font-bold text-[10px] shrink-0">
+            <div className="w-6 h-6 rounded-full bg-indigo-900/60 border border-indigo-700/60 flex items-center justify-center text-indigo-200 font-bold text-[10px] shrink-0">
               RA
             </div>
             <div className="flex flex-col min-w-0">
@@ -332,13 +352,43 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <span className="text-[9px] text-zinc-500 font-mono truncate">{userTier} Tier</span>
             </div>
           </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={() => onNavigate('/ralion/settings')}
+              title="Settings"
+              className="p-1.5 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900 transition-colors"
+            >
+              <Settings className="w-3.5 h-3.5" />
+            </button>
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                title="Sign Out"
+                className="p-1.5 rounded text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="p-2 border-t border-zinc-800/80 flex flex-col items-center gap-1.5 bg-zinc-950">
           <button
             onClick={() => onNavigate('/ralion/settings')}
             title="Settings"
-            className="p-1 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900 transition-colors"
+            className="p-1.5 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900 transition-colors"
           >
             <Settings className="w-3.5 h-3.5" />
           </button>
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              title="Sign Out"
+              className="p-1.5 rounded text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       )}
     </aside>
