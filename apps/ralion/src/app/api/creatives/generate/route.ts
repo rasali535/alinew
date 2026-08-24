@@ -14,17 +14,34 @@ export async function OPTIONS(request: NextRequest) {
   return handleCorsPreflight(request);
 }
 
-/**
- * POST /api/creatives/generate
- *
- * Real Semantic Creative Generation Pipeline:
- * - Validates input brief/prompt
- * - Requests GPU image generation (FLUX.1) or video generation (CogVideoX)
- * - Validates binary stream (magic bytes, MIME type, size > 1KB, non-empty, non-HTML/JSON error)
- * - Persists verified raw binary to durable local storage
- * - Creates CreativeAsset record ONLY AFTER successful verification and persistence
- * - Returns structured CreativeGenerationError on any failure stage
- */
+function sanitizePrompt(raw: string): string {
+  return raw
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function getDimensionsForFormat(format?: string): { width: number; height: number } {
+  switch (format) {
+    case '16:9':
+    case 'landscape':
+      return { width: 1024, height: 576 };
+    case '9:16':
+    case 'story':
+    case 'reel':
+      return { width: 576, height: 1024 };
+    case '4:5':
+    case 'portrait':
+      return { width: 816, height: 1020 };
+    case '1:1':
+    case 'square':
+    default:
+      return { width: 1024, height: 1024 };
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -61,7 +78,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 }, request);
     }
 
-    const cleanPrompt = prompt.trim();
+    const cleanPrompt = sanitizePrompt(prompt);
     const seed = Math.floor(Math.random() * 1000000);
 
     // ── NEGATIVE TEST SIMULATION HOOKS ──────────────────────────────────────
@@ -82,6 +99,7 @@ export async function POST(request: NextRequest) {
         success: false,
         status: 'FAILED',
         error: errorPayload.errorMessage,
+        errorCode: errorPayload.errorCode,
         userFacingMessage: errorPayload.userFacingMessage,
         details: errorPayload,
       }, { status: 502 }, request);
@@ -104,6 +122,7 @@ export async function POST(request: NextRequest) {
         success: false,
         status: 'FAILED',
         error: errorPayload.errorMessage,
+        errorCode: errorPayload.errorCode,
         userFacingMessage: errorPayload.userFacingMessage,
         details: errorPayload,
       }, { status: 502 }, request);
@@ -111,12 +130,17 @@ export async function POST(request: NextRequest) {
 
     // ── 🎨 1. REAL IMAGE GENERATION (Black Forest Labs FLUX.1) ─────────────
     if (type === 'POSTER_IMAGE' || type === 'image') {
-      const fullPrompt = `${cleanPrompt}, ${style} style, ${format} aspect ratio, high resolution commercial creative`;
+      const dims = getDimensionsForFormat(format);
+      const fullPrompt = `${cleanPrompt}, ${style || 'cinematic'} style, professional commercial visual`;
       const encodedPrompt = encodeURIComponent(fullPrompt);
+      const encodedShortPrompt = encodeURIComponent(cleanPrompt.slice(0, 240));
+
       const candidateUrls = [
-        `https://image.pollinations.ai/prompt/${encodedPrompt}?nologo=true&seed=${seed}&width=1024&height=768`,
-        `https://image.pollinations.ai/prompt/${encodedPrompt}?model=flux&nologo=true&seed=${seed}&width=1024&height=768`,
-        `https://image.pollinations.ai/prompt/${encodedPrompt}?model=turbo&nologo=true&seed=${seed}&width=1024&height=768`,
+        `https://image.pollinations.ai/prompt/${encodedPrompt}?nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}`,
+        `https://image.pollinations.ai/prompt/${encodedPrompt}?model=flux&nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}`,
+        `https://image.pollinations.ai/prompt/${encodedShortPrompt}?nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}`,
+        `https://image.pollinations.ai/prompt/${encodedPrompt}?model=turbo&nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}`,
+        `https://image.pollinations.ai/prompt/${encodedShortPrompt}?seed=${seed + 1}&width=768&height=768&nologo=true`,
       ];
 
       let imageBuffer: Buffer | null = null;
@@ -127,11 +151,11 @@ export async function POST(request: NextRequest) {
         try {
           const fetchRes = await fetch(fluxUrl, {
             headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
               'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
             },
             cache: 'no-store',
-            signal: AbortSignal.timeout(30000),
+            signal: AbortSignal.timeout(22000),
           });
 
           if (!fetchRes.ok) {
@@ -172,6 +196,7 @@ export async function POST(request: NextRequest) {
           success: false,
           status: 'FAILED',
           error: errorPayload.errorMessage,
+          errorCode: errorPayload.errorCode,
           userFacingMessage: errorPayload.userFacingMessage,
           details: errorPayload,
         }, { status: 502 }, request);
@@ -205,11 +230,14 @@ export async function POST(request: NextRequest) {
 
     // ── 🎥 2. REAL VIDEO GENERATION (CogVideoX / Motion Reel) ──────────────
     if (type === 'VIDEO_REEL' || type === 'video') {
-      const fullVideoPrompt = `${cleanPrompt}, cinematic commercial video reel, ${style}`;
+      const fullVideoPrompt = `${cleanPrompt}, cinematic commercial video reel, ${style || 'cinematic'}`;
       const encodedVideoPrompt = encodeURIComponent(fullVideoPrompt);
+      const encodedShortPrompt = encodeURIComponent(cleanPrompt.slice(0, 240));
+
       const candidateVideoUrls = [
         `https://image.pollinations.ai/prompt/${encodedVideoPrompt}?nologo=true&seed=${seed}&width=1024&height=576`,
         `https://image.pollinations.ai/prompt/${encodedVideoPrompt}?model=flux&nologo=true&seed=${seed}&width=1024&height=576`,
+        `https://image.pollinations.ai/prompt/${encodedShortPrompt}?nologo=true&seed=${seed}&width=1024&height=576`,
         `https://image.pollinations.ai/prompt/${encodedVideoPrompt}?model=turbo&nologo=true&seed=${seed}&width=1024&height=576`,
       ];
 
@@ -221,11 +249,11 @@ export async function POST(request: NextRequest) {
         try {
           const frameRes = await fetch(vidUrl, {
             headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
               'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
             },
             cache: 'no-store',
-            signal: AbortSignal.timeout(30000),
+            signal: AbortSignal.timeout(22000),
           });
           if (frameRes.ok) {
             const arrBuf = await frameRes.arrayBuffer();
