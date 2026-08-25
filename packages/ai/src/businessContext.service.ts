@@ -13,7 +13,7 @@
 
 import { WebsiteIngestionService, IngestedWebsiteKnowledge } from './websiteIngestion.service';
 
-export type DataProvenance = 'VERIFIED' | 'USER_APPROVED' | 'USER_PROVIDED' | 'INFERRED' | 'AI_RECOMMENDATION';
+export type DataProvenance = 'VERIFIED' | 'USER_APPROVED' | 'USER_PROVIDED' | 'INFERRED' | 'AI_RECOMMENDATION' | 'UNVERIFIED';
 
 export interface ProvenanceItem<T> {
   value: T;
@@ -164,17 +164,32 @@ export class BusinessContextService {
     }
 
     const timestamp = new Date().toISOString();
-    const isRasAli = orgId === 'ras-ali-labs' || orgId === 'org-default';
+    const isRasAli = orgId === 'ras-ali-labs';
     const isTest = Boolean(options?.isTestExecution || orgId.startsWith('test-') || orgId.includes('test'));
     const registeredProfile = tenantProfileRegistry.get(orgId);
+    
+    // Check structured BusinessKnowledgeProfileService
+    let knowledgeProfile: any = null;
+    try {
+      const { BusinessKnowledgeProfileService } = require('./businessKnowledgeProfile.service');
+      knowledgeProfile = BusinessKnowledgeProfileService.getProfile(orgId);
+    } catch {}
+
+    const hasVerifiedKnowledge = Boolean(
+      registeredProfile?.companyName ||
+      knowledgeProfile?.isVerified ||
+      isRasAli
+    );
 
     // Resolve Organization Name
-    let orgName = registeredProfile?.companyName || 'Ralion Enterprise';
-    if (!registeredProfile?.companyName) {
+    let orgName = registeredProfile?.companyName || knowledgeProfile?.companyName?.value || '';
+    if (!orgName) {
       if (isRasAli) {
         orgName = 'Ras Ali Labs';
       } else if (isTest) {
         orgName = 'Test Organization';
+      } else {
+        orgName = orgId.replace(/^org[-_]/, '').replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'My Business';
       }
     }
 
@@ -184,88 +199,85 @@ export class BusinessContextService {
     const layer1: Layer1BusinessKnowledge = {
       companyName: {
         value: orgName,
-        provenance: 'VERIFIED',
-        source: 'Workspace Profile',
-        confidence: 1.0,
+        provenance: hasVerifiedKnowledge ? 'VERIFIED' : 'UNVERIFIED',
+        source: knowledgeProfile ? 'Business Knowledge Profile' : (registeredProfile ? 'Registered Profile' : 'Workspace Name'),
+        confidence: hasVerifiedKnowledge ? 1.0 : 0.2,
         lastVerifiedAt: timestamp,
       },
       legalIdentity: {
-        value: isRasAli ? 'Ras Ali Labs (Pty) Ltd — Reg. BW-2024-882109' : `${orgName} Registered Business`,
-        provenance: 'VERIFIED',
+        value: isRasAli ? 'Ras Ali Labs (Pty) Ltd — Reg. BW-2024-882109' : (hasVerifiedKnowledge ? `${orgName} Registered Business` : 'Unverified Business'),
+        provenance: hasVerifiedKnowledge ? 'VERIFIED' : 'UNVERIFIED',
         source: 'Corporate Registration Record',
-        confidence: 1.0,
+        confidence: hasVerifiedKnowledge ? 1.0 : 0.1,
         lastVerifiedAt: timestamp,
       },
       websiteUrl: {
-        value: registeredProfile?.websiteUrl || websiteKnowledge?.websiteUrl || (isRasAli ? 'https://www.rasalilabs.com' : 'Not configured'),
-        provenance: websiteKnowledge ? 'VERIFIED' : 'USER_PROVIDED',
+        value: registeredProfile?.websiteUrl || knowledgeProfile?.websiteUrl?.value || websiteKnowledge?.websiteUrl || (isRasAli ? 'https://www.rasalilabs.com' : 'Not configured'),
+        provenance: (websiteKnowledge || knowledgeProfile) ? 'VERIFIED' : 'USER_PROVIDED',
         source: 'Verified Domain Registry',
-        confidence: websiteKnowledge ? 1.0 : 0.6,
+        confidence: (websiteKnowledge || knowledgeProfile) ? 1.0 : 0.0,
         lastVerifiedAt: timestamp,
       },
       websiteKnowledge: {
         value: websiteKnowledge,
-        provenance: websiteKnowledge?.provenance || 'VERIFIED',
+        provenance: websiteKnowledge?.provenance || (hasVerifiedKnowledge ? 'VERIFIED' : 'UNVERIFIED'),
         source: websiteKnowledge ? 'Ingested Public Website' : 'Not Ingested',
         confidence: websiteKnowledge ? 0.98 : 0.0,
         lastVerifiedAt: websiteKnowledge?.lastSuccessfulSync || timestamp,
       },
       tagline: {
-        value: registeredProfile?.tagline || (isRasAli 
+        value: registeredProfile?.tagline || knowledgeProfile?.tagline?.value || (isRasAli 
           ? 'Empowering African and Global Enterprises to Prosper Through Sovereign Intelligent OS'
-          : 'Empowered to Prosper'),
-        provenance: 'USER_PROVIDED',
+          : (hasVerifiedKnowledge ? `Empowering ${orgName}` : 'Empowered to Prosper')),
+        provenance: hasVerifiedKnowledge ? 'VERIFIED' : 'UNVERIFIED',
         source: 'Brand Settings',
-        confidence: 0.98,
+        confidence: hasVerifiedKnowledge ? 0.95 : 0.2,
         lastVerifiedAt: timestamp,
       },
       industry: {
-        value: registeredProfile?.industry || (isRasAli 
+        value: registeredProfile?.industry || knowledgeProfile?.industry?.value || (isRasAli 
           ? 'Enterprise Software, B2B SaaS & Industrial Intelligence'
-          : 'Business & Commercial Services'),
-        provenance: 'VERIFIED',
+          : (hasVerifiedKnowledge ? 'Commercial Enterprise' : 'Unspecified')),
+        provenance: hasVerifiedKnowledge ? 'VERIFIED' : 'UNVERIFIED',
         source: 'Organization Registration',
-        confidence: 1.0,
+        confidence: hasVerifiedKnowledge ? 1.0 : 0.0,
         lastVerifiedAt: timestamp,
       },
       targetMarket: {
-        value: registeredProfile?.targetMarket || (isRasAli
+        value: registeredProfile?.targetMarket || (knowledgeProfile?.targetMarkets?.value ? knowledgeProfile.targetMarkets.value.join(', ') : '') || (isRasAli
           ? 'SADC B2B Enterprises, Healthcare, Logistics, Funeral Services & Public Sector'
-          : 'Regional Commercial Enterprises & Clients'),
-        provenance: 'USER_PROVIDED',
+          : (hasVerifiedKnowledge ? 'Regional Commercial Enterprises & Clients' : 'Unspecified')),
+        provenance: hasVerifiedKnowledge ? 'USER_PROVIDED' : 'UNVERIFIED',
         source: 'Market Strategy Plan',
-        confidence: 0.95,
+        confidence: hasVerifiedKnowledge ? 0.95 : 0.0,
         lastVerifiedAt: timestamp,
       },
       brandVoice: {
-        value: registeredProfile?.brandVoice || 'Professional, Authoritative, Innovative, African Excellence',
+        value: registeredProfile?.brandVoice || knowledgeProfile?.brandVoice?.value || 'Professional, Trustworthy, Customer-Focused',
         provenance: 'USER_PROVIDED',
         source: 'Brand Guidelines',
-        confidence: 0.96,
+        confidence: hasVerifiedKnowledge ? 0.96 : 0.3,
         lastVerifiedAt: timestamp,
       },
       valueProposition: {
-        value: registeredProfile?.valueProposition || (isRasAli
+        value: registeredProfile?.valueProposition || (knowledgeProfile?.valuePropositions?.value ? knowledgeProfile.valuePropositions.value.join('; ') : '') || (isRasAli
           ? 'Sovereign enterprise software with native offline resilience, RBAC security, zero-data-loss guarantees, and African commercial workflow alignment.'
-          : 'Streamlined commercial execution and automated business workflows powered by Ralion OS.'),
-        provenance: 'VERIFIED',
+          : (hasVerifiedKnowledge ? `Streamlined commercial execution and services for ${orgName}.` : 'No verified value proposition recorded yet.')),
+        provenance: hasVerifiedKnowledge ? 'VERIFIED' : 'UNVERIFIED',
         source: 'Value Proposition Ledger',
-        confidence: 0.97,
+        confidence: hasVerifiedKnowledge ? 0.97 : 0.0,
         lastVerifiedAt: timestamp,
       },
       productsAndServices: {
-        value: registeredProfile?.productsAndServices || (isRasAli ? [
+        value: registeredProfile?.productsAndServices || knowledgeProfile?.products?.value || (isRasAli ? [
           { name: 'Ralion OS Core (CRM, Documents, Tasks)', category: 'Core Operating System' },
           { name: 'Mari AI Command Center & Growth Partner', category: 'Artificial Intelligence' },
           { name: 'Ralion Growth Studio', category: 'Social Media & Marketing' },
           { name: 'Industry OS Suites (Health, Logistics, Funeral, Trade)', category: 'Vertical OS' },
-        ] : [
-          { name: 'Ralion OS Core Suite', category: 'Enterprise Software' },
-          { name: 'Mari AI Assistant', category: 'Artificial Intelligence' },
-        ]),
-        provenance: 'VERIFIED',
+        ] : []),
+        provenance: hasVerifiedKnowledge ? 'VERIFIED' : 'UNVERIFIED',
         source: 'Product Catalog',
-        confidence: 1.0,
+        confidence: hasVerifiedKnowledge ? 1.0 : 0.0,
         lastVerifiedAt: timestamp,
       },
       strategicGoals: {
@@ -273,11 +285,11 @@ export class BusinessContextService {
           'Expand SADC B2B enterprise customer base',
           'Accelerate short-form video engagement on Facebook and LinkedIn',
           'Maintain 99.8%+ SLA uptime and zero-data-loss integrity',
-        ] : [
+        ] : (hasVerifiedKnowledge ? [
           'Grow customer revenue and active client pipeline',
           'Build strong digital audience engagement',
-        ]),
-        provenance: 'USER_PROVIDED',
+        ] : [])),
+        provenance: hasVerifiedKnowledge ? 'USER_PROVIDED' : 'UNVERIFIED',
         source: 'Executive Strategy',
         confidence: 0.94,
         lastVerifiedAt: timestamp,

@@ -15,7 +15,7 @@ export async function OPTIONS(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
-    const orgId = body.organizationId || 'ras-ali-labs';
+    const orgId = body.organizationId || request.headers.get('x-organization-id') || request.headers.get('x-workspace-id') || 'org_demo';
     const activeScreen = body.activeScreen;
     const forceRefresh = Boolean(body.forceRefresh);
 

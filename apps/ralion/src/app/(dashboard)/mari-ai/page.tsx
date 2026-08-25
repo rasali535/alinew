@@ -63,6 +63,7 @@ import {
   KnowledgeDocument,
   DataProvenance
 } from '@ralion/ai';
+import { useOrganization } from '@ralion/auth';
 
 interface ChatMessage {
   id: string;
@@ -76,6 +77,7 @@ interface ChatMessage {
 export default function MariAiPage() {
   const router = useRouter();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { organization, user } = useOrganization();
 
   // Active view tab
   const [activeTab, setActiveTab] = useState<'GROWTH_PARTNER' | 'KNOWLEDGE' | 'ADMIN_INFRA'>('GROWTH_PARTNER');
@@ -89,8 +91,8 @@ export default function MariAiPage() {
   }, []);
 
   // Context & live telemetry states
-  const [userName, setUserName] = useState('Ras Ali');
-  const [userTier, setUserTier] = useState('COMMUNITY');
+  const [userName, setUserName] = useState(user?.displayName || 'Executive');
+  const [userTier, setUserTier] = useState(organization?.licenseTier || 'PROFESSIONAL');
   const [businessContext, setBusinessContext] = useState<BusinessContext | null>(null);
   const [growthProfile, setGrowthProfile] = useState<BusinessGrowthProfile | null>(null);
   const [briefing, setBriefing] = useState<MariBriefing | null>(null);
@@ -108,6 +110,9 @@ export default function MariAiPage() {
   const [newDoc, setNewDoc] = useState({ title: '', category: 'SOP' as const, content: '' });
   const [isSyncingWebsite, setIsSyncingWebsite] = useState(false);
   const [websiteSyncSuccess, setWebsiteSyncSuccess] = useState<string | null>(null);
+  const [websiteInputUrl, setWebsiteInputUrl] = useState('');
+
+  const activeOrgId = organization?.id || organization?.slug || 'org-demo';
 
   // Load Business Context, Growth Profile, and Briefing on Mount
   const loadGrowthIntelligence = async (forceRefresh = false) => {
@@ -132,7 +137,7 @@ export default function MariAiPage() {
         if (rawP) savedFbPage = JSON.parse(rawP);
       }
 
-      const context = await BusinessContextService.assembleContext('ras-ali-labs', {
+      const context = await BusinessContextService.assembleContext(activeOrgId, {
         activeScreen: { route: '/mari-ai', label: 'Mari Business Growth Partner' },
         forceRefresh,
         localOverrides: {
@@ -209,7 +214,7 @@ export default function MariAiPage() {
     import('@/lib/services/auth.service').then(({ AuthService }) => {
       AuthService.getCurrentUser().then((user) => {
         if (user?.fullName) setUserName(user.fullName);
-        if (user?.tier) setUserTier(user.tier.toUpperCase());
+        if (user?.tier) setUserTier(user.tier.toUpperCase() as any);
       });
     });
 
@@ -993,29 +998,35 @@ export default function MariAiPage() {
                   <div>
                     <h3 className="text-base font-bold text-white flex items-center gap-2">
                       Verified Website Knowledge
-                      <Badge variant="success" className="text-[10px] font-mono">
-                        {businessContext?.layer1.websiteKnowledge?.value?.isStale ? 'STALE (>14d)' : 'VERIFIED / SYNCED'}
+                      <Badge variant={businessContext?.layer1.websiteKnowledge?.value ? 'success' : 'warning'} className="text-[10px] font-mono">
+                        {businessContext?.layer1.websiteKnowledge?.value 
+                          ? (businessContext.layer1.websiteKnowledge.value.isStale ? 'STALE (>14d)' : 'VERIFIED / SYNCED')
+                          : 'NOT INGESTED'}
                       </Badge>
                     </h3>
                     <p className="text-xs text-zinc-400 mt-0.5">
-                      Ingested public business presence: <span className="text-purple-300 font-mono">{businessContext?.layer1.websiteUrl?.value || 'https://www.rasalilabs.com'}</span>
+                      {businessContext?.layer1.websiteKnowledge?.value 
+                        ? <>Ingested public business presence: <span className="text-purple-300 font-mono">{businessContext.layer1.websiteKnowledge.value.websiteUrl}</span></>
+                        : `No website knowledge ingested yet for ${organization?.name || 'this organization'}.`}
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={handleSyncWebsite}
-                  disabled={isSyncingWebsite}
-                  className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-lg shadow-purple-600/20"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isSyncingWebsite ? 'animate-spin' : ''}`} />
-                  {isSyncingWebsite ? 'Syncing Website...' : 'Sync Website'}
-                </Button>
-              </div>
+              {businessContext?.layer1.websiteKnowledge?.value && (
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={handleSyncWebsite}
+                    disabled={isSyncingWebsite}
+                    className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-lg shadow-purple-600/20"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isSyncingWebsite ? 'animate-spin' : ''}`} />
+                    {isSyncingWebsite ? 'Syncing Website...' : 'Refresh Knowledge'}
+                  </Button>
+                </div>
+              )}
             </div>
 
             {websiteSyncSuccess && (
@@ -1025,36 +1036,98 @@ export default function MariAiPage() {
               </div>
             )}
 
-            {/* Ingested Sections Breakdown */}
-            <div className="mt-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {(businessContext?.layer1.websiteKnowledge?.value?.sections || [
-                { id: '1', title: 'Company Overview', category: 'ABOUT', keyTakeaways: ['African enterprise technology leader', 'Sovereign Ralion OS ecosystem'] },
-                { id: '2', title: 'Products & Solutions', category: 'PRODUCTS_SERVICES', keyTakeaways: ['Ralion OS Core', 'Mari AI Command Center', 'Growth Studio'] },
-                { id: '3', title: 'Value Proposition', category: 'VALUE_PROPOSITION', keyTakeaways: ['99.8%+ SLA uptime', 'Native offline resilience', 'SADC commercial focus'] },
-              ]).map((section: any) => (
-                <div key={section.id} className="p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-800 text-xs flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[10px] font-bold text-purple-400 uppercase font-mono">{section.category}</span>
-                      <span className="text-[10px] text-zinc-500 font-mono">Layer 1</span>
-                    </div>
-                    <h5 className="font-bold text-white text-xs">{section.title}</h5>
-                    <ul className="mt-2 space-y-1 text-[11px] text-zinc-400">
-                      {(section.keyTakeaways || []).map((t: string, idx: number) => (
-                        <li key={idx} className="flex items-start gap-1.5">
-                          <span className="text-purple-400 shrink-0">•</span>
-                          <span className="leading-snug">{t}</span>
-                        </li>
-                      ))}
-                    </ul>
+            {/* If no website ingested yet: Show Quick Ingestion Form */}
+            {!businessContext?.layer1.websiteKnowledge?.value && (
+              <div className="mt-5 p-5 rounded-2xl bg-zinc-950/90 border border-dashed border-purple-500/40">
+                <h4 className="text-sm font-bold text-white mb-1 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-purple-400" />
+                  Teach Mari AI about {organization?.name || 'Your Business'}
+                </h4>
+                <p className="text-xs text-zinc-400 mb-4 leading-relaxed">
+                  Enter your official business website URL. Mari AI will safely crawl public business pages, extract your products, services, target audience, and value propositions with zero cross-tenant leakage.
+                </p>
+
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                  <div className="relative flex-1">
+                    <input
+                      type="url"
+                      placeholder="https://www.example.com"
+                      value={websiteInputUrl}
+                      onChange={(e) => setWebsiteInputUrl(e.target.value)}
+                      className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500 font-mono"
+                    />
                   </div>
-                  <div className="mt-3 pt-2 border-t border-zinc-800/80 flex items-center justify-between text-[10px] text-zinc-500">
-                    <span>Source: Verified Website</span>
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  </div>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    disabled={isSyncingWebsite || !websiteInputUrl.trim()}
+                    onClick={async () => {
+                      setIsSyncingWebsite(true);
+                      setWebsiteSyncSuccess(null);
+                      try {
+                        const res = await fetch('/api/mari/knowledge/website-sync', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            organizationId: activeOrgId,
+                            websiteUrl: websiteInputUrl.trim(),
+                          }),
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                          setWebsiteSyncSuccess(`Successfully ingested ${data.websiteKnowledge?.websiteUrl || websiteInputUrl}! Mari AI is now fully grounded.`);
+                          await loadGrowthIntelligence(true);
+                        }
+                      } catch (e: any) {
+                        console.error('Ingestion failed:', e);
+                      } finally {
+                        setIsSyncingWebsite(false);
+                      }
+                    }}
+                    className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-semibold px-5 py-2.5 rounded-xl shadow-lg shadow-purple-600/30 shrink-0"
+                  >
+                    {isSyncingWebsite ? (
+                      <span className="flex items-center gap-2">
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Ingesting Website...
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-2">
+                        <Sparkles className="w-3.5 h-3.5" /> Analyze & Ingest Website
+                      </span>
+                    )}
+                  </Button>
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
+
+            {/* Ingested Sections Breakdown */}
+            {businessContext?.layer1.websiteKnowledge?.value && (
+              <div className="mt-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {businessContext.layer1.websiteKnowledge.value.sections.map((section: any) => (
+                  <div key={section.id} className="p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-800 text-xs flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[10px] font-bold text-purple-400 uppercase font-mono">{section.category}</span>
+                        <span className="text-[10px] text-zinc-500 font-mono">Layer 1</span>
+                      </div>
+                      <h5 className="font-bold text-white text-xs">{section.title}</h5>
+                      <ul className="mt-2 space-y-1 text-[11px] text-zinc-400">
+                        {(section.keyTakeaways || []).map((t: string, idx: number) => (
+                          <li key={idx} className="flex items-start gap-1.5">
+                            <span className="text-purple-400 shrink-0">•</span>
+                            <span className="leading-snug">{t}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="mt-3 pt-2 border-t border-zinc-800/80 flex items-center justify-between text-[10px] text-zinc-500">
+                      <span>Source: Verified Website</span>
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
 
           {/* 3-Layer Knowledge Model Sources Overview */}

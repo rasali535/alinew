@@ -1,0 +1,22 @@
+{
+  "id": "asset-1787676206273-mtaya",
+  "organizationId": "org_e2e_beta_202",
+  "type": "POSTER_IMAGE",
+  "provider": "FLUX.1 Studio",
+  "status": "COMPLETED",
+  "prompt": "Emergency clinical diagnostic reagents delivery for Lusaka teaching hospitals",
+  "title": "Beta Healthcare Diagnostics Delivery",
+  "mimeType": "image/jpeg",
+  "storagePath": "C:\\Users\\Ras Ali Labs\\Desktop\\rasalilabs\\alinew\\apps\\ralion\\public\\uploads\\creatives\\asset-1787676206273-mtaya.jpg",
+  "publicUrl": "/ralion/uploads/creatives/asset-1787676206273-mtaya.jpg",
+  "previewUrl": "/ralion/uploads/creatives/asset-1787676206273-mtaya.jpg",
+  "fileSizeBytes": 31964,
+  "createdAt": "2026-08-25T16:43:26.274Z",
+  "completedAt": "2026-08-25T16:43:26.274Z",
+  "metadata": {
+    "style": "Corporate Executive",
+    "format": "1:1",
+    "generator": "FLUX.1 Studio",
+    "byteLength": 31964
+  }
+}

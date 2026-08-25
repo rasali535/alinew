@@ -1,0 +1,22 @@
+{
+  "id": "asset-1787676160035-vdscp",
+  "organizationId": "org_e2e_alpha_101",
+  "type": "POSTER_IMAGE",
+  "provider": "FLUX.1 Studio",
+  "status": "COMPLETED",
+  "prompt": "Cold-chain refrigerated fleet transit across Gaborone and Francistown mining routes",
+  "title": "Alpha Logistics Cold-Chain Fleet",
+  "mimeType": "image/jpeg",
+  "storagePath": "C:\\Users\\Ras Ali Labs\\Desktop\\rasalilabs\\alinew\\apps\\ralion\\public\\uploads\\creatives\\asset-1787676160035-vdscp.jpg",
+  "publicUrl": "/ralion/uploads/creatives/asset-1787676160035-vdscp.jpg",
+  "previewUrl": "/ralion/uploads/creatives/asset-1787676160035-vdscp.jpg",
+  "fileSizeBytes": 61681,
+  "createdAt": "2026-08-25T16:42:40.040Z",
+  "completedAt": "2026-08-25T16:42:40.040Z",
+  "metadata": {
+    "style": "Corporate Executive",
+    "format": "1:1",
+    "generator": "FLUX.1 Studio",
+    "byteLength": 61681
+  }
+}

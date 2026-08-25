@@ -16,8 +16,8 @@ export async function OPTIONS(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
-    const orgId = body.organizationId || 'ras-ali-labs';
-    const websiteUrl = body.websiteUrl || (orgId === 'ras-ali-labs' ? 'https://www.rasalilabs.com' : 'https://example.com');
+    const orgId = body.organizationId || request.headers.get('x-organization-id') || 'org_demo';
+    const websiteUrl = body.websiteUrl || 'https://example.com';
 
     const result = await WebsiteIngestionService.ingestWebsite(orgId, websiteUrl, {
       customSections: body.customSections,

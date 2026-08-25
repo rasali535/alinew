@@ -241,45 +241,94 @@ function generateLocalStrategicResponse(
   context?: BusinessContext | null
 ): { text: string; modelInfo: SelectedModelInfo } {
   const pLower = prompt.toLowerCase();
-  const orgName = context?.layer1.companyName.value || context?.organizationName || 'Ras Ali Labs';
-  const industry = context?.layer1.industry.value || 'Enterprise Software & Industrial Intelligence';
-  const targetMarket = context?.layer1.targetMarket.value || 'SADC B2B Enterprises & Healthcare';
-  const valueProp = context?.layer1.valueProposition.value || 'Sovereign business software with native offline resilience and workflow automation.';
-  const websiteUrl = context?.layer1.websiteUrl?.value || 'https://www.rasalilabs.com';
+  const orgName = context?.layer1.companyName.value || context?.organizationName || '';
+  const isRasAli = orgName === 'Ras Ali Labs';
+  const hasVerifiedKnowledge = Boolean(
+    (context?.layer1.companyName.provenance === 'VERIFIED' && context?.layer1.industry.value !== 'Unspecified') ||
+    isRasAli
+  );
+
+  const industry = context?.layer1.industry.value || 'Commercial Enterprise';
+  const targetMarket = context?.layer1.targetMarket.value || 'Regional Commercial Market';
+  const valueProp = context?.layer1.valueProposition.value || '';
+  const websiteUrl = context?.layer1.websiteUrl?.value || 'Not configured';
   const websiteKnowledge = context?.layer1.websiteKnowledge?.value;
 
-  const pipelineVal = context?.layer2.crm.totalPipelineValue.value || 84500;
-  const activeClients = context?.layer2.crm.activeCustomersCount.value || 5;
-  const prospects = context?.layer2.crm.prospectsCount.value || 3;
-  const reachGrowth = context?.layer2.social.reachGrowthPct?.value || 38.4;
-  const followers = context?.layer2.social.followersCount?.value || 107;
-  const pageName = context?.layer2.social.connectedPageName?.value || 'Facebook Page';
+  const pipelineVal = context?.layer2.crm.totalPipelineValue.value || 0;
+  const activeClients = context?.layer2.crm.activeCustomersCount.value || 0;
+  const reachGrowth = context?.layer2.social.reachGrowthPct?.value || 0;
+  const followers = context?.layer2.social.followersCount?.value || 0;
+  const pageName = context?.layer2.social.connectedPageName?.value || '';
+  const isSocialConnected = Boolean(context?.layer2.social.isConnected && pageName);
 
   let responseText = '';
 
-  // 0. Hostile Cross-Tenant Containment Check
+  // 0. PLATFORM KNOWLEDGE (Available to ALL users globally)
   if (
-    (pLower.includes('beta healthcare') && !orgName.toLowerCase().includes('beta healthcare')) ||
-    (pLower.includes('alpha logistics') && !orgName.toLowerCase().includes('alpha logistics'))
+    pLower.includes('what is ralion') ||
+    pLower.includes('how to use ralion') ||
+    pLower.includes('ralion modules') ||
+    pLower.includes('what modules') ||
+    pLower.includes('billing help') ||
+    pLower.includes('pricing') ||
+    pLower.includes('license tier') ||
+    pLower.includes('how do i connect') ||
+    pLower.includes('what can mari do')
   ) {
-    const foreignEntity = pLower.includes('beta healthcare') ? 'Beta Healthcare' : 'Alpha Logistics';
     return {
-      text: `No ${foreignEntity} information available. I only maintain verified intelligence for ${orgName}.`,
+      text: `### Ralion OS — Sovereign Enterprise Intelligence\n\n` +
+        `**Core Platform Capabilities**:\n` +
+        `• **CRM & Sales Pipeline:** Deal tracking, contacts ledger, revenue velocity.\n` +
+        `• **Mari AI Command Center:** Autonomous business intelligence, strategy diagnostics, and campaign orchestration.\n` +
+        `• **Growth Studio & Creative Engine:** AI image/poster generation (FLUX.1-schnell), commercial video generation (CogVideoX), and unified social scheduling.\n` +
+        `• **Social Publishing:** Multi-platform dispatch to Facebook Pages, Instagram, LinkedIn, and X.\n` +
+        `• **Sovereign Architecture:** Dual desktop/web offline resilience, RBAC data isolation, and enterprise audit logging.\n\n` +
+        `*For billing and technical support, visit [Platform Support](https://rasalilabs.com/support).*`,
       modelInfo: {
-        model: 'mari-intelligence',
-        category: 'Mari Tenant Isolation Engine',
+        model: 'mari-platform-kb',
+        category: 'Ralion Platform Knowledge',
         endpoint: 'chat',
       },
     };
   }
 
-  // 1. "What does my business do?" / "What do you know about my business?" / "Tell me about our company"
+  // 1. Hostile Cross-Tenant Containment Check
+  const knownEntities = ['beta healthcare', 'alpha logistics', 'ras ali labs', 'foundations academy'];
+  for (const entity of knownEntities) {
+    if (pLower.includes(entity) && !orgName.toLowerCase().includes(entity)) {
+      const formattedEntity = entity.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      return {
+        text: `No ${formattedEntity} information available. I only maintain verified intelligence for ${orgName || 'your organization'}.`,
+        modelInfo: {
+          model: 'mari-intelligence',
+          category: 'Mari Tenant Isolation Engine',
+          endpoint: 'chat',
+        },
+      };
+    }
+  }
+
+  // 2. Unverified Tenant Fallback (Strictly NO generic Ras Ali Labs fallback)
+  if (!hasVerifiedKnowledge && !isRasAli) {
+    return {
+      text: `I don't have enough verified information about your business yet. Add your website or complete your Business Profile and I'll learn from it.`,
+      modelInfo: {
+        model: 'mari-intelligence',
+        category: 'Mari Tenant Onboarding Guard',
+        endpoint: 'chat',
+      },
+    };
+  }
+
+  // 3. "What does my business do?" / "What services do we provide?"
   if (
     pLower.includes('does my business do') ||
     pLower.includes('does our business do') ||
     pLower.includes('do we do') ||
     pLower.includes('what do i sell') ||
     pLower.includes('what do we sell') ||
+    pLower.includes('services do we provide') ||
+    pLower.includes('what services') ||
     pLower.includes('know about my business') || 
     pLower.includes('about our business') || 
     pLower.includes('about my business') || 
@@ -287,19 +336,25 @@ function generateLocalStrategicResponse(
     pLower.includes('tell me about us') ||
     pLower.includes('tell me about our company')
   ) {
-    const productsSummary = context?.layer1.productsAndServices.value
-      .map(p => `• **${p.name}** (${p.category})`)
-      .join('\n') || `• **${orgName} Core Solutions** (${industry})\n• **Automated Workflows**\n• **Customer Intelligence**`;
+    const productsList = context?.layer1.productsAndServices.value || [];
+    const productsSummary = productsList.length > 0
+      ? productsList.map(p => `• **${p.name}** (${p.category})`).join('\n')
+      : `• **${orgName} Core Solutions** (${industry})\n• **Automated Workflows**\n• **Customer Support & Inquiries**`;
+
+    const sourceCitations = websiteUrl && websiteUrl !== 'Not configured'
+      ? `Based on your website (${websiteUrl}), here is what I understand about **${orgName}**:`
+      : `Based on your verified business profile, here is what I understand about **${orgName}**:`;
 
     responseText = `### ${orgName}\n\n` +
+      `${sourceCitations}\n\n` +
       `**Business Overview**:\n${orgName} operates in the **${industry}** industry, serving **${targetMarket}**.\n\n` +
-      `**Core Value Proposition**:\n${valueProp}\n\n` +
+      `**Core Value Proposition**:\n${valueProp || `Dedicated commercial services tailored for ${targetMarket}.`}\n\n` +
       `**Products & Services**:\n${productsSummary}\n\n` +
       `**Target Market**:\n${targetMarket}.\n\n` +
       `*Would you like me to turn this into a growth plan or generate promotional campaigns for ${targetMarket}?*`;
   }
-  // 2. Website Knowledge Queries: "What does my website say?" / "website"
-  else if (pLower.includes('website') || pLower.includes('rasalilabs.com') || pLower.includes('online')) {
+  // 4. Website Knowledge Queries: "What does my website say?" / "website"
+  else if (pLower.includes('website') || pLower.includes('online')) {
     if (websiteKnowledge && websiteKnowledge.sections.length > 0) {
       const sectionsText = websiteKnowledge.sections.map(s => 
         `• **${s.title}**: ${s.keyTakeaways.join('; ')}`
@@ -309,7 +364,7 @@ function generateLocalStrategicResponse(
         ? `\n\n*(Notice: This website knowledge was synced >14 days ago. Click [Sync Website] to refresh.)*`
         : ``;
 
-      responseText = `Here is what your verified website (${websiteKnowledge.websiteUrl}) communicates about ${orgName}:\n\n` +
+      responseText = `Based on your verified website (${websiteKnowledge.websiteUrl}), here is what is communicated about ${orgName}:\n\n` +
         `**Overview**: ${websiteKnowledge.summary}\n\n` +
         `**Key Verified Sections**:\n` +
         `${sectionsText}${stalenessNote}\n\n` +
@@ -319,51 +374,55 @@ function generateLocalStrategicResponse(
         `[Sync Website] | [Add Business Knowledge]`;
     }
   }
-  // 3. Facebook / Social Intelligence Queries
+  // 5. Facebook / Social Intelligence Queries
   else if (pLower.includes('facebook') || pLower.includes('social') || pLower.includes('audience') || pLower.includes('reach') || pLower.includes('performance')) {
-    responseText = `Social & Channel Intelligence for ${orgName}:\n\n` +
-      `• **Connected Channel:** ${pageName} (${followers} verified followers, +${reachGrowth}% reach velocity).\n` +
-      `• **Performance Analysis:** Your video content is currently outperforming static content (2.3× higher engagement on short-form reels vs static posters).\n` +
-      `• **Audience Consistency:** Peak reach occurs between 14:00 and 16:00 on Wednesdays and Fridays.\n\n` +
-      `**Mari Recommendation**:\n` +
-      `I recommend creating another short-form commercial Reel targeting SADC enterprise decision makers to capitalize on your current +${reachGrowth}% audience momentum.\n\n` +
-      `[Create Reel] | [Create Visual] | [Open Growth Studio]`;
+    if (isSocialConnected) {
+      responseText = `Social & Channel Intelligence for ${orgName}:\n\n` +
+        `• **Connected Channel:** ${pageName} (${followers} verified followers, +${reachGrowth}% reach velocity).\n` +
+        `• **Performance Analysis:** Your video content is currently outperforming static content (2.3× higher engagement on short-form reels vs static posters).\n` +
+        `• **Audience Consistency:** Peak reach occurs between 14:00 and 16:00 on Wednesdays and Fridays.\n\n` +
+        `**Mari Recommendation**:\n` +
+        `I recommend creating another short-form commercial Reel targeting ${targetMarket} to capitalize on your current +${reachGrowth}% audience momentum.\n\n` +
+        `[Create Reel] | [Create Visual] | [Open Growth Studio]`;
+    } else {
+      responseText = `Social channels are not currently connected for ${orgName}. You can connect your Facebook Page or Instagram in Growth Studio to enrich Mari with live audience reach and engagement telemetry.\n\n` +
+        `[Connect Facebook] | [Open Growth Studio]`;
+    }
   }
-  // 4. Growth & Focus Queries: "How can we grow this business?" / "Where to focus"
+  // 6. Growth & Focus Queries: "How can we grow this business?" / "Where to focus"
   else if (pLower.includes('grow') || pLower.includes('focus') || pLower.includes('opportunity') || pLower.includes('priority')) {
+    const dealsSection = pipelineVal > 0
+      ? `1. **Advance $${pipelineVal.toLocaleString()} in Active CRM Deals**\n   You have active commercial prospects in proposal stage. Sending personal executive follow-ups today will advance deals into signed contracts.\n\n`
+      : `1. **Ingest & Qualify Commercial Leads in CRM**\n   Build your customer pipeline by logging active prospective accounts in Ralion CRM.\n\n`;
+
+    const socialSection = isSocialConnected
+      ? `2. **Capitalize on +${reachGrowth}% Social Reach Velocity**\n   Your audience (${followers} verified followers) generates 2.3× higher reach on video demonstrations.\n\n`
+      : `2. **Activate Brand Social Channels**\n   Publish promotional content and spotlight reels to establish organic search presence.\n\n`;
+
     responseText = `Good day! Based on your live business state and growth intelligence for ${orgName}, here is how we can grow your business today:\n\n` +
-      `1. **Advance $${pipelineVal.toLocaleString()} in Active CRM Deals**\n` +
-      `   You have active commercial prospects in proposal stage. Sending personal executive follow-ups today will advance deals into signed contracts.\n\n` +
-      `2. **Capitalize on +${reachGrowth}% Social Reach Velocity**\n` +
-      `   Your audience (${followers} verified followers) generates 2.3× higher reach on video demonstrations. Publishing a midweek spotlight reel captures peak traffic.\n\n` +
-      `3. **Target Regional SADC Enterprise Expansion**\n` +
-      `   Position sovereign software workflows for cross-border logistics and healthcare tenders in Botswana and South Africa.\n\n` +
-      `Would you like me to prepare a Growth Campaign or draft CRM follow-ups?`;
+      dealsSection +
+      socialSection +
+      `3. **Target Regional Commercial Expansion**\n` +
+      `   Position core offerings for ${targetMarket} through targeted campaigns.\n\n` +
+      `[Open Growth Studio] | [Generate Creative] | [View CRM Pipeline]`;
   }
-  // 5. Operational & Diagnostic Queries: "Risk" / "Pipeline"
-  else if (pLower.includes('risk') || pLower.includes('bottleneck') || pLower.includes('pipeline')) {
-    responseText = `Operational Diagnostic for ${orgName}:\n\n` +
-      `• **Sales Pipeline Health:** $${pipelineVal.toLocaleString()} active portfolio value across ${prospects} prospects.\n` +
-      `• **Identified Risk:** 3 high-value prospects have had no recorded touches for > 5 days. Recommended remedy: Send executive follow-up via CRM.\n` +
-      `• **Audience Consistency:** Peak reach occurs between 14:00 and 16:00 on Wednesdays and Fridays. Ensure scheduled content is queued in Growth Studio.`;
-  }
-  // 6. Default Strategic Summary
+  // Default fallback
   else {
-    responseText = `I have analyzed your request against active workspace intelligence for ${orgName}.\n\n` +
-      `• **Active CRM Pipeline:** $${pipelineVal.toLocaleString()} (${activeClients} clients, ${prospects} prospects)\n` +
-      `• **Audience Reach Growth:** +${reachGrowth}% (${followers} followers on ${pageName})\n` +
-      `• **Verified Website:** ${websiteUrl}\n` +
-      `• **System SLA:** ${context?.layer2.operations.slaUptimePct.value || 99.8}% operational uptime\n\n` +
-      `What strategic workflow would you like to execute next?`;
+    responseText = `Good day! I am Mari, your AI Business Growth Partner for **${orgName}**.\n\n` +
+      `I maintain verified intelligence for your business in **${industry}** serving **${targetMarket}**.\n\n` +
+      `How can I assist your commercial operations today?\n\n` +
+      `• *Ask "What does my business do?" to inspect verified knowledge.*\n` +
+      `• *Ask "How can we grow this business?" for revenue diagnostics.*\n` +
+      `• *Ask "Create a commercial Reel" to generate visual campaigns.*`;
   }
 
   return {
     text: responseText,
     modelInfo: {
-      model: 'mari-intelligence',
-      category: 'Mari Business Intelligence',
+      model: 'mari-growth-partner',
+      category: 'Mari Strategic Growth Engine',
       endpoint: 'chat',
-    }
+    },
   };
 }
 

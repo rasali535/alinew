@@ -118,7 +118,9 @@ export class WebsiteIngestionService {
    * Retrieves the current ingested website knowledge for an organization.
    * Returns verified knowledge or indicates if website is pending ingestion.
    */
-  static getWebsiteKnowledge(orgId: string = 'ras-ali-labs'): IngestedWebsiteKnowledge | null {
+  static getWebsiteKnowledge(orgId: string): IngestedWebsiteKnowledge | null {
+    if (!orgId) return null;
+
     // Check dynamic store first
     if (websiteStore[orgId]) {
       const knowledge = websiteStore[orgId];
@@ -130,8 +132,8 @@ export class WebsiteIngestionService {
       return knowledge;
     }
 
-    // Default verified knowledge for Ras Ali Labs
-    if (orgId === 'ras-ali-labs' || orgId === 'org-default') {
+    // Strict check: Only 'ras-ali-labs' gets the default Ras Ali Labs profile
+    if (orgId === 'ras-ali-labs') {
       websiteStore['ras-ali-labs'] = { ...RAS_ALI_LABS_VERIFIED_WEBSITE };
       return websiteStore['ras-ali-labs'];
     }
@@ -140,8 +142,7 @@ export class WebsiteIngestionService {
   }
 
   /**
-   * Ingests or re-indexes website knowledge for an organization.
-   * Simulates/executes authoritative structured parsing of public business pages.
+   * Ingests or re-indexes website knowledge for an organization using SSRF-protected crawler.
    */
   static async ingestWebsite(
     orgId: string,
@@ -153,7 +154,15 @@ export class WebsiteIngestionService {
       ? websiteUrl.trim() 
       : `https://${websiteUrl.trim()}`;
 
-    const isRasAli = cleanUrl.includes('rasalilabs') || orgId === 'ras-ali-labs';
+    const isRasAli = cleanUrl.includes('rasalilabs.com') && orgId === 'ras-ali-labs';
+
+    // Ingest into BusinessKnowledgeProfileService
+    try {
+      const { BusinessKnowledgeProfileService } = require('./businessKnowledgeProfile.service');
+      await BusinessKnowledgeProfileService.ingestWebsiteForTenant(orgId, cleanUrl);
+    } catch (e: any) {
+      console.warn('[WebsiteIngestionService] BusinessKnowledgeProfile sync notice:', e.message);
+    }
 
     const sections: WebsiteSection[] = options?.customSections || (isRasAli ? RAS_ALI_LABS_VERIFIED_WEBSITE.sections : [
       {

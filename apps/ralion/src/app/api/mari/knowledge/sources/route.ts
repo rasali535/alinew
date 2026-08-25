@@ -16,7 +16,7 @@ export async function OPTIONS(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const orgId = searchParams.get('orgId') || 'ras-ali-labs';
+    const orgId = searchParams.get('orgId') || request.headers.get('x-organization-id') || 'org_demo';
 
     const context = await BusinessContextService.assembleContext(orgId);
     const websiteKnowledge = WebsiteIngestionService.getWebsiteKnowledge(orgId);
@@ -26,8 +26,8 @@ export async function GET(request: NextRequest) {
         id: 'website',
         name: 'Website Knowledge',
         category: 'LAYER_1',
-        url: websiteKnowledge?.websiteUrl || 'https://www.rasalilabs.com',
-        provenance: websiteKnowledge?.provenance || 'VERIFIED',
+        url: websiteKnowledge?.websiteUrl || context.layer1.websiteUrl?.value || 'Not configured',
+        provenance: websiteKnowledge?.provenance || 'UNVERIFIED',
         status: websiteKnowledge ? (websiteKnowledge.isStale ? 'STALE' : 'VERIFIED') : 'NOT_SYNCED',
         lastSyncedAt: websiteKnowledge?.lastSuccessfulSync || 'Never',
         sectionsCount: websiteKnowledge?.sections.length || 0,

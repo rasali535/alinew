@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
     const query = body.query || body.message || body.prompt;
-    const orgId = body.organizationId || 'ras-ali-labs';
+    const orgId = body.organizationId || request.headers.get('x-organization-id') || request.headers.get('x-workspace-id') || 'org_demo';
     const activeScreen = body.activeScreen;
 
     if (!query || typeof query !== 'string') {
