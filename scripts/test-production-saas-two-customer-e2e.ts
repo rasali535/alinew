@@ -25,6 +25,10 @@ import {
 } from '../packages/auth/src/types';
 
 import {
+  BillingDatabaseService,
+} from '../packages/database/src/index';
+
+import {
   generateOAuthState,
   verifyOAuthState,
   ZernioSocialService,
@@ -94,6 +98,35 @@ async function runProductionSaaSSimulation() {
     country: 'South Africa',
     websiteUrl: 'https://www.skylinemedia.co.za',
   };
+
+  // Provision subscriptions and wallets
+  BillingDatabaseService.saveSubscription({
+    id: `sub_${CUSTOMER_A.organizationId}`,
+    organizationId: CUSTOMER_A.organizationId,
+    planId: 'ENTERPRISE',
+    status: 'ACTIVE',
+    billingCycle: 'MONTHLY',
+    provider: 'paypal',
+    currentPeriodStart: new Date().toISOString(),
+    currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    cancelAtPeriodEnd: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+
+  BillingDatabaseService.saveSubscription({
+    id: `sub_${CUSTOMER_B.organizationId}`,
+    organizationId: CUSTOMER_B.organizationId,
+    planId: 'PROFESSIONAL',
+    status: 'ACTIVE',
+    billingCycle: 'MONTHLY',
+    provider: 'paypal',
+    currentPeriodStart: new Date().toISOString(),
+    currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    cancelAtPeriodEnd: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
 
   const walletA = TenantCreditsService.getOrCreateWallet(CUSTOMER_A.organizationId, CUSTOMER_A.tier);
   const walletB = TenantCreditsService.getOrCreateWallet(CUSTOMER_B.organizationId, CUSTOMER_B.tier);

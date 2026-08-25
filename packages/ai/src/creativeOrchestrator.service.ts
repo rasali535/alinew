@@ -20,6 +20,7 @@ import {
   validateVideoBuffer,
 } from './creativeAsset.service';
 import { TenantCreditsService, CREDIT_COSTS } from './tenantCredits.service';
+import { EntitlementService } from '@ralion/auth';
 
 export interface OrchestratorGenerateOptions {
   organizationId: string;
@@ -50,7 +51,7 @@ export class CreativeOrchestrator {
 
   /**
    * Orchestrates the complete generation lifecycle:
-   * CREDIT_CHECK -> QUEUED -> GENERATING (Router Failover) -> VALIDATING -> STORING -> COMPLETED
+   * ENTITLEMENT_CHECK -> CREDIT_CHECK -> QUEUED -> GENERATING (Router Failover) -> VALIDATING -> STORING -> COMPLETED
    */
   static async generate(options: OrchestratorGenerateOptions): Promise<{
     success: boolean;
@@ -81,7 +82,19 @@ export class CreativeOrchestrator {
       };
     }
 
-    // ── STAGE 0: TENANT CREDIT VERIFICATION & DEDUCTION ─────────────────────
+    // ── STAGE 0: PLAN ENTITLEMENT VERIFICATION ──────────────────────────────
+    const featureKey = type === 'VIDEO_REEL' ? 'cogvideoVideos' : 'fluxImages';
+    const entitlement = EntitlementService.checkFeature(organizationId, featureKey);
+    if (!entitlement.allowed) {
+      return {
+        success: false,
+        status: 'FAILED',
+        userFacingMessage: entitlement.reason || `Your current subscription does not include ${type === 'VIDEO_REEL' ? 'video' : 'visual'} generation. Please upgrade your plan.`,
+        errorDetails: { errorCode: 'ENTITLEMENT_REQUIRED', stage: 'ENTITLEMENT_CHECK', details: entitlement.reason },
+      };
+    }
+
+    // ── STAGE 0.5: TENANT CREDIT VERIFICATION & DEDUCTION ───────────────────
     const creditCost = type === 'VIDEO_REEL' ? CREDIT_COSTS.VIDEO_REEL : CREDIT_COSTS.POSTER_IMAGE;
     try {
       TenantCreditsService.deductCredits(

@@ -11,7 +11,9 @@ import {
   MariOrchestrationService,
   callMariAiApi,
   CreativeOrchestrator,
+  TenantCreditsService,
 } from '../packages/ai/src/index';
+import { BillingDatabaseService } from '../packages/database/src/index';
 import { SocialPublishingService } from '../apps/ralion/src/lib/services/social/socialPublishing.service';
 
 interface ValidationResult {
@@ -133,6 +135,38 @@ async function runProductionMultiTenantValidation() {
       { name: 'Vaccine Cold Storage Containers', category: 'Biomedical Logistics' },
     ],
   });
+
+  // Provision subscriptions and credit wallets
+  BillingDatabaseService.saveSubscription({
+    id: `sub_${TENANT_A.organizationId}`,
+    organizationId: TENANT_A.organizationId,
+    planId: 'ENTERPRISE',
+    status: 'ACTIVE',
+    billingCycle: 'MONTHLY',
+    provider: 'paypal',
+    currentPeriodStart: new Date().toISOString(),
+    currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    cancelAtPeriodEnd: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+
+  BillingDatabaseService.saveSubscription({
+    id: `sub_${TENANT_B.organizationId}`,
+    organizationId: TENANT_B.organizationId,
+    planId: 'PROFESSIONAL',
+    status: 'ACTIVE',
+    billingCycle: 'MONTHLY',
+    provider: 'paypal',
+    currentPeriodStart: new Date().toISOString(),
+    currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    cancelAtPeriodEnd: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+
+  TenantCreditsService.getOrCreateWallet(TENANT_A.organizationId, 'ENTERPRISE');
+  TenantCreditsService.getOrCreateWallet(TENANT_B.organizationId, 'PROFESSIONAL');
 
   recordMatrix(
     1,

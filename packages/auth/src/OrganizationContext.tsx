@@ -1,3 +1,5 @@
+'use client';
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { UserProfile, Organization, Branch, LicenseTier } from './types';
 

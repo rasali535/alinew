@@ -13,6 +13,7 @@ export type CreditTransactionType = 'INITIAL_GRANT' | 'REFILL' | 'CONSUMPTION' |
 export interface CreditTransaction {
   id: string;
   organizationId: string;
+  userId?: string;
   amount: number; // Positive for grant/refill/refund, negative for consumption
   balanceAfter: number;
   type: CreditTransactionType;
@@ -195,6 +196,10 @@ export class TenantCreditsService {
   static getTransactions(organizationId: string): CreditTransaction[] {
     if (!organizationId) return [];
     return (this.transactions.get(organizationId) || []).map((t) => ({ ...t }));
+  }
+
+  static getLedger(organizationId: string): CreditTransaction[] {
+    return this.getTransactions(organizationId);
   }
 
   /**

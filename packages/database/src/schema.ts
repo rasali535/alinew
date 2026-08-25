@@ -371,4 +371,98 @@ export interface SocialInboxMessageRecord {
   createdAt: string;
 }
 
+// ═════════════════════════════════════════════════════════════════════════════
+// COMMERCIAL MULTI-TENANT BILLING & SUBSCRIPTION SCHEMAS
+// ═════════════════════════════════════════════════════════════════════════════
+
+export type SubscriptionPlanId = 'COMMUNITY' | 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE';
+export type SubscriptionStatus = 'ACTIVE' | 'TRIALING' | 'PAST_DUE' | 'CANCELED' | 'SUSPENDED' | 'EXPIRED' | 'PENDING';
+export type BillingCycle = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+export type PaymentProvider = 'paypal' | 'stripe' | 'manual';
+
+export interface PlanEntitlements {
+  planId: SubscriptionPlanId;
+  name: string;
+  description: string;
+  monthlyPriceUsd: number;
+  monthlyCreditQuota: number;
+  maxWorkspaces: number;
+  maxSocialConnections: number;
+  maxTeamMembers: number;
+  features: {
+    mariChat: boolean;
+    fluxImages: boolean;
+    cogvideoVideos: boolean;
+    growthCampaigns: boolean;
+    socialPublishing: boolean;
+    marketResearch: boolean;
+    biReporting: boolean;
+    unlimitedWorkflows: boolean;
+    sovereignCloud: boolean;
+    prioritySupport: boolean;
+  };
+}
+
+export interface OrganizationSubscriptionRecord {
+  id: string;
+  organizationId: string;
+  planId: SubscriptionPlanId;
+  status: SubscriptionStatus;
+  billingCycle: BillingCycle;
+  provider: PaymentProvider;
+  providerCustomerId?: string;
+  providerSubscriptionId?: string;
+  providerPlanId?: string;
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  cancelAtPeriodEnd: boolean;
+  canceledAt?: string;
+  trialEnd?: string;
+  metadata?: Record<string, any>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BillingAccountRecord {
+  organizationId: string;
+  companyName: string;
+  billingEmail: string;
+  currency: 'USD' | 'BWP' | 'ZAR' | 'EUR';
+  country?: string;
+  taxId?: string;
+  paymentMethodType?: string;
+  lastPaymentStatus?: 'COMPLETED' | 'FAILED' | 'PENDING';
+  lastPaymentDate?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PaymentTransactionRecord {
+  id: string;
+  organizationId: string;
+  subscriptionId?: string;
+  provider: PaymentProvider;
+  providerTransactionId: string;
+  amount: number;
+  currency: string;
+  status: 'COMPLETED' | 'PENDING' | 'FAILED' | 'REFUNDED' | 'REVERSED';
+  eventType: string;
+  description?: string;
+  rawEventData?: Record<string, any>;
+  createdAt: string;
+}
+
+export interface BillingWebhookEventRecord {
+  id: string;
+  provider: PaymentProvider;
+  eventId: string;
+  eventType: string;
+  resourceId: string;
+  status: 'PROCESSED' | 'FAILED' | 'IGNORED';
+  signatureValid: boolean;
+  receivedAt: string;
+  processedAt?: string;
+  error?: string;
+}
+
 
