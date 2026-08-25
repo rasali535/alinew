@@ -614,9 +614,10 @@ export class ZernioSocialService {
   /**
    * Get message history for a specific conversation thread
    */
-  static async getConversationMessages(conversationId: string, accountId: string): Promise<any> {
+  static async getConversationMessages(conversationId: string, accountId?: string): Promise<any> {
+    const query = accountId ? `?accountId=${encodeURIComponent(accountId)}` : '';
     return this.request<any>(
-      `inbox/conversations/${encodeURIComponent(conversationId)}/messages?accountId=${encodeURIComponent(accountId)}`,
+      `inbox/conversations/${encodeURIComponent(conversationId)}/messages${query}`,
       'GET'
     );
   }

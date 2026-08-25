@@ -313,4 +313,34 @@ export class BusinessGrowthProfileService {
     profileStore[orgId].growthMemory.unshift(memoryItem);
     return memoryItem;
   }
+
+  static getGrowthProfile(organizationId: string): BusinessGrowthProfile {
+    return (
+      profileStore[organizationId] || {
+        organizationId,
+        businessName: '',
+        industry: '',
+        targetMarket: '',
+        idealCustomerProfile: '',
+        revenueModel: '',
+        activePipelineValue: 0,
+        activeCustomersCount: 0,
+        activeProspectsCount: 0,
+        marketingChannels: [],
+        growthScore: { score: 0, drivers: { positive: [], negative: [] }, explanation: '' },
+        highestImpactMove: {} as any,
+        opportunities: [],
+        risks: [],
+        growthMemory: [],
+        lastEvaluatedAt: new Date().toISOString(),
+        version: '1.0',
+      }
+    );
+  }
+
+  static _resetForTesting(): void {
+    for (const key of Object.keys(profileStore)) {
+      delete profileStore[key];
+    }
+  }
 }

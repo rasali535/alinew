@@ -51,6 +51,7 @@ export interface SidebarProps {
   currentPath?: string;
   tier?: string;
   orgName?: string;
+  userName?: string;
   platformUrl?: string;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -62,7 +63,8 @@ export interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({
   currentPath = '/ralion/dashboard',
   tier = 'COMMUNITY',
-  orgName = 'Ras Ali Labs Workspace',
+  orgName = 'Organization Workspace',
+  userName,
   platformUrl = 'https://portal.rasalilabs.com',
   isCollapsed = false,
   onToggleCollapse,
@@ -71,6 +73,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLogout,
 }) => {
   const userTier = (tier || 'COMMUNITY').toUpperCase();
+  const displayName = userName || orgName || 'Workspace Member';
+  const displayInitials = (displayName.split(' ').map((s) => s[0]).join('') || 'WS').substring(0, 2).toUpperCase();
 
   // State for collapsible sections
   const [isSolutionsOpen, setIsSolutionsOpen] = useState(true);
@@ -345,10 +349,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="p-2.5 border-t border-zinc-800/80 flex items-center justify-between bg-zinc-950 text-zinc-400">
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-6 h-6 rounded-full bg-indigo-900/60 border border-indigo-700/60 flex items-center justify-center text-indigo-200 font-bold text-[10px] shrink-0">
-              RA
+              {displayInitials}
             </div>
             <div className="flex flex-col min-w-0">
-              <span className="text-xs font-medium text-zinc-200 truncate">Ras Ali Admin</span>
+              <span className="text-xs font-medium text-zinc-200 truncate">{displayName}</span>
               <span className="text-[9px] text-zinc-500 font-mono truncate">{userTier} Tier</span>
             </div>
           </div>

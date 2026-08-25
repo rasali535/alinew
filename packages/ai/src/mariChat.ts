@@ -1,5 +1,6 @@
 import { generateHfImage, generateHfVideo } from './aimlClient';
 import type { BusinessContext } from './businessContext.service';
+import { BusinessKnowledgeProfileService } from './businessKnowledgeProfile.service';
 
 export interface MariQueryResponse {
   answer: string;
@@ -264,19 +265,12 @@ function generateLocalStrategicResponse(
   let responseText = '';
 
   // 0. Hostile Cross-Tenant Containment Check (Must run first before keyword matching)
-  const knownEntities = [
-    'beta healthcare',
-    'alpha logistics',
-    'ras ali labs',
-    'foundations academy',
-    'apex health logistics',
-    'skyline media group',
-  ];
-  for (const entity of knownEntities) {
-    if (pLower.includes(entity) && !orgName.toLowerCase().includes(entity)) {
-      const formattedEntity = entity.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  const allKnownEntities = BusinessKnowledgeProfileService.listAllCompanyNames();
+  for (const entity of allKnownEntities) {
+    const entityLower = entity.toLowerCase();
+    if (entityLower.length >= 3 && pLower.includes(entityLower) && !orgName.toLowerCase().includes(entityLower)) {
       return {
-        text: `No ${formattedEntity} information available. I only maintain verified intelligence for ${orgName || 'your organization'}.`,
+        text: `No ${entity} information available. I only maintain verified intelligence for ${orgName || 'your organization'}.`,
         modelInfo: {
           model: 'mari-intelligence',
           category: 'Mari Tenant Isolation Engine',

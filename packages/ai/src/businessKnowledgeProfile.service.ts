@@ -485,4 +485,24 @@ export class BusinessKnowledgeProfileService {
   static setProfile(orgId: string, profile: BusinessKnowledgeProfile) {
     tenantProfileMap.set(orgId, profile);
   }
+
+  /**
+   * Returns list of all company names across active tenant profiles and known entities.
+   */
+  static listAllCompanyNames(): string[] {
+    const names = new Set<string>([
+      'Ras Ali Labs',
+      'Beta Healthcare',
+      'Alpha Logistics',
+      'Apex Health Logistics',
+      'Skyline Media Group',
+      'Foundations Academy',
+    ]);
+    for (const profile of tenantProfileMap.values()) {
+      if (profile.companyName?.value) {
+        names.add(profile.companyName.value);
+      }
+    }
+    return Array.from(names);
+  }
 }

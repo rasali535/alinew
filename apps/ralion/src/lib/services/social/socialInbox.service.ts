@@ -34,29 +34,38 @@ export class SocialInboxService {
     const provider = typeof params === 'object' ? params.provider : legacyProvider;
 
     // 1. Resolve connected tenant's Zernio profile and account mapping strictly for this workspace / user
-    let connQuery = supabase
-      .from('social_connections')
-      .select('zernio_profile_id, zernio_account_id, workspace_id, user_id')
-      .eq('provider', provider || 'facebook')
-      .eq('connection_status', 'CONNECTED');
+    let profileId: string | null = null;
+    let accountId: string | null = null;
 
-    if (workspaceId && workspaceId !== 'default' && workspaceId !== 'default-org') {
-      connQuery = connQuery.or(`workspace_id.eq.${workspaceId},user_id.eq.${userId || workspaceId}`);
-    } else if (userId && userId !== 'default-user') {
-      connQuery = connQuery.eq('user_id', userId);
-    } else {
-      // Unscoped request -> return empty conversations (zero tenant cross-leakage)
+    try {
+      let connQuery = supabase
+        .from('social_connections')
+        .select('zernio_profile_id, zernio_account_id, workspace_id, user_id')
+        .eq('provider', provider || 'facebook')
+        .eq('connection_status', 'CONNECTED');
+
+      if (workspaceId && workspaceId !== 'default' && workspaceId !== 'default-org') {
+        connQuery = connQuery.or(`workspace_id.eq.${workspaceId},user_id.eq.${userId || workspaceId}`);
+      } else if (userId && userId !== 'default-user') {
+        connQuery = connQuery.eq('user_id', userId);
+      } else {
+        // Unscoped request -> return empty conversations (zero tenant cross-leakage)
+        return [];
+      }
+
+      const { data: conn } = await connQuery.maybeSingle();
+      if (conn?.zernio_profile_id) {
+        profileId = conn.zernio_profile_id;
+        accountId = conn.zernio_account_id || null;
+      }
+    } catch {
+      // Database connection fallback -> return empty conversations safely
       return [];
     }
 
-    const { data: conn } = await connQuery.maybeSingle();
-
-    if (!conn || !conn.zernio_profile_id) {
+    if (!profileId) {
       return [];
     }
-
-    const profileId = conn.zernio_profile_id;
-    const accountId = conn.zernio_account_id;
 
     const conversationMap = new Map<string, any>();
 
@@ -74,7 +83,7 @@ export class SocialInboxService {
               let messages: any[] = [];
 
               try {
-                const msgData = await ZernioSocialService.getConversationMessages(convId, accountId);
+                const msgData = await ZernioSocialService.getConversationMessages(convId, accountId || undefined);
                 const rawMsgs = msgData?.messages || (Array.isArray(msgData) ? msgData : []);
                 if (Array.isArray(rawMsgs)) {
                   messages = rawMsgs.map((m: any) => ({
@@ -172,6 +181,7 @@ export class SocialInboxService {
     recipientId: string;
     messageText: string;
     userId: string;
+    senderName?: string;
   }) {
     const supabase = getServiceSupabase();
 
@@ -217,7 +227,7 @@ export class SocialInboxService {
         provider: params.provider,
         conversation_id: params.conversationId,
         sender_id: params.userId,
-        sender_name: 'Ras Ali Labs Support',
+        sender_name: params.senderName || 'Support Agent',
         recipient_id: params.recipientId,
         message_text: params.messageText,
         direction: 'OUTBOUND',
