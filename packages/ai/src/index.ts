@@ -15,3 +15,4 @@ export * from './creativeAsset.service';
 export * from './creativeProvider.interface';
 export * from './creativeProviders';
 export * from './creativeOrchestrator.service';
+export * from './tenantCredits.service';

@@ -59,3 +59,5 @@ apps/desktop/release/
 dist_20260729_170700/
 zip_test/
 *.zip
+public/uploads/
+apps/ralion/public/uploads/

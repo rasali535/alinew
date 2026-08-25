@@ -263,17 +263,43 @@ function generateLocalStrategicResponse(
 
   let responseText = '';
 
-  // 0. PLATFORM KNOWLEDGE (Available to ALL users globally)
+  // 0. Hostile Cross-Tenant Containment Check (Must run first before keyword matching)
+  const knownEntities = [
+    'beta healthcare',
+    'alpha logistics',
+    'ras ali labs',
+    'foundations academy',
+    'apex health logistics',
+    'skyline media group',
+  ];
+  for (const entity of knownEntities) {
+    if (pLower.includes(entity) && !orgName.toLowerCase().includes(entity)) {
+      const formattedEntity = entity.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      return {
+        text: `No ${formattedEntity} information available. I only maintain verified intelligence for ${orgName || 'your organization'}.`,
+        modelInfo: {
+          model: 'mari-intelligence',
+          category: 'Mari Tenant Isolation Engine',
+          endpoint: 'chat',
+        },
+      };
+    }
+  }
+
+  // 1. PLATFORM KNOWLEDGE (Available to ALL users globally)
   if (
     pLower.includes('what is ralion') ||
     pLower.includes('how to use ralion') ||
+    pLower.includes('how does ralion') ||
+    pLower.includes('how can ralion') ||
     pLower.includes('ralion modules') ||
     pLower.includes('what modules') ||
     pLower.includes('billing help') ||
     pLower.includes('pricing') ||
     pLower.includes('license tier') ||
     pLower.includes('how do i connect') ||
-    pLower.includes('what can mari do')
+    pLower.includes('what can mari do') ||
+    (pLower.includes('ralion os') && (pLower.includes('help') || pLower.includes('overview') || pLower.includes('feature') || pLower.includes('module')))
   ) {
     return {
       text: `### Ralion OS — Sovereign Enterprise Intelligence\n\n` +
@@ -290,22 +316,6 @@ function generateLocalStrategicResponse(
         endpoint: 'chat',
       },
     };
-  }
-
-  // 1. Hostile Cross-Tenant Containment Check
-  const knownEntities = ['beta healthcare', 'alpha logistics', 'ras ali labs', 'foundations academy'];
-  for (const entity of knownEntities) {
-    if (pLower.includes(entity) && !orgName.toLowerCase().includes(entity)) {
-      const formattedEntity = entity.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-      return {
-        text: `No ${formattedEntity} information available. I only maintain verified intelligence for ${orgName || 'your organization'}.`,
-        modelInfo: {
-          model: 'mari-intelligence',
-          category: 'Mari Tenant Isolation Engine',
-          endpoint: 'chat',
-        },
-      };
-    }
   }
 
   // 2. Unverified Tenant Fallback (Strictly NO generic Ras Ali Labs fallback)

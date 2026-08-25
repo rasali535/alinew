@@ -1,7 +1,9 @@
 export type UserRole = 
   | 'PLATFORM_ADMIN'
   | 'ORGANIZATION_OWNER'
+  | 'ADMIN'
   | 'MANAGER'
+  | 'MEMBER'
   | 'EMPLOYEE'
   | 'CUSTOM';
 
@@ -122,6 +124,22 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'mari:ai_actions',
     'mari:knowledge_base',
   ],
+  ADMIN: [
+    'org:manage',
+    'users:manage',
+    'billing:manage',
+    'crm:read',
+    'crm:write',
+    'tasks:read',
+    'tasks:write',
+    'documents:read',
+    'documents:write',
+    'workflows:manage',
+    'growth:manage',
+    'mari:ai_chat',
+    'mari:ai_actions',
+    'mari:knowledge_base',
+  ],
   MANAGER: [
     'users:manage',
     'crm:read',
@@ -134,6 +152,14 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'growth:manage',
     'mari:ai_chat',
     'mari:ai_actions',
+  ],
+  MEMBER: [
+    'crm:read',
+    'crm:write',
+    'tasks:read',
+    'tasks:write',
+    'documents:read',
+    'mari:ai_chat',
   ],
   EMPLOYEE: [
     'crm:read',

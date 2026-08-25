@@ -19,6 +19,7 @@ import {
   validateImageBuffer,
   validateVideoBuffer,
 } from './creativeAsset.service';
+import { TenantCreditsService, CREDIT_COSTS } from './tenantCredits.service';
 
 export interface OrchestratorGenerateOptions {
   organizationId: string;
@@ -49,7 +50,7 @@ export class CreativeOrchestrator {
 
   /**
    * Orchestrates the complete generation lifecycle:
-   * QUEUED -> GENERATING (Router Failover) -> VALIDATING -> STORING -> COMPLETED
+   * CREDIT_CHECK -> QUEUED -> GENERATING (Router Failover) -> VALIDATING -> STORING -> COMPLETED
    */
   static async generate(options: OrchestratorGenerateOptions): Promise<{
     success: boolean;
@@ -71,8 +72,35 @@ export class CreativeOrchestrator {
       mockFailure,
     } = options;
 
+    if (!organizationId) {
+      return {
+        success: false,
+        status: 'FAILED',
+        userFacingMessage: 'Organization context is required for creative generation.',
+        errorDetails: { errorCode: 'UNAUTHENTICATED_TENANT', stage: 'TENANT_CHECK' },
+      };
+    }
+
+    // ── STAGE 0: TENANT CREDIT VERIFICATION & DEDUCTION ─────────────────────
+    const creditCost = type === 'VIDEO_REEL' ? CREDIT_COSTS.VIDEO_REEL : CREDIT_COSTS.POSTER_IMAGE;
+    try {
+      TenantCreditsService.deductCredits(
+        organizationId,
+        creditCost,
+        `Generate ${type === 'VIDEO_REEL' ? 'Video Reel' : 'Poster Image'}: ${prompt.substring(0, 30)}...`
+      );
+    } catch (creditErr: any) {
+      return {
+        success: false,
+        status: 'FAILED',
+        userFacingMessage: creditErr.message || 'Insufficient credits to generate this creative.',
+        errorDetails: { errorCode: 'INSUFFICIENT_CREDITS', stage: 'CREDIT_CHECK', details: creditErr.message },
+      };
+    }
+
     // ── STAGE 1: PROMPT VALIDATION ──────────────────────────────────────────
     if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
+      TenantCreditsService.addCredits(organizationId, creditCost, 'Refund for invalid prompt');
       return {
         success: false,
         status: 'FAILED',
@@ -83,6 +111,7 @@ export class CreativeOrchestrator {
 
     // ── NEGATIVE TEST SIMULATION HOOKS ──────────────────────────────────────
     if (mockFailure === 'JSON_ERROR_PAYLOAD') {
+      TenantCreditsService.addCredits(organizationId, creditCost, 'Refund for provider simulation failure');
       return {
         success: false,
         status: 'FAILED',
@@ -91,6 +120,7 @@ export class CreativeOrchestrator {
       };
     }
     if (mockFailure === 'EMPTY_BODY') {
+      TenantCreditsService.addCredits(organizationId, creditCost, 'Refund for empty response');
       return {
         success: false,
         status: 'FAILED',
@@ -145,6 +175,7 @@ export class CreativeOrchestrator {
     }
 
     if (!successfulResult) {
+      TenantCreditsService.addCredits(organizationId, creditCost, 'Refund for exhausted provider failover');
       const userMessage =
         type === 'POSTER_IMAGE'
           ? "I couldn't complete the creative this time. I haven't marked anything as generated. [Retry] [Try Another Format]"
