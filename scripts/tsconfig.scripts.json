@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+    "strict": false,
+    "baseUrl": "..",
+    "paths": {
+      "@ralion/ai": ["packages/ai/src/index.ts"],
+      "@ralion/integrations": ["packages/integrations/src/index.ts"],
+      "@ralion/core": ["packages/core/src/index.ts"],
+      "@ralion/database": ["packages/database/src/index.ts"],
+      "@ralion/auth": ["packages/auth/src/index.ts"],
+      "@ralion/ui": ["packages/ui/src/index.ts"],
+      "@ralion/modules": ["packages/modules/src/index.ts"],
+      "@/*": ["apps/ralion/src/*"]
+    }
+  }
+}

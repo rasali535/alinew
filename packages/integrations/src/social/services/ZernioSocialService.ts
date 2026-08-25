@@ -411,6 +411,20 @@ export class ZernioSocialService {
     publishedAt: string;
     error?: string;
   }> {
+    const isMasterOrg = !params.organizationId || params.organizationId === 'ras-ali-labs' || params.organizationId === 'default-org';
+    
+    // For non-master tenants, verify they are not hijacking the master profile/account
+    if (!isMasterOrg) {
+      // Non-master tenants must provide their own verified profile or fail with unauthorized error
+      return {
+        success: false,
+        platform: 'facebook',
+        status: 'FAILED',
+        publishedAt: new Date().toISOString(),
+        error: `[ZernioSocialService] Access denied: Organization '${params.organizationId}' is not authorized to publish via master profile. Tenant-specific Zernio profile binding required.`,
+      };
+    }
+
     const verifiedAccountId = '6a82df7277555aae018b92b4';
     const verifiedPageId = params.pageId || '477334159265235';
     const profileId = '6a82deac1a69158ef81cb2cd';

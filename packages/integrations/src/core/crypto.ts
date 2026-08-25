@@ -100,12 +100,34 @@ export function decryptToken(encryptedEnvelope: string): string {
 export function generateOAuthState(workspaceId: string, provider: string): string {
   const nonce = crypto.randomBytes(16).toString('hex');
   const payload = JSON.stringify({ workspaceId, provider, nonce, ts: Date.now() });
-  return Buffer.from(payload).toString('base64url');
+  const payloadBase64 = Buffer.from(payload).toString('base64url');
+  const key = getDerivedKey();
+  const signature = crypto.createHmac('sha256', key).update(payloadBase64).digest('base64url');
+  return `${payloadBase64}.${signature}`;
 }
 
 export function verifyOAuthState(stateToken: string): { workspaceId: string; provider: string; valid: boolean } {
   try {
-    const decoded = Buffer.from(stateToken, 'base64url').toString('utf-8');
+    if (!stateToken || typeof stateToken !== 'string') {
+      return { workspaceId: '', provider: '', valid: false };
+    }
+
+    const parts = stateToken.split('.');
+    if (parts.length !== 2) {
+      return { workspaceId: '', provider: '', valid: false };
+    }
+
+    const [payloadBase64, signature] = parts;
+    const key = getDerivedKey();
+    const expectedSignature = crypto.createHmac('sha256', key).update(payloadBase64).digest('base64url');
+
+    const sigBuf = Buffer.from(signature);
+    const expBuf = Buffer.from(expectedSignature);
+    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+      return { workspaceId: '', provider: '', valid: false };
+    }
+
+    const decoded = Buffer.from(payloadBase64, 'base64url').toString('utf-8');
     const parsed = JSON.parse(decoded);
     // Enforce 15-minute maximum lifetime on OAuth CSRF state tokens
     const isNotExpired = Date.now() - (parsed.ts || 0) < 15 * 60 * 1000;

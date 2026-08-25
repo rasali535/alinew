@@ -13,13 +13,23 @@ export async function GET(
   { params }: { params: Promise<{ assetId: string }> }
 ) {
   const { assetId } = await params;
-  const asset = CreativeAssetService.getAsset(assetId);
+  const { searchParams } = new URL(request.url);
+  const requestingOrgId = searchParams.get('organizationId') || request.headers.get('x-organization-id') || undefined;
 
-  if (!asset) {
+  const rawAsset = CreativeAssetService.getAsset(assetId);
+  if (!rawAsset) {
     return corsJsonResponse({ success: false, error: 'Asset not found' }, { status: 404 }, request);
   }
 
-  return corsJsonResponse({ success: true, asset }, undefined, request);
+  if (requestingOrgId && rawAsset.organizationId !== requestingOrgId) {
+    return corsJsonResponse(
+      { success: false, error: 'Access denied: Cross-tenant asset access prohibited' },
+      { status: 403 },
+      request
+    );
+  }
+
+  return corsJsonResponse({ success: true, asset: rawAsset }, undefined, request);
 }
 
 export async function DELETE(
@@ -27,10 +37,25 @@ export async function DELETE(
   { params }: { params: Promise<{ assetId: string }> }
 ) {
   const { assetId } = await params;
-  const deleted = CreativeAssetService.deleteAsset(assetId);
+  const { searchParams } = new URL(request.url);
+  const requestingOrgId = searchParams.get('organizationId') || request.headers.get('x-organization-id') || undefined;
 
-  if (!deleted) {
+  const rawAsset = CreativeAssetService.getAsset(assetId);
+  if (!rawAsset) {
     return corsJsonResponse({ success: false, error: 'Asset not found' }, { status: 404 }, request);
+  }
+
+  if (requestingOrgId && rawAsset.organizationId !== requestingOrgId) {
+    return corsJsonResponse(
+      { success: false, error: 'Access denied: Cross-tenant asset deletion prohibited' },
+      { status: 403 },
+      request
+    );
+  }
+
+  const deleted = CreativeAssetService.deleteAsset(assetId, requestingOrgId);
+  if (!deleted) {
+    return corsJsonResponse({ success: false, error: 'Failed to delete asset' }, { status: 400 }, request);
   }
 
   return corsJsonResponse({ success: true, message: 'Asset deleted successfully' }, undefined, request);

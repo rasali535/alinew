@@ -13,9 +13,7 @@ const PROVIDERS = [
   'hubspot', 'salesforce'
 ];
 
-export async function generateStaticParams() {
-  return PROVIDERS.map(provider => ({ provider }));
-}
+export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: NextRequest,

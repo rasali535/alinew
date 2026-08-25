@@ -84,11 +84,17 @@ export async function POST(request: NextRequest) {
       }, { status: httpStatus }, request);
     }
 
+    const assetPayload = {
+      id: result.receipt.assetId,
+      ...result.receipt,
+      organizationId,
+    };
+
     return corsJsonResponse({
       success: true,
       status: 'COMPLETED',
       userFacingMessage: result.userFacingMessage,
-      asset: result.receipt,
+      asset: assetPayload,
       receipt: result.receipt,
     }, undefined, request);
 

@@ -151,6 +151,16 @@ export class SocialPublishingService {
       console.warn('[SocialPublishing] Connection fetch notice:', dbErr.message);
     }
 
+    // 4. Validate explicit socialConnectionId if provided
+    if (params.socialConnectionId) {
+      const explicitConn = (connections || []).find((c) => c.id === params.socialConnectionId);
+      if (!explicitConn) {
+        const connSecurityError = new Error(`[SocialPublishing] Access denied: Connection ${params.socialConnectionId} does not belong to this workspace/user.`);
+        (connSecurityError as any).statusCode = 403;
+        throw connSecurityError;
+      }
+    }
+
     const connMap = new Map<SocialPlatformType, any>();
     for (const c of connections || []) {
       connMap.set(c.provider as SocialPlatformType, c);
@@ -172,6 +182,26 @@ export class SocialPublishingService {
         };
         errors.push(`${platform}: No active connection`);
         return;
+      }
+
+      // Verify page ownership if explicit pageId is supplied
+      if (params.pageId) {
+        const allowedPageIds = [
+          conn.provider_account_id,
+          conn.page_id,
+          conn.metadata?.pageId,
+        ].filter(Boolean);
+
+        if (allowedPageIds.length > 0 && !allowedPageIds.includes(params.pageId)) {
+          platformResults[platform] = {
+            success: false,
+            error: `Access denied: Page ${params.pageId} is not authorized for this connection.`,
+            platform,
+            publishedAt: new Date().toISOString(),
+          };
+          errors.push(`${platform}: Unauthorized page ID`);
+          return;
+        }
       }
 
       const infraProvider = (conn.infrastructure_provider || 'native') as InfrastructureProviderType;

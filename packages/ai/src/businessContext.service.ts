@@ -97,12 +97,41 @@ export interface BusinessContext {
   credits: MariCreditsUsage;
 }
 
+export interface TenantProfileOverride {
+  companyName?: string;
+  industry?: string;
+  targetMarket?: string;
+  valueProposition?: string;
+  productsAndServices?: Array<{ name: string; category: string; description?: string }>;
+  tagline?: string;
+  websiteUrl?: string;
+  brandVoice?: string;
+  strategicGoals?: string[];
+}
+
+const tenantProfileRegistry = new Map<string, TenantProfileOverride>();
+
 // In-memory cache for organization business contexts
 const contextCache: Record<string, { context: BusinessContext; cachedAt: number; version: number }> = {};
 const CACHE_TTL_MS = 60 * 1000; // 1 minute active cache
 
 export class BusinessContextService {
   private static versionCounter = 1;
+
+  /**
+   * Registers or updates a tenant's business profile in the tenant profile registry.
+   */
+  static registerTenantProfile(orgId: string, profile: TenantProfileOverride) {
+    tenantProfileRegistry.set(orgId, profile);
+    delete contextCache[orgId];
+  }
+
+  /**
+   * Retrieves the registered profile for a tenant.
+   */
+  static getTenantProfile(orgId: string): TenantProfileOverride | undefined {
+    return tenantProfileRegistry.get(orgId);
+  }
 
   /**
    * Assembles the complete 3-layer Business Context for an organization.
@@ -137,13 +166,16 @@ export class BusinessContextService {
     const timestamp = new Date().toISOString();
     const isRasAli = orgId === 'ras-ali-labs' || orgId === 'org-default';
     const isTest = Boolean(options?.isTestExecution || orgId.startsWith('test-') || orgId.includes('test'));
+    const registeredProfile = tenantProfileRegistry.get(orgId);
 
     // Resolve Organization Name
-    let orgName = 'Ralion Enterprise';
-    if (isRasAli) {
-      orgName = 'Ras Ali Labs';
-    } else if (isTest) {
-      orgName = 'Test Organization';
+    let orgName = registeredProfile?.companyName || 'Ralion Enterprise';
+    if (!registeredProfile?.companyName) {
+      if (isRasAli) {
+        orgName = 'Ras Ali Labs';
+      } else if (isTest) {
+        orgName = 'Test Organization';
+      }
     }
 
     // 1. Layer 1: Business Knowledge & Ingested Website
@@ -165,7 +197,7 @@ export class BusinessContextService {
         lastVerifiedAt: timestamp,
       },
       websiteUrl: {
-        value: websiteKnowledge?.websiteUrl || (isRasAli ? 'https://www.rasalilabs.com' : 'Not configured'),
+        value: registeredProfile?.websiteUrl || websiteKnowledge?.websiteUrl || (isRasAli ? 'https://www.rasalilabs.com' : 'Not configured'),
         provenance: websiteKnowledge ? 'VERIFIED' : 'USER_PROVIDED',
         source: 'Verified Domain Registry',
         confidence: websiteKnowledge ? 1.0 : 0.6,
@@ -179,50 +211,50 @@ export class BusinessContextService {
         lastVerifiedAt: websiteKnowledge?.lastSuccessfulSync || timestamp,
       },
       tagline: {
-        value: isRasAli 
+        value: registeredProfile?.tagline || (isRasAli 
           ? 'Empowering African and Global Enterprises to Prosper Through Sovereign Intelligent OS'
-          : 'Empowered to Prosper',
+          : 'Empowered to Prosper'),
         provenance: 'USER_PROVIDED',
         source: 'Brand Settings',
         confidence: 0.98,
         lastVerifiedAt: timestamp,
       },
       industry: {
-        value: isRasAli 
+        value: registeredProfile?.industry || (isRasAli 
           ? 'Enterprise Software, B2B SaaS & Industrial Intelligence'
-          : 'Business & Commercial Services',
+          : 'Business & Commercial Services'),
         provenance: 'VERIFIED',
         source: 'Organization Registration',
         confidence: 1.0,
         lastVerifiedAt: timestamp,
       },
       targetMarket: {
-        value: isRasAli
+        value: registeredProfile?.targetMarket || (isRasAli
           ? 'SADC B2B Enterprises, Healthcare, Logistics, Funeral Services & Public Sector'
-          : 'Regional Commercial Enterprises & Clients',
+          : 'Regional Commercial Enterprises & Clients'),
         provenance: 'USER_PROVIDED',
         source: 'Market Strategy Plan',
         confidence: 0.95,
         lastVerifiedAt: timestamp,
       },
       brandVoice: {
-        value: 'Professional, Authoritative, Innovative, African Excellence',
+        value: registeredProfile?.brandVoice || 'Professional, Authoritative, Innovative, African Excellence',
         provenance: 'USER_PROVIDED',
         source: 'Brand Guidelines',
         confidence: 0.96,
         lastVerifiedAt: timestamp,
       },
       valueProposition: {
-        value: isRasAli
+        value: registeredProfile?.valueProposition || (isRasAli
           ? 'Sovereign enterprise software with native offline resilience, RBAC security, zero-data-loss guarantees, and African commercial workflow alignment.'
-          : 'Streamlined commercial execution and automated business workflows powered by Ralion OS.',
+          : 'Streamlined commercial execution and automated business workflows powered by Ralion OS.'),
         provenance: 'VERIFIED',
         source: 'Value Proposition Ledger',
         confidence: 0.97,
         lastVerifiedAt: timestamp,
       },
       productsAndServices: {
-        value: isRasAli ? [
+        value: registeredProfile?.productsAndServices || (isRasAli ? [
           { name: 'Ralion OS Core (CRM, Documents, Tasks)', category: 'Core Operating System' },
           { name: 'Mari AI Command Center & Growth Partner', category: 'Artificial Intelligence' },
           { name: 'Ralion Growth Studio', category: 'Social Media & Marketing' },
@@ -230,21 +262,21 @@ export class BusinessContextService {
         ] : [
           { name: 'Ralion OS Core Suite', category: 'Enterprise Software' },
           { name: 'Mari AI Assistant', category: 'Artificial Intelligence' },
-        ],
+        ]),
         provenance: 'VERIFIED',
         source: 'Product Catalog',
         confidence: 1.0,
         lastVerifiedAt: timestamp,
       },
       strategicGoals: {
-        value: isRasAli ? [
+        value: registeredProfile?.strategicGoals || (isRasAli ? [
           'Expand SADC B2B enterprise customer base',
           'Accelerate short-form video engagement on Facebook and LinkedIn',
           'Maintain 99.8%+ SLA uptime and zero-data-loss integrity',
         ] : [
           'Grow customer revenue and active client pipeline',
           'Build strong digital audience engagement',
-        ],
+        ]),
         provenance: 'USER_PROVIDED',
         source: 'Executive Strategy',
         confidence: 0.94,

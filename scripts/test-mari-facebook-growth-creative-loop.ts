@@ -5,7 +5,7 @@ import {
   validateImageBuffer,
   validateVideoBuffer,
   MariLearningLoopRecord,
-} from '../packages/ai/src';
+} from '../packages/ai/src/index';
 
 async function runFinalClosedLoopHardeningTest() {
   console.log('\n================================================================');

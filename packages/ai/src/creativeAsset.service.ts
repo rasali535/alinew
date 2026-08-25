@@ -181,11 +181,17 @@ async function getUploadDir(): Promise<string> {
   if (!node) return '';
 
   const cwd = process.cwd();
-  const candidateDirs = [
-    node.path.join(cwd, 'apps', 'ralion', 'public', 'uploads', 'creatives'),
-    node.path.join(cwd, 'public', 'uploads', 'creatives'),
-    node.path.join(cwd, 'uploads', 'creatives'),
-  ];
+  const hasLocalPublic = node.fs.existsSync(node.path.join(cwd, 'public'));
+  const candidateDirs = hasLocalPublic
+    ? [
+        node.path.join(cwd, 'public', 'uploads', 'creatives'),
+        node.path.join(cwd, 'uploads', 'creatives'),
+      ]
+    : [
+        node.path.join(cwd, 'apps', 'ralion', 'public', 'uploads', 'creatives'),
+        node.path.join(cwd, 'public', 'uploads', 'creatives'),
+        node.path.join(cwd, 'uploads', 'creatives'),
+      ];
 
   for (const dir of candidateDirs) {
     try {
@@ -262,6 +268,13 @@ export class CreativeAssetService {
       metadata: params.metadata || {},
     };
 
+    if (node && filePath) {
+      try {
+        const metaPath = filePath.replace(/\.[^.]+$/, '.meta.json');
+        node.fs.writeFileSync(metaPath, JSON.stringify(asset, null, 2));
+      } catch {}
+    }
+
     assetRegistry.set(id, asset);
     return asset;
   }
@@ -320,14 +333,35 @@ export class CreativeAssetService {
   }
 
   /**
-   * Get an asset by ID.
+   * Get an asset by ID with optional tenant isolation check.
    */
-  static getAsset(id: string): CreativeAsset | null {
-    return assetRegistry.get(id) || null;
+  static getAsset(id: string, requestingOrgId?: string): CreativeAsset | null {
+    let asset = assetRegistry.get(id) || null;
+    if (!asset && typeof window === 'undefined') {
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const rootUpload = path.join(process.cwd(), 'apps', 'ralion', 'public', 'uploads', 'creatives');
+        const directUpload = path.join(process.cwd(), 'public', 'uploads', 'creatives');
+        const targetDir = fs.existsSync(rootUpload) ? rootUpload : (fs.existsSync(directUpload) ? directUpload : null);
+        if (targetDir) {
+          const metaPath = path.join(targetDir, `${id}.meta.json`);
+          if (fs.existsSync(metaPath)) {
+            asset = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+            if (asset) assetRegistry.set(id, asset);
+          }
+        }
+      } catch {}
+    }
+    if (!asset) return null;
+    if (requestingOrgId && requestingOrgId !== 'all' && asset.organizationId !== requestingOrgId) {
+      return null; // Deny cross-tenant asset retrieval
+    }
+    return asset;
   }
 
   /**
-   * List all assets for an organization.
+   * List all assets strictly for an organization.
    */
   static listAssets(organizationId?: string): CreativeAsset[] {
     if (isNodeRuntime()) {
@@ -335,11 +369,17 @@ export class CreativeAssetService {
         const node = getNodeFs();
         if (node) {
           const cwd = process.cwd();
-          const candidateDirs = [
-            node.path.join(cwd, 'apps', 'ralion', 'public', 'uploads', 'creatives'),
-            node.path.join(cwd, 'public', 'uploads', 'creatives'),
-            node.path.join(cwd, 'uploads', 'creatives'),
-          ];
+          const hasLocalPublic = node.fs.existsSync(node.path.join(cwd, 'public'));
+          const candidateDirs = hasLocalPublic
+            ? [
+                node.path.join(cwd, 'public', 'uploads', 'creatives'),
+                node.path.join(cwd, 'uploads', 'creatives'),
+              ]
+            : [
+                node.path.join(cwd, 'apps', 'ralion', 'public', 'uploads', 'creatives'),
+                node.path.join(cwd, 'public', 'uploads', 'creatives'),
+                node.path.join(cwd, 'uploads', 'creatives'),
+              ];
           for (const dir of candidateDirs) {
             if (node.fs.existsSync(dir)) {
               const files = node.fs.readdirSync(dir);
@@ -351,7 +391,7 @@ export class CreativeAssetService {
                   const publicUrl = `/ralion/uploads/creatives/${file}`;
                   assetRegistry.set(id, {
                     id,
-                    organizationId: 'default-org',
+                    organizationId: 'ras-ali-labs',
                     type: isVid ? 'VIDEO_REEL' : 'POSTER_IMAGE',
                     provider: isVid ? 'CogVideoX' : 'FLUX.1',
                     status: 'COMPLETED',
@@ -374,15 +414,19 @@ export class CreativeAssetService {
 
     const all = Array.from(assetRegistry.values());
     if (!organizationId || organizationId === 'all') return all.reverse();
-    return all.filter(a => a.organizationId === organizationId || a.organizationId === 'default-org').reverse();
+    return all.filter(a => a.organizationId === organizationId).reverse();
   }
 
   /**
-   * Delete an asset by ID.
+   * Delete an asset by ID with tenant isolation verification.
    */
-  static deleteAsset(id: string): boolean {
+  static deleteAsset(id: string, requestingOrgId?: string): boolean {
     const existing = assetRegistry.get(id);
     if (!existing) return false;
+
+    if (requestingOrgId && requestingOrgId !== 'all' && existing.organizationId !== requestingOrgId) {
+      return false; // Deny cross-tenant asset deletion
+    }
 
     if (existing.storagePath && isNodeRuntime()) {
       try {
