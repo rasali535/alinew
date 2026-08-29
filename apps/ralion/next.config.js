@@ -48,6 +48,71 @@ const nextConfig = {
     unoptimized: true,
   },
   reactStrictMode: true,
+  async redirects() {
+    if (isStandalone) return [];
+    return [
+      {
+        source: '/',
+        destination: '/ralion/dashboard',
+        permanent: false,
+        basePath: false,
+      },
+      {
+        source: '/login',
+        destination: '/ralion/login',
+        permanent: false,
+        basePath: false,
+      },
+      {
+        source: '/dashboard',
+        destination: '/ralion/dashboard',
+        permanent: false,
+        basePath: false,
+      },
+      {
+        source: '/mari-ai',
+        destination: '/ralion/mari-ai',
+        permanent: false,
+        basePath: false,
+      },
+      {
+        source: '/growth',
+        destination: '/ralion/growth',
+        permanent: false,
+        basePath: false,
+      },
+      {
+        source: '/billing',
+        destination: '/ralion/billing',
+        permanent: false,
+        basePath: false,
+      },
+      {
+        source: '/crm',
+        destination: '/ralion/crm',
+        permanent: false,
+        basePath: false,
+      },
+      {
+        source: '/settings',
+        destination: '/ralion/settings',
+        permanent: false,
+        basePath: false,
+      },
+      {
+        source: '/onboarding',
+        destination: '/ralion/onboarding',
+        permanent: false,
+        basePath: false,
+      },
+      {
+        source: '/_next/:path*',
+        destination: '/ralion/_next/:path*',
+        permanent: false,
+        basePath: false,
+      },
+    ];
+  },
   ...(isStandalone
     ? {
         async headers() {

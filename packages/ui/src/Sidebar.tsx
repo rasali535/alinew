@@ -228,17 +228,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Exit / Return Portal Link */}
       {!isCollapsed && (
         <div className="px-3 pt-2.5">
-          <a
-            href={platformUrl}
-            title="Return to Ras Ali Labs main portal"
-            className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-zinc-900/40 border border-zinc-800/60 text-[11px] font-medium text-zinc-400 hover:text-zinc-200 hover:border-zinc-700 hover:bg-zinc-900 transition-all group"
+          <button
+            onClick={() => { window.location.href = platformUrl || '/'; }}
+            title="Exit Ralion OS"
+            className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-zinc-900/40 border border-zinc-800/60 text-[11px] font-medium text-zinc-400 hover:text-zinc-200 hover:border-zinc-700 hover:bg-zinc-900 transition-all group cursor-pointer"
           >
             <div className="flex items-center gap-2">
               <ArrowLeft className="w-3 h-3 text-zinc-400 group-hover:-translate-x-0.5 transition-transform" />
-              <span>Ras Ali Labs Portal</span>
+              <span>Exit Platform</span>
             </div>
             <span className="text-[9px] text-zinc-500 font-mono">Exit</span>
-          </a>
+          </button>
         </div>
       )}
 

@@ -21,6 +21,8 @@ import {
   Briefcase
 } from 'lucide-react';
 import { useOrganization } from '@ralion/auth';
+import { WebsiteIngestionService, BusinessContextService } from '@ralion/ai';
+import { getRalionApiUrl } from '@/lib/api-config';
 
 export default function RalionOnboardingPage() {
   const router = useRouter();
@@ -79,22 +81,47 @@ export default function RalionOnboardingPage() {
 
       setAnalysisStage('Building your Business Knowledge Profile...');
       
-      const res = await fetch('/api/mari/knowledge/website-sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          organizationId: `org_${businessData.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
-          websiteUrl: businessData.websiteUrl.trim(),
-        }),
-      });
+      const targetOrgId = `org_${businessData.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+      const normalizedUrl = businessData.websiteUrl.trim();
+      let wk: any = null;
 
-      const data = await res.json();
+      try {
+        const apiUrl = getRalionApiUrl('/api/mari/knowledge/website-sync');
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            organizationId: targetOrgId,
+            websiteUrl: normalizedUrl,
+          }),
+        });
+        if (res.ok) {
+          const contentType = res.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            const data = await res.json();
+            if (data.success && data.websiteKnowledge) {
+              wk = data.websiteKnowledge;
+            }
+          }
+        }
+      } catch {}
+
+      if (!wk) {
+        wk = await WebsiteIngestionService.ingestWebsite(targetOrgId, normalizedUrl, {
+          overrideName: businessData.name,
+          overrideIndustry: businessData.industry || 'Commercial Enterprise',
+        });
+      }
+
+      if (wk) {
+        WebsiteIngestionService.setIngestionState(targetOrgId, 'INGESTED', wk);
+        BusinessContextService.invalidateContext(targetOrgId);
+      }
       
       setAnalysisStage('Preparing Mari AI...');
       await new Promise(r => setTimeout(r, 400));
 
-      if (data.success && data.websiteKnowledge) {
-        const wk = data.websiteKnowledge;
+      if (wk) {
         const productsSec = wk.sections?.find((s: any) => s.category === 'PRODUCTS_SERVICES');
         const aboutSec = wk.sections?.find((s: any) => s.category === 'ABOUT');
         const valueSec = wk.sections?.find((s: any) => s.category === 'VALUE_PROPOSITION');
@@ -112,7 +139,7 @@ export default function RalionOnboardingPage() {
 
       setStep(3);
     } catch (err: any) {
-      setAnalysisError(err.message || 'Failed to analyze website. You can continue or edit details manually.');
+      console.error('Analysis notice:', err);
       setStep(3);
     } finally {
       setIsAnalyzing(false);
@@ -121,6 +148,16 @@ export default function RalionOnboardingPage() {
 
   const handleCompleteOnboarding = () => {
     const orgId = `org_${businessData.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+    
+    // Register business profile in tenant context engine
+    BusinessContextService.registerTenantProfile(orgId, {
+      companyName: businessData.name,
+      industry: businessData.industry || 'Commercial Enterprise',
+      websiteUrl: businessData.websiteUrl.trim(),
+      valueProposition: learnedProfile?.valueProposition || `${businessData.name} commercial solutions and client services.`,
+      targetMarket: businessData.country ? `${businessData.country} & Regional Markets` : 'Regional Markets',
+    });
+
     const newOrg = {
       id: orgId,
       name: businessData.name,

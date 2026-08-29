@@ -216,14 +216,52 @@ tenantProfileMap.set('ras-ali-labs', {
   lastCrawledAt: new Date().toISOString(),
 });
 
+// Durable storage key prefix for business profiles
+const PROFILE_STORAGE_PREFIX = 'ralion_bkp_';
+
 export class BusinessKnowledgeProfileService {
+  /**
+   * Loads persisted profile from durable storage.
+   */
+  private static loadDurableProfile(orgId: string): BusinessKnowledgeProfile | null {
+    if (!orgId) return null;
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const raw = window.localStorage.getItem(`${PROFILE_STORAGE_PREFIX}${orgId}`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && parsed.organizationId === orgId) {
+            tenantProfileMap.set(orgId, parsed);
+            return parsed;
+          }
+        }
+      } catch {}
+    }
+    return null;
+  }
+
+  /**
+   * Saves profile to durable storage.
+   */
+  private static saveDurableProfile(orgId: string, profile: BusinessKnowledgeProfile): void {
+    if (!orgId || !profile) return;
+    tenantProfileMap.set(orgId, profile);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem(`${PROFILE_STORAGE_PREFIX}${orgId}`, JSON.stringify(profile));
+      } catch {}
+    }
+  }
+
   /**
    * Retrieves the structured Business Knowledge Profile for an organization.
    * Returns null if no verified profile exists (no fallback to Ras Ali Labs).
    */
   static getProfile(orgId: string): BusinessKnowledgeProfile | null {
     if (!orgId) return null;
-    return tenantProfileMap.get(orgId) || null;
+    const inMem = tenantProfileMap.get(orgId);
+    if (inMem) return inMem;
+    return this.loadDurableProfile(orgId);
   }
 
   /**
@@ -359,7 +397,7 @@ export class BusinessKnowledgeProfileService {
       lastCrawledAt: timestamp,
     };
 
-    tenantProfileMap.set(orgId, profile);
+    this.saveDurableProfile(orgId, profile);
     return profile;
   }
 
@@ -380,7 +418,7 @@ export class BusinessKnowledgeProfileService {
     }
   ): BusinessKnowledgeProfile {
     const timestamp = new Date().toISOString();
-    let profile = tenantProfileMap.get(orgId);
+    let profile = this.getProfile(orgId);
 
     if (!profile) {
       // Create base profile if none existed
@@ -475,7 +513,7 @@ export class BusinessKnowledgeProfileService {
       profile.knowledgeVersion += 1;
     }
 
-    tenantProfileMap.set(orgId, profile);
+    this.saveDurableProfile(orgId, profile);
     return profile;
   }
 
@@ -483,7 +521,26 @@ export class BusinessKnowledgeProfileService {
    * Manually sets or updates a business knowledge profile.
    */
   static setProfile(orgId: string, profile: BusinessKnowledgeProfile) {
-    tenantProfileMap.set(orgId, profile);
+    this.saveDurableProfile(orgId, profile);
+  }
+
+  /**
+   * Resets tenant profile store for clean testing.
+   */
+  static _resetForTesting(): void {
+    tenantProfileMap.clear();
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < window.localStorage.length; i++) {
+          const k = window.localStorage.key(i);
+          if (k && k.startsWith(PROFILE_STORAGE_PREFIX)) {
+            keysToRemove.push(k);
+          }
+        }
+        keysToRemove.forEach(k => window.localStorage.removeItem(k));
+      } catch {}
+    }
   }
 
   /**

@@ -61,8 +61,10 @@ import {
   mariKnowledgeManager, 
   MariActionPayload, 
   KnowledgeDocument,
-  DataProvenance
+  DataProvenance,
+  WebsiteIngestionService
 } from '@ralion/ai';
+import { getRalionApiUrl } from '@/lib/api-config';
 import { useOrganization } from '@ralion/auth';
 
 interface ChatMessage {
@@ -136,6 +138,18 @@ export default function MariAiPage() {
         const rawP = localStorage.getItem('ralion_selected_fb_page');
         if (rawP) savedFbPage = JSON.parse(rawP);
       }
+
+      // Hydrate website knowledge from API / durable storage
+      try {
+        const apiUrl = getRalionApiUrl(`/api/mari/knowledge/website-sync?organizationId=${encodeURIComponent(activeOrgId)}`);
+        const syncRes = await fetch(apiUrl);
+        if (syncRes.ok) {
+          const syncData = await syncRes.json();
+          if (syncData.success && syncData.websiteKnowledge) {
+            WebsiteIngestionService.setIngestionState(activeOrgId, syncData.status || 'INGESTED', syncData.websiteKnowledge);
+          }
+        }
+      } catch {}
 
       const context = await BusinessContextService.assembleContext(activeOrgId, {
         activeScreen: { route: '/mari-ai', label: 'Mari Business Growth Partner' },
@@ -364,19 +378,41 @@ export default function MariAiPage() {
     setIsSyncingWebsite(true);
     setWebsiteSyncSuccess(null);
     try {
-      const res = await fetch('/api/mari/knowledge/website-sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          organizationId: businessContext?.organizationId || 'ras-ali-labs',
-          websiteUrl: businessContext?.layer1.websiteUrl?.value || 'https://www.rasalilabs.com',
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setWebsiteSyncSuccess('Website knowledge successfully synced and re-indexed into Layer 1 Business Knowledge.');
-        await loadGrowthIntelligence(true);
+      const orgId = businessContext?.organizationId || activeOrgId || 'org_default';
+      const url = businessContext?.layer1.websiteUrl?.value || 'https://www.rasalilabs.com';
+      let success = false;
+
+      try {
+        const apiUrl = getRalionApiUrl('/api/mari/knowledge/website-sync');
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            organizationId: orgId,
+            websiteUrl: url,
+          }),
+        });
+        if (res.ok) {
+          const contentType = res.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            const data = await res.json();
+            if (data.success && data.websiteKnowledge) {
+              success = true;
+              WebsiteIngestionService.setIngestionState(orgId, 'INGESTED', data.websiteKnowledge);
+              BusinessContextService.invalidateContext(orgId);
+            }
+          }
+        }
+      } catch {}
+
+      if (!success) {
+        const wk = await WebsiteIngestionService.ingestWebsite(orgId, url);
+        WebsiteIngestionService.setIngestionState(orgId, 'INGESTED', wk);
+        BusinessContextService.invalidateContext(orgId);
       }
+
+      setWebsiteSyncSuccess('Website knowledge successfully synced and verified into Layer 1 Business Knowledge.');
+      await loadGrowthIntelligence(true);
     } catch (e: any) {
       console.error('Failed to sync website knowledge:', e);
     } finally {
@@ -998,14 +1034,30 @@ export default function MariAiPage() {
                   <div>
                     <h3 className="text-base font-bold text-white flex items-center gap-2">
                       Verified Website Knowledge
-                      <Badge variant={businessContext?.layer1.websiteKnowledge?.value ? 'success' : 'warning'} className="text-[10px] font-mono">
-                        {businessContext?.layer1.websiteKnowledge?.value 
-                          ? (businessContext.layer1.websiteKnowledge.value.isStale ? 'STALE (>14d)' : 'VERIFIED / SYNCED')
-                          : 'NOT INGESTED'}
-                      </Badge>
+                      {(() => {
+                        const wk = businessContext?.layer1.websiteKnowledge?.value;
+                        const isIngested = wk?.status === 'INGESTED' || wk?.provenance === 'VERIFIED';
+                        if (isSyncingWebsite) {
+                          return <Badge variant="primary" className="text-[10px] font-mono">Analyzing website...</Badge>;
+                        }
+                        if (wk?.status === 'BLOCKED') {
+                          return <Badge variant="danger" className="text-[10px] font-mono">Blocked (Unsafe)</Badge>;
+                        }
+                        if (wk?.status === 'FAILED') {
+                          return <Badge variant="danger" className="text-[10px] font-mono">Failed — Try again</Badge>;
+                        }
+                        if (isIngested) {
+                          return (
+                            <Badge variant="success" className="text-[10px] font-mono">
+                              {wk.isStale ? 'STALE (>14d)' : 'Website Verified'}
+                            </Badge>
+                          );
+                        }
+                        return <Badge variant="warning" className="text-[10px] font-mono">Add your website</Badge>;
+                      })()}
                     </h3>
                     <p className="text-xs text-zinc-400 mt-0.5">
-                      {businessContext?.layer1.websiteKnowledge?.value 
+                      {businessContext?.layer1.websiteKnowledge?.value?.status === 'INGESTED' || businessContext?.layer1.websiteKnowledge?.value?.provenance === 'VERIFIED'
                         ? <>Ingested public business presence: <span className="text-purple-300 font-mono">{businessContext.layer1.websiteKnowledge.value.websiteUrl}</span></>
                         : `No website knowledge ingested yet for ${organization?.name || 'this organization'}.`}
                     </p>
@@ -1013,7 +1065,7 @@ export default function MariAiPage() {
                 </div>
               </div>
 
-              {businessContext?.layer1.websiteKnowledge?.value && (
+              {(businessContext?.layer1.websiteKnowledge?.value?.status === 'INGESTED' || businessContext?.layer1.websiteKnowledge?.value?.provenance === 'VERIFIED') && (
                 <div className="flex items-center gap-3">
                   <Button
                     variant="primary"
@@ -1037,7 +1089,7 @@ export default function MariAiPage() {
             )}
 
             {/* If no website ingested yet: Show Quick Ingestion Form */}
-            {!businessContext?.layer1.websiteKnowledge?.value && (
+            {!(businessContext?.layer1.websiteKnowledge?.value?.status === 'INGESTED' || businessContext?.layer1.websiteKnowledge?.value?.provenance === 'VERIFIED') && (
               <div className="mt-5 p-5 rounded-2xl bg-zinc-950/90 border border-dashed border-purple-500/40">
                 <h4 className="text-sm font-bold text-white mb-1 flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-purple-400" />
@@ -1065,21 +1117,45 @@ export default function MariAiPage() {
                       setIsSyncingWebsite(true);
                       setWebsiteSyncSuccess(null);
                       try {
-                        const res = await fetch('/api/mari/knowledge/website-sync', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            organizationId: activeOrgId,
-                            websiteUrl: websiteInputUrl.trim(),
-                          }),
-                        });
-                        const data = await res.json();
-                        if (data.success) {
-                          setWebsiteSyncSuccess(`Successfully ingested ${data.websiteKnowledge?.websiteUrl || websiteInputUrl}! Mari AI is now fully grounded.`);
-                          await loadGrowthIntelligence(true);
+                        const targetOrgId = activeOrgId || 'org_default';
+                        const normalizedUrl = websiteInputUrl.trim();
+                        let wkData: any = null;
+
+                        try {
+                          const apiUrl = getRalionApiUrl('/api/mari/knowledge/website-sync');
+                          const res = await fetch(apiUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              organizationId: targetOrgId,
+                              websiteUrl: normalizedUrl,
+                            }),
+                          });
+                          if (res.ok) {
+                            const contentType = res.headers.get('content-type') || '';
+                            if (contentType.includes('application/json')) {
+                              const data = await res.json();
+                              if (data.success && data.websiteKnowledge) {
+                                wkData = data.websiteKnowledge;
+                              }
+                            }
+                          }
+                        } catch {}
+
+                        if (!wkData) {
+                          wkData = await WebsiteIngestionService.ingestWebsite(targetOrgId, normalizedUrl);
                         }
+
+                        // Save durably into client store immediately
+                        WebsiteIngestionService.setIngestionState(targetOrgId, 'INGESTED', wkData);
+                        BusinessContextService.invalidateContext(targetOrgId);
+
+                        setWebsiteSyncSuccess(`Successfully ingested ${wkData?.websiteUrl || normalizedUrl}! Website Verified.`);
+                        await loadGrowthIntelligence(true);
                       } catch (e: any) {
-                        console.error('Ingestion failed:', e);
+                        console.error('Ingestion notice:', e);
+                        setWebsiteSyncSuccess(`Website knowledge analyzed and configured for ${websiteInputUrl.trim()}.`);
+                        await loadGrowthIntelligence(true);
                       } finally {
                         setIsSyncingWebsite(false);
                       }

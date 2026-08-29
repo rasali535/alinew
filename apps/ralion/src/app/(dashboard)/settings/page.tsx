@@ -4,15 +4,23 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, Button, Badge } from '@ralion/ui';
 import { Settings, Building2, Shield, Users, MapPin, Key, Laptop, Check, RefreshCw, HardDrive, BrainCircuit, Globe, BookOpen, CheckCircle2, ShieldCheck, Database, Activity, Sparkles } from 'lucide-react';
 import { REGISTERED_MODULES } from '@ralion/modules';
+import { WebsiteIngestionService } from '@ralion/ai';
+import { getRalionApiUrl } from '@/lib/api-config';
+import { useOrganization } from '@ralion/auth';
 import Link from 'next/link';
 
 export default function SettingsPage() {
+  const { organization } = useOrganization();
+  const activeOrgId = organization?.id || organization?.slug || 'ras-ali-labs';
+  const isRasAli = activeOrgId === 'ras-ali-labs';
+
   const [enabledPlugins, setEnabledPlugins] = useState<string[]>(['health', 'funeral', 'logistics', 'trade']);
   const [activeTab, setActiveTab] = useState<'KNOWLEDGE' | 'PLUGINS' | 'ROLES' | 'BRANCHES' | 'SECURITY'>('KNOWLEDGE');
   const [isDesktopEnv, setIsDesktopEnv] = useState(false);
   const [deviceId, setDeviceId] = useState('RALION-HW-HASH-2026-BW-882109');
   const [isSyncingWebsite, setIsSyncingWebsite] = useState(false);
   const [websiteSyncSuccess, setWebsiteSyncSuccess] = useState<string | null>(null);
+  const [wkKnowledge, setWkKnowledge] = useState<any>(() => WebsiteIngestionService.getWebsiteKnowledge(activeOrgId));
   const [offlineStatus, setOfflineStatus] = useState({
     isOffline: false,
     offlineGraceDaysRemaining: 7,
@@ -20,22 +28,64 @@ export default function SettingsPage() {
     lastSyncTimestamp: 'Just now'
   });
 
+  const loadTenantWk = async () => {
+    try {
+      const apiUrl = getRalionApiUrl(`/api/mari/knowledge/website-sync?organizationId=${encodeURIComponent(activeOrgId)}`);
+      const res = await fetch(apiUrl);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.websiteKnowledge) {
+          WebsiteIngestionService.setIngestionState(activeOrgId, data.status || 'INGESTED', data.websiteKnowledge);
+          setWkKnowledge(data.websiteKnowledge);
+          return;
+        }
+      }
+    } catch {}
+    setWkKnowledge(WebsiteIngestionService.getWebsiteKnowledge(activeOrgId));
+  };
+
+  useEffect(() => {
+    loadTenantWk();
+  }, [activeOrgId]);
+
   const handleSyncWebsite = async () => {
     setIsSyncingWebsite(true);
     setWebsiteSyncSuccess(null);
     try {
-      const res = await fetch('/api/mari/knowledge/website-sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          organizationId: 'ras-ali-labs',
-          websiteUrl: 'https://www.rasalilabs.com',
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setWebsiteSyncSuccess('Website knowledge successfully re-indexed and verified into Layer 1 Business Knowledge.');
+      const orgId = activeOrgId;
+      const url = wkKnowledge?.websiteUrl || (isRasAli ? 'https://www.rasalilabs.com' : 'https://example.com');
+      let success = false;
+
+      try {
+        const apiUrl = getRalionApiUrl('/api/mari/knowledge/website-sync');
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            organizationId: orgId,
+            websiteUrl: url,
+          }),
+        });
+        if (res.ok) {
+          const contentType = res.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            const data = await res.json();
+            if (data.success && data.websiteKnowledge) {
+              success = true;
+              WebsiteIngestionService.setIngestionState(orgId, 'INGESTED', data.websiteKnowledge);
+              setWkKnowledge(data.websiteKnowledge);
+            }
+          }
+        }
+      } catch {}
+
+      if (!success) {
+        const wk = await WebsiteIngestionService.ingestWebsite(orgId, url);
+        WebsiteIngestionService.setIngestionState(orgId, 'INGESTED', wk);
+        setWkKnowledge(wk);
       }
+
+      setWebsiteSyncSuccess('Website knowledge successfully re-indexed and verified into Layer 1 Business Knowledge.');
     } catch (e) {
       console.error(e);
     } finally {
@@ -96,9 +146,15 @@ export default function SettingsPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="text-base font-bold text-white">Website Knowledge Ingestion</h3>
-                    <Badge variant="success">VERIFIED & ACTIVE</Badge>
+                    <Badge variant={wkKnowledge?.status === 'INGESTED' || wkKnowledge?.provenance === 'VERIFIED' ? 'success' : 'warning'}>
+                      {wkKnowledge?.status === 'INGESTED' || wkKnowledge?.provenance === 'VERIFIED'
+                        ? (wkKnowledge.isStale ? 'STALE (>14d)' : 'Website Verified')
+                        : 'Add your website'}
+                    </Badge>
                   </div>
-                  <p className="text-xs text-zinc-400 mt-0.5 font-mono">https://www.rasalilabs.com</p>
+                  <p className="text-xs text-zinc-400 mt-0.5 font-mono">
+                    {wkKnowledge?.websiteUrl || (isRasAli ? 'https://www.rasalilabs.com' : 'No website configured')}
+                  </p>
                 </div>
               </div>
 
@@ -110,7 +166,7 @@ export default function SettingsPage() {
                 className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-md"
               >
                 <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isSyncingWebsite ? 'animate-spin' : ''}`} />
-                {isSyncingWebsite ? 'Syncing Website...' : 'Sync Website Now'}
+                {isSyncingWebsite ? 'Syncing Website...' : (wkKnowledge?.status === 'INGESTED' ? 'Sync Website Now' : 'Ingest Website')}
               </Button>
             </div>
 
@@ -124,15 +180,21 @@ export default function SettingsPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4 text-xs">
               <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800">
                 <span className="text-[10px] text-zinc-500 uppercase font-mono block">Status</span>
-                <span className="font-bold text-emerald-400">VERIFIED / USER_APPROVED</span>
+                <span className="font-bold text-emerald-400">
+                  {wkKnowledge?.status === 'INGESTED' || wkKnowledge?.provenance === 'VERIFIED' ? 'VERIFIED / INGESTED' : 'NOT_CONFIGURED'}
+                </span>
               </div>
               <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800">
                 <span className="text-[10px] text-zinc-500 uppercase font-mono block">Sections Ingested</span>
-                <span className="font-bold text-white">5 Sections (About, Products, Differentiators, SADC, Contacts)</span>
+                <span className="font-bold text-white">
+                  {wkKnowledge?.sections?.length ? `${wkKnowledge.sections.length} Verified Sections` : '0 Sections'}
+                </span>
               </div>
               <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800">
                 <span className="text-[10px] text-zinc-500 uppercase font-mono block">Sync Health</span>
-                <span className="font-bold text-white">Continuous / No Staleness</span>
+                <span className="font-bold text-white">
+                  {wkKnowledge?.isStale ? 'Needs Refresh (>14d)' : 'Continuous / Verified'}
+                </span>
               </div>
             </div>
           </Card>

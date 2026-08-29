@@ -61,6 +61,7 @@ export default function DashboardLayout({
             currentPath={pathname}
             orgName={organizationName}
             tier={currentUser?.tier || 'COMMUNITY'}
+            platformUrl={process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com'}
             isCollapsed={isSidebarCollapsed}
             onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
             onNavigate={handleNavigate}
@@ -84,6 +85,7 @@ export default function DashboardLayout({
                 currentPath={pathname}
                 orgName={organizationName}
                 tier={currentUser?.tier || 'COMMUNITY'}
+                platformUrl={process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com'}
                 isCollapsed={false}
                 onNavigate={handleNavigate}
                 onOpenMariAI={() => {

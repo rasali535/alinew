@@ -175,9 +175,14 @@ export class BusinessContextService {
       knowledgeProfile = BusinessKnowledgeProfileService.getProfile(orgId);
     } catch {}
 
+    // 1. Layer 1: Business Knowledge & Ingested Website
+    const websiteKnowledge = WebsiteIngestionService.getWebsiteKnowledge(orgId);
+
     const hasVerifiedKnowledge = Boolean(
       registeredProfile?.companyName ||
       knowledgeProfile?.isVerified ||
+      websiteKnowledge?.status === 'INGESTED' ||
+      websiteKnowledge?.provenance === 'VERIFIED' ||
       isRasAli
     );
 
@@ -194,8 +199,6 @@ export class BusinessContextService {
     }
 
     // 1. Layer 1: Business Knowledge & Ingested Website
-    const websiteKnowledge = WebsiteIngestionService.getWebsiteKnowledge(orgId);
-
     const layer1: Layer1BusinessKnowledge = {
       companyName: {
         value: orgName,
