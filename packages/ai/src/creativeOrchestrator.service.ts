@@ -11,8 +11,10 @@ import {
   FluxImageProvider,
   TurboImageProvider,
   ResilientImageProvider,
+  SyntheticStudioImageProvider,
   CogVideoXProvider,
   FallbackVideoProvider,
+  SyntheticMotionVideoProvider,
 } from './creativeProviders';
 import {
   CreativeAssetService,
@@ -40,11 +42,13 @@ export class CreativeOrchestrator {
     new FluxImageProvider(),
     new TurboImageProvider(),
     new ResilientImageProvider(),
+    new SyntheticStudioImageProvider(),
   ];
 
   private static videoProviders: CreativeProvider[] = [
     new CogVideoXProvider(),
     new FallbackVideoProvider(),
+    new SyntheticMotionVideoProvider(),
   ];
 
   private static learningRecords: MariLearningLoopRecord[] = [];

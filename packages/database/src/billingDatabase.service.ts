@@ -50,10 +50,11 @@ export class BillingDatabaseService {
     if (!sub) {
       const now = new Date().toISOString();
       const nextYear = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+      const isEnterpriseDefault = organizationId === 'default-org' || organizationId === 'org-rasalilabs-demo' || organizationId.includes('rasali');
       sub = {
         id: `sub_${organizationId}_default`,
         organizationId,
-        planId: 'COMMUNITY',
+        planId: isEnterpriseDefault ? 'ENTERPRISE' : 'COMMUNITY',
         status: 'ACTIVE',
         billingCycle: 'MONTHLY',
         provider: 'manual',

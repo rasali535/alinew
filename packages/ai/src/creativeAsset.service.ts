@@ -56,9 +56,9 @@ export function validateImageBuffer(buffer: Buffer | ArrayBuffer | Uint8Array): 
   // Check for HTML or JSON string error signatures
   const headerStr = buf.subarray(0, Math.min(256, byteLength)).toString('utf-8').trim();
   if (
-    headerStr.startsWith('<!DOCTYPE') ||
+    headerStr.startsWith('<!DOCTYPE html') ||
     headerStr.startsWith('<html') ||
-    headerStr.startsWith('<svg') === false && headerStr.startsWith('<') ||
+    (!headerStr.startsWith('<svg') && !headerStr.startsWith('<?xml') && headerStr.startsWith('<')) ||
     headerStr.startsWith('{"error"') ||
     headerStr.startsWith('{"status":"error"') ||
     headerStr.startsWith('{"message":')
@@ -68,6 +68,11 @@ export function validateImageBuffer(buffer: Buffer | ArrayBuffer | Uint8Array): 
       byteLength,
       error: 'Provider returned an HTML error document or JSON error payload instead of binary image media.',
     };
+  }
+
+  // SVG: <svg or <?xml
+  if (headerStr.startsWith('<svg') || headerStr.startsWith('<?xml')) {
+    return { valid: true, mimeType: 'image/svg+xml', format: 'svg', byteLength };
   }
 
   // Check magic bytes
@@ -229,7 +234,11 @@ export class CreativeAssetService {
       ? 'mp4'
       : params.mimeType.includes('png')
         ? 'png'
-        : 'jpg';
+        : params.mimeType.includes('svg')
+          ? 'svg'
+          : params.mimeType.includes('webp')
+            ? 'webp'
+            : 'jpg';
     const filename = `${id}.${ext}`;
     
     let filePath = '';
