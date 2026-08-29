@@ -1,6 +1,7 @@
 import { generateHfImage, generateHfVideo } from './aimlClient';
 import type { BusinessContext } from './businessContext.service';
 import { BusinessKnowledgeProfileService } from './businessKnowledgeProfile.service';
+import { WebsiteIngestionService } from './websiteIngestion.service';
 
 export interface MariQueryResponse {
   answer: string;
@@ -242,25 +243,36 @@ function generateLocalStrategicResponse(
   context?: BusinessContext | null
 ): { text: string; modelInfo: SelectedModelInfo } {
   const pLower = prompt.toLowerCase();
-  const orgName = context?.layer1.companyName.value || context?.organizationName || '';
-  const isRasAli = orgName === 'Ras Ali Labs';
+  const orgId = context?.organizationId || '';
+
+  // Hydrate website knowledge and business knowledge profile
+  const wk = context?.layer1?.websiteKnowledge?.value || (orgId ? WebsiteIngestionService.getWebsiteKnowledge(orgId) : null);
+  let profile = orgId ? BusinessKnowledgeProfileService.getProfile(orgId) : null;
+
+  const isWkIngested = Boolean(wk && (wk.status === 'INGESTED' || wk.provenance === 'VERIFIED' || (wk.sections && wk.sections.length > 0)));
+
+  const orgName = context?.layer1?.companyName?.value || profile?.companyName?.value || wk?.title || context?.organizationName || '';
+  const isRasAli = orgName === 'Ras Ali Labs' || orgId === 'ras-ali-labs';
+
   const hasVerifiedKnowledge = Boolean(
-    (context?.layer1.companyName.provenance === 'VERIFIED' && context?.layer1.industry.value !== 'Unspecified') ||
+    isWkIngested ||
+    (profile && profile.isVerified) ||
+    (context?.layer1?.companyName?.provenance === 'VERIFIED') ||
     isRasAli
   );
 
-  const industry = context?.layer1.industry.value || 'Commercial Enterprise';
-  const targetMarket = context?.layer1.targetMarket.value || 'Regional Commercial Market';
-  const valueProp = context?.layer1.valueProposition.value || '';
-  const websiteUrl = context?.layer1.websiteUrl?.value || 'Not configured';
-  const websiteKnowledge = context?.layer1.websiteKnowledge?.value;
+  const industry = profile?.industry?.value || context?.layer1?.industry?.value || (isWkIngested ? 'Commercial Enterprise' : 'Commercial Enterprise');
+  const targetMarket = profile?.targetMarkets?.value?.[0] || context?.layer1?.targetMarket?.value || 'Regional Commercial Market';
+  const valueProp = profile?.valuePropositions?.value?.[0] || context?.layer1?.valueProposition?.value || '';
+  const websiteUrl = wk?.websiteUrl || profile?.websiteUrl?.value || context?.layer1?.websiteUrl?.value || 'Not configured';
+  const websiteKnowledge = wk || context?.layer1?.websiteKnowledge?.value;
 
-  const pipelineVal = context?.layer2.crm.totalPipelineValue.value || 0;
-  const activeClients = context?.layer2.crm.activeCustomersCount.value || 0;
-  const reachGrowth = context?.layer2.social.reachGrowthPct?.value || 0;
-  const followers = context?.layer2.social.followersCount?.value || 0;
-  const pageName = context?.layer2.social.connectedPageName?.value || '';
-  const isSocialConnected = Boolean(context?.layer2.social.isConnected && pageName);
+  const pipelineVal = context?.layer2?.crm?.totalPipelineValue?.value || 0;
+  const activeClients = context?.layer2?.crm?.activeCustomersCount?.value || 0;
+  const reachGrowth = context?.layer2?.social?.reachGrowthPct?.value || 0;
+  const followers = context?.layer2?.social?.followersCount?.value || 0;
+  const pageName = context?.layer2?.social?.connectedPageName?.value || '';
+  const isSocialConnected = Boolean(context?.layer2?.social?.isConnected && pageName);
 
   let responseText = '';
 

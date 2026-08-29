@@ -256,9 +256,18 @@ export default function MariAiPage() {
     setIsProcessing(true);
 
     try {
+      let activeCtx = businessContext;
+      if (!activeCtx?.layer1?.websiteKnowledge?.value) {
+        const wk = WebsiteIngestionService.getWebsiteKnowledge(activeOrgId);
+        if (wk) {
+          activeCtx = await BusinessContextService.assembleContext(activeOrgId, { forceRefresh: true });
+          setBusinessContext(activeCtx);
+        }
+      }
+
       const ragSearch = mariKnowledgeManager.searchKnowledgeBase(queryText);
       const ruleResponse = processMariQuery(queryText);
-      const apiResult = await callMariAiApi(queryText, undefined, businessContext);
+      const apiResult = await callMariAiApi(queryText, undefined, activeCtx || businessContext);
 
       const answerText = apiResult?.text || ruleResponse.answer;
 
