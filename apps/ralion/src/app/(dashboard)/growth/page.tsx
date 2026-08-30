@@ -38,6 +38,22 @@ async function authFetch(pathOrUrl: string, init?: RequestInit): Promise<Respons
   });
 }
 
+function resolveSafeImageUrl(src?: string, fallbackTitle: string = 'Ralion Creative'): string {
+  if (!src || typeof src !== 'string') {
+    return `data:image/svg+xml;utf8,<svg width="800" height="500" xmlns="http://www.w3.org/2000/svg"><rect width="800" height="500" fill="%230f172a"/><text x="50%" y="45%" fill="%2338bdf8" font-size="24" font-weight="bold" font-family="sans-serif" text-anchor="middle">${encodeURIComponent(fallbackTitle)}</text><text x="50%" y="60%" fill="%2394a3b8" font-size="14" font-family="sans-serif" text-anchor="middle">Ralion Growth OS</text></svg>`;
+  }
+  const trimmed = src.trim();
+  if (trimmed.startsWith('data:image') || trimmed.startsWith('blob:')) return trimmed;
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+  if (trimmed.startsWith('/')) return trimmed;
+  if (trimmed.startsWith('asset-') || trimmed.endsWith('.jpg') || trimmed.endsWith('.png') || trimmed.endsWith('.svg') || trimmed.endsWith('.webp')) {
+    return `/uploads/creatives/${trimmed}`;
+  }
+  // If it's pure multi-line text (e.g. Mari response string), synthesize a vector SVG poster so it doesn't 400
+  const safeText = encodeURIComponent(trimmed.substring(0, 45).replace(/[\r\n]+/g, ' '));
+  return `data:image/svg+xml;utf8,<svg width="800" height="500" xmlns="http://www.w3.org/2000/svg"><rect width="800" height="500" fill="%230f172a"/><text x="50%" y="45%" fill="%2338bdf8" font-size="24" font-weight="bold" font-family="sans-serif" text-anchor="middle">${safeText}</text><text x="50%" y="60%" fill="%2394a3b8" font-size="14" font-family="sans-serif" text-anchor="middle">Ralion Growth OS</text></svg>`;
+}
+
 // ── SVG Spline & Sparkline Mathematical Helpers ──────────────────────────────
 function getSplinePath(values: number[], width: number, height: number, padding: number = 20): string {
   if (!values || values.length === 0) return '';
@@ -2945,7 +2961,14 @@ function GrowthPageContent() {
                 <CardContent className="p-4 flex-1 flex flex-col gap-3">
                   {item.type === 'POSTER_IMAGE' && (
                     <div className="relative group rounded-xl overflow-hidden border border-zinc-800 max-h-72 bg-zinc-950 flex items-center justify-center">
-                      <img src={item.output} alt={item.title} className="w-full h-auto object-cover max-h-72 rounded-lg" />
+                      <img
+                        src={resolveSafeImageUrl(item.output, item.title)}
+                        alt={item.title}
+                        className="w-full h-auto object-cover max-h-72 rounded-lg"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src = resolveSafeImageUrl('', item.title);
+                        }}
+                      />
                     </div>
                   )}
 
@@ -4668,7 +4691,14 @@ function GrowthPageContent() {
                   <div key={item.id} className="p-3.5 rounded-2xl bg-zinc-900/80 border border-zinc-800 flex flex-col justify-between gap-3 group hover:border-purple-500/40 transition-all shadow-md">
                     <div className="aspect-video w-full rounded-xl overflow-hidden bg-black/60 relative">
                       {item.type === 'POSTER_IMAGE' ? (
-                        <img src={item.output} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                        <img
+                          src={resolveSafeImageUrl(item.output, item.title)}
+                          alt={item.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src = resolveSafeImageUrl('', item.title);
+                          }}
+                        />
                       ) : (
                         <video src={item.output} className="w-full h-full object-cover" />
                       )}
