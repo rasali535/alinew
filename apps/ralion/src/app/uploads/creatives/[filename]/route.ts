@@ -6,9 +6,10 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { filename: string } }
+  { params }: { params: Promise<{ filename: string }> }
 ) {
-  const filename = params.filename || '';
+  const resolvedParams = await params;
+  const filename = resolvedParams?.filename || '';
   const cwd = process.cwd();
 
   const candidatePaths = [
