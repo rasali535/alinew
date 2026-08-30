@@ -136,9 +136,9 @@ export class FluxImageProvider implements CreativeProvider {
 
     // ── Tier 2: Dedicated High-Resolution FLUX.1 Endpoints ──
     const candidateUrls = [
-      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=flux&nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}&negative=${STRICT_NEGATIVE_PROMPT}`,
-      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=flux-realism&nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}&negative=${STRICT_NEGATIVE_PROMPT}`,
-      `https://image.pollinations.ai/prompt/${encodeURIComponent(clean)}?model=flux&nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}&negative=${STRICT_NEGATIVE_PROMPT}`,
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=flux&width=${dims.width}&height=${dims.height}&seed=${seed}&nologo=true`,
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=flux-realism&width=${dims.width}&height=${dims.height}&seed=${seed}&nologo=true`,
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(clean)}?model=flux&width=${dims.width}&height=${dims.height}&seed=${seed}&nologo=true`,
     ];
 
     let lastError = '';
@@ -197,9 +197,9 @@ export class FluxRealismImageProvider implements CreativeProvider {
     const seed = (req.seed || Math.floor(Math.random() * 1000000)) + 1;
 
     const candidateUrls = [
-      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=flux-realism&nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}&negative=${STRICT_NEGATIVE_PROMPT}`,
-      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=flux-3d&nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}&negative=${STRICT_NEGATIVE_PROMPT}`,
-      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=flux&nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}&negative=${STRICT_NEGATIVE_PROMPT}`,
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=flux-realism&width=${dims.width}&height=${dims.height}&seed=${seed}&nologo=true`,
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=flux-3d&width=${dims.width}&height=${dims.height}&seed=${seed}&nologo=true`,
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=flux&width=${dims.width}&height=${dims.height}&seed=${seed}&nologo=true`,
     ];
 
     let lastError = '';
@@ -258,8 +258,8 @@ export class ResilientImageProvider implements CreativeProvider {
     const seed = req.seed || Math.floor(Math.random() * 1000000);
 
     const candidateUrls = [
-      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=flux-cablyai&seed=${seed}&width=${dims.width}&height=${dims.height}&nologo=true&negative=${STRICT_NEGATIVE_PROMPT}`,
-      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=flux&seed=${seed}&width=${dims.width}&height=${dims.height}&nologo=true&negative=${STRICT_NEGATIVE_PROMPT}`,
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=flux-cablyai&seed=${seed}&width=${dims.width}&height=${dims.height}&nologo=true`,
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=flux&seed=${seed}&width=${dims.width}&height=${dims.height}&nologo=true`,
     ];
 
     let lastError = '';
