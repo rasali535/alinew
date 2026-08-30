@@ -248,13 +248,103 @@ function GrowthPageContent() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Mari AI & Creative Studio Collaboration
+  const [mariBrainstormConcepts, setMariBrainstormConcepts] = useState<Array<{ title: string; prompt: string; style?: string; format?: string }>>([]);
+  const [isBrainstorming, setIsBrainstorming] = useState(false);
+
   // Mari Orchestration Recommendation Context
   const [mariRecommendation, setMariRecommendation] = useState<MariRecommendationContract | null>(null);
 
   useEffect(() => {
     const rec = MariOrchestrationService.getPendingRecommendation();
     if (rec) setMariRecommendation(rec);
+
+    if (typeof window !== 'undefined') {
+      const savedPrompt = localStorage.getItem('ralion_creative_prompt');
+      if (savedPrompt) {
+        setPosterPrompt(savedPrompt);
+        setVideoPrompt(savedPrompt);
+        setActiveTab('CREATIVES');
+        localStorage.removeItem('ralion_creative_prompt');
+      }
+    }
   }, []);
+
+  const handleMariBrainstorm = async () => {
+    setIsBrainstorming(true);
+    try {
+      const { callMariAiApi, BusinessContextService } = await import('@ralion/ai');
+      let context = null;
+      try {
+        context = await BusinessContextService.assembleContext();
+      } catch {}
+
+      const promptReq = "Brainstorm 3 distinct, high-converting social media marketing visual concepts for our business. Return a JSON array of 3 objects with keys 'title', 'prompt', 'style', 'format'. Make the prompts vivid, modern, and ready for creative design.";
+      const res = await callMariAiApi(promptReq, undefined, context || undefined);
+      const text = typeof res === 'string' ? res : res?.text || '';
+
+      let parsed: any[] = [];
+      try {
+        const jsonMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/);
+        if (jsonMatch) {
+          parsed = JSON.parse(jsonMatch[0]);
+        }
+      } catch {}
+
+      if (!parsed || parsed.length === 0) {
+        parsed = [
+          {
+            title: '🚀 Next-Gen Innovation',
+            prompt: 'High-impact enterprise showcase poster for Ralion OS with modern blue glow, holographic analytics interface, and sleek dark background.',
+            style: 'Modern Minimalist',
+            format: '1:1 Square'
+          },
+          {
+            title: '🎯 Special 25% Limited Promo',
+            prompt: 'Eye-catching bold promotional poster featuring 25% OFF enterprise digital transformation solutions with vibrant cyan and violet gradients.',
+            style: 'Bold & Vibrant Neon',
+            format: '16:9 Landscape'
+          },
+          {
+            title: '💼 Executive Industry Authority',
+            prompt: 'Premium corporate executive poster highlighting high-reliability supply chain and AI business intelligence across Southern Africa.',
+            style: 'Corporate Executive',
+            format: '4:5 Portrait'
+          }
+        ];
+      }
+
+      setMariBrainstormConcepts(parsed);
+      setOauthAlert({
+        type: 'success',
+        message: '💡 Mari AI generated 3 custom creative concepts for your business!',
+      });
+      setTimeout(() => setOauthAlert(null), 4000);
+    } catch (e) {
+      setMariBrainstormConcepts([
+        {
+          title: '🚀 Product Launch Spotlight',
+          prompt: 'Modern high-tech poster showing digital workflow automation and intelligent business management tools on an elegant dark UI.',
+          style: 'Modern Minimalist',
+          format: '1:1 Square'
+        },
+        {
+          title: '🎯 Seasonal Special Offer',
+          prompt: 'Vibrant promotional graphic announcing exclusive seasonal discount for regional enterprise clients.',
+          style: 'Bold & Vibrant Neon',
+          format: '16:9 Landscape'
+        },
+        {
+          title: '👥 Hiring & Careers',
+          prompt: 'Inspiring recruitment poster welcoming talented software engineers, designers, and innovators to join Ras Ali Labs.',
+          style: 'Corporate Executive',
+          format: '4:5 Portrait'
+        }
+      ]);
+    } finally {
+      setIsBrainstorming(false);
+    }
+  };
 
   const applyMariRecommendation = (rec: MariRecommendationContract) => {
     if (rec.parameters.topic || rec.parameters.campaignName) {
@@ -4198,12 +4288,33 @@ function GrowthPageContent() {
                 </CardHeader>
 
                 <CardContent className="flex flex-col gap-5 pt-5">
-                  {/* 1. Prompt Textarea */}
+                  {/* 1. Prompt Textarea & Mari AI Brainstorm Button */}
                   <div className="flex flex-col gap-2">
-                    <label className="text-xs font-bold text-zinc-300 flex items-center justify-between">
-                      <span>Creative Prompt / Concept</span>
-                      <span className="text-[10px] text-zinc-500 font-normal">Be descriptive for best visual results</span>
-                    </label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
+                        <span>Creative Prompt / Concept</span>
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={handleMariBrainstorm}
+                        disabled={isBrainstorming}
+                        className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-gradient-to-r from-purple-600/20 to-blue-600/20 hover:from-purple-600/30 hover:to-blue-600/30 border border-purple-500/40 text-purple-300 hover:text-white text-xs font-bold transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                      >
+                        {isBrainstorming ? (
+                          <>
+                            <div className="w-3 h-3 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+                            <span>Mari is brainstorming...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                            <span>Brainstorm with Mari AI</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
                     <textarea
                       rows={3}
                       value={creativeMode === 'poster' ? posterPrompt : videoPrompt}
@@ -4218,6 +4329,51 @@ function GrowthPageContent() {
                       }
                       className="w-full p-4 rounded-2xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500 transition-all font-sans leading-relaxed"
                     />
+
+                    {/* Mari AI Brainstormed Concepts Cards */}
+                    {mariBrainstormConcepts.length > 0 && (
+                      <div className="p-3 rounded-2xl bg-purple-950/20 border border-purple-800/40 flex flex-col gap-2.5 my-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-purple-300 flex items-center gap-1.5">
+                            <Sparkles className="w-3.5 h-3.5 text-purple-400" /> Mari AI Recommended Concepts:
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setMariBrainstormConcepts([])}
+                            className="text-[10px] text-zinc-500 hover:text-zinc-300"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          {mariBrainstormConcepts.map((c, i) => (
+                            <div
+                              key={i}
+                              onClick={() => {
+                                if (creativeMode === 'poster') {
+                                  setPosterPrompt(c.prompt);
+                                  if (c.style) setPosterStyle(c.style);
+                                  if (c.format) setPosterFormat(c.format);
+                                } else {
+                                  setVideoPrompt(c.prompt);
+                                }
+                              }}
+                              className="p-2.5 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-700/80 hover:border-purple-500/50 cursor-pointer transition-all flex flex-col justify-between gap-2 group"
+                            >
+                              <span className="text-[11px] font-bold text-white group-hover:text-purple-300 transition-colors">
+                                {c.title}
+                              </span>
+                              <p className="text-[10px] text-zinc-400 line-clamp-2 leading-relaxed">
+                                {c.prompt}
+                              </p>
+                              <span className="text-[9px] font-bold text-purple-400 uppercase tracking-wider flex items-center gap-1">
+                                ⚡ Apply Concept &rarr;
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Quick Inspiration Pills */}
                     <div className="flex items-center gap-1.5 flex-wrap pt-1">

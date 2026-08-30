@@ -151,6 +151,28 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
               })()}
             </div>
 
+            {/* Mari Creative Collaboration Action */}
+            {msg.sender === 'MARI' && (
+              <div className="flex flex-wrap gap-1.5 mt-1 max-w-[85%]">
+                <button
+                  onClick={() => {
+                    if (typeof window !== 'undefined') {
+                      const cleanPrompt = msg.text.replace(/!\[.*?\]\(.*?\)/g, '').substring(0, 300).trim();
+                      localStorage.setItem('ralion_creative_prompt', cleanPrompt);
+                    }
+                    if (onNavigate) {
+                      onNavigate('/growth?tab=creatives');
+                    }
+                    onClose();
+                  }}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-950/40 border border-purple-500/40 text-[11px] font-bold text-purple-300 hover:bg-purple-600/20 hover:border-purple-400 transition-all shadow-sm"
+                >
+                  <Sparkles className="w-3 h-3 text-purple-400" />
+                  Send Prompt to Creative Studio
+                </button>
+              </div>
+            )}
+
             {/* Suggested Actions */}
             {msg.actions && msg.actions.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-1 max-w-[85%]">
@@ -176,20 +198,41 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
         {isProcessing && (
           <div className="flex items-center gap-2 text-xs text-zinc-400 italic">
             <span className="w-2 h-2 rounded-full bg-blue-500 animate-ping" />
-            Mari AI is calculating insights...
+            Mari AI is calculating insights &amp; creative concepts...
           </div>
         )}
       </div>
 
-      {/* Input Form */}
-      <div className="p-4 border-t border-zinc-800/80 bg-zinc-900/40">
+      {/* Input Form & Quick Collaboration Pills */}
+      <div className="p-4 border-t border-zinc-800/80 bg-zinc-900/40 flex flex-col gap-2.5">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+          <button
+            type="button"
+            onClick={() => {
+              setInputQuery('Brainstorm 3 viral social media marketing poster concepts for our business');
+            }}
+            className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[10px] text-zinc-300 hover:text-white shrink-0 transition-colors flex items-center gap-1"
+          >
+            <Sparkles className="w-3 h-3 text-purple-400" /> Creative Prompts
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setInputQuery('Draft a high-converting Facebook post with caption, image concept, and hashtags');
+            }}
+            className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[10px] text-zinc-300 hover:text-white shrink-0 transition-colors flex items-center gap-1"
+          >
+            <Zap className="w-3 h-3 text-blue-400" /> Draft Social Post
+          </button>
+        </div>
+
         <div className="relative">
           <input
             type="text"
             value={inputQuery}
             onChange={(e) => setInputQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="Ask Mari: 'Show sales this month' or 'Draft post'..."
+            placeholder="Ask Mari: 'Generate 3 poster concepts' or 'Draft ad'..."
             className="w-full pl-4 pr-12 py-3 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 transition-colors shadow-inner"
           />
           <button

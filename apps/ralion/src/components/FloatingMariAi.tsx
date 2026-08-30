@@ -12,9 +12,9 @@ export const FloatingMariAi: React.FC = () => {
   const [input, setInput] = useState('');
 
   const quickPrompts = [
+    '🎨 Generate 3 poster prompts',
     'Show my business performance',
     'Show customer growth',
-    'Find overdue tasks',
     'Summarize activity'
   ];
 
@@ -114,6 +114,25 @@ export const FloatingMariAi: React.FC = () => {
                     }
                     return <div className="text-[11px]">{parts}</div>;
                   })()}
+
+                  {m.sender === 'MARI' && (
+                    <div className="pt-1.5 mt-1.5 border-t border-zinc-700/40 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (typeof window !== 'undefined') {
+                            const clean = m.text.replace(/!\[.*?\]\(.*?\)/g, '').substring(0, 300).trim();
+                            localStorage.setItem('ralion_creative_prompt', clean);
+                            window.location.href = '/growth?tab=creatives';
+                          }
+                          setIsOpen(false);
+                        }}
+                        className="text-[10px] font-bold text-purple-300 hover:text-white flex items-center gap-1 transition-colors"
+                      >
+                        <Sparkles className="w-2.5 h-2.5 text-purple-400" /> Send to Studio &rarr;
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
