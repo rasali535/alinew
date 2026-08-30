@@ -9,7 +9,7 @@ import {
   Clock, Play, Download, Settings, Layers, Filter, CheckCircle2, AlertCircle, Smartphone,
   LayoutDashboard, Users, Heart, MessageCircle, ArrowUpRight, ArrowDownRight, Compass,
   ShieldCheck, Flame, Award, Zap, ThumbsUp, Radio, HelpCircle, Activity, ChevronDown,
-  Upload, Paperclip, MessageSquare, Inbox, CornerDownRight, X
+  Upload, Paperclip, MessageSquare, Inbox, CornerDownRight, X, Shield, Folder
 } from 'lucide-react';
 import Link from 'next/link';
 import { AuthService } from '@/lib/services/auth.service';
@@ -233,6 +233,11 @@ function GrowthPageContent() {
   const [posterFormat, setPosterFormat] = useState('1:1 Square');
   const [isGeneratingPoster, setIsGeneratingPoster] = useState(false);
   const [generatedPoster, setGeneratedPoster] = useState('');
+
+  // Creative Studio Brand Logo / Overlay State
+  const [creativeLogo, setCreativeLogo] = useState<string>('');
+  const [logoPosition, setLogoPosition] = useState<'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'>('top-right');
+  const [creativeMode, setCreativeMode] = useState<'poster' | 'video'>('poster');
 
   const [videoPrompt, setVideoPrompt] = useState('');
   const [videoLength, setVideoLength] = useState('15 Seconds');
@@ -684,6 +689,31 @@ function GrowthPageContent() {
         message: `✅ Successfully uploaded creative: ${file.name}`,
       });
       setTimeout(() => setOauthAlert(null), 4000);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setOauthAlert({
+        type: 'error',
+        message: 'Please upload a valid image file for your brand logo (PNG, JPG, SVG, WebP).',
+      });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (uploadEvent) => {
+      setCreativeLogo(uploadEvent.target?.result as string);
+      setOauthAlert({
+        type: 'success',
+        message: `✅ Brand logo loaded: ${file.name}`,
+      });
+      setTimeout(() => setOauthAlert(null), 3000);
     };
     reader.readAsDataURL(file);
     e.target.value = '';
@@ -1427,8 +1457,36 @@ function GrowthPageContent() {
           .replace(/"/g, '&quot;');
         const safeStyle = (posterStyle || 'Corporate Executive').toUpperCase();
 
-        const w = posterFormat === '16:9' ? 1024 : posterFormat === '9:16' ? 576 : posterFormat === '4:5' ? 816 : 1024;
-        const h = posterFormat === '16:9' ? 576 : posterFormat === '9:16' ? 1024 : posterFormat === '4:5' ? 1020 : 1024;
+        const w = posterFormat.includes('16:9') ? 1024 : posterFormat.includes('9:16') ? 576 : posterFormat.includes('4:5') ? 816 : 1024;
+        const h = posterFormat.includes('16:9') ? 576 : posterFormat.includes('9:16') ? 1024 : posterFormat.includes('4:5') ? 1020 : 1024;
+
+        let logoSvgElement = '';
+        if (creativeLogo) {
+          const logoW = 150;
+          const logoH = 50;
+          let lx = 64;
+          let ly = 64;
+          if (logoPosition === 'top-right') {
+            lx = w - logoW - 64;
+            ly = 64;
+          } else if (logoPosition === 'bottom-left') {
+            lx = 64;
+            ly = h - logoH - 64;
+          } else if (logoPosition === 'bottom-right') {
+            lx = w - logoW - 64;
+            ly = h - logoH - 64;
+          }
+          logoSvgElement = `<g transform="translate(${lx}, ${ly})">
+            <rect width="${logoW}" height="${logoH}" rx="12" fill="rgba(15,23,42,0.85)" stroke="rgba(255,255,255,0.25)" stroke-width="1.5" />
+            <image href="${creativeLogo}" x="10" y="8" width="${logoW - 20}" height="${logoH - 16}" preserveAspectRatio="xMidYMid meet" />
+          </g>`;
+        }
+
+        const defaultBadge = `<g transform="translate(64, 64)">
+          <rect width="180" height="36" rx="18" fill="rgba(59,130,246,0.15)" stroke="rgba(96,165,250,0.35)" stroke-width="1" />
+          <circle cx="20" cy="18" r="5" fill="#38bdf8" />
+          <text x="36" y="23" fill="#93c5fd" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="600" letter-spacing="1">RALION GROWTH</text>
+        </g>`;
 
         const svgContent = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -1450,11 +1508,7 @@ function GrowthPageContent() {
   <rect width="${w}" height="${h}" fill="url(#bgGrad)" />
   <circle cx="${w * 0.8}" cy="${h * 0.2}" r="${w * 0.4}" fill="url(#glowGrad)" />
   <rect x="32" y="32" width="${w - 64}" height="${h - 64}" rx="24" stroke="rgba(255,255,255,0.14)" stroke-width="1.5" fill="rgba(15,23,42,0.4)" />
-  <g transform="translate(64, 64)">
-    <rect width="180" height="36" rx="18" fill="rgba(59,130,246,0.15)" stroke="rgba(96,165,250,0.35)" stroke-width="1" />
-    <circle cx="20" cy="18" r="5" fill="#38bdf8" />
-    <text x="36" y="23" fill="#93c5fd" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="600" letter-spacing="1">RALION GROWTH</text>
-  </g>
+  ${logoSvgElement ? `${defaultBadge}\n  ${logoSvgElement}` : defaultBadge}
   <g transform="translate(64, ${h * 0.42})">
     <text fill="url(#accentGrad)" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="${w > 800 ? 36 : 24}" font-weight="800" letter-spacing="-0.5">${safeTitle}</text>
     <text y="${w > 800 ? 54 : 38}" fill="#94a3b8" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="${w > 800 ? 18 : 14}" font-weight="400">Engineered for high-velocity enterprise market expansion &amp; strategic growth.</text>
@@ -4063,195 +4117,443 @@ function GrowthPageContent() {
       {/* ==================================== */}
       {/* 6. CREATIVES MEDIA GENERATOR TAB */}
       {/* ==================================== */}
+      {/* ==================================== */}
+      {/* 6. CREATIVES MEDIA GENERATOR TAB */}
+      {/* ==================================== */}
       {activeTab === 'CREATIVES' && (
         <div className="flex flex-col gap-6">
-          {/* Quick Creative Upload Banner */}
-          <div className="p-4 rounded-2xl bg-zinc-900/80 border border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white shadow-md">
-                <Upload className="w-5 h-5" />
+          {/* Top Banner: Overview & Upload Option */}
+          <div className="p-5 rounded-3xl bg-gradient-to-r from-purple-950/40 via-zinc-900 to-indigo-950/40 border border-purple-800/30 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl backdrop-blur-sm">
+            <div className="flex items-center gap-4">
+              <div className="p-3.5 rounded-2xl bg-gradient-to-tr from-purple-600 to-pink-600 text-white shadow-lg shrink-0">
+                <Sparkles className="w-6 h-6" />
               </div>
               <div>
-                <h4 className="text-sm font-bold text-white">Have your own creative asset?</h4>
-                <p className="text-xs text-zinc-400">Upload custom graphics, brand posters, or video clips directly to your creative gallery and social publisher.</p>
+                <h3 className="text-base font-black text-white flex items-center gap-2">
+                  Studio Creatives &amp; Brand Visual Engine
+                </h3>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Generate stunning marketing posters and video reels from a simple prompt, with optional brand logo watermark.
+                </p>
               </div>
             </div>
-            <label className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold cursor-pointer transition-all shadow-md active:scale-95 shrink-0">
-              <Upload className="w-4 h-4" />
-              Upload Creative (Image / Video)
-              <input
-                type="file"
-                accept="image/*,video/*"
-                onChange={handleCreativeUpload}
-                className="hidden"
-              />
-            </label>
+
+            <div className="flex items-center gap-2.5 w-full md:w-auto justify-start md:justify-end flex-wrap">
+              <label className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-white text-xs font-bold cursor-pointer transition-all shadow-md active:scale-95">
+                <Upload className="w-4 h-4 text-purple-400" />
+                Upload Existing Asset
+                <input
+                  type="file"
+                  accept="image/*,video/*"
+                  onChange={handleCreativeUpload}
+                  className="hidden"
+                />
+              </label>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* AI Poster Generator */}
-            <Card className="border-zinc-800 bg-zinc-900/80">
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-gradient-to-tr from-pink-600 to-purple-600 text-white shadow-md">
-                  <Image className="w-5 h-5" />
-                </div>
-                <div>
-                  <CardTitle className="text-base font-bold text-white">AI Poster Generator (Flux Schnell)</CardTitle>
-                  <CardDescription className="text-xs text-zinc-400">Generate high-converting graphic posters for ads and social feeds.</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <textarea
-                rows={3}
-                value={posterPrompt}
-                onChange={e => setPosterPrompt(e.target.value)}
-                placeholder="Describe the poster concept... (e.g. A futuristic promotional poster for Ralion OS Tech Summit in Gaborone)"
-                className="w-full p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500 resize-none font-mono"
-              />
-              <div className="grid grid-cols-2 gap-2">
-                <select 
-                  value={posterFormat} 
-                  onChange={e => setPosterFormat(e.target.value)}
-                  className="px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-300 outline-none"
-                >
-                  <option>1:1 Square (Instagram/FB)</option>
-                  <option>9:16 Story / Reel</option>
-                  <option>16:9 Landscape (LinkedIn/X)</option>
-                </select>
-                <select 
-                  value={posterStyle} 
-                  onChange={e => setPosterStyle(e.target.value)}
-                  className="px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-300 outline-none"
-                >
-                  <option>Modern Minimalist</option>
-                  <option>Bold & Vibrant Neon</option>
-                  <option>Corporate Executive</option>
-                  <option>SADC Logistics & Trade</option>
-                </select>
-              </div>
+          {/* Main 2-Column Creative Studio */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Left Column: Prompt, Logo & Controls (7 Cols) */}
+            <div className="lg:col-span-7 flex flex-col gap-5">
+              <Card className="border-zinc-800 bg-zinc-900/90 shadow-xl rounded-3xl overflow-hidden">
+                <CardHeader className="border-b border-zinc-800/60 pb-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                        <Wand2 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-sm font-bold text-white">Create New Asset</CardTitle>
+                        <CardDescription className="text-xs text-zinc-400">Step 1: Enter your brief &amp; customize branding</CardDescription>
+                      </div>
+                    </div>
 
-              <Button 
-                onClick={() => generateMedia('poster')} 
-                variant="primary" 
-                className="w-full justify-center bg-purple-600 hover:bg-purple-700 font-bold py-2.5"
-              >
-                {isGeneratingPoster ? 'Generating Poster...' : <><Wand2 className="w-4 h-4 mr-2" /> Generate Poster Image</>}
-              </Button>
-
-              {generatedPoster && (
-                <div className="mt-2 p-2 bg-zinc-950 rounded-xl border border-zinc-800 overflow-hidden flex flex-col gap-3">
-                  <img src={generatedPoster} alt="Generated Poster" className="w-full h-auto rounded-lg object-cover" />
-                  <div className="flex justify-between gap-2">
-                    <a href={generatedPoster} target="_blank" rel="noreferrer" download className="px-3 py-1.5 rounded-lg bg-zinc-900 text-xs text-zinc-300 font-semibold flex items-center gap-1">
-                      <Download className="w-3.5 h-3.5 text-blue-400" /> Download
-                    </a>
-                    <Button 
-                      size="sm" 
-                      variant="primary" 
-                      onClick={() => convertItemToPost({
-                        id: `gen-${Date.now()}`,
-                        type: 'POSTER_IMAGE',
-                        title: posterPrompt.substring(0, 30) || 'AI Poster',
-                        prompt: posterPrompt,
-                        output: generatedPoster,
-                        modelUsed: 'FLUX.1',
-                        createdAt: 'Just now'
-                      })}
-                      className="text-xs bg-purple-600 hover:bg-purple-700 font-bold"
-                    >
-                      Convert to Social Post
-                    </Button>
+                    {/* Mode Selector */}
+                    <div className="flex bg-zinc-950 p-1 rounded-xl border border-zinc-800">
+                      <button
+                        type="button"
+                        onClick={() => setCreativeMode('poster')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                          creativeMode === 'poster'
+                            ? 'bg-purple-600 text-white shadow-md'
+                            : 'text-zinc-400 hover:text-white'
+                        }`}
+                      >
+                        <Image className="w-3.5 h-3.5" /> Poster Visual
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCreativeMode('video')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                          creativeMode === 'video'
+                            ? 'bg-blue-600 text-white shadow-md'
+                            : 'text-zinc-400 hover:text-white'
+                        }`}
+                      >
+                        <Video className="w-3.5 h-3.5" /> Video Reel
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                </CardHeader>
 
-          {/* AI Video Generator */}
-          <Card className="border-zinc-800 bg-zinc-900/80">
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-gradient-to-tr from-blue-600 to-cyan-600 text-white shadow-md">
-                  <Video className="w-5 h-5" />
-                </div>
-                <div>
-                  <CardTitle className="text-base font-bold text-white">AI Video Creator (CogVideoX Motion Studio)</CardTitle>
-                  <CardDescription className="text-xs text-zinc-400">Generate short-form video reels from prompt descriptions.</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <textarea
-                rows={3}
-                value={videoPrompt}
-                onChange={e => setVideoPrompt(e.target.value)}
-                placeholder="Describe the video scenes... (e.g. A 15-second promotional clip showing automated cargo tracking on a tablet)"
-                className="w-full p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 resize-none font-mono"
-              />
-              <div className="grid grid-cols-2 gap-2">
-                <select 
-                  value={videoLength} 
-                  onChange={e => setVideoLength(e.target.value)}
-                  className="px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-300 outline-none"
-                >
-                  <option>15s Short Reel</option>
-                  <option>30s Product Spotlight</option>
-                  <option>60s Explainer</option>
-                </select>
-                <select 
-                  value={videoVoiceover} 
-                  onChange={e => setVideoVoiceover(e.target.value)}
-                  className="px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-300 outline-none"
-                >
-                  <option>Executive English Voiceover</option>
-                  <option>Dynamic High Energy</option>
-                  <option>Minimalist Ambient</option>
-                </select>
-              </div>
+                <CardContent className="flex flex-col gap-5 pt-5">
+                  {/* 1. Prompt Textarea */}
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold text-zinc-300 flex items-center justify-between">
+                      <span>Creative Prompt / Concept</span>
+                      <span className="text-[10px] text-zinc-500 font-normal">Be descriptive for best visual results</span>
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={creativeMode === 'poster' ? posterPrompt : videoPrompt}
+                      onChange={e => {
+                        if (creativeMode === 'poster') setPosterPrompt(e.target.value);
+                        else setVideoPrompt(e.target.value);
+                      }}
+                      placeholder={
+                        creativeMode === 'poster'
+                          ? "e.g. 50% Off Spring Sale on premium industrial equipment in Gaborone with dynamic modern tech background..."
+                          : "e.g. A 15-second promotional clip showcasing automated logistics cargo tracking on a digital tablet..."
+                      }
+                      className="w-full p-4 rounded-2xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500 transition-all font-sans leading-relaxed"
+                    />
 
-              <Button 
-                onClick={() => generateMedia('video')} 
-                variant="primary" 
-                className="w-full justify-center bg-blue-600 hover:bg-blue-700 font-bold py-2.5"
-              >
-                {isGeneratingVideo ? 'Rendering Video Reel...' : <><Wand2 className="w-4 h-4 mr-2" /> Generate Video Reel</>}
-              </Button>
-
-              {generatedVideo && (
-                <div className="mt-2 p-2 bg-zinc-950 rounded-xl border border-zinc-800 flex flex-col gap-3">
-                  <video controls className="w-full rounded-lg max-h-64 object-cover">
-                    <source src={generatedVideo} type="video/mp4" />
-                  </video>
-                  <div className="flex justify-between gap-2">
-                    <a href={generatedVideo} target="_blank" rel="noreferrer" download className="px-3 py-1.5 rounded-lg bg-zinc-900 text-xs text-zinc-300 font-semibold flex items-center gap-1">
-                      <Download className="w-3.5 h-3.5 text-blue-400" /> Download Video
-                    </a>
-                    <Button 
-                      size="sm" 
-                      variant="primary" 
-                      onClick={() => convertItemToPost({
-                        id: `gen-${Date.now()}`,
-                        type: 'VIDEO_REEL',
-                        title: videoPrompt.substring(0, 30) || 'AI Video Reel',
-                        prompt: videoPrompt,
-                        output: generatedVideo,
-                        modelUsed: 'CogVideoX Animation',
-                        createdAt: 'Just now'
-                      })}
-                      className="text-xs bg-blue-600 hover:bg-blue-700 font-bold"
-                    >
-                      Convert to Video Post
-                    </Button>
+                    {/* Quick Inspiration Pills */}
+                    <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                      <span className="text-[11px] font-semibold text-zinc-500 mr-1 flex items-center gap-1">
+                        <Sparkles className="w-3 h-3 text-purple-400" /> Ideas:
+                      </span>
+                      {[
+                        { label: '🎯 Special 25% Discount Promo', text: 'Special 25% Off Limited-Time Promotion on enterprise software and digital transformation solutions.' },
+                        { label: '🚀 Product Launch Spotlight', text: 'Introducing Ralion OS — The Next-Gen Enterprise Operating System powered by Mari AI.' },
+                        { label: "👥 We're Hiring Developers", text: 'We are hiring top senior software engineers, AI researchers, and product designers. Join Ras Ali Labs today!' },
+                        { label: '🏆 Customer Success Win', text: 'How our logistics client reduced supply chain delays by 40% across SADC regional trade routes.' },
+                      ].map((item, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            if (creativeMode === 'poster') setPosterPrompt(item.text);
+                            else setVideoPrompt(item.text);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-[11px] text-zinc-300 hover:text-white transition-all"
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+
+                  {/* 2. Brand Logo / Watermark Upload Section */}
+                  <div className="p-4 rounded-2xl bg-zinc-950/80 border border-zinc-800/80 flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Shield className="w-4 h-4 text-purple-400" />
+                        <span className="text-xs font-bold text-white">Brand Logo &amp; Watermark</span>
+                      </div>
+                      <span className="text-[10px] text-zinc-400 font-medium">(Optional overlay on creative)</span>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                      {creativeLogo ? (
+                        <div className="flex items-center gap-3 p-2 bg-zinc-900 rounded-xl border border-zinc-700">
+                          <img src={creativeLogo} alt="Uploaded Brand Logo" className="h-9 w-auto max-w-[120px] object-contain rounded-lg bg-black/40 p-1" />
+                          <div className="flex flex-col">
+                            <span className="text-[11px] font-bold text-white">Logo Active</span>
+                            <button
+                              type="button"
+                              onClick={() => setCreativeLogo('')}
+                              className="text-[10px] text-red-400 hover:text-red-300 font-semibold text-left"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <label className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-dashed border-zinc-700 text-zinc-300 text-xs font-semibold cursor-pointer transition-all">
+                          <Upload className="w-3.5 h-3.5 text-purple-400" />
+                          Upload Logo (PNG, SVG, JPG)
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleLogoUpload}
+                            className="hidden"
+                          />
+                        </label>
+                      )}
+
+                      {/* Logo Position Selector */}
+                      {creativeLogo && (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Position:</span>
+                          {(['top-left', 'top-right', 'bottom-left', 'bottom-right'] as const).map(pos => (
+                            <button
+                              key={pos}
+                              type="button"
+                              onClick={() => setLogoPosition(pos)}
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase transition-all ${
+                                logoPosition === pos
+                                  ? 'bg-purple-600 text-white shadow-sm'
+                                  : 'bg-zinc-900 text-zinc-400 hover:text-white'
+                              }`}
+                            >
+                              {pos.replace('-', ' ')}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 3. Format & Visual Style Controls */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-bold text-zinc-400">Aspect Ratio / Dimensions</label>
+                      <select
+                        value={creativeMode === 'poster' ? posterFormat : videoLength}
+                        onChange={e => {
+                          if (creativeMode === 'poster') setPosterFormat(e.target.value);
+                          else setVideoLength(e.target.value);
+                        }}
+                        className="px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-200 outline-none focus:border-purple-500 transition-all font-medium"
+                      >
+                        {creativeMode === 'poster' ? (
+                          <>
+                            <option value="1:1 Square">1:1 Square (Instagram / Facebook)</option>
+                            <option value="9:16 Story / Reel">9:16 Story / Reel (TikTok / Shorts)</option>
+                            <option value="16:9 Landscape">16:9 Landscape (LinkedIn / X / Web)</option>
+                            <option value="4:5 Portrait">4:5 Feed Portrait (High Engagement)</option>
+                          </>
+                        ) : (
+                          <>
+                            <option value="15s Short Reel">15s Short Reel (High Reach)</option>
+                            <option value="30s Product Spotlight">30s Product Spotlight</option>
+                            <option value="60s Explainer">60s Full Explainer</option>
+                          </>
+                        )}
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-bold text-zinc-400">
+                        {creativeMode === 'poster' ? 'Visual Aesthetic Theme' : 'Voiceover Style'}
+                      </label>
+                      <select
+                        value={creativeMode === 'poster' ? posterStyle : videoVoiceover}
+                        onChange={e => {
+                          if (creativeMode === 'poster') setPosterStyle(e.target.value);
+                          else setVideoVoiceover(e.target.value);
+                        }}
+                        className="px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-200 outline-none focus:border-purple-500 transition-all font-medium"
+                      >
+                        {creativeMode === 'poster' ? (
+                          <>
+                            <option value="Modern Minimalist">Modern Minimalist</option>
+                            <option value="Bold & Vibrant Neon">Bold &amp; Vibrant Neon</option>
+                            <option value="Corporate Executive">Corporate Executive</option>
+                            <option value="Luxury Dark Gold">Luxury Dark Gold</option>
+                          </>
+                        ) : (
+                          <>
+                            <option value="Executive English Voiceover">Executive English Voiceover</option>
+                            <option value="Dynamic High Energy">Dynamic High Energy</option>
+                            <option value="Minimalist Ambient">Minimalist Ambient</option>
+                          </>
+                        )}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* 4. Generate Button */}
+                  <Button
+                    onClick={() => generateMedia(creativeMode)}
+                    variant="primary"
+                    disabled={isGeneratingPoster || isGeneratingVideo}
+                    className={`w-full justify-center font-bold py-3.5 rounded-xl shadow-xl transition-all active:scale-98 ${
+                      creativeMode === 'poster'
+                        ? 'bg-gradient-to-r from-purple-600 via-pink-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white'
+                        : 'bg-gradient-to-r from-blue-600 via-cyan-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white'
+                    }`}
+                  >
+                    {(isGeneratingPoster || isGeneratingVideo) ? (
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <span>Rendering {creativeMode === 'poster' ? 'Visual Poster' : 'Video Reel'}...</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Wand2 className="w-4 h-4" />
+                        <span>Generate Studio {creativeMode === 'poster' ? 'Visual Poster' : 'Video Reel'}</span>
+                      </div>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Right Column: Live Result & Actions (5 Cols) */}
+            <div className="lg:col-span-5 flex flex-col gap-5">
+              <Card className="border-zinc-800 bg-zinc-900/90 shadow-xl rounded-3xl overflow-hidden h-full flex flex-col">
+                <CardHeader className="border-b border-zinc-800/60 pb-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <CheckCircle2 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-sm font-bold text-white">Live Studio Preview</CardTitle>
+                        <CardDescription className="text-xs text-zinc-400">Real-time render &amp; export ready</CardDescription>
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="flex flex-col flex-1 p-5 gap-4 justify-between">
+                  {/* Media Display Window */}
+                  <div className="w-full bg-zinc-950 rounded-2xl border border-zinc-800/80 overflow-hidden flex items-center justify-center min-h-[300px] relative group">
+                    {creativeMode === 'poster' ? (
+                      generatedPoster ? (
+                        <img
+                          src={generatedPoster}
+                          alt="Generated Studio Poster"
+                          className="w-full h-auto max-h-[380px] object-contain rounded-xl shadow-2xl"
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center p-8 text-center gap-3">
+                          <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 text-zinc-600">
+                            <Image className="w-8 h-8" />
+                          </div>
+                          <span className="text-xs font-bold text-zinc-400">Ready to Render Visual</span>
+                          <p className="text-[11px] text-zinc-600 max-w-xs">
+                            Enter your concept on the left, upload your logo, and click Generate to see your creative here.
+                          </p>
+                        </div>
+                      )
+                    ) : (
+                      generatedVideo ? (
+                        <video controls className="w-full rounded-xl max-h-[380px] object-cover shadow-2xl">
+                          <source src={generatedVideo} type="video/mp4" />
+                        </video>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center p-8 text-center gap-3">
+                          <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 text-zinc-600">
+                            <Video className="w-8 h-8" />
+                          </div>
+                          <span className="text-xs font-bold text-zinc-400">Ready to Render Video</span>
+                          <p className="text-[11px] text-zinc-600 max-w-xs">
+                            Enter your scene prompt and click Generate to render your motion video reel.
+                          </p>
+                        </div>
+                      )
+                    )}
+                  </div>
+
+                  {/* Export & Convert Actions */}
+                  {(generatedPoster || generatedVideo) && (
+                    <div className="flex flex-col gap-2 pt-2 border-t border-zinc-800/60">
+                      <div className="grid grid-cols-2 gap-2">
+                        <a
+                          href={creativeMode === 'poster' ? generatedPoster : generatedVideo}
+                          target="_blank"
+                          rel="noreferrer"
+                          download={`ralion-creative-${Date.now()}`}
+                          className="px-3.5 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-xs text-zinc-300 font-bold flex items-center justify-center gap-1.5 transition-all"
+                        >
+                          <Download className="w-4 h-4 text-blue-400" /> Download
+                        </a>
+
+                        <Button
+                          variant="primary"
+                          onClick={() => {
+                            const activeMedia = creativeMode === 'poster' ? generatedPoster : generatedVideo;
+                            const activePrompt = creativeMode === 'poster' ? posterPrompt : videoPrompt;
+                            convertItemToPost({
+                              id: `gen-${Date.now()}`,
+                              type: creativeMode === 'poster' ? 'POSTER_IMAGE' : 'VIDEO_REEL',
+                              title: activePrompt.substring(0, 32) || 'Studio Creative',
+                              prompt: activePrompt,
+                              output: activeMedia,
+                              previewUrl: activeMedia,
+                              modelUsed: creativeMode === 'poster' ? 'FLUX.1 Neural Studio' : 'CogVideoX Motion Studio',
+                              createdAt: 'Just now'
+                            });
+                          }}
+                          className="text-xs bg-purple-600 hover:bg-purple-700 font-bold justify-center"
+                        >
+                          <Send className="w-3.5 h-3.5 mr-1.5" /> Convert to Post
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+
+          {/* Generated Content Gallery Section */}
+          <div className="flex flex-col gap-4 mt-2">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-black text-white flex items-center gap-2">
+                <Folder className="w-4 h-4 text-purple-400" /> Generated Creative Library ({generatedGallery.length})
+              </h4>
+              <span className="text-xs text-zinc-500">Click any asset to convert into a published social post</span>
+            </div>
+
+            {generatedGallery.length === 0 ? (
+              <div className="p-8 rounded-2xl bg-zinc-900/40 border border-dashed border-zinc-800 text-center flex flex-col items-center justify-center gap-2">
+                <Sparkles className="w-6 h-6 text-zinc-600" />
+                <p className="text-xs font-semibold text-zinc-400">No generated creatives in your library yet.</p>
+                <p className="text-[11px] text-zinc-600">Use the studio above to generate your first high-converting visual poster or video reel.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {generatedGallery.map(item => (
+                  <div key={item.id} className="p-3.5 rounded-2xl bg-zinc-900/80 border border-zinc-800 flex flex-col justify-between gap-3 group hover:border-purple-500/40 transition-all shadow-md">
+                    <div className="aspect-video w-full rounded-xl overflow-hidden bg-black/60 relative">
+                      {item.type === 'POSTER_IMAGE' ? (
+                        <img src={item.output} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                      ) : (
+                        <video src={item.output} className="w-full h-full object-cover" />
+                      )}
+                      <span className="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-black/80 text-[10px] font-bold text-white backdrop-blur-sm border border-white/10">
+                        {item.type === 'POSTER_IMAGE' ? 'POSTER' : 'VIDEO'}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs font-bold text-white line-clamp-1">{item.title}</span>
+                      <span className="text-[10px] text-zinc-500 font-mono">{item.modelUsed}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-800">
+                      <a
+                        href={item.output}
+                        target="_blank"
+                        rel="noreferrer"
+                        download
+                        className="p-1.5 rounded-lg bg-zinc-950 text-zinc-400 hover:text-white transition-colors"
+                        title="Download Asset"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </a>
+
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        onClick={() => convertItemToPost(item)}
+                        className="text-[11px] py-1 px-2.5 bg-purple-600 hover:bg-purple-700 font-bold"
+                      >
+                        Use in Post
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-    )}
+      )}
 
       {/* ==================================== */}
       {/* 7. ANALYTICS TAB */}
