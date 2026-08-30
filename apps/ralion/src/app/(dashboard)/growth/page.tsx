@@ -250,10 +250,14 @@ function GrowthPageContent() {
   const [isGeneratingPoster, setIsGeneratingPoster] = useState(false);
   const [generatedPoster, setGeneratedPoster] = useState('');
 
-  // Creative Studio Brand Logo / Overlay State
+  // Creative Studio Brand Logo / Typography / Overlay State
   const [creativeLogo, setCreativeLogo] = useState<string>('');
   const [logoPosition, setLogoPosition] = useState<'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'>('top-right');
   const [creativeMode, setCreativeMode] = useState<'poster' | 'video'>('poster');
+  const [posterHeadline, setPosterHeadline] = useState('Transform Your Enterprise');
+  const [posterSubtitle, setPosterSubtitle] = useState('Intelligent AI & Business Growth Solutions');
+  const [posterCta, setPosterCta] = useState('Explore Solutions →');
+  const [showTypographyOverlay, setShowTypographyOverlay] = useState(true);
 
   const [videoPrompt, setVideoPrompt] = useState('');
   const [videoLength, setVideoLength] = useState('15 Seconds');
@@ -4553,6 +4557,64 @@ Rules:
                     </div>
                   </div>
 
+                  {/* 3b. Branded Typography & Call-To-Action (CTA) Overlay */}
+                  <div className="p-4 rounded-2xl bg-zinc-950/80 border border-zinc-800/80 flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-purple-400" />
+                        <span className="text-xs font-bold text-white">Poster Wording &amp; CTA Button</span>
+                      </div>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={showTypographyOverlay}
+                          onChange={e => setShowTypographyOverlay(e.target.checked)}
+                          className="rounded border-zinc-700 bg-zinc-900 text-purple-600 focus:ring-0 w-3.5 h-3.5"
+                        />
+                        <span className="text-[11px] text-purple-300 font-semibold">Overlay on Poster</span>
+                      </label>
+                    </div>
+
+                    {showTypographyOverlay && (
+                      <div className="flex flex-col gap-2.5 pt-1">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[11px] font-bold text-zinc-400">Headline Wording</label>
+                          <input
+                            type="text"
+                            value={posterHeadline}
+                            onChange={e => setPosterHeadline(e.target.value)}
+                            placeholder="e.g. Transform Your Enterprise with Ralion OS"
+                            className="px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 outline-none focus:border-purple-500 font-medium"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div className="flex flex-col gap-1">
+                            <label className="text-[11px] font-bold text-zinc-400">Subtitle / Value Prop</label>
+                            <input
+                              type="text"
+                              value={posterSubtitle}
+                              onChange={e => setPosterSubtitle(e.target.value)}
+                              placeholder="e.g. AI-Powered Business Intelligence"
+                              className="px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 outline-none focus:border-purple-500 font-medium"
+                            />
+                          </div>
+
+                          <div className="flex flex-col gap-1">
+                            <label className="text-[11px] font-bold text-zinc-400">CTA Button Text</label>
+                            <input
+                              type="text"
+                              value={posterCta}
+                              onChange={e => setPosterCta(e.target.value)}
+                              placeholder="e.g. Explore Solutions →"
+                              className="px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 outline-none focus:border-purple-500 font-medium"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {/* 4. Generate Button */}
                   <Button
                     onClick={() => generateMedia(creativeMode)}
@@ -4599,26 +4661,51 @@ Rules:
 
                 <CardContent className="flex flex-col flex-1 p-5 gap-4 justify-between">
                   {/* Media Display Window */}
-                  <div className="w-full bg-zinc-950 rounded-2xl border border-zinc-800/80 overflow-hidden flex items-center justify-center min-h-[300px] relative group">
+                  <div className="w-full bg-zinc-950 rounded-2xl border border-zinc-800/80 overflow-hidden flex items-center justify-center min-h-[320px] relative group">
                     {creativeMode === 'poster' ? (
                       generatedPoster ? (
-                        <div className="relative w-full h-full flex items-center justify-center">
+                        <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-xl">
                           <img
                             src={resolveSafeImageUrl(generatedPoster, posterPrompt || 'Studio Poster')}
                             alt="Generated Studio Poster"
-                            className="w-full h-auto max-h-[380px] object-contain rounded-xl shadow-2xl"
+                            className="w-full h-auto max-h-[420px] object-contain rounded-xl shadow-2xl"
                             onError={(e) => {
                               (e.currentTarget as HTMLImageElement).src = resolveSafeImageUrl('', posterPrompt || 'Studio Poster');
                             }}
                           />
+
+                          {/* Brand Logo Watermark */}
                           {creativeLogo && (
-                            <div className={`absolute p-2.5 rounded-xl bg-black/60 backdrop-blur-md border border-white/20 shadow-xl pointer-events-none transition-all ${
+                            <div className={`absolute p-2.5 rounded-xl bg-black/60 backdrop-blur-md border border-white/20 shadow-xl pointer-events-none transition-all z-10 ${
                               logoPosition === 'top-left' ? 'top-4 left-4' :
                               logoPosition === 'top-right' ? 'top-4 right-4' :
                               logoPosition === 'bottom-left' ? 'bottom-4 left-4' :
                               'bottom-4 right-4'
                             }`}>
                               <img src={creativeLogo} alt="Brand Logo" className="h-8 w-auto max-w-[120px] object-contain" />
+                            </div>
+                          )}
+
+                          {/* Branded Typography & CTA Overlay Scrim */}
+                          {showTypographyOverlay && (
+                            <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5 bg-gradient-to-t from-black/95 via-black/75 to-transparent flex flex-col gap-2 z-10 text-left pointer-events-none">
+                              <div className="flex flex-col gap-0.5">
+                                <h3 className="text-sm sm:text-base font-black text-white leading-snug drop-shadow-md tracking-tight">
+                                  {posterHeadline || 'Transform Your Enterprise'}
+                                </h3>
+                                <p className="text-[11px] sm:text-xs text-zinc-300 font-medium drop-shadow-sm line-clamp-1">
+                                  {posterSubtitle || 'Intelligent AI & Business Growth Solutions'}
+                                </p>
+                              </div>
+
+                              <div className="flex items-center justify-between pt-1">
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 text-[11px] font-bold text-white shadow-lg border border-purple-400/30">
+                                  {posterCta || 'Explore Solutions →'}
+                                </span>
+                                <span className="text-[9px] text-zinc-400 font-mono tracking-wider font-bold">
+                                  RALION GROWTH OS
+                                </span>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -4672,15 +4759,6 @@ Rules:
                           type="button"
                           onClick={() => {
                             if (creativeMode === 'poster' && generatedPoster) {
-                              if (!creativeLogo) {
-                                const a = document.createElement('a');
-                                a.href = generatedPoster;
-                                a.download = `ralion-creative-${Date.now()}.png`;
-                                document.body.appendChild(a);
-                                a.click();
-                                document.body.removeChild(a);
-                                return;
-                              }
                               try {
                                 const canvas = document.createElement('canvas');
                                 const ctx = canvas.getContext('2d');
@@ -4691,39 +4769,103 @@ Rules:
                                   canvas.height = img.naturalHeight || 1024;
                                   if (ctx) {
                                     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                                    const logoImg = new window.Image();
-                                    logoImg.crossOrigin = 'anonymous';
-                                    logoImg.onload = () => {
-                                      const logoW = canvas.width * 0.18;
-                                      const logoH = (logoImg.naturalHeight / logoImg.naturalWidth) * logoW || (logoW * 0.4);
-                                      const pad = canvas.width * 0.04;
-                                      let lx = pad;
-                                      let ly = pad;
-                                      if (logoPosition === 'top-right') {
-                                        lx = canvas.width - logoW - pad;
-                                        ly = pad;
-                                      } else if (logoPosition === 'bottom-left') {
-                                        lx = pad;
-                                        ly = canvas.height - logoH - pad;
-                                      } else if (logoPosition === 'bottom-right') {
-                                        lx = canvas.width - logoW - pad;
-                                        ly = canvas.height - logoH - pad;
-                                      }
-                                      ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-                                      ctx.beginPath();
-                                      ctx.roundRect(lx - 12, ly - 8, logoW + 24, logoH + 16, 14);
-                                      ctx.fill();
-                                      ctx.drawImage(logoImg, lx, ly, logoW, logoH);
 
+                                    // 1. Draw Typography & CTA Overlay if enabled
+                                    if (showTypographyOverlay) {
+                                      const overlayH = canvas.height * 0.32;
+                                      const gradient = ctx.createLinearGradient(0, canvas.height - overlayH, 0, canvas.height);
+                                      gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+                                      gradient.addColorStop(0.3, 'rgba(3, 7, 18, 0.7)');
+                                      gradient.addColorStop(1, 'rgba(3, 7, 18, 0.96)');
+                                      ctx.fillStyle = gradient;
+                                      ctx.fillRect(0, canvas.height - overlayH, canvas.width, overlayH);
+
+                                      // Headline
+                                      ctx.fillStyle = '#FFFFFF';
+                                      const headlineFontSize = Math.max(26, Math.round(canvas.width * 0.038));
+                                      ctx.font = `900 ${headlineFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+                                      ctx.fillText(posterHeadline || 'Transform Your Enterprise', canvas.width * 0.05, canvas.height - overlayH * 0.58);
+
+                                      // Subtitle
+                                      ctx.fillStyle = '#94A3B8';
+                                      const subFontSize = Math.max(15, Math.round(canvas.width * 0.02));
+                                      ctx.font = `500 ${subFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+                                      ctx.fillText(posterSubtitle || 'Intelligent AI & Business Growth Solutions', canvas.width * 0.05, canvas.height - overlayH * 0.38);
+
+                                      // CTA Button Pill
+                                      const ctaText = posterCta || 'Explore Solutions →';
+                                      const ctaFontSize = Math.max(14, Math.round(canvas.width * 0.018));
+                                      ctx.font = `bold ${ctaFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+                                      const textWidth = ctx.measureText(ctaText).width;
+                                      const pillW = textWidth + 36;
+                                      const pillH = ctaFontSize * 2.2;
+                                      const pillX = canvas.width * 0.05;
+                                      const pillY = canvas.height - overlayH * 0.22;
+
+                                      const btnGrad = ctx.createLinearGradient(pillX, pillY, pillX + pillW, pillY);
+                                      btnGrad.addColorStop(0, '#9333ea');
+                                      btnGrad.addColorStop(1, '#4f46e5');
+                                      ctx.fillStyle = btnGrad;
+                                      ctx.beginPath();
+                                      ctx.roundRect(pillX, pillY, pillW, pillH, pillH / 2);
+                                      ctx.fill();
+
+                                      ctx.fillStyle = '#FFFFFF';
+                                      ctx.fillText(ctaText, pillX + 18, pillY + pillH * 0.68);
+
+                                      // Brand tag on right
+                                      ctx.fillStyle = '#64748B';
+                                      const tagFontSize = Math.max(12, Math.round(canvas.width * 0.015));
+                                      ctx.font = `700 ${tagFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+                                      const tagText = 'RALION GROWTH OS';
+                                      const tagW = ctx.measureText(tagText).width;
+                                      ctx.fillText(tagText, canvas.width - tagW - canvas.width * 0.05, pillY + pillH * 0.68);
+                                    }
+
+                                    // 2. Draw Brand Logo if present
+                                    if (creativeLogo) {
+                                      const logoImg = new window.Image();
+                                      logoImg.crossOrigin = 'anonymous';
+                                      logoImg.onload = () => {
+                                        const logoW = canvas.width * 0.18;
+                                        const logoH = (logoImg.naturalHeight / logoImg.naturalWidth) * logoW || (logoW * 0.4);
+                                        const pad = canvas.width * 0.04;
+                                        let lx = pad;
+                                        let ly = pad;
+                                        if (logoPosition === 'top-right') {
+                                          lx = canvas.width - logoW - pad;
+                                          ly = pad;
+                                        } else if (logoPosition === 'bottom-left') {
+                                          lx = pad;
+                                          ly = canvas.height - logoH - pad;
+                                        } else if (logoPosition === 'bottom-right') {
+                                          lx = canvas.width - logoW - pad;
+                                          ly = canvas.height - logoH - pad;
+                                        }
+                                        ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+                                        ctx.beginPath();
+                                        ctx.roundRect(lx - 12, ly - 8, logoW + 24, logoH + 16, 14);
+                                        ctx.fill();
+                                        ctx.drawImage(logoImg, lx, ly, logoW, logoH);
+
+                                        const brandedUrl = canvas.toDataURL('image/png');
+                                        const a = document.createElement('a');
+                                        a.href = brandedUrl;
+                                        a.download = `ralion-branded-poster-${Date.now()}.png`;
+                                        document.body.appendChild(a);
+                                        a.click();
+                                        document.body.removeChild(a);
+                                      };
+                                      logoImg.src = creativeLogo;
+                                    } else {
                                       const brandedUrl = canvas.toDataURL('image/png');
                                       const a = document.createElement('a');
                                       a.href = brandedUrl;
-                                      a.download = `ralion-branded-creative-${Date.now()}.png`;
+                                      a.download = `ralion-poster-${Date.now()}.png`;
                                       document.body.appendChild(a);
                                       a.click();
                                       document.body.removeChild(a);
-                                    };
-                                    logoImg.src = creativeLogo;
+                                    }
                                   }
                                 };
                                 img.src = resolveSafeImageUrl(generatedPoster, posterPrompt);
@@ -4746,7 +4888,7 @@ Rules:
                           }}
                           className="px-3.5 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-xs text-zinc-300 font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                         >
-                          <Download className="w-4 h-4 text-blue-400" /> Download {creativeLogo ? 'Branded' : ''}
+                          <Download className="w-4 h-4 text-blue-400" /> Download Creative
                         </button>
 
                         <Button
