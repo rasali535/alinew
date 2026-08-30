@@ -263,12 +263,9 @@ export default function MariAiPage() {
 
     try {
       let activeCtx = businessContext;
-      if (!activeCtx?.layer1?.websiteKnowledge?.value) {
-        const wk = WebsiteIngestionService.getWebsiteKnowledge(activeOrgId);
-        if (wk) {
-          activeCtx = await BusinessContextService.assembleContext(activeOrgId, { forceRefresh: true });
-          setBusinessContext(activeCtx);
-        }
+      if (!activeCtx || !activeCtx.layer1.websiteKnowledge?.value || !activeCtx.layer2.social?.isConnected) {
+        activeCtx = await BusinessContextService.assembleContext(activeOrgId, { forceRefresh: true });
+        setBusinessContext(activeCtx);
       }
 
       const ragSearch = mariKnowledgeManager.searchKnowledgeBase(queryText);

@@ -183,12 +183,28 @@ export class WebsiteIngestionService {
 
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
+        // 1. Direct org key
         const raw = window.localStorage.getItem(`${STORAGE_PREFIX}${orgId}`);
         if (raw) {
           const parsed = JSON.parse(raw);
-          if (parsed && parsed.organizationId === orgId) {
+          if (parsed && (parsed.status === 'INGESTED' || parsed.provenance === 'VERIFIED' || parsed.websiteUrl)) {
             websiteStore[orgId] = parsed;
             return parsed;
+          }
+        }
+
+        // 2. Scan all ralion_wk_ keys in localStorage
+        for (let i = 0; i < window.localStorage.length; i++) {
+          const key = window.localStorage.key(i);
+          if (key && (key.startsWith(STORAGE_PREFIX) || key === 'ralion_website_knowledge' || key === 'ralion_ingested_website')) {
+            const val = window.localStorage.getItem(key);
+            if (val) {
+              const parsed = JSON.parse(val);
+              if (parsed && (parsed.status === 'INGESTED' || parsed.provenance === 'VERIFIED' || (parsed.sections && parsed.sections.length > 0) || parsed.websiteUrl)) {
+                websiteStore[orgId] = parsed;
+                return parsed;
+              }
+            }
           }
         }
       } catch {}

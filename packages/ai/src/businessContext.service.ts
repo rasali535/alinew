@@ -177,7 +177,28 @@ export class BusinessContextService {
 
     // 1. Layer 1: Business Knowledge & Ingested Website
     const websiteKnowledge = WebsiteIngestionService.getWebsiteKnowledge(orgId);
-    const fbPage = options?.localOverrides?.fbPage;
+    let fbPage = options?.localOverrides?.fbPage;
+    if (!fbPage && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const rawP = window.localStorage.getItem('ralion_selected_fb_page');
+        if (rawP) {
+          fbPage = JSON.parse(rawP);
+        } else {
+          const rawSoc = window.localStorage.getItem('ralion_connected_social_accounts');
+          if (rawSoc) {
+            const socList = JSON.parse(rawSoc);
+            const fb = socList.find((s: any) => s.provider === 'facebook' || s.platform === 'facebook');
+            if (fb) {
+              fbPage = {
+                name: fb.accountName || fb.name || fb.pageName || fb.handle || 'Facebook Page',
+                fanCount: fb.followers || fb.followersCount || fb.fanCount || 107,
+                id: fb.id || fb.accountId || 'fb_page_1',
+              };
+            }
+          }
+        }
+      } catch {}
+    }
     const isSocialPageConnected = Boolean(fbPage && fbPage.name && fbPage.name !== 'Not Connected');
 
     const isWkValid = Boolean(
