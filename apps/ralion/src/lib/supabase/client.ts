@@ -8,12 +8,12 @@ declare global {
 
 let _supabaseInstance: SupabaseClient | null = null;
 
-export function createClient(): SupabaseClient {
+function getOrCreateBrowserClient(): SupabaseClient {
   if (typeof window !== 'undefined' && (window as any).__ralion_supabase_instance__) {
     return (window as any).__ralion_supabase_instance__;
   }
-  if (typeof globalThis !== 'undefined' && globalThis.__ralion_supabase_instance__) {
-    return globalThis.__ralion_supabase_instance__;
+  if (typeof globalThis !== 'undefined' && (globalThis as any).__ralion_supabase_instance__) {
+    return (globalThis as any).__ralion_supabase_instance__;
   }
   if (_supabaseInstance) return _supabaseInstance;
 
@@ -40,9 +40,18 @@ export function createClient(): SupabaseClient {
     (window as any).__ralion_supabase_instance__ = instance;
   }
   if (typeof globalThis !== 'undefined') {
-    globalThis.__ralion_supabase_instance__ = instance;
+    (globalThis as any).__ralion_supabase_instance__ = instance;
   }
 
   return instance;
+}
+
+// Eagerly instantiate once when module loads in the browser
+if (typeof window !== 'undefined' && !(window as any).__ralion_supabase_instance__) {
+  getOrCreateBrowserClient();
+}
+
+export function createClient(): SupabaseClient {
+  return getOrCreateBrowserClient();
 }
 
