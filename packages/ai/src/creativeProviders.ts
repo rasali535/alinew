@@ -34,6 +34,25 @@ function resolveDimensions(req: CreativeProviderRequest): { width: number; heigh
   }
 }
 
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 5000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    try { controller.abort(); } catch {}
+  }, timeoutMs);
+
+  try {
+    const res = await Promise.race([
+      fetch(url, { ...options, signal: controller.signal }),
+      new Promise<Response>((_, reject) =>
+        setTimeout(() => reject(new Error(`Fetch timed out after ${timeoutMs}ms`)), timeoutMs)
+      ),
+    ]);
+    return res;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * Provider A (Primary Image): FLUX.1 High-Resolution Studio
  */
@@ -59,14 +78,13 @@ export class FluxImageProvider implements CreativeProvider {
 
     for (const url of candidateUrls) {
       try {
-        const res = await fetch(url, {
+        const res = await fetchWithTimeout(url, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
             'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
           },
           cache: 'no-store',
-          signal: AbortSignal.timeout(req.timeoutMs || 3500),
-        });
+        }, req.timeoutMs || 4500);
 
         if (!res.ok) {
           lastError = `Provider HTTP error ${res.status}`;
@@ -119,14 +137,13 @@ export class TurboImageProvider implements CreativeProvider {
 
     for (const url of candidateUrls) {
       try {
-        const res = await fetch(url, {
+        const res = await fetchWithTimeout(url, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
             'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
           },
           cache: 'no-store',
-          signal: AbortSignal.timeout(req.timeoutMs || 3500),
-        });
+        }, req.timeoutMs || 4500);
 
         if (!res.ok) {
           lastError = `Provider HTTP error ${res.status}`;
@@ -170,14 +187,13 @@ export class ResilientImageProvider implements CreativeProvider {
     const seed = req.seed || Math.floor(Math.random() * 1000000);
     const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(clean)}?seed=${seed}&width=768&height=768&nologo=true`;
 
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
       },
       cache: 'no-store',
-      signal: AbortSignal.timeout(req.timeoutMs || 3500),
-    });
+    }, req.timeoutMs || 4500);
 
     if (!res.ok) {
       throw new Error(`Provider HTTP error ${res.status}`);
@@ -224,14 +240,13 @@ export class CogVideoXProvider implements CreativeProvider {
 
     for (const url of candidateUrls) {
       try {
-        const res = await fetch(url, {
+        const res = await fetchWithTimeout(url, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
             'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
           },
           cache: 'no-store',
-          signal: AbortSignal.timeout(req.timeoutMs || 3500),
-        });
+        }, req.timeoutMs || 4500);
 
         if (!res.ok) {
           lastError = `HTTP ${res.status}`;
@@ -276,14 +291,13 @@ export class FallbackVideoProvider implements CreativeProvider {
     const seed = (req.seed || Math.floor(Math.random() * 1000000)) + 2;
     const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(clean)}?seed=${seed}&width=1024&height=576&nologo=true`;
 
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
       },
       cache: 'no-store',
-      signal: AbortSignal.timeout(req.timeoutMs || 3500),
-    });
+    }, req.timeoutMs || 4500);
 
     if (!res.ok) {
       throw new Error(`Fallback Video Provider HTTP error ${res.status}`);

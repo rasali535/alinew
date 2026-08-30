@@ -1388,9 +1388,8 @@ function GrowthPageContent() {
     }
 
     try {
-      const endpoint = window.location.pathname.startsWith('/ralion') 
-        ? '/ralion/api/creatives/generate' 
-        : '/api/creatives/generate';
+      const endpoint = getRalionApiUrl('/api/creatives/generate');
+      const targetOrg = organization?.id || organization?.slug || 'default-org';
 
       const res = await fetch(endpoint, {
         method: 'POST',
@@ -1400,7 +1399,7 @@ function GrowthPageContent() {
           prompt: prompt.trim(),
           style: type === 'poster' ? posterStyle : videoVoiceover,
           format: type === 'poster' ? posterFormat : videoLength,
-          organizationId: 'default-org',
+          organizationId: targetOrg,
         }),
       });
 
