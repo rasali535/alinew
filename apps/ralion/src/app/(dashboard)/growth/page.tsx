@@ -1389,7 +1389,9 @@ function GrowthPageContent() {
 
     try {
       const endpoint = getRalionApiUrl('/api/creatives/generate');
-      const targetOrg = organization?.id || organization?.slug || 'default-org';
+      const targetOrg = typeof window !== 'undefined'
+        ? (window.localStorage.getItem('ralion_active_org') || 'default-org')
+        : 'default-org';
 
       const res = await fetch(endpoint, {
         method: 'POST',
