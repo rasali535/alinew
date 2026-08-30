@@ -53,6 +53,27 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
   }
 }
 
+function buildPhotorealisticPrompt(rawPrompt: string, style?: string): string {
+  // Strip meta words that confuse diffusion models into drawing picture frames or pseudo-text
+  const subject = rawPrompt
+    .replace(/^(create|generate|design|make|draw|show)\s+(an?\s+)?(image|poster|photo|picture|graphic|video)\s+(of|for|about)?/gi, '')
+    .replace(/\b(promotional\s+)?(poster|flyer|banner|billboard|mockup|picture frame|frame)\b/gi, 'visual scene')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  let styleDesc = 'modern corporate aesthetic, sharp professional studio lighting, 8k resolution, cinematic atmosphere, award-winning commercial photography';
+  const sLower = (style || '').toLowerCase();
+  if (sLower.includes('neon') || sLower.includes('vibrant')) {
+    styleDesc = 'vibrant neon lighting, cyan and purple luminescent glow, futuristic 3D visual, highly detailed, octane render 8k';
+  } else if (sLower.includes('minimalist')) {
+    styleDesc = 'clean minimalist product photography, soft diffused studio lighting, elegant modern composition, sharp focus';
+  } else if (sLower.includes('gold') || sLower.includes('luxury')) {
+    styleDesc = 'luxury dark obsidian aesthetic with gold accents, dramatic cinematic lighting, elegant commercial masterpiece';
+  }
+
+  return `${subject || 'enterprise technological innovation'}, ${styleDesc}, photorealistic, ultra-detailed, 8k uhd`;
+}
+
 /**
  * Provider A (Primary Image): FLUX.1 High-Resolution Studio
  */
@@ -63,15 +84,16 @@ export class FluxImageProvider implements CreativeProvider {
   async generate(req: CreativeProviderRequest): Promise<CreativeProviderResult> {
     const t0 = Date.now();
     const clean = sanitizePrompt(req.prompt);
+    const enriched = buildPhotorealisticPrompt(clean, req.style);
     const dims = resolveDimensions(req);
     const seed = req.seed || Math.floor(Math.random() * 1000000);
-    const fullPrompt = `${clean}, ${req.style || 'cinematic corporate'} style, professional commercial visual`;
-    const shortPrompt = clean.slice(0, 220);
+    const negative = encodeURIComponent('text,words,letters,writing,typography,watermark,logo,picture frame,framed poster,border,low quality,blurry,distorted,bad anatomy,ugly,amateur');
 
     const candidateUrls = [
-      `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}`,
-      `https://image.pollinations.ai/prompt/${encodeURIComponent(shortPrompt)}?nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}`,
-      `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?model=flux&nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}`,
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=flux&nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}&negative=${negative}`,
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=flux-realism&nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}`,
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(clean)}?model=flux&nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}&negative=${negative}`,
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}`,
     ];
 
     let lastError = '';
@@ -124,13 +146,15 @@ export class TurboImageProvider implements CreativeProvider {
 
   async generate(req: CreativeProviderRequest): Promise<CreativeProviderResult> {
     const t0 = Date.now();
-    const clean = sanitizePrompt(req.prompt).slice(0, 220);
+    const clean = sanitizePrompt(req.prompt);
+    const enriched = buildPhotorealisticPrompt(clean, req.style);
     const dims = resolveDimensions(req);
     const seed = (req.seed || Math.floor(Math.random() * 1000000)) + 1;
+    const negative = encodeURIComponent('text,words,letters,writing,watermark,picture frame,border,blurry');
 
     const candidateUrls = [
-      `https://image.pollinations.ai/prompt/${encodeURIComponent(clean)}?model=turbo&nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}`,
-      `https://image.pollinations.ai/prompt/${encodeURIComponent(clean)}?seed=${seed}&width=${dims.width}&height=${dims.height}&nologo=true`,
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=flux&nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}&negative=${negative}`,
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=turbo&nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}&negative=${negative}`,
     ];
 
     let lastError = '';

@@ -165,6 +165,7 @@ export class CreativeOrchestrator {
           prompt: prompt.trim(),
           style,
           format,
+          timeoutMs: 6500,
         };
         const result = await provider.generate(req);
 
