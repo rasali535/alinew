@@ -81,6 +81,8 @@ const STRICT_NEGATIVE_PROMPT = encodeURIComponent(
   'text,words,letters,writing,typography,watermark,logo,signature,picture frame,framed poster,border,low quality,blurry,distorted,bad anatomy,ugly,amateur,jpeg artifacts,circles on blue,blank canvas'
 );
 
+const HF_API_KEY = process.env.HUGGINGFACE_API_KEY || process.env.NEXT_PUBLIC_HF_API_KEY || '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';
+
 /**
  * Provider A (Primary Image): FLUX.1 High-Resolution Studio
  */
@@ -95,6 +97,44 @@ export class FluxImageProvider implements CreativeProvider {
     const dims = resolveDimensions(req);
     const seed = req.seed || Math.floor(Math.random() * 1000000);
 
+    // ── Tier 1: Official Hugging Face Black Forest Labs FLUX.1-schnell Inference ──
+    if (HF_API_KEY) {
+      try {
+        const hfRes = await fetchWithTimeout('https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${HF_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            inputs: enriched,
+            parameters: {
+              width: dims.width,
+              height: dims.height,
+              seed,
+            }
+          }),
+        }, 12000);
+
+        if (hfRes.ok) {
+          const arrayBuf = await hfRes.arrayBuffer();
+          const buffer = Buffer.from(arrayBuf);
+          const val = validateImageBuffer(buffer);
+          if (val.valid) {
+            return {
+              buffer,
+              mimeType: val.mimeType || 'image/jpeg',
+              providerName: 'Official FLUX.1 Schnell',
+              generationTimeMs: Date.now() - t0,
+            };
+          }
+        }
+      } catch (hfErr) {
+        console.warn('[FLUX.1 Inference] HF Inference notice, failing over to dedicated GPU cluster:', hfErr);
+      }
+    }
+
+    // ── Tier 2: Dedicated High-Resolution FLUX.1 Endpoints ──
     const candidateUrls = [
       `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=flux&nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}&negative=${STRICT_NEGATIVE_PROMPT}`,
       `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=flux-realism&nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}&negative=${STRICT_NEGATIVE_PROMPT}`,
