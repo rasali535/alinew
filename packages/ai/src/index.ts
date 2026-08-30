@@ -16,3 +16,6 @@ export * from './creativeProvider.interface';
 export * from './creativeProviders';
 export * from './creativeOrchestrator.service';
 export * from './tenantCredits.service';
+export * from './creativeBrief.types';
+export * from './mariCreativeIntelligence.service';
+export * from './creativeComposition.service';
