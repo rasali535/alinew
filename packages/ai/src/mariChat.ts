@@ -259,15 +259,26 @@ export async function callMariAiApi(
     }
 
     // ── Build authoritative business context system prompt ─────────────────
+    let activeContext = businessContext;
     let contextPrompt = '';
-    if (businessContext) {
-      const { BusinessContextService } = await import('./businessContext.service');
-      contextPrompt = BusinessContextService.generateContextPrompt(businessContext);
-    } else {
+    
+    if (!activeContext) {
       try {
         const { BusinessContextService } = await import('./businessContext.service');
-        const resolvedContext = await BusinessContextService.assembleContext('ras-ali-labs');
-        contextPrompt = BusinessContextService.generateContextPrompt(resolvedContext);
+        let targetOrg = 'ras-ali-labs';
+        if (typeof window !== 'undefined' && window.localStorage) {
+          targetOrg = window.localStorage.getItem('ralion_active_workspace_id') || 
+                      window.localStorage.getItem('ralion_active_org_id') || 
+                      'ras-ali-labs';
+        }
+        activeContext = await BusinessContextService.assembleContext(targetOrg);
+      } catch {}
+    }
+
+    if (activeContext) {
+      try {
+        const { BusinessContextService } = await import('./businessContext.service');
+        contextPrompt = BusinessContextService.generateContextPrompt(activeContext);
       } catch {}
     }
 
@@ -292,7 +303,7 @@ export async function callMariAiApi(
     }
 
     // ── TIER 2: Local Grounded Strategic Engine (Direct Reliable Fallback) ──
-    return generateLocalStrategicResponse(prompt, businessContext);
+    return generateLocalStrategicResponse(prompt, activeContext);
 
   } catch (err) {
     console.warn('[Mari AI] Gateway error, using local engine:', err);
@@ -436,7 +447,7 @@ function generateLocalStrategicResponse(
 
   // 2. Unverified Tenant Fallback (Strictly NO generic Ras Ali Labs fallback)
   if (!hasVerifiedKnowledge && !isRasAli) {
-    const fallbackText = `I don't have enough verified information about your business yet. Add your website or complete your Business Profile and I'll learn from it.`;
+    const fallbackText = `I don't have enough verified information about your business yet. Add your website or complete your Business Profile [Sync Website] and I'll learn from it.`;
     const promptTokens = estimateTokenCount(prompt);
     const completionTokens = estimateTokenCount(fallbackText);
     const usage: MariTokenUsage = {
@@ -484,12 +495,12 @@ function generateLocalStrategicResponse(
         ? `Based on your connected Facebook channel (**${pageName}**) and verified business telemetry, here is what I understand about **${orgName}**:`
         : `Based on your verified business profile, here is what I understand about **${orgName}**:`);
 
-    responseText = `### ${orgName}\n\n` +
+    responseText = `### Your Business: ${orgName}\n\n` +
       `${sourceCitations}\n\n` +
-      `**Business Overview**:\n${orgName} operates in the **${industry}** industry, serving **${targetMarket}**.\n\n` +
+      `**Business Overview (Core business)**:\n${orgName} operates in the **${industry}** industry, serving **${targetMarket}**.\n\n` +
       `**Core Value Proposition**:\n${valueProp || `Dedicated commercial services tailored for ${targetMarket}.`}\n\n` +
-      `**Products & Services**:\n${productsSummary}\n\n` +
-      `**Target Market**:\n${targetMarket}.\n\n` +
+      `**Products & Services (What you sell)**:\n${productsSummary}\n\n` +
+      `**Target Market (Who you serve)**:\n${targetMarket}.\n\n` +
       `*Would you like me to turn this into a growth plan or generate promotional campaigns for ${targetMarket}?*`;
   }
   // 4. Website Knowledge Queries: "What does my website say?" / "website"

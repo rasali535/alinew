@@ -37,10 +37,14 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
 
     const fetchResponse = async () => {
       try {
-        const { callMariAiApi, processMariQuery } = await import('@ralion/ai');
-        
+        const { callMariAiApi, processMariQuery, BusinessContextService } = await import('@ralion/ai');
+        let context = null;
+        try {
+          context = await BusinessContextService.assembleContext();
+        } catch {}
+
         // Let's try the real API first
-        const apiResponse = await callMariAiApi(userText);
+        const apiResponse = await callMariAiApi(userText, undefined, context || undefined);
         
         if (apiResponse) {
           const respText = typeof apiResponse === 'string' ? apiResponse : apiResponse.text;

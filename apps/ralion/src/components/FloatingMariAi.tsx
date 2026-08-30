@@ -26,10 +26,14 @@ export const FloatingMariAi: React.FC = () => {
 
     const fetchResponse = async () => {
       try {
-        const { callMariAiApi, processMariQuery } = await import('@ralion/ai');
-        
+        const { callMariAiApi, processMariQuery, BusinessContextService } = await import('@ralion/ai');
+        let context = null;
+        try {
+          context = await BusinessContextService.assembleContext();
+        } catch {}
+
         // Let's try the real API first
-        const apiResponse = await callMariAiApi(text);
+        const apiResponse = await callMariAiApi(text, undefined, context || undefined);
         
         if (apiResponse) {
           const respText = typeof apiResponse === 'string' ? apiResponse : apiResponse.text;
