@@ -9,14 +9,27 @@ export type CreativeFormat = '1:1_SQUARE' | '4:5_PORTRAIT' | '16:9_LANDSCAPE' | 
 
 export type CreativeType = 'POSTER' | 'FLYER';
 
+export type PosterLayoutType =
+  | 'FULL_BLEED_HERO'        // 100% full visual with subtle organic vignette & bottom typography
+  | 'SPLIT_COMPOSITION'      // 55/45 visual vs matte brand layout for guaranteed contrast
+  | 'EDITORIAL_TYPOGRAPHY'   // Luxury editorial typography with framed photo & generous whitespace
+  | 'SERVICE_FOCUS';         // Focused central visual, top hook, 3 capability points, CTA
+
+export type FlyerLayoutType =
+  | 'EDITORIAL_FLYER'         // Premium corporate flyer with asymmetric grid & clear hierarchy
+  | 'BOLD_COMMERCIAL_FLYER'   // High-impact promotional flyer with hero visual & offer badge
+  | 'MODERN_BUSINESS_FLYER';  // Clean 3-pillar capability flyer with structured contact footer
+
 export type CreativeTemplateId =
-  | 'CORPORATE_HERO'     // Template A: Large visual, headline left/bottom, CTA
-  | 'PRODUCT_FOCUS'      // Template B: Product center, headline top, feature chips, CTA
-  | 'SERVICE_PROMO'      // Template C: Strong headline, supporting visual, 3 benefit checkmarks, CTA
-  | 'OFFER_DISCOUNT'     // Template D: Large promo badge, urgency indicator, visual, CTA
-  | 'ANNOUNCEMENT'       // Template E: Dominant typography statement, brand mark, CTA
-  | 'EVENT_SHOWCASE'     // Template F: Event title, date/time/location chips, hero visual, CTA
-  | 'MULTI_SECTION_FLYER'; // Dedicated Multi-Section Structured Flyer
+  | 'CORPORATE_HERO'          // Legacy alias -> FULL_BLEED_HERO
+  | 'PRODUCT_FOCUS'           // Legacy alias -> SERVICE_FOCUS
+  | 'SERVICE_PROMO'           // Legacy alias -> SERVICE_FOCUS
+  | 'OFFER_DISCOUNT'          // Legacy alias -> BOLD_COMMERCIAL_FLYER / FULL_BLEED_HERO
+  | 'ANNOUNCEMENT'            // Legacy alias -> EDITORIAL_TYPOGRAPHY
+  | 'EVENT_SHOWCASE'          // Legacy alias -> FULL_BLEED_HERO
+  | 'MULTI_SECTION_FLYER'     // Legacy alias -> MODERN_BUSINESS_FLYER
+  | PosterLayoutType
+  | FlyerLayoutType;
 
 export type TypographyStyle =
   | 'MODERN_INTER'            // Inter / Inter (Clean Modern)
@@ -42,24 +55,28 @@ export interface ContactInfo {
 
 export interface StructuredCreativeBrief {
   id: string;
+  organizationId?: string;
   campaignObjective: 'LEAD_GENERATION' | 'BRAND_AWARENESS' | 'PRODUCT_LAUNCH' | 'EVENT_PROMOTION' | 'SPECIAL_OFFER' | 'RECRUITMENT';
   targetAudience: string;
   platform: 'facebook' | 'instagram' | 'linkedin' | 'twitter' | 'whatsapp' | 'web';
   format: CreativeFormat;
   creativeType: CreativeType;
   templateId: CreativeTemplateId;
+  posterLayout?: PosterLayoutType;
+  flyerLayout?: FlyerLayoutType;
   
   // Deterministic Copy Hierarchy
   brandName: string;
-  headline: string;          // 4-10 words
-  subheadline?: string;      // 8-18 words
-  bodyCopy?: string;         // Max 30 words
-  keyBenefits?: string[];    // 1-3 crisp benefit points
-  offerBadge?: string;       // e.g. "SAVE 25%", "FREE TRIAL", "LIMITED ACCESS"
-  cta: string;               // 2-5 words, e.g. "Request a Quote →"
+  industry: string;
+  headline: string;
+  subheadline?: string;
+  bodyCopy?: string;
+  keyBenefits?: string[];
+  offerBadge?: string;
+  cta: string;
   contactDetails?: ContactInfo;
-  urgency?: string;          // e.g. "Offer Ends Friday", "Seats Limited"
-  disclaimers?: string;      // e.g. "Terms & Conditions apply."
+  urgency?: string;
+  disclaimers?: string;
   
   // Design & Brand System
   brandColors: BrandColorPalette;
@@ -75,14 +92,35 @@ export interface StructuredCreativeBrief {
   };
 }
 
+export interface CommercialVisualQAResult {
+  passed: boolean;
+  overallScore: number;
+  hierarchyPass: boolean;
+  contrastPass: boolean;
+  whitespacePass: boolean;
+  tenantIsolationPass: boolean;
+  copyNaturalnessPass: boolean;
+  brandingPass: boolean;
+  evaluatedMetrics: {
+    visualScore: number;
+    hierarchyScore: number;
+    typographyScore: number;
+    brandingScore: number;
+    readabilityScore: number;
+    ctaScore: number;
+  };
+  passedChecks: string[];
+  reasons: string[];
+}
+
 export interface CreativeQualityScorecard {
-  visualScore: number;       // 1 - 10 (Subject resolution, clarity, negative space)
-  hierarchyScore: number;    // 1 - 10 (Visual scanability: Brand -> Headline -> Offer -> CTA)
-  typographyScore: number;   // 1 - 10 (Font pairing, weights, kerning, line heights)
-  brandingScore: number;     // 1 - 10 (Logo aspect ratio, brand palette adherence)
-  readabilityScore: number;  // 1 - 10 (Contrast ratio, scrim opacity, word count limits)
-  ctaScore: number;          // 1 - 10 (CTA prominence, button affordance)
-  overallScore: number;      // 1.0 - 10.0 Weighted composite
+  visualScore: number;
+  hierarchyScore: number;
+  typographyScore: number;
+  brandingScore: number;
+  readabilityScore: number;
+  ctaScore: number;
+  overallScore: number;
   passedChecks: string[];
   warnings: string[];
 }

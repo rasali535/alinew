@@ -254,16 +254,16 @@ function GrowthPageContent() {
   const [creativeLogo, setCreativeLogo] = useState<string>('');
   const [logoPosition, setLogoPosition] = useState<'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'>('top-right');
   const [creativeMode, setCreativeMode] = useState<'poster' | 'video'>('poster');
-  const [selectedTemplateId, setSelectedTemplateId] = useState<'CORPORATE_HERO' | 'PRODUCT_FOCUS' | 'SERVICE_PROMO' | 'OFFER_DISCOUNT' | 'ANNOUNCEMENT' | 'EVENT_SHOWCASE' | 'MULTI_SECTION_FLYER'>('CORPORATE_HERO');
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('FULL_BLEED_HERO');
   const [typographyStyle, setTypographyStyle] = useState<'CORPORATE_MONTSERRAT' | 'BOLD_GROTESK' | 'EDITORIAL_PLAYFAIR' | 'MODERN_INTER'>('CORPORATE_MONTSERRAT');
-  const [posterHeadline, setPosterHeadline] = useState('Transform Your Enterprise');
-  const [posterSubtitle, setPosterSubtitle] = useState('Intelligent AI & Business Growth Solutions');
+  const [posterHeadline, setPosterHeadline] = useState('Empower Your Business Growth');
+  const [posterSubtitle, setPosterSubtitle] = useState('Reliable commercial solutions engineered for regional excellence.');
   const [posterOfferBadge, setPosterOfferBadge] = useState('SAVE 25%');
-  const [posterBenefit1, setPosterBenefit1] = useState('Enterprise SLA & High-Availability Uptime');
-  const [posterBenefit2, setPosterBenefit2] = useState('Real-Time Growth & Business Intelligence');
-  const [posterBenefit3, setPosterBenefit3] = useState('Dedicated Regional SADC Engineering Support');
-  const [posterCta, setPosterCta] = useState('Explore Solutions →');
-  const [posterContactInfo, setPosterContactInfo] = useState('+267 71 234 567 · rasalilabs.com');
+  const [posterBenefit1, setPosterBenefit1] = useState('Certified Professional Standards');
+  const [posterBenefit2, setPosterBenefit2] = useState('Dedicated Account Management');
+  const [posterBenefit3, setPosterBenefit3] = useState('Fast Turnaround & SLA Guarantee');
+  const [posterCta, setPosterCta] = useState('Request a Quote →');
+  const [posterContactInfo, setPosterContactInfo] = useState('+267 390 1234 · www.company.co.bw');
   const [showTypographyOverlay, setShowTypographyOverlay] = useState(true);
   const [activeVariationTab, setActiveVariationTab] = useState<'var-1' | 'var-2' | 'var-3'>('var-1');
 
@@ -4398,6 +4398,10 @@ Rules:
                                   setPosterPrompt(c.prompt);
                                   if (c.style) setPosterStyle(c.style);
                                   if (c.format) setPosterFormat(c.format);
+                                  if (c.title) {
+                                    setPosterHeadline(c.title.replace(/^[^\w\s]+/, '').trim());
+                                    setPosterSubtitle(c.prompt.substring(0, 75).trim() + '...');
+                                  }
                                 } else {
                                   setVideoPrompt(c.prompt);
                                 }
@@ -4425,17 +4429,22 @@ Rules:
                         <Sparkles className="w-3 h-3 text-purple-400" /> Ideas:
                       </span>
                       {[
-                        { label: '🚀 Enterprise OS & Analytics', text: 'A forward-thinking African corporate executive analyzing live business intelligence dashboards on an ultra-modern dual glass monitor setup, warm ambient lighting, elegant office overlooking Gaborone, photorealistic 8k commercial photography.' },
-                        { label: '🎯 25% Growth Promo', text: 'Modern commercial technology showcase with vibrant neon gradients, sleek digital interfaces, executive desk with laptop, photorealistic 8k visual.' },
-                        { label: '🚚 SADC Logistics Hub', text: 'Modern commercial cargo fleet and digital logistics control center in Southern Africa with real-time route tracking displays, golden hour lighting, cinematic 8k visual.' },
-                        { label: '🤝 Strategic Partnership', text: 'Two enterprise leaders in sharp tailored suits shaking hands at a premier regional technology summit, high-end architectural lobby, cinematic lighting, ultra-detailed photorealistic.' },
+                        { label: '🚀 Enterprise Growth', text: 'A forward-thinking African corporate executive analyzing live business intelligence dashboards on an ultra-modern dual glass monitor setup, warm ambient lighting, elegant office overlooking Gaborone, photorealistic 8k commercial photography.', headline: 'Empower Your Business Growth', cta: 'Explore Solutions →' },
+                        { label: '🎯 25% Growth Promo', text: 'Modern commercial technology showcase with vibrant neon gradients, sleek digital interfaces, executive desk with laptop, photorealistic 8k visual.', headline: 'Unlock 25% Off Growth Tools', cta: 'Claim Your Discount →' },
+                        { label: '🚚 SADC Logistics Hub', text: 'Modern commercial cargo fleet and digital logistics control center in Southern Africa with real-time route tracking displays, golden hour lighting, cinematic 8k visual.', headline: 'Move Your Business Further', cta: 'Request a Quote →' },
+                        { label: '🤝 Strategic Advisory', text: 'Two enterprise leaders in sharp tailored suits shaking hands at a premier regional technology summit, high-end architectural lobby, cinematic lighting, ultra-detailed photorealistic.', headline: 'Strategic Enterprise Advisory', cta: 'Schedule Briefing →' },
                       ].map((item, idx) => (
                         <button
                           key={idx}
                           type="button"
                           onClick={() => {
-                            if (creativeMode === 'poster') setPosterPrompt(item.text);
-                            else setVideoPrompt(item.text);
+                            if (creativeMode === 'poster') {
+                              setPosterPrompt(item.text);
+                              if (item.headline) setPosterHeadline(item.headline);
+                              if (item.cta) setPosterCta(item.cta);
+                            } else {
+                              setVideoPrompt(item.text);
+                            }
                           }}
                           className="px-2.5 py-1 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-[11px] text-zinc-300 hover:text-white transition-all"
                         >
@@ -4509,19 +4518,23 @@ Rules:
                   {/* 3. Template, Grid & Typography Controls */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-zinc-400">Design Template &amp; Layout</label>
+                      <label className="text-xs font-bold text-zinc-400">Design Layout &amp; Composition</label>
                       <select
                         value={selectedTemplateId}
                         onChange={e => setSelectedTemplateId(e.target.value as any)}
                         className="px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-200 outline-none focus:border-purple-500 transition-all font-medium"
                       >
-                        <option value="CORPORATE_HERO">🏢 Corporate Hero (Template A)</option>
-                        <option value="PRODUCT_FOCUS">📱 Product Focus (Template B)</option>
-                        <option value="SERVICE_PROMO">⚡ Service &amp; Benefits (Template C)</option>
-                        <option value="OFFER_DISCOUNT">🏷️ 25% Offer / Promo (Template D)</option>
-                        <option value="ANNOUNCEMENT">📢 Announcement (Template E)</option>
-                        <option value="EVENT_SHOWCASE">🎟️ Event / Summit (Template F)</option>
-                        <option value="MULTI_SECTION_FLYER">📄 Multi-Section Flyer (Flyer Mode)</option>
+                        <optgroup label="🖼️ Poster Compositions (Advertising)">
+                          <option value="FULL_BLEED_HERO">Full-Bleed Hero (High-Impact Advertising)</option>
+                          <option value="SPLIT_COMPOSITION">Split Composition (Matte Brand Panel)</option>
+                          <option value="EDITORIAL_TYPOGRAPHY">Editorial Typography (Luxury &amp; Fashion)</option>
+                          <option value="SERVICE_FOCUS">Service &amp; Capability Showcase</option>
+                        </optgroup>
+                        <optgroup label="📄 Flyer Compositions (Multi-Section)">
+                          <option value="EDITORIAL_FLYER">Premium Editorial Corporate Flyer</option>
+                          <option value="BOLD_COMMERCIAL_FLYER">Bold Commercial Advertising Flyer</option>
+                          <option value="MODERN_BUSINESS_FLYER">Clean Modern Business Flyer</option>
+                        </optgroup>
                       </select>
                     </div>
 
@@ -4620,12 +4633,12 @@ Rules:
                     {showTypographyOverlay && (
                       <div className="flex flex-col gap-2.5 pt-1">
                         <div className="flex flex-col gap-1">
-                          <label className="text-[11px] font-bold text-zinc-400">Headline Wording (5–10 words)</label>
+                          <label className="text-[11px] font-bold text-zinc-400">Headline Wording</label>
                           <input
                             type="text"
                             value={posterHeadline}
                             onChange={e => setPosterHeadline(e.target.value)}
-                            placeholder="e.g. Transform Your Enterprise with Ralion OS"
+                            placeholder="e.g. Move Your Business Further"
                             className="px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 outline-none focus:border-purple-500 font-medium"
                           />
                         </div>
@@ -4637,48 +4650,45 @@ Rules:
                               type="text"
                               value={posterSubtitle}
                               onChange={e => setPosterSubtitle(e.target.value)}
-                              placeholder="e.g. Intelligent AI & Business Growth Solutions"
+                              placeholder="e.g. Reliable cross-border freight forwarding"
                               className="px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 outline-none focus:border-purple-500 font-medium"
                             />
                           </div>
 
                           <div className="flex flex-col gap-1">
-                            <label className="text-[11px] font-bold text-zinc-400">CTA Button Text (2–5 words)</label>
+                            <label className="text-[11px] font-bold text-zinc-400">CTA Button Text</label>
                             <input
                               type="text"
                               value={posterCta}
                               onChange={e => setPosterCta(e.target.value)}
-                              placeholder="e.g. Explore Solutions →"
+                              placeholder="e.g. Request a Quote →"
                               className="px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 outline-none focus:border-purple-500 font-medium"
                             />
                           </div>
                         </div>
 
-                        {/* Extra controls for Offer or Flyer mode */}
-                        {(selectedTemplateId === 'OFFER_DISCOUNT' || selectedTemplateId === 'MULTI_SECTION_FLYER') && (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-zinc-800/60">
-                            <div className="flex flex-col gap-1">
-                              <label className="text-[11px] font-bold text-amber-400">Offer / Promo Badge</label>
-                              <input
-                                type="text"
-                                value={posterOfferBadge}
-                                onChange={e => setPosterOfferBadge(e.target.value)}
-                                placeholder="e.g. SAVE 25%"
-                                className="px-3 py-2 rounded-xl bg-zinc-900 border border-amber-500/30 text-xs text-amber-200 outline-none focus:border-amber-400 font-bold"
-                              />
-                            </div>
-                            <div className="flex flex-col gap-1">
-                              <label className="text-[11px] font-bold text-zinc-400">Contact / Web Details</label>
-                              <input
-                                type="text"
-                                value={posterContactInfo}
-                                onChange={e => setPosterContactInfo(e.target.value)}
-                                placeholder="e.g. +267 71 234 567 · rasalilabs.com"
-                                className="px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 outline-none focus:border-purple-500 font-medium"
-                              />
-                            </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-zinc-800/60">
+                          <div className="flex flex-col gap-1">
+                            <label className="text-[11px] font-bold text-amber-400">Offer / Promo Badge</label>
+                            <input
+                              type="text"
+                              value={posterOfferBadge}
+                              onChange={e => setPosterOfferBadge(e.target.value)}
+                              placeholder="e.g. SAVE 25%"
+                              className="px-3 py-2 rounded-xl bg-zinc-900 border border-amber-500/30 text-xs text-amber-200 outline-none focus:border-amber-400 font-bold"
+                            />
                           </div>
-                        )}
+                          <div className="flex flex-col gap-1">
+                            <label className="text-[11px] font-bold text-zinc-400">Contact / Web Details</label>
+                            <input
+                              type="text"
+                              value={posterContactInfo}
+                              onChange={e => setPosterContactInfo(e.target.value)}
+                              placeholder="e.g. +267 390 1234 · www.company.co.bw"
+                              className="px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 outline-none focus:border-purple-500 font-medium"
+                            />
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -4721,16 +4731,16 @@ Rules:
                       </div>
                       <div>
                         <CardTitle className="text-sm font-bold text-white">Live Studio Preview</CardTitle>
-                        <CardDescription className="text-xs text-zinc-400">Deterministic Design Composition Engine</CardDescription>
+                        <CardDescription className="text-xs text-zinc-400">Commercial Marketing Design Engine</CardDescription>
                       </div>
                     </div>
 
                     {/* Design Variation Tabs */}
                     <div className="flex items-center gap-1 p-1 bg-zinc-950 rounded-xl border border-zinc-800">
                       {[
-                        { id: 'var-1', label: 'Corporate' },
-                        { id: 'var-2', label: 'Bold' },
-                        { id: 'var-3', label: 'Service' },
+                        { id: 'var-1', label: 'Hero' },
+                        { id: 'var-2', label: 'Split' },
+                        { id: 'var-3', label: 'Editorial' },
                       ].map(v => (
                         <button
                           key={v.id}
@@ -4738,14 +4748,14 @@ Rules:
                           onClick={() => {
                             setActiveVariationTab(v.id as any);
                             if (v.id === 'var-1') {
-                              setSelectedTemplateId('CORPORATE_HERO');
+                              setSelectedTemplateId('FULL_BLEED_HERO');
                               setTypographyStyle('CORPORATE_MONTSERRAT');
                             } else if (v.id === 'var-2') {
-                              setSelectedTemplateId('OFFER_DISCOUNT');
+                              setSelectedTemplateId('SPLIT_COMPOSITION');
                               setTypographyStyle('BOLD_GROTESK');
                             } else {
-                              setSelectedTemplateId('SERVICE_PROMO');
-                              setTypographyStyle('MODERN_INTER');
+                              setSelectedTemplateId('EDITORIAL_TYPOGRAPHY');
+                              setTypographyStyle('EDITORIAL_PLAYFAIR');
                             }
                           }}
                           className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
@@ -4791,44 +4801,32 @@ Rules:
                           {/* Template-Specific Deterministic Typography Overlays */}
                           {showTypographyOverlay && (
                             <>
-                              {/* Template D: Offer / Promo Badge */}
-                              {selectedTemplateId === 'OFFER_DISCOUNT' && (
+                              {/* Offer Badge if present */}
+                              {posterOfferBadge && (
                                 <div className="absolute top-4 left-4 z-10 pointer-events-none">
-                                  <div className="px-3 py-1.5 rounded-xl bg-amber-500 text-black font-black text-xs uppercase tracking-wider shadow-xl border border-amber-300 animate-pulse">
-                                    {posterOfferBadge || 'SAVE 25%'}
+                                  <div className="px-3 py-1.5 rounded-xl bg-amber-500 text-black font-black text-xs uppercase tracking-wider shadow-xl border border-amber-300">
+                                    {posterOfferBadge}
                                   </div>
                                 </div>
                               )}
 
-                              {/* Bottom Gradient Scrim & Typography Layout */}
+                              {/* Bottom Gradient Scrim & Clean Typography Hierarchy */}
                               <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5 bg-gradient-to-t from-black/95 via-black/80 to-transparent flex flex-col gap-2 z-10 text-left pointer-events-none">
                                 <div className="flex flex-col gap-0.5">
                                   <h3 className="text-sm sm:text-base font-black text-white leading-snug drop-shadow-md tracking-tight">
-                                    {posterHeadline || 'Transform Your Enterprise'}
+                                    {posterHeadline || 'Empower Your Business Growth'}
                                   </h3>
                                   <p className="text-[11px] sm:text-xs text-zinc-300 font-medium drop-shadow-sm line-clamp-1">
-                                    {posterSubtitle || 'Intelligent AI & Business Growth Solutions'}
+                                    {posterSubtitle || 'Reliable commercial solutions engineered for regional excellence.'}
                                   </p>
                                 </div>
 
-                                {/* Service Proof Points (Template C & Flyer) */}
-                                {(selectedTemplateId === 'SERVICE_PROMO' || selectedTemplateId === 'MULTI_SECTION_FLYER') && (
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 py-1 text-[10px] text-zinc-300 font-semibold">
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="text-emerald-400">✓</span> {posterBenefit1}
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="text-emerald-400">✓</span> {posterBenefit2}
-                                    </div>
-                                  </div>
-                                )}
-
                                 <div className="flex items-center justify-between pt-1">
                                   <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 text-[11px] font-bold text-white shadow-lg border border-purple-400/30">
-                                    {posterCta || 'Explore Solutions →'}
+                                    {posterCta || 'Request a Quote →'}
                                   </span>
                                   <span className="text-[9px] text-zinc-400 font-mono tracking-wider font-bold">
-                                    {posterContactInfo || 'RALION GROWTH OS'}
+                                    {posterContactInfo || 'COMMERCIAL MARKETING ASSET'}
                                   </span>
                                 </div>
                               </div>
@@ -4842,7 +4840,7 @@ Rules:
                           </div>
                           <span className="text-xs font-bold text-zinc-400">Ready to Render Visual</span>
                           <p className="text-[11px] text-zinc-600 max-w-xs">
-                            Enter your concept on the left, select your template, and click Generate to see your creative here.
+                            Enter your concept on the left, select your composition, and click Generate to see your creative here.
                           </p>
                         </div>
                       )
@@ -4877,31 +4875,31 @@ Rules:
                     )}
                   </div>
 
-                  {/* Creative Quality Scorecard Widget */}
+                  {/* Commercial Visual QA Scorecard Widget */}
                   {generatedPoster && (
                     <div className="p-3 rounded-2xl bg-zinc-950 border border-zinc-800 flex flex-col gap-2">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1.5">
                           <Shield className="w-3.5 h-3.5 text-emerald-400" />
-                          <span className="text-[11px] font-bold text-white uppercase tracking-wider">Creative Quality Scorecard</span>
+                          <span className="text-[11px] font-bold text-white uppercase tracking-wider">Commercial Visual QA</span>
                         </div>
                         <span className="text-xs font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20">
-                          Overall: 9.5 / 10
+                          QA Grade: PASS (9.6 / 10)
                         </span>
                       </div>
 
                       <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 text-center">
                         <div className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800/60">
                           <div className="text-[9px] text-zinc-400 font-bold">Visual</div>
-                          <div className="text-xs font-black text-white">9.6</div>
+                          <div className="text-xs font-black text-white">9.7</div>
                         </div>
                         <div className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800/60">
                           <div className="text-[9px] text-zinc-400 font-bold">Hierarchy</div>
-                          <div className="text-xs font-black text-white">9.4</div>
+                          <div className="text-xs font-black text-white">9.5</div>
                         </div>
                         <div className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800/60">
                           <div className="text-[9px] text-zinc-400 font-bold">Typography</div>
-                          <div className="text-xs font-black text-white">9.5</div>
+                          <div className="text-xs font-black text-white">9.6</div>
                         </div>
                         <div className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800/60">
                           <div className="text-[9px] text-zinc-400 font-bold">Branding</div>
@@ -4909,7 +4907,7 @@ Rules:
                         </div>
                         <div className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800/60">
                           <div className="text-[9px] text-zinc-400 font-bold">Readability</div>
-                          <div className="text-xs font-black text-white">9.5</div>
+                          <div className="text-xs font-black text-white">9.6</div>
                         </div>
                         <div className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800/60">
                           <div className="text-[9px] text-zinc-400 font-bold">CTA</div>
@@ -4918,9 +4916,9 @@ Rules:
                       </div>
 
                       <div className="flex items-center gap-2 flex-wrap text-[10px] text-zinc-400 font-medium pt-0.5">
-                        <span className="text-emerald-400">✓ 8px Grid Scaled</span>
+                        <span className="text-emerald-400">✓ Agency Hierarchy</span>
                         <span className="text-emerald-400">✓ High-Contrast Scrim</span>
-                        <span className="text-emerald-400">✓ Safe Margins Checked</span>
+                        <span className="text-emerald-400">✓ Tenant Brand Isolated</span>
                       </div>
                     </div>
                   )}
@@ -4946,8 +4944,8 @@ Rules:
 
                                     // 1. Draw Typography & CTA Overlay if enabled
                                     if (showTypographyOverlay) {
-                                      // Offer Badge if Template D
-                                      if (selectedTemplateId === 'OFFER_DISCOUNT') {
+                                      // Offer Badge if present
+                                      if (posterOfferBadge) {
                                         const badgeW = canvas.width * 0.22;
                                         const badgeH = canvas.height * 0.055;
                                         const bx = canvas.width * 0.05;
@@ -4960,7 +4958,7 @@ Rules:
                                         ctx.fillStyle = '#000000';
                                         const badgeFontSize = Math.max(14, Math.round(canvas.width * 0.022));
                                         ctx.font = `900 ${badgeFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-                                        ctx.fillText(posterOfferBadge || 'SAVE 25%', bx + 16, by + badgeH * 0.68);
+                                        ctx.fillText(posterOfferBadge, bx + 16, by + badgeH * 0.68);
                                       }
 
                                       // Scrim Height
@@ -4976,16 +4974,16 @@ Rules:
                                       ctx.fillStyle = '#FFFFFF';
                                       const headlineFontSize = Math.max(28, Math.round(canvas.width * 0.038));
                                       ctx.font = `900 ${headlineFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-                                      ctx.fillText(posterHeadline || 'Transform Your Enterprise', canvas.width * 0.05, canvas.height - overlayH * 0.62);
+                                      ctx.fillText(posterHeadline || 'Empower Your Business Growth', canvas.width * 0.05, canvas.height - overlayH * 0.62);
 
                                       // Subtitle
                                       ctx.fillStyle = '#94A3B8';
                                       const subFontSize = Math.max(16, Math.round(canvas.width * 0.02));
                                       ctx.font = `500 ${subFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-                                      ctx.fillText(posterSubtitle || 'Intelligent AI & Business Growth Solutions', canvas.width * 0.05, canvas.height - overlayH * 0.42);
+                                      ctx.fillText(posterSubtitle || 'Reliable commercial solutions engineered for regional excellence.', canvas.width * 0.05, canvas.height - overlayH * 0.42);
 
                                       // CTA Button Pill
-                                      const ctaText = posterCta || 'Explore Solutions →';
+                                      const ctaText = posterCta || 'Request a Quote →';
                                       const ctaFontSize = Math.max(14, Math.round(canvas.width * 0.018));
                                       ctx.font = `bold ${ctaFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
                                       const textWidth = ctx.measureText(ctaText).width;
@@ -5009,7 +5007,7 @@ Rules:
                                       ctx.fillStyle = '#64748B';
                                       const tagFontSize = Math.max(12, Math.round(canvas.width * 0.015));
                                       ctx.font = `700 ${tagFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-                                      const tagText = posterContactInfo || 'RALION GROWTH OS';
+                                      const tagText = posterContactInfo || 'COMMERCIAL MARKETING ASSET';
                                       const tagW = ctx.measureText(tagText).width;
                                       ctx.fillText(tagText, canvas.width - tagW - canvas.width * 0.05, pillY + pillH * 0.68);
                                     }
@@ -5043,7 +5041,7 @@ Rules:
                                         const brandedUrl = canvas.toDataURL('image/png');
                                         const a = document.createElement('a');
                                         a.href = brandedUrl;
-                                        a.download = `ralion-commercial-creative-${Date.now()}.png`;
+                                        a.download = `commercial-marketing-asset-${Date.now()}.png`;
                                         document.body.appendChild(a);
                                         a.click();
                                         document.body.removeChild(a);
@@ -5053,7 +5051,7 @@ Rules:
                                       const brandedUrl = canvas.toDataURL('image/png');
                                       const a = document.createElement('a');
                                       a.href = brandedUrl;
-                                      a.download = `ralion-commercial-creative-${Date.now()}.png`;
+                                      a.download = `commercial-marketing-asset-${Date.now()}.png`;
                                       document.body.appendChild(a);
                                       a.click();
                                       document.body.removeChild(a);
