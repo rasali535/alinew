@@ -12,7 +12,7 @@ export interface UserProfile {
 }
 
 export class AuthService {
-  private static supabase = createClient();
+  private static get supabase() { return createClient(); }
 
   /**
    * Login with email and password

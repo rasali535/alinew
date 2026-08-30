@@ -9,7 +9,7 @@ export interface OrganizationDetails {
 }
 
 export class OrganizationService {
-  private static supabase = createClient();
+  private static get supabase() { return createClient(); }
 
   /**
    * Get active organizations for current user

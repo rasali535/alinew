@@ -10,7 +10,7 @@ export interface LicenseValidation {
 }
 
 export class LicenseService {
-  private static supabase = createClient();
+  private static get supabase() { return createClient(); }
 
   /**
    * Validate license for an organization

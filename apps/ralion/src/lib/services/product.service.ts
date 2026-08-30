@@ -8,7 +8,7 @@ export interface ProductAccessResult {
 }
 
 export class ProductService {
-  private static supabase = createClient();
+  private static get supabase() { return createClient(); }
   private static productId = process.env.NEXT_PUBLIC_PRODUCT_ID || 'ralion';
 
   /**

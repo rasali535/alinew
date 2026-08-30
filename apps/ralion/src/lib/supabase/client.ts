@@ -9,6 +9,9 @@ declare global {
 let _supabaseInstance: SupabaseClient | null = null;
 
 export function createClient(): SupabaseClient {
+  if (typeof window !== 'undefined' && (window as any).__ralion_supabase_instance__) {
+    return (window as any).__ralion_supabase_instance__;
+  }
   if (typeof globalThis !== 'undefined' && globalThis.__ralion_supabase_instance__) {
     return globalThis.__ralion_supabase_instance__;
   }
@@ -33,6 +36,9 @@ export function createClient(): SupabaseClient {
   });
 
   _supabaseInstance = instance;
+  if (typeof window !== 'undefined') {
+    (window as any).__ralion_supabase_instance__ = instance;
+  }
   if (typeof globalThis !== 'undefined') {
     globalThis.__ralion_supabase_instance__ = instance;
   }

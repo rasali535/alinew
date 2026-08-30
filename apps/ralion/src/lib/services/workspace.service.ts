@@ -18,7 +18,7 @@ export interface WorkspaceItem {
 }
 
 export class WorkspaceService {
-  private static supabase = createClient();
+  private static get supabase() { return createClient(); }
 
   /**
    * Get active workspace ID from client storage or fallback to current user's default workspace
