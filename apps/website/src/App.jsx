@@ -95,10 +95,27 @@ function App() {
                 <Route path="/about" element={<About />} />
                 <Route path="/request-demo" element={<RequestDemo />} />
 
-                {/* Ralion Platform & Community Edition */}
+                {/* Ralion Platform & Dashboard Redirects */}
                 <Route path="/ralion/community" element={<CommunityEdition />} />
                 <Route path="/ralion" element={<ExternalRedirect to="/ralion/dashboard" />} />
                 <Route path="/ralion/*" element={<ExternalRedirect />} />
+                <Route path="/growth" element={<ExternalRedirect to="/ralion/growth" />} />
+                <Route path="/creatives" element={<ExternalRedirect to="/ralion/growth" />} />
+                <Route path="/dashboard" element={<ExternalRedirect to="/ralion/dashboard" />} />
+                <Route path="/crm" element={<ExternalRedirect to="/ralion/crm" />} />
+                <Route path="/customers" element={<ExternalRedirect to="/ralion/customers" />} />
+                <Route path="/leads" element={<ExternalRedirect to="/ralion/leads" />} />
+                <Route path="/calendar" element={<ExternalRedirect to="/ralion/calendar" />} />
+                <Route path="/tasks" element={<ExternalRedirect to="/ralion/tasks" />} />
+                <Route path="/documents" element={<ExternalRedirect to="/ralion/documents" />} />
+                <Route path="/billing" element={<ExternalRedirect to="/ralion/billing" />} />
+                <Route path="/mari-ai" element={<ExternalRedirect to="/ralion/mari-ai" />} />
+                <Route path="/settings" element={<ExternalRedirect to="/ralion/settings" />} />
+                <Route path="/settings/*" element={<ExternalRedirect />} />
+                <Route path="/workflows" element={<ExternalRedirect to="/ralion/workflows" />} />
+                <Route path="/workspace" element={<ExternalRedirect to="/ralion/workspace" />} />
+                <Route path="/portal" element={<ExternalRedirect to="/ralion/portal" />} />
+                <Route path="/reports" element={<ExternalRedirect to="/ralion/reports" />} />
 
                 {/* SaaS Onboarding & Customer Portal */}
                 <Route path="/checkout" element={<Checkout />} />

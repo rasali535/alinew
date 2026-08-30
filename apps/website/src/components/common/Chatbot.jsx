@@ -167,11 +167,15 @@ export default function Chatbot() {
                     userId: `user-${Math.random().toString(36).substr(2, 9)}`,
                     metadata: { source: 'web_ziggy' }
                 });
-                storedSessionId = response.data.id;
-                localStorage.setItem('chat_session_id', storedSessionId);
-                console.log('Ziggy Connected! Session:', storedSessionId);
+                storedSessionId = response.data?.id;
+                if (storedSessionId) {
+                    localStorage.setItem('chat_session_id', storedSessionId);
+                    console.log('Ziggy Connected! Session:', storedSessionId);
+                }
             } catch (error) {
-                console.error('Ziggy Connection Error:', error.message);
+                console.warn('Ziggy Connection Notice:', error.message);
+                storedSessionId = `session-local-${Math.random().toString(36).substr(2, 9)}-${Date.now()}`;
+                localStorage.setItem('chat_session_id', storedSessionId);
             }
         }
 

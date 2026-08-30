@@ -60,10 +60,19 @@ export class SessionRepository {
 
             return this.mapRowToSession(row);
         } catch (error) {
-            logger.error('Failed to create session', { error, userId });
-            throw error instanceof DatabaseError
-                ? error
-                : new DatabaseError('Failed to create session', error);
+            logger.warn('Failed to create session in DB, falling back to in-memory session', { error: (error as any)?.message, userId });
+            const id = crypto.randomUUID();
+            const now = new Date();
+            const session: Session = {
+                id,
+                userId: userId || undefined,
+                createdAt: now,
+                updatedAt: now,
+                expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000),
+                metadata: metadata || {},
+            };
+            this.inMemorySessions.set(id, session);
+            return session;
         }
     }
 
