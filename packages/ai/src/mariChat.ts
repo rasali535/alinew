@@ -317,13 +317,35 @@ function generateLocalStrategicResponse(
   const wk = context?.layer1?.websiteKnowledge?.value || (orgId ? WebsiteIngestionService.getWebsiteKnowledge(orgId) : null);
   let profile = orgId ? BusinessKnowledgeProfileService.getProfile(orgId) : null;
 
-  const isWkIngested = Boolean(wk && (wk.status === 'INGESTED' || wk.provenance === 'VERIFIED' || (wk.sections && wk.sections.length > 0)));
+  const isWkIngested = Boolean(
+    wk && (
+      wk.status === 'INGESTED' ||
+      wk.provenance === 'VERIFIED' ||
+      (wk.sections && wk.sections.length > 0) ||
+      (wk.websiteUrl && wk.websiteUrl !== 'Not configured') ||
+      Boolean(wk.title)
+    )
+  );
 
   const orgName = context?.layer1?.companyName?.value || profile?.companyName?.value || wk?.title || context?.organizationName || '';
   const isRasAli = orgName === 'Ras Ali Labs' || orgId === 'ras-ali-labs' || orgId === 'org-rasalilabs-demo' || orgId.includes('rasali');
 
+  const pageName = context?.layer2?.social?.connectedPageName?.value || (isRasAli ? 'Ras Ali Labs Official' : '');
+  const isSocialConnected = Boolean(
+    (context?.layer2?.social?.isConnected && pageName && pageName !== 'Not Connected') ||
+    (pageName && pageName !== 'Not Connected' && pageName !== '') ||
+    (isRasAli && pageName)
+  );
+
+  const hasProducts = Boolean(
+    (context?.layer1?.productsAndServices?.value && context.layer1.productsAndServices.value.length > 0) ||
+    (profile?.products?.value && profile.products.value.length > 0)
+  );
+
   const hasVerifiedKnowledge = Boolean(
     isWkIngested ||
+    isSocialConnected ||
+    hasProducts ||
     (profile && profile.isVerified) ||
     (context?.layer1?.companyName?.provenance === 'VERIFIED') ||
     isRasAli
@@ -339,8 +361,6 @@ function generateLocalStrategicResponse(
   const activeClients = context?.layer2?.crm?.activeCustomersCount?.value || 0;
   const reachGrowth = context?.layer2?.social?.reachGrowthPct?.value || (isRasAli ? 34 : 0);
   const followers = context?.layer2?.social?.followersCount?.value || (isRasAli ? 107 : 0);
-  const pageName = context?.layer2?.social?.connectedPageName?.value || (isRasAli ? 'Ras Ali Labs Official' : '');
-  const isSocialConnected = Boolean((context?.layer2?.social?.isConnected && pageName) || (isRasAli && pageName));
 
   let responseText = '';
 
@@ -458,9 +478,11 @@ function generateLocalStrategicResponse(
       ? productsList.map(p => `• **${p.name}** (${p.category})`).join('\n')
       : `• **${orgName} Core Solutions** (${industry})\n• **Automated Workflows**\n• **Customer Support & Inquiries**`;
 
-    const sourceCitations = websiteUrl && websiteUrl !== 'Not configured'
-      ? `Based on your website (${websiteUrl}), here is what I understand about **${orgName}**:`
-      : `Based on your verified business profile, here is what I understand about **${orgName}**:`;
+    const sourceCitations = (websiteUrl && websiteUrl !== 'Not configured')
+      ? `Based on your website (${websiteUrl})${isSocialConnected ? ` and connected Facebook channel (**${pageName}**)` : ''}, here is what I understand about **${orgName}**:`
+      : (isSocialConnected
+        ? `Based on your connected Facebook channel (**${pageName}**) and verified business telemetry, here is what I understand about **${orgName}**:`
+        : `Based on your verified business profile, here is what I understand about **${orgName}**:`);
 
     responseText = `### ${orgName}\n\n` +
       `${sourceCitations}\n\n` +

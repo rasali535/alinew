@@ -177,17 +177,29 @@ export class BusinessContextService {
 
     // 1. Layer 1: Business Knowledge & Ingested Website
     const websiteKnowledge = WebsiteIngestionService.getWebsiteKnowledge(orgId);
+    const fbPage = options?.localOverrides?.fbPage;
+    const isSocialPageConnected = Boolean(fbPage && fbPage.name && fbPage.name !== 'Not Connected');
+
+    const isWkValid = Boolean(
+      websiteKnowledge && (
+        websiteKnowledge.status === 'INGESTED' ||
+        websiteKnowledge.provenance === 'VERIFIED' ||
+        (websiteKnowledge.sections && websiteKnowledge.sections.length > 0) ||
+        (websiteKnowledge.websiteUrl && websiteKnowledge.websiteUrl !== 'Not configured') ||
+        Boolean(websiteKnowledge.title)
+      )
+    );
 
     const hasVerifiedKnowledge = Boolean(
       registeredProfile?.companyName ||
       knowledgeProfile?.isVerified ||
-      websiteKnowledge?.status === 'INGESTED' ||
-      websiteKnowledge?.provenance === 'VERIFIED' ||
+      isWkValid ||
+      isSocialPageConnected ||
       isRasAli
     );
 
-    // Resolve Organization Name
-    let orgName = registeredProfile?.companyName || knowledgeProfile?.companyName?.value || '';
+    // Resolve Organization Name (Prioritize Registered Profile -> Knowledge Profile -> Facebook Page -> Website Title)
+    let orgName = registeredProfile?.companyName || knowledgeProfile?.companyName?.value || (isSocialPageConnected ? fbPage.name : '') || websiteKnowledge?.title || '';
     if (!orgName) {
       if (isRasAli) {
         orgName = 'Ras Ali Labs';
@@ -358,8 +370,7 @@ export class BusinessContextService {
       ? tasksList.filter((t: any) => t.status === 'PENDING' && t.priority === 'HIGH').length 
       : (isRasAli ? 1 : 0);
 
-    const fbPage = options?.localOverrides?.fbPage;
-    const isSocialConnected = Boolean(fbPage || isRasAli);
+    const isSocialConnected = Boolean(isSocialPageConnected || isRasAli);
     const followers = fbPage?.fanCount ?? (isRasAli ? 107 : 0);
     const pageName = fbPage?.name ?? (isRasAli ? 'Ras Ali Labs Facebook Page' : 'Not Connected');
 
