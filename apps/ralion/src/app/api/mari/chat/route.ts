@@ -53,6 +53,16 @@ export async function POST(request: NextRequest) {
       ragContext: ragContext.includes('No matching') ? null : ragContext,
       modelUsed,
       contextVersion: context.version,
+      usage: apiResult?.usage || {
+        promptTokens: Math.ceil((query.length + 40) / 4),
+        completionTokens: Math.ceil(answerText.length / 4),
+        totalTokens: Math.ceil((query.length + 40 + answerText.length) / 4),
+      },
+      tokens: apiResult?.tokens || apiResult?.usage || {
+        promptTokens: Math.ceil((query.length + 40) / 4),
+        completionTokens: Math.ceil(answerText.length / 4),
+        totalTokens: Math.ceil((query.length + 40 + answerText.length) / 4),
+      },
     }, undefined, request);
   } catch (err: any) {
     return corsJsonResponse({

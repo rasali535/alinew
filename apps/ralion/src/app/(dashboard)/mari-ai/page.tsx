@@ -74,6 +74,12 @@ interface ChatMessage {
   actionsSuggested?: MariActionPayload[];
   ragContext?: string;
   timestamp: string;
+  tokens?: {
+    promptTokens?: number;
+    completionTokens?: number;
+    totalTokens?: number;
+  };
+  modelUsed?: string;
 }
 
 export default function MariAiPage() {
@@ -277,7 +283,13 @@ export default function MariAiPage() {
         text: answerText,
         actionsSuggested: ruleResponse.suggestedActions as MariActionPayload[],
         ragContext: ragSearch.includes('No matching') ? undefined : ragSearch,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        tokens: apiResult?.tokens || apiResult?.usage || {
+          promptTokens: Math.ceil((queryText.length + 40) / 4),
+          completionTokens: Math.ceil(answerText.length / 4),
+          totalTokens: Math.ceil((queryText.length + 40 + answerText.length) / 4),
+        },
+        modelUsed: apiResult?.modelInfo ? `${apiResult.modelInfo.category} (${apiResult.modelInfo.model})` : 'Mari Growth Intelligence',
       };
 
       setMessages(prev => [...prev, mariMsg]);
@@ -900,7 +912,14 @@ export default function MariAiPage() {
 
                       <div className="flex items-center justify-between gap-2 mt-2 pt-1 text-[10px] text-zinc-500 font-mono">
                         <span>{m.timestamp}</span>
-                        <span className="text-purple-400/80">Mari Growth Intelligence</span>
+                        <div className="flex items-center gap-2">
+                          {m.tokens?.totalTokens && (
+                            <span className="text-zinc-400 bg-zinc-900/80 px-2 py-0.5 rounded border border-zinc-800/80 font-mono text-[10px]">
+                              {m.tokens.totalTokens.toLocaleString()} tokens
+                            </span>
+                          )}
+                          <span className="text-purple-400/80">{m.modelUsed || 'Mari Growth Intelligence'}</span>
+                        </div>
                       </div>
                     </div>
                   </div>

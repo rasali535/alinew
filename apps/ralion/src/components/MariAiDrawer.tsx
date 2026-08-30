@@ -16,7 +16,7 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
   onClose,
   onNavigate
 }) => {
-  const [messages, setMessages] = useState<Array<{ sender: 'USER' | 'MARI'; text: string; actions?: any[] }>>([
+  const [messages, setMessages] = useState<Array<{ sender: 'USER' | 'MARI'; text: string; actions?: any[]; tokens?: { totalTokens?: number } }>>([
     {
       sender: 'MARI',
       text: "Hello! I am Mari AI, your enterprise business assistant by Ras Ali Labs. Ask me anything about your revenue, tasks, active deals, or tell me to generate marketing content!"
@@ -44,12 +44,14 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
         
         if (apiResponse) {
           const respText = typeof apiResponse === 'string' ? apiResponse : apiResponse.text;
+          const tokens = (typeof apiResponse === 'object' && apiResponse.tokens) ? apiResponse.tokens : undefined;
           setMessages(prev => [
             ...prev,
             {
               sender: 'MARI',
               text: respText,
-              actions: []
+              actions: [],
+              tokens,
             }
           ]);
         } else {
@@ -113,8 +115,13 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
               }`}
             >
               {msg.sender === 'MARI' && (
-                <div className="flex items-center gap-1.5 mb-1 text-[10px] font-bold text-blue-400 uppercase tracking-wider">
-                  <Bot className="w-3 h-3" /> Mari AI Response
+                <div className="flex items-center justify-between gap-1.5 mb-1 text-[10px] font-bold text-blue-400 uppercase tracking-wider">
+                  <span className="flex items-center gap-1"><Bot className="w-3 h-3" /> Mari AI</span>
+                  {msg.tokens?.totalTokens && (
+                    <span className="text-[9px] text-zinc-500 font-mono font-normal normal-case">
+                      {msg.tokens.totalTokens} tokens
+                    </span>
+                  )}
                 </div>
               )}
               {(() => {
