@@ -4593,14 +4593,26 @@ function GrowthPageContent() {
                   <div className="w-full bg-zinc-950 rounded-2xl border border-zinc-800/80 overflow-hidden flex items-center justify-center min-h-[300px] relative group">
                     {creativeMode === 'poster' ? (
                       generatedPoster ? (
-                        <img
-                          src={resolveSafeImageUrl(generatedPoster, posterPrompt || 'Studio Poster')}
-                          alt="Generated Studio Poster"
-                          className="w-full h-auto max-h-[380px] object-contain rounded-xl shadow-2xl"
-                          onError={(e) => {
-                            (e.currentTarget as HTMLImageElement).src = resolveSafeImageUrl('', posterPrompt || 'Studio Poster');
-                          }}
-                        />
+                        <div className="relative w-full h-full flex items-center justify-center">
+                          <img
+                            src={resolveSafeImageUrl(generatedPoster, posterPrompt || 'Studio Poster')}
+                            alt="Generated Studio Poster"
+                            className="w-full h-auto max-h-[380px] object-contain rounded-xl shadow-2xl"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).src = resolveSafeImageUrl('', posterPrompt || 'Studio Poster');
+                            }}
+                          />
+                          {creativeLogo && (
+                            <div className={`absolute p-2.5 rounded-xl bg-black/60 backdrop-blur-md border border-white/20 shadow-xl pointer-events-none transition-all ${
+                              logoPosition === 'top-left' ? 'top-4 left-4' :
+                              logoPosition === 'top-right' ? 'top-4 right-4' :
+                              logoPosition === 'bottom-left' ? 'bottom-4 left-4' :
+                              'bottom-4 right-4'
+                            }`}>
+                              <img src={creativeLogo} alt="Brand Logo" className="h-8 w-auto max-w-[120px] object-contain" />
+                            </div>
+                          )}
+                        </div>
                       ) : (
                         <div className="flex flex-col items-center justify-center p-8 text-center gap-3">
                           <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 text-zinc-600">
@@ -4614,9 +4626,21 @@ function GrowthPageContent() {
                       )
                     ) : (
                       generatedVideo ? (
-                        <video controls className="w-full rounded-xl max-h-[380px] object-cover shadow-2xl">
-                          <source src={generatedVideo} type="video/mp4" />
-                        </video>
+                        <div className="relative w-full h-full flex items-center justify-center">
+                          <video controls className="w-full rounded-xl max-h-[380px] object-cover shadow-2xl">
+                            <source src={generatedVideo} type="video/mp4" />
+                          </video>
+                          {creativeLogo && (
+                            <div className={`absolute p-2.5 rounded-xl bg-black/60 backdrop-blur-md border border-white/20 shadow-xl pointer-events-none ${
+                              logoPosition === 'top-left' ? 'top-4 left-4' :
+                              logoPosition === 'top-right' ? 'top-4 right-4' :
+                              logoPosition === 'bottom-left' ? 'bottom-4 left-4' :
+                              'bottom-4 right-4'
+                            }`}>
+                              <img src={creativeLogo} alt="Brand Logo" className="h-8 w-auto max-w-[120px] object-contain" />
+                            </div>
+                          )}
+                        </div>
                       ) : (
                         <div className="flex flex-col items-center justify-center p-8 text-center gap-3">
                           <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 text-zinc-600">
@@ -4635,15 +4659,86 @@ function GrowthPageContent() {
                   {(generatedPoster || generatedVideo) && (
                     <div className="flex flex-col gap-2 pt-2 border-t border-zinc-800/60">
                       <div className="grid grid-cols-2 gap-2">
-                        <a
-                          href={creativeMode === 'poster' ? generatedPoster : generatedVideo}
-                          target="_blank"
-                          rel="noreferrer"
-                          download={`ralion-creative-${Date.now()}`}
-                          className="px-3.5 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-xs text-zinc-300 font-bold flex items-center justify-center gap-1.5 transition-all"
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (creativeMode === 'poster' && generatedPoster) {
+                              if (!creativeLogo) {
+                                const a = document.createElement('a');
+                                a.href = generatedPoster;
+                                a.download = `ralion-creative-${Date.now()}.png`;
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                                return;
+                              }
+                              try {
+                                const canvas = document.createElement('canvas');
+                                const ctx = canvas.getContext('2d');
+                                const img = new window.Image();
+                                img.crossOrigin = 'anonymous';
+                                img.onload = () => {
+                                  canvas.width = img.naturalWidth || 1024;
+                                  canvas.height = img.naturalHeight || 1024;
+                                  if (ctx) {
+                                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                                    const logoImg = new window.Image();
+                                    logoImg.crossOrigin = 'anonymous';
+                                    logoImg.onload = () => {
+                                      const logoW = canvas.width * 0.18;
+                                      const logoH = (logoImg.naturalHeight / logoImg.naturalWidth) * logoW || (logoW * 0.4);
+                                      const pad = canvas.width * 0.04;
+                                      let lx = pad;
+                                      let ly = pad;
+                                      if (logoPosition === 'top-right') {
+                                        lx = canvas.width - logoW - pad;
+                                        ly = pad;
+                                      } else if (logoPosition === 'bottom-left') {
+                                        lx = pad;
+                                        ly = canvas.height - logoH - pad;
+                                      } else if (logoPosition === 'bottom-right') {
+                                        lx = canvas.width - logoW - pad;
+                                        ly = canvas.height - logoH - pad;
+                                      }
+                                      ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+                                      ctx.beginPath();
+                                      ctx.roundRect(lx - 12, ly - 8, logoW + 24, logoH + 16, 14);
+                                      ctx.fill();
+                                      ctx.drawImage(logoImg, lx, ly, logoW, logoH);
+
+                                      const brandedUrl = canvas.toDataURL('image/png');
+                                      const a = document.createElement('a');
+                                      a.href = brandedUrl;
+                                      a.download = `ralion-branded-creative-${Date.now()}.png`;
+                                      document.body.appendChild(a);
+                                      a.click();
+                                      document.body.removeChild(a);
+                                    };
+                                    logoImg.src = creativeLogo;
+                                  }
+                                };
+                                img.src = resolveSafeImageUrl(generatedPoster, posterPrompt);
+                              } catch {
+                                const a = document.createElement('a');
+                                a.href = generatedPoster;
+                                a.download = `ralion-creative-${Date.now()}.png`;
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                              }
+                            } else if (generatedVideo) {
+                              const a = document.createElement('a');
+                              a.href = generatedVideo;
+                              a.download = `ralion-video-${Date.now()}.mp4`;
+                              document.body.appendChild(a);
+                              a.click();
+                              document.body.removeChild(a);
+                            }
+                          }}
+                          className="px-3.5 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-xs text-zinc-300 font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                         >
-                          <Download className="w-4 h-4 text-blue-400" /> Download
-                        </a>
+                          <Download className="w-4 h-4 text-blue-400" /> Download {creativeLogo ? 'Branded' : ''}
+                        </button>
 
                         <Button
                           variant="primary"
