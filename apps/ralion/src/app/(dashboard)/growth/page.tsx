@@ -4594,9 +4594,12 @@ function GrowthPageContent() {
                     {creativeMode === 'poster' ? (
                       generatedPoster ? (
                         <img
-                          src={generatedPoster}
+                          src={resolveSafeImageUrl(generatedPoster, posterPrompt || 'Studio Poster')}
                           alt="Generated Studio Poster"
                           className="w-full h-auto max-h-[380px] object-contain rounded-xl shadow-2xl"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src = resolveSafeImageUrl('', posterPrompt || 'Studio Poster');
+                          }}
                         />
                       ) : (
                         <div className="flex flex-col items-center justify-center p-8 text-center gap-3">
