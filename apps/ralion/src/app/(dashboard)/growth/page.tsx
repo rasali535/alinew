@@ -295,7 +295,16 @@ function GrowthPageContent() {
         context = await BusinessContextService.assembleContext();
       } catch {}
 
-      const promptReq = "Brainstorm 3 distinct, high-converting social media marketing visual concepts for our business. Return a JSON array of 3 objects with keys 'title', 'prompt', 'style', 'format'. Make the prompts vivid, modern, and ready for creative design.";
+      const orgName = context?.layer1?.companyName?.value || 'Ras Ali Labs';
+      const industry = context?.layer1?.industry?.value || 'Enterprise Software & Digital OS';
+
+      const promptReq = `You are Mari AI, Creative Director for ${orgName} (${industry}).
+Generate 3 distinct, highly vivid visual photography/3D scene prompts for social media marketing.
+Rules:
+1. Do NOT write generic slogans or headline copy. Write vivid visual scene descriptions that an AI image model can paint (subjects, setting, lighting, objects, modern African enterprise atmosphere).
+2. The concepts must directly represent ${orgName}'s core business in enterprise software, business intelligence, and digital transformation.
+3. Return ONLY a valid JSON array of 3 objects with keys: "title", "prompt", "style", "format".`;
+
       const res = await callMariAiApi(promptReq, undefined, context || undefined);
       const text = typeof res === 'string' ? res : res?.text || '';
 
@@ -310,20 +319,20 @@ function GrowthPageContent() {
       if (!parsed || parsed.length === 0) {
         parsed = [
           {
-            title: '🚀 Next-Gen Innovation',
-            prompt: 'High-tech enterprise operations center with holographic business telemetry displays, subtle cyan and purple ambient glow, ultra-detailed 8k commercial visual.',
-            style: 'Modern Minimalist',
+            title: '🚀 Enterprise OS & Analytics',
+            prompt: 'A forward-thinking African corporate executive analyzing live business intelligence dashboards on an ultra-modern dual glass monitor setup, warm ambient lighting, elegant office overlooking Gaborone, photorealistic 8k commercial photography.',
+            style: 'Corporate Executive',
             format: '1:1 Square'
           },
           {
-            title: '🎯 Special 25% Growth Promo',
-            prompt: 'Modern commercial technology showcase with vibrant neon gradients, sleek digital interfaces, and high-energy atmosphere.',
-            style: 'Bold & Vibrant Neon',
+            title: '🎯 Regional Market Expansion',
+            prompt: 'Dynamic African technology team collaborating in a sunlit modern glass conference room with interactive strategy displays, vibrant professional energy, commercial photography 8k.',
+            style: 'Modern Minimalist',
             format: '16:9 Landscape'
           },
           {
-            title: '💼 Executive Industry Authority',
-            prompt: 'Sophisticated corporate executive boardroom overlooking Gaborone cityscape with premium glass architecture and cinematic lighting.',
+            title: '💼 Executive Strategic Partnership',
+            prompt: 'Two enterprise leaders in sharp tailored suits shaking hands at a premier regional technology summit, high-end architectural lobby, cinematic lighting, ultra-detailed photorealistic.',
             style: 'Corporate Executive',
             format: '4:5 Portrait'
           }
@@ -333,26 +342,26 @@ function GrowthPageContent() {
       setMariBrainstormConcepts(parsed);
       setOauthAlert({
         type: 'success',
-        message: '💡 Mari AI generated 3 custom creative concepts for your business!',
+        message: `💡 Mari AI generated 3 custom visual prompts tailored for ${orgName}!`,
       });
       setTimeout(() => setOauthAlert(null), 4000);
     } catch (e) {
       setMariBrainstormConcepts([
         {
-          title: '🚀 Product Launch Spotlight',
-          prompt: 'Modern high-tech poster showing digital workflow automation and intelligent business management tools on an elegant dark UI.',
-          style: 'Modern Minimalist',
+          title: '🚀 Enterprise OS & Analytics',
+          prompt: 'A forward-thinking African corporate executive analyzing live business intelligence dashboards on an ultra-modern dual glass monitor setup, warm ambient lighting, elegant office overlooking Gaborone, photorealistic 8k commercial photography.',
+          style: 'Corporate Executive',
           format: '1:1 Square'
         },
         {
-          title: '🎯 Seasonal Special Offer',
-          prompt: 'Vibrant promotional graphic announcing exclusive seasonal discount for regional enterprise clients.',
-          style: 'Bold & Vibrant Neon',
+          title: '🎯 Regional Market Expansion',
+          prompt: 'Dynamic African technology team collaborating in a sunlit modern glass conference room with interactive strategy displays, vibrant professional energy, commercial photography 8k.',
+          style: 'Modern Minimalist',
           format: '16:9 Landscape'
         },
         {
-          title: '👥 Hiring & Careers',
-          prompt: 'Inspiring recruitment poster welcoming talented software engineers, designers, and innovators to join Ras Ali Labs.',
+          title: '💼 Executive Strategic Partnership',
+          prompt: 'Two enterprise leaders in sharp tailored suits shaking hands at a premier regional technology summit, high-end architectural lobby, cinematic lighting, ultra-detailed photorealistic.',
           style: 'Corporate Executive',
           format: '4:5 Portrait'
         }
@@ -4404,10 +4413,10 @@ function GrowthPageContent() {
                         <Sparkles className="w-3 h-3 text-purple-400" /> Ideas:
                       </span>
                       {[
-                        { label: '🎯 Special 25% Discount Promo', text: 'Special 25% Off Limited-Time Promotion on enterprise software and digital transformation solutions.' },
-                        { label: '🚀 Product Launch Spotlight', text: 'Introducing Ralion OS — The Next-Gen Enterprise Operating System powered by Mari AI.' },
-                        { label: "👥 We're Hiring Developers", text: 'We are hiring top senior software engineers, AI researchers, and product designers. Join Ras Ali Labs today!' },
-                        { label: '🏆 Customer Success Win', text: 'How our logistics client reduced supply chain delays by 40% across SADC regional trade routes.' },
+                        { label: '🚀 Enterprise OS & Analytics', text: 'A forward-thinking African corporate executive analyzing live business intelligence dashboards on an ultra-modern dual glass monitor setup, warm ambient lighting, elegant office overlooking Gaborone, photorealistic 8k commercial photography.' },
+                        { label: '🎯 25% Growth Promo', text: 'Modern commercial technology showcase with vibrant neon gradients, sleek digital interfaces, executive desk with laptop, photorealistic 8k visual.' },
+                        { label: '🚚 SADC Logistics Hub', text: 'Modern commercial cargo fleet and digital logistics control center in Southern Africa with real-time route tracking displays, golden hour lighting, cinematic 8k visual.' },
+                        { label: '🤝 Strategic Partnership', text: 'Two enterprise leaders in sharp tailored suits shaking hands at a premier regional technology summit, high-end architectural lobby, cinematic lighting, ultra-detailed photorealistic.' },
                       ].map((item, idx) => (
                         <button
                           key={idx}
