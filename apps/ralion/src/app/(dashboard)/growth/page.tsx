@@ -311,19 +311,19 @@ function GrowthPageContent() {
         parsed = [
           {
             title: '🚀 Next-Gen Innovation',
-            prompt: 'High-impact enterprise showcase poster for Ralion OS with modern blue glow, holographic analytics interface, and sleek dark background.',
+            prompt: 'High-tech enterprise operations center with holographic business telemetry displays, subtle cyan and purple ambient glow, ultra-detailed 8k commercial visual.',
             style: 'Modern Minimalist',
             format: '1:1 Square'
           },
           {
-            title: '🎯 Special 25% Limited Promo',
-            prompt: 'Eye-catching bold promotional poster featuring 25% OFF enterprise digital transformation solutions with vibrant cyan and violet gradients.',
+            title: '🎯 Special 25% Growth Promo',
+            prompt: 'Modern commercial technology showcase with vibrant neon gradients, sleek digital interfaces, and high-energy atmosphere.',
             style: 'Bold & Vibrant Neon',
             format: '16:9 Landscape'
           },
           {
             title: '💼 Executive Industry Authority',
-            prompt: 'Premium corporate executive poster highlighting high-reliability supply chain and AI business intelligence across Southern Africa.',
+            prompt: 'Sophisticated corporate executive boardroom overlooking Gaborone cityscape with premium glass architecture and cinematic lighting.',
             style: 'Corporate Executive',
             format: '4:5 Portrait'
           }

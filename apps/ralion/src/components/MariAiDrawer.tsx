@@ -157,8 +157,15 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
                 <button
                   onClick={() => {
                     if (typeof window !== 'undefined') {
-                      const cleanPrompt = msg.text.replace(/!\[.*?\]\(.*?\)/g, '').substring(0, 300).trim();
-                      localStorage.setItem('ralion_creative_prompt', cleanPrompt);
+                      const cleanPrompt = msg.text
+                        .replace(/!\[.*?\]\(.*?\)/g, '')
+                        .replace(/[*#_`]/g, '')
+                        .replace(/^(Social & Channel Intelligence|Good day!|Based on your|Here is|I recommend)[^\n]*\n+/gi, '')
+                        .replace(/\[.*?\]/g, '')
+                        .replace(/\s+/g, ' ')
+                        .trim()
+                        .substring(0, 280);
+                      localStorage.setItem('ralion_creative_prompt', cleanPrompt || msg.text.substring(0, 200));
                     }
                     if (onNavigate) {
                       onNavigate('/growth?tab=creatives');

@@ -9,7 +9,7 @@ import {
 } from './creativeProvider.interface';
 import {
   FluxImageProvider,
-  TurboImageProvider,
+  FluxRealismImageProvider,
   ResilientImageProvider,
   SyntheticStudioImageProvider,
   CogVideoXProvider,
@@ -40,7 +40,7 @@ export interface OrchestratorGenerateOptions {
 export class CreativeOrchestrator {
   private static imageProviders: CreativeProvider[] = [
     new FluxImageProvider(),
-    new TurboImageProvider(),
+    new FluxRealismImageProvider(),
     new ResilientImageProvider(),
     new SyntheticStudioImageProvider(),
   ];
@@ -165,7 +165,7 @@ export class CreativeOrchestrator {
           prompt: prompt.trim(),
           style,
           format,
-          timeoutMs: 6500,
+          timeoutMs: 12000,
         };
         const result = await provider.generate(req);
 

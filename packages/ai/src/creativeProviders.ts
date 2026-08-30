@@ -34,7 +34,7 @@ function resolveDimensions(req: CreativeProviderRequest): { width: number; heigh
   }
 }
 
-async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 5000): Promise<Response> {
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 12000): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => {
     try { controller.abort(); } catch {}
@@ -54,25 +54,32 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
 }
 
 function buildPhotorealisticPrompt(rawPrompt: string, style?: string): string {
-  // Strip meta words that confuse diffusion models into drawing picture frames or pseudo-text
-  const subject = rawPrompt
-    .replace(/^(create|generate|design|make|draw|show)\s+(an?\s+)?(image|poster|photo|picture|graphic|video)\s+(of|for|about)?/gi, '')
-    .replace(/\b(promotional\s+)?(poster|flyer|banner|billboard|mockup|picture frame|frame)\b/gi, 'visual scene')
+  // 1. Strip conversational and meta-instruction prefixes
+  let subject = rawPrompt
+    .replace(/^["'\s]+|["'\s]+$/g, '')
+    .replace(/^(here\s+is\s+(the|a)\s+concept:?|i\s+recommend\s+(creating\s+)?(a|an)?|concept\s*\d*:?)/gi, '')
+    .replace(/^(create|generate|design|make|draw|show|render)\s+(an?\s+)?(image|poster|photo|picture|graphic|video|visual)\s+(of|for|about)?/gi, '')
+    .replace(/\b(promotional\s+)?(poster|flyer|banner|billboard|mockup|picture frame|framed poster|frame)\b/gi, 'visual scene')
     .replace(/\s+/g, ' ')
     .trim();
 
-  let styleDesc = 'modern corporate aesthetic, sharp professional studio lighting, 8k resolution, cinematic atmosphere, award-winning commercial photography';
+  // 2. Style enhancement for vivid commercial render
+  let styleDesc = 'modern commercial advertising photography, cinematic studio lighting, photorealistic, 8k uhd, sharp focus, vibrant and crisp composition';
   const sLower = (style || '').toLowerCase();
   if (sLower.includes('neon') || sLower.includes('vibrant')) {
-    styleDesc = 'vibrant neon lighting, cyan and purple luminescent glow, futuristic 3D visual, highly detailed, octane render 8k';
+    styleDesc = 'futuristic luminescent neon lighting, cyan and ultraviolet glow, sleek 3D render, octane render 8k, sharp geometric accents';
   } else if (sLower.includes('minimalist')) {
-    styleDesc = 'clean minimalist product photography, soft diffused studio lighting, elegant modern composition, sharp focus';
+    styleDesc = 'clean minimalist studio product photography, elegant high-key lighting, modern Scandinavian architectural composition, crisp details';
   } else if (sLower.includes('gold') || sLower.includes('luxury')) {
-    styleDesc = 'luxury dark obsidian aesthetic with gold accents, dramatic cinematic lighting, elegant commercial masterpiece';
+    styleDesc = 'luxury dark obsidian aesthetic with radiant gold accents, dramatic editorial studio lighting, ultra-premium commercial render';
   }
 
-  return `${subject || 'enterprise technological innovation'}, ${styleDesc}, photorealistic, ultra-detailed, 8k uhd`;
+  return `${subject || 'enterprise technological innovation'}, ${styleDesc}`;
 }
+
+const STRICT_NEGATIVE_PROMPT = encodeURIComponent(
+  'text,words,letters,writing,typography,watermark,logo,signature,picture frame,framed poster,border,low quality,blurry,distorted,bad anatomy,ugly,amateur,jpeg artifacts,circles on blue,blank canvas'
+);
 
 /**
  * Provider A (Primary Image): FLUX.1 High-Resolution Studio
@@ -87,13 +94,11 @@ export class FluxImageProvider implements CreativeProvider {
     const enriched = buildPhotorealisticPrompt(clean, req.style);
     const dims = resolveDimensions(req);
     const seed = req.seed || Math.floor(Math.random() * 1000000);
-    const negative = encodeURIComponent('text,words,letters,writing,typography,watermark,logo,picture frame,framed poster,border,low quality,blurry,distorted,bad anatomy,ugly,amateur');
 
     const candidateUrls = [
-      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=flux&nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}&negative=${negative}`,
-      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=flux-realism&nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}`,
-      `https://image.pollinations.ai/prompt/${encodeURIComponent(clean)}?model=flux&nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}&negative=${negative}`,
-      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}`,
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=flux&nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}&negative=${STRICT_NEGATIVE_PROMPT}`,
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=flux-realism&nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}&negative=${STRICT_NEGATIVE_PROMPT}`,
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(clean)}?model=flux&nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}&negative=${STRICT_NEGATIVE_PROMPT}`,
     ];
 
     let lastError = '';
@@ -106,7 +111,7 @@ export class FluxImageProvider implements CreativeProvider {
             'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
           },
           cache: 'no-store',
-        }, req.timeoutMs || 4500);
+        }, req.timeoutMs || 12000);
 
         if (!res.ok) {
           lastError = `Provider HTTP error ${res.status}`;
@@ -138,10 +143,10 @@ export class FluxImageProvider implements CreativeProvider {
 }
 
 /**
- * Provider B (Fast Fallback Image): Turbo High-Speed Engine
+ * Provider B (High-Definition Secondary Image): FLUX Realism Engine
  */
-export class TurboImageProvider implements CreativeProvider {
-  readonly name = 'Turbo Speed Engine';
+export class FluxRealismImageProvider implements CreativeProvider {
+  readonly name = 'FLUX Realism Engine';
   readonly supportedTypes = ['POSTER_IMAGE' as const];
 
   async generate(req: CreativeProviderRequest): Promise<CreativeProviderResult> {
@@ -150,11 +155,11 @@ export class TurboImageProvider implements CreativeProvider {
     const enriched = buildPhotorealisticPrompt(clean, req.style);
     const dims = resolveDimensions(req);
     const seed = (req.seed || Math.floor(Math.random() * 1000000)) + 1;
-    const negative = encodeURIComponent('text,words,letters,writing,watermark,picture frame,border,blurry');
 
     const candidateUrls = [
-      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=flux&nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}&negative=${negative}`,
-      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=turbo&nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}&negative=${negative}`,
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=flux-realism&nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}&negative=${STRICT_NEGATIVE_PROMPT}`,
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=flux-3d&nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}&negative=${STRICT_NEGATIVE_PROMPT}`,
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=flux&nologo=true&seed=${seed}&width=${dims.width}&height=${dims.height}&negative=${STRICT_NEGATIVE_PROMPT}`,
     ];
 
     let lastError = '';
@@ -167,7 +172,7 @@ export class TurboImageProvider implements CreativeProvider {
             'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
           },
           cache: 'no-store',
-        }, req.timeoutMs || 4500);
+        }, req.timeoutMs || 12000);
 
         if (!res.ok) {
           lastError = `Provider HTTP error ${res.status}`;
@@ -194,49 +199,67 @@ export class TurboImageProvider implements CreativeProvider {
       }
     }
 
-    throw new Error(lastError || 'Turbo candidate generation failed');
+    throw new Error(lastError || 'FLUX Realism generation failed');
   }
 }
 
 /**
- * Provider C (High-Availability Compact Image): Resilient Square Engine
+ * Provider C (High-Availability Compact Image): Resilient FLUX Engine
  */
 export class ResilientImageProvider implements CreativeProvider {
-  readonly name = 'Resilient Studio Engine';
+  readonly name = 'Resilient FLUX Engine';
   readonly supportedTypes = ['POSTER_IMAGE' as const];
 
   async generate(req: CreativeProviderRequest): Promise<CreativeProviderResult> {
     const t0 = Date.now();
-    const clean = sanitizePrompt(req.prompt).slice(0, 200);
+    const clean = sanitizePrompt(req.prompt);
+    const enriched = buildPhotorealisticPrompt(clean, req.style);
+    const dims = resolveDimensions(req);
     const seed = req.seed || Math.floor(Math.random() * 1000000);
-    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(clean)}?seed=${seed}&width=768&height=768&nologo=true`;
 
-    const res = await fetchWithTimeout(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-      },
-      cache: 'no-store',
-    }, req.timeoutMs || 4500);
+    const candidateUrls = [
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=flux-cablyai&seed=${seed}&width=${dims.width}&height=${dims.height}&nologo=true&negative=${STRICT_NEGATIVE_PROMPT}`,
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?model=flux&seed=${seed}&width=${dims.width}&height=${dims.height}&nologo=true&negative=${STRICT_NEGATIVE_PROMPT}`,
+    ];
 
-    if (!res.ok) {
-      throw new Error(`Provider HTTP error ${res.status}`);
+    let lastError = '';
+
+    for (const url of candidateUrls) {
+      try {
+        const res = await fetchWithTimeout(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+          },
+          cache: 'no-store',
+        }, req.timeoutMs || 12000);
+
+        if (!res.ok) {
+          lastError = `Provider HTTP error ${res.status}`;
+          continue;
+        }
+
+        const arrayBuf = await res.arrayBuffer();
+        const buffer = Buffer.from(arrayBuf);
+        const val = validateImageBuffer(buffer);
+
+        if (!val.valid) {
+          lastError = val.error || 'Invalid image stream received';
+          continue;
+        }
+
+        return {
+          buffer,
+          mimeType: val.mimeType || 'image/jpeg',
+          providerName: this.name,
+          generationTimeMs: Date.now() - t0,
+        };
+      } catch (err: any) {
+        lastError = err?.message || 'Connection timeout';
+      }
     }
 
-    const arrayBuf = await res.arrayBuffer();
-    const buffer = Buffer.from(arrayBuf);
-    const val = validateImageBuffer(buffer);
-
-    if (!val.valid) {
-      throw new Error(val.error || 'Invalid image stream received');
-    }
-
-    return {
-      buffer,
-      mimeType: val.mimeType || 'image/jpeg',
-      providerName: this.name,
-      generationTimeMs: Date.now() - t0,
-    };
+    throw new Error(lastError || 'Resilient FLUX generation failed');
   }
 }
 

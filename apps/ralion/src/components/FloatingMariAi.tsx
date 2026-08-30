@@ -121,8 +121,15 @@ export const FloatingMariAi: React.FC = () => {
                         type="button"
                         onClick={() => {
                           if (typeof window !== 'undefined') {
-                            const clean = m.text.replace(/!\[.*?\]\(.*?\)/g, '').substring(0, 300).trim();
-                            localStorage.setItem('ralion_creative_prompt', clean);
+                            const clean = m.text
+                              .replace(/!\[.*?\]\(.*?\)/g, '')
+                              .replace(/[*#_`]/g, '')
+                              .replace(/^(Social & Channel Intelligence|Good day!|Based on your|Here is|I recommend)[^\n]*\n+/gi, '')
+                              .replace(/\[.*?\]/g, '')
+                              .replace(/\s+/g, ' ')
+                              .trim()
+                              .substring(0, 280);
+                            localStorage.setItem('ralion_creative_prompt', clean || m.text.substring(0, 200));
                             window.location.href = '/growth?tab=creatives';
                           }
                           setIsOpen(false);
