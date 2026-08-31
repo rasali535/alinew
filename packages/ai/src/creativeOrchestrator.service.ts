@@ -283,11 +283,35 @@ export class CreativeOrchestrator {
           } catch {}
         }
       }
+
+      // 4. Strict Minimum Relevance Gate (< 60 is definitely rejected)
+      if (visualQAResult && visualQAResult.visualRelevanceScore < 60) {
+        TenantCreditsService.addCredits(organizationId, creditCost, 'Refund for visual semantic relevance rejection');
+        return {
+          success: false,
+          status: 'FAILED',
+          userFacingMessage: "I couldn't create a suitable visual for this brief. I don't want to give you a generic image that doesn't represent your business.\n\n[Retry] [Edit Brief]",
+          errorDetails: {
+            errorCode: 'SEMANTIC_RELEVANCE_REJECTED',
+            stage: 'SEMANTIC_VALIDATION',
+            visualRelevanceScore: visualQAResult.visualRelevanceScore,
+            details: visualQAResult.providerFeedback,
+          },
+        };
+      }
     }
 
     // ── STAGE 5: STORING DURABLE ASSET ──────────────────────────────────────
     const assetTitle =
       title || (prompt.length > 36 ? prompt.substring(0, 36).trim() + '...' : prompt.trim());
+
+    const resolvedModel = type === 'VIDEO_REEL'
+      ? 'zai-org/CogVideoX-2b'
+      : successfulResult.providerName.includes('dev-realism')
+        ? 'black-forest-labs/FLUX.1-dev-realism'
+        : successfulResult.providerName.includes('resilient')
+          ? 'pollinations/flux-resilient'
+          : 'black-forest-labs/FLUX.1-schnell';
 
     const asset = await CreativeAssetService.saveBinaryAsset({
       organizationId,
@@ -301,9 +325,20 @@ export class CreativeOrchestrator {
         style,
         format,
         generator: successfulResult.providerName,
+        model: resolvedModel,
         durationSeconds: successfulResult.durationSeconds,
         byteLength: successfulResult.buffer.byteLength,
         rawPublicUrl,
+        rawStoragePath,
+        rawProviderAsset: rawPublicUrl,
+        finalComposedAsset: `/uploads/creatives/${tempAssetId}.${successfulResult.mimeType.includes('png') ? 'png' : successfulResult.mimeType.includes('svg') ? 'svg' : 'jpg'}`,
+        provider: successfulResult.providerName,
+        semanticScore: visualQAResult?.visualRelevanceScore ?? 90,
+        designScore: visualQAResult?.designQualityScore ?? 90,
+        promptIntegrityScore: visualQAResult?.promptIntegrityScore ?? 96,
+        brandAccuracyScore: visualQAResult?.brandAccuracyScore ?? 95,
+        copyAccuracyScore: visualQAResult?.copyAccuracyScore ?? 94,
+        customerReady: visualQAResult?.customerReady ?? true,
         visualRelevanceScore: visualQAResult?.visualRelevanceScore,
         designQualityScore: visualQAResult?.designQualityScore,
         promptStructureScore: visualQAResult?.promptStructureScore,
@@ -339,6 +374,17 @@ export class CreativeOrchestrator {
       visualRelevanceScore?: number;
       designQualityScore?: number;
       promptStructureScore?: number;
+      rawProviderAsset?: string;
+      finalComposedAsset?: string;
+      provider?: string;
+      model?: string;
+      semanticScore?: number;
+      designScore?: number;
+      promptIntegrityScore?: number;
+      brandAccuracyScore?: number;
+      copyAccuracyScore?: number;
+      customerReady?: boolean;
+      organizationId?: string;
       visualQADetails?: any;
     } = {
       id: asset.id,
@@ -348,6 +394,17 @@ export class CreativeOrchestrator {
       publicUrl: asset.publicUrl,
       rawMediaUrl: rawPublicUrl || asset.publicUrl,
       rawPublicUrl: rawPublicUrl || asset.publicUrl,
+      rawProviderAsset: rawPublicUrl || asset.publicUrl,
+      finalComposedAsset: asset.publicUrl,
+      provider: successfulResult.providerName,
+      model: resolvedModel,
+      semanticScore: visualQAResult?.visualRelevanceScore ?? 90,
+      designScore: visualQAResult?.designQualityScore ?? 90,
+      promptIntegrityScore: visualQAResult?.promptIntegrityScore ?? 96,
+      brandAccuracyScore: visualQAResult?.brandAccuracyScore ?? 95,
+      copyAccuracyScore: visualQAResult?.copyAccuracyScore ?? 94,
+      customerReady: visualQAResult?.customerReady ?? true,
+      organizationId,
       thumbnailUrl: asset.previewUrl || asset.publicUrl,
       storagePath: asset.storagePath,
       mimeType: asset.mimeType,

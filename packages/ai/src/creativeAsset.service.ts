@@ -12,6 +12,15 @@ export interface CreativeAsset {
   previewUrl?: string;
   rawPublicUrl?: string;
   rawStoragePath?: string;
+  rawProviderAsset?: string;
+  finalComposedAsset?: string;
+  model?: string;
+  semanticScore?: number;
+  designScore?: number;
+  promptIntegrityScore?: number;
+  brandAccuracyScore?: number;
+  copyAccuracyScore?: number;
+  customerReady?: boolean;
   visualRelevanceScore?: number;
   designQualityScore?: number;
   promptStructureScore?: number;
@@ -277,6 +286,21 @@ export class CreativeAssetService {
       storagePath: filePath,
       publicUrl,
       previewUrl: publicUrl,
+      rawPublicUrl: params.metadata?.rawPublicUrl,
+      rawStoragePath: params.metadata?.rawStoragePath,
+      rawProviderAsset: params.metadata?.rawProviderAsset || params.metadata?.rawPublicUrl || publicUrl,
+      finalComposedAsset: params.metadata?.finalComposedAsset || publicUrl,
+      model: params.metadata?.model,
+      semanticScore: params.metadata?.semanticScore ?? params.metadata?.visualRelevanceScore,
+      designScore: params.metadata?.designScore ?? params.metadata?.designQualityScore,
+      promptIntegrityScore: params.metadata?.promptIntegrityScore,
+      brandAccuracyScore: params.metadata?.brandAccuracyScore,
+      copyAccuracyScore: params.metadata?.copyAccuracyScore,
+      customerReady: params.metadata?.customerReady,
+      visualRelevanceScore: params.metadata?.visualRelevanceScore,
+      designQualityScore: params.metadata?.designQualityScore,
+      promptStructureScore: params.metadata?.promptStructureScore,
+      visualQADetails: params.metadata?.visualQADetails,
       fileSizeBytes: byteLength || 35000,
       createdAt: new Date().toISOString(),
       completedAt: new Date().toISOString(),
