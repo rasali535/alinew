@@ -166,7 +166,7 @@ export class CreativeOrchestrator {
           prompt: prompt.trim(),
           style,
           format,
-          timeoutMs: 5000,
+          timeoutMs: 15000,
         };
         const result = await provider.generate(req);
 
@@ -256,7 +256,7 @@ export class CreativeOrchestrator {
               prompt: enhancedPrompt,
               style,
               format,
-              timeoutMs: 5000,
+              timeoutMs: 15000,
             });
             const retryVal = validateImageBuffer(retryRes.buffer);
             if (retryVal.valid) {

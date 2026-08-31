@@ -21,10 +21,9 @@ const HF_MODELS = {
 export { HF_MODELS };
 
 const GEMINI_API_KEYS = [
+  "AQ.Ab8RN6LHIgVR8Zti6ifRmdpEKXKguMi1mbTZ951Mdn0mFzBhxA",
   process.env.GEMINI_API_KEY,
   process.env.NEXT_PUBLIC_GEMINI_API_KEY,
-  "AQ.Ab8RN6LHIgVR8Zti6ifRmdpEKXKguMi1mbTZ951Mdn0mFzBhxA",
-  "AQ.Ab8RN6IRj0O9lVvQ4iNUoUjSDosss7Nsot3qoQT5A_An-Wienw",
 ].filter(Boolean) as string[];
 
 export interface AimlMessage {
