@@ -120,7 +120,7 @@ export class BusinessGrowthProfileService {
     const reachGrowth = l2.social.reachGrowthPct?.value || 38.4;
     const pendingTasks = l2.operations.pendingTasksCount.value;
 
-    const isRasAli = orgId === 'ras-ali-labs' || orgId === 'org-default';
+    const isRasAli = orgId === 'ras-ali-labs';
 
     // Existing memory records or seed initial verified history for Ras Ali Labs
     const existingMemories: GrowthMemoryRecord[] = profileStore[orgId]?.growthMemory || (isRasAli ? [

@@ -15,7 +15,7 @@ export class MariKnowledgeManager {
   private documents: KnowledgeDocument[] = [
     {
       id: 'kb-1',
-      orgId: 'org-default',
+      orgId: 'ras-ali-labs',
       title: 'Ras Ali Labs Enterprise Service Level Agreement (SLA)',
       category: 'POLICY',
       content: 'Ras Ali Labs guarantees 99.99% uptime for all Ralion OS instances. Support requests are categorized into Critical, High, and Standard priorities with response times under 15 minutes for Critical issues.',
@@ -25,7 +25,7 @@ export class MariKnowledgeManager {
     },
     {
       id: 'kb-2',
-      orgId: 'org-default',
+      orgId: 'ras-ali-labs',
       title: 'Ralion Health Clinical Assessment Protocol',
       category: 'SOP',
       content: 'All clinical patient intake forms must be processed within 24 hours of intake. Assessment summaries must record physical indicators, counseling progress notes, and emergency contact details.',
@@ -35,7 +35,7 @@ export class MariKnowledgeManager {
     },
     {
       id: 'kb-3',
-      orgId: 'org-default',
+      orgId: 'ras-ali-labs',
       title: 'Botswana Border Logistics & Customs Compliance Guide',
       category: 'MANUAL',
       content: 'Trucks crossing the Pioneer Border post require pre-stamped customs declarations, driver identification hash, and manifest verification. Any delay triggers an automated Customs Hold workflow alert.',
@@ -45,15 +45,18 @@ export class MariKnowledgeManager {
     }
   ];
 
-  public getDocuments(): KnowledgeDocument[] {
+  public getDocuments(orgId?: string): KnowledgeDocument[] {
+    if (orgId) {
+      return this.documents.filter(d => d.orgId === orgId);
+    }
     return this.documents;
   }
 
-  public addDocument(doc: { title: string; category: KnowledgeDocument['category']; content: string }): KnowledgeDocument {
+  public addDocument(doc: { orgId?: string; title: string; category: KnowledgeDocument['category']; content: string }): KnowledgeDocument {
     const chunks = chunkText(doc.content);
     const created: KnowledgeDocument = {
       id: `kb-${Date.now()}`,
-      orgId: 'org-default',
+      orgId: doc.orgId || 'ras-ali-labs',
       title: doc.title,
       category: doc.category,
       content: doc.content,
@@ -65,9 +68,10 @@ export class MariKnowledgeManager {
     return created;
   }
 
-  public searchKnowledgeBase(query: string): string {
+  public searchKnowledgeBase(query: string, orgId?: string): string {
+    const targetDocs = orgId ? this.documents.filter(d => d.orgId === orgId) : this.documents;
     const allChunks: TextChunk[] = [];
-    this.documents.forEach(doc => {
+    targetDocs.forEach(doc => {
       const chunks = chunkText(doc.content);
       chunks.forEach((chunkTextStr, idx) => {
         allChunks.push({

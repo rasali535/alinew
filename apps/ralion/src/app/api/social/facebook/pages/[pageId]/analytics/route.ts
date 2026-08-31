@@ -19,13 +19,21 @@ export async function GET(
 ) {
   try {
     const { pageId } = await params;
-    const context = await getCurrentRalionContext(request, { requireAuth: false });
+    const context = await getCurrentRalionContext(request, { requireAuth: true });
+
+    if (!context?.workspace?.id || !context?.user?.id) {
+      return corsJsonResponse(
+        { success: false, error: 'Unauthorized: Valid authenticated workspace and user required.' },
+        { status: 401 },
+        request
+      );
+    }
 
     const analytics = await FacebookPageManagementService.getPageAnalytics({
-      organizationId: context?.workspace.id || 'org-rasalilabs-demo',
-      workspaceId: context?.workspace.id || 'ws-default',
-      userId: context?.user.id || 'usr-admin-1',
-      pageId: pageId || '477334159265235',
+      organizationId: context.workspace.id,
+      workspaceId: context.workspace.id,
+      userId: context.user.id,
+      pageId: pageId,
     });
 
     return corsJsonResponse({

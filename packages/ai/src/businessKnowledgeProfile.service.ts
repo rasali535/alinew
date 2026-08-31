@@ -265,6 +265,13 @@ export class BusinessKnowledgeProfileService {
   }
 
   /**
+   * Lists all structured Business Knowledge Profiles across all tenants.
+   */
+  static listProfiles(): BusinessKnowledgeProfile[] {
+    return Array.from(tenantProfileMap.values());
+  }
+
+  /**
    * Ingests and structures a business website for a tenant.
    */
   static async ingestWebsiteForTenant(

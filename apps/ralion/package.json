@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 6509",
+    "prebuild": "node -e \"const fs=require('fs'); try { fs.rmSync('.next/export', {recursive:true, force:true}); } catch(e){} try { fs.rmSync('.next/server', {recursive:true, force:true}); } catch(e){} fs.mkdirSync('.next/server/pages', {recursive: true});\"",
     "build": "next build",
     "start": "next start -p 6509",
     "lint": "next lint"
