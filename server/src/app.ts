@@ -1,4 +1,5 @@
 import express, { Application } from 'express';
+import axios from 'axios';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -105,6 +106,86 @@ export function createApp(): Application {
                     ? fs.readdirSync(path.join(process.cwd(), 'logs'))
                     : 'logs dir missing'
             });
+        }
+    });
+
+    // Creative asset delivery endpoint backed by Supabase Storage
+    app.get([
+        '/api/creatives/file/:filename',
+        '/ralion/api/creatives/file/:filename',
+        '/api/creatives/uploads/:filename',
+        '/ralion/api/creatives/uploads/:filename',
+        '/creatives/file/:filename'
+    ], async (req, res) => {
+        try {
+            const rawFilename = req.params.filename || '';
+            const filename = path.basename(rawFilename);
+            if (!filename || filename.includes('..')) {
+                return res.status(400).json({ error: 'Invalid filename' });
+            }
+
+            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co';
+            const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpZHNmaWhhZ3d0dGxtaGZ5bm1mIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjQ3ODIzOSwiZXhwIjoyMDg4MDU0MjM5fQ.J3Y348_TksyQ6fXw-b5N148rI5U5Y1tWpU6V4sJpEwM';
+
+            // 1. Download directly from Supabase Storage authenticated endpoint
+            const storageUrl = `${supabaseUrl}/storage/v1/object/creatives/${filename}`;
+            const authEndpoint = `${supabaseUrl}/storage/v1/object/authenticated/creatives/${filename}`;
+
+            let response;
+            try {
+                response = await axios.get(storageUrl, {
+                    headers: {
+                        'Authorization': `Bearer ${supabaseKey}`,
+                        'apikey': supabaseKey,
+                    },
+                    responseType: 'arraybuffer',
+                    validateStatus: () => true,
+                });
+            } catch {
+                // Ignore and try fallback
+            }
+
+            if (!response || response.status !== 200) {
+                try {
+                    response = await axios.get(authEndpoint, {
+                        headers: {
+                            'Authorization': `Bearer ${supabaseKey}`,
+                            'apikey': supabaseKey,
+                        },
+                        responseType: 'arraybuffer',
+                        validateStatus: () => true,
+                    });
+                } catch {
+                    // Ignore
+                }
+            }
+
+            if (response && response.status === 200 && response.data) {
+                const dataBuffer = Buffer.from(response.data as ArrayBuffer);
+                const ext = path.extname(filename).toLowerCase();
+                let contentType = response.headers['content-type'] || 'image/jpeg';
+                if (!contentType || contentType === 'application/octet-stream') {
+                    if (ext === '.png') contentType = 'image/png';
+                    else if (ext === '.svg') contentType = 'image/svg+xml';
+                    else if (ext === '.webp') contentType = 'image/webp';
+                    else if (ext === '.mp4') contentType = 'video/mp4';
+                    else contentType = 'image/jpeg';
+                }
+
+                res.setHeader('Content-Type', contentType);
+                res.setHeader('Content-Length', dataBuffer.length);
+                res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+                return res.status(200).send(dataBuffer);
+            }
+
+            return res.status(404).json({
+                error: 'ASSET_NOT_FOUND',
+                filename,
+                message: 'Creative asset not found in durable storage',
+            });
+        } catch (err: any) {
+            logger.error('Error delivering creative file:', err);
+            return res.status(500).json({ error: 'INTERNAL_SERVER_ERROR', message: err.message });
         }
     });
 
