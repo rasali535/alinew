@@ -17,6 +17,8 @@ import {
   WebsiteIngestionService,
   TenantCreditsService,
 } from '../packages/ai/src';
+import dotenv from 'dotenv';
+dotenv.config();
 
 interface CommercialTestGate {
   gateName: string;

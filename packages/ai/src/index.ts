@@ -20,3 +20,4 @@ export * from './creativeBrief.types';
 export * from './mariCreativeIntelligence.service';
 export * from './creativeComposition.service';
 export * from './visualSemanticEvaluator.service';
+export * from './storage';

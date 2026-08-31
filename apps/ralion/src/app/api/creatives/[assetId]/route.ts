@@ -16,7 +16,10 @@ export async function GET(
   const { searchParams } = new URL(request.url);
   const requestingOrgId = searchParams.get('organizationId') || request.headers.get('x-organization-id') || undefined;
 
-  const rawAsset = CreativeAssetService.getAsset(assetId);
+  let rawAsset = CreativeAssetService.getAsset(assetId);
+  if (!rawAsset) {
+    rawAsset = await CreativeAssetService.getAssetAsync(assetId);
+  }
   if (!rawAsset) {
     return corsJsonResponse({ success: false, error: 'Asset not found' }, { status: 404 }, request);
   }

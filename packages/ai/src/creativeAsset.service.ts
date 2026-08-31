@@ -1,3 +1,8 @@
+import {
+  AssetStorageProvider,
+  getProductionStorageProvider,
+} from './storage';
+
 export interface CreativeAsset {
   id: string;
   organizationId: string;
@@ -8,6 +13,9 @@ export interface CreativeAsset {
   title: string;
   mimeType: string;
   storagePath: string;
+  storageProvider?: 'SUPABASE' | 'LEGACY_LOCAL' | string;
+  bucket?: string;
+  sha256?: string;
   publicUrl: string;
   previewUrl?: string;
   rawPublicUrl?: string;
@@ -37,11 +45,26 @@ export interface CreativeGenerationError {
   providerStatus?: number | string;
   httpStatus: number;
   generationStatus: 'QUEUED' | 'GENERATING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
-  errorCode: 'EMPTY_MEDIA_RESPONSE' | 'INVALID_CONTENT_TYPE' | 'CORRUPTED_BUFFER' | 'TIMEOUT' | 'PROVIDER_ERROR' | 'INVALID_PROMPT' | 'STORAGE_ERROR' | 'JOB_FAILED';
+  errorCode:
+    | 'EMPTY_MEDIA_RESPONSE'
+    | 'INVALID_CONTENT_TYPE'
+    | 'CORRUPTED_BUFFER'
+    | 'TIMEOUT'
+    | 'PROVIDER_ERROR'
+    | 'INVALID_PROMPT'
+    | 'STORAGE_ERROR'
+    | 'JOB_FAILED';
   errorMessage: string;
   userFacingMessage: string;
   assetId?: string;
-  stage: 'PROMPT_VALIDATION' | 'PROVIDER_DISPATCH' | 'ASYNC_POLL' | 'MEDIA_RETRIEVAL' | 'BINARY_VALIDATION' | 'DURABLE_STORAGE' | 'VERIFICATION';
+  stage:
+    | 'PROMPT_VALIDATION'
+    | 'PROVIDER_DISPATCH'
+    | 'ASYNC_POLL'
+    | 'MEDIA_RETRIEVAL'
+    | 'BINARY_VALIDATION'
+    | 'DURABLE_STORAGE'
+    | 'VERIFICATION';
   retryable: boolean;
   timestamp: string;
 }
@@ -92,12 +115,12 @@ export function validateImageBuffer(buffer: Buffer | ArrayBuffer | Uint8Array): 
 
   // Check magic bytes
   // JPEG: FF D8 FF
-  if (buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) {
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
     return { valid: true, mimeType: 'image/jpeg', format: 'jpeg', byteLength };
   }
 
   // PNG: 89 50 4E 47
-  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) {
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
     return { valid: true, mimeType: 'image/png', format: 'png', byteLength };
   }
 
@@ -159,12 +182,11 @@ export function validateVideoBuffer(buffer: Buffer | ArrayBuffer | Uint8Array): 
   if (asciiHeader.includes('ftyp') || asciiHeader.includes('isom') || asciiHeader.includes('mp42')) {
     format = 'mp4';
     mimeType = 'video/mp4';
-  } else if (buf[0] === 0x1A && buf[1] === 0x45 && buf[2] === 0xDF && buf[3] === 0xA3) {
+  } else if (buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3) {
     format = 'webm';
     mimeType = 'video/webm';
   }
 
-  // Assessed standard commercial duration
   const duration = 15.0;
 
   return {
@@ -176,58 +198,8 @@ export function validateVideoBuffer(buffer: Buffer | ArrayBuffer | Uint8Array): 
   };
 }
 
-// In-memory registry with persistent storage fallback
+// In-memory registry with persistent Supabase Storage synchronization
 const assetRegistry = new Map<string, CreativeAsset>();
-
-// Isomorphic runtime helpers
-function isNodeRuntime(): boolean {
-  return typeof window === 'undefined' && typeof process !== 'undefined' && Boolean(process.versions?.node);
-}
-
-function getNodeFs() {
-  if (!isNodeRuntime()) return null;
-  try {
-    const nodeRequire = (globalThis as any).require || eval('require');
-    const fs = nodeRequire('fs');
-    const path = nodeRequire('path');
-    return { fs, path };
-  } catch {
-    return null;
-  }
-}
-
-async function getUploadDir(): Promise<string> {
-  const node = await getNodeFs();
-  if (!node) return '';
-
-  const cwd = process.cwd();
-  const hasLocalPublic = node.fs.existsSync(node.path.join(cwd, 'public'));
-  const candidateDirs = hasLocalPublic
-    ? [
-        node.path.join(cwd, 'public', 'uploads', 'creatives'),
-        node.path.join(cwd, 'uploads', 'creatives'),
-      ]
-    : [
-        node.path.join(cwd, 'apps', 'ralion', 'public', 'uploads', 'creatives'),
-        node.path.join(cwd, 'public', 'uploads', 'creatives'),
-        node.path.join(cwd, 'uploads', 'creatives'),
-      ];
-
-  for (const dir of candidateDirs) {
-    try {
-      if (!node.fs.existsSync(dir)) {
-        node.fs.mkdirSync(dir, { recursive: true });
-      }
-      return dir;
-    } catch {}
-  }
-
-  const fallback = node.path.join(cwd, '.creatives_storage');
-  if (!node.fs.existsSync(fallback)) {
-    try { node.fs.mkdirSync(fallback, { recursive: true }); } catch {}
-  }
-  return fallback;
-}
 
 /**
  * Returns the Next.js application base path depending on deployment mode.
@@ -245,7 +217,9 @@ export function getAppBasePath(): string {
 
 export class CreativeAssetService {
   /**
-   * Save a binary buffer to durable storage and create an asset record.
+   * Save a binary buffer to durable Supabase storage and create an asset record.
+   * Enforces the completed gate: provider -> validation -> upload -> verify existence & retrievability.
+   * Hard fails if storage fails (NO local fallback in production).
    */
   static async saveBinaryAsset(params: {
     organizationId?: string;
@@ -259,50 +233,72 @@ export class CreativeAssetService {
   }): Promise<CreativeAsset> {
     const orgId = params.organizationId || 'default-org';
     const id = `asset-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-    const ext = params.type === 'VIDEO_REEL'
-      ? 'mp4'
-      : params.mimeType.includes('png')
-        ? 'png'
-        : params.mimeType.includes('svg')
-          ? 'svg'
-          : params.mimeType.includes('webp')
-            ? 'webp'
-            : 'jpg';
+    const ext =
+      params.type === 'VIDEO_REEL'
+        ? 'mp4'
+        : params.mimeType.includes('png')
+          ? 'png'
+          : params.mimeType.includes('svg')
+            ? 'svg'
+            : params.mimeType.includes('webp')
+              ? 'webp'
+              : 'jpg';
     const filename = `${id}.${ext}`;
-    
-    let filePath = '';
-    let byteLength = 0;
-    let storageWriteSuccess = false;
+    const storagePath = filename;
 
-    const node = await getNodeFs();
-    if (node && params.buffer) {
-      try {
-        const uploadDir = await getUploadDir();
-        filePath = node.path.join(uploadDir, filename);
-        const nodeBuffer = Buffer.isBuffer(params.buffer) ? params.buffer : Buffer.from(params.buffer);
-        byteLength = nodeBuffer.byteLength;
-        node.fs.writeFileSync(filePath, nodeBuffer);
-        // Storage existence verification before marking COMPLETED
-        const written = node.fs.existsSync(filePath) && node.fs.statSync(filePath).size > 0;
-        if (written) {
-          storageWriteSuccess = true;
-        } else {
-          console.error(`[CreativeAssetService] Storage integrity check FAILED: wrote ${filename} but file missing or empty`);
-        }
-      } catch (err) {
-        console.error('[CreativeAssetService] Filesystem write error:', err);
+    let byteLength = 0;
+    let sha256 = '';
+    let storageWriteSuccess = false;
+    let errorDetails: string | undefined;
+
+    const storage: AssetStorageProvider = getProductionStorageProvider();
+
+    try {
+      const nodeBuffer = Buffer.isBuffer(params.buffer)
+        ? params.buffer
+        : Buffer.from(params.buffer);
+      byteLength = nodeBuffer.byteLength;
+
+      // 1. Upload to Supabase Storage
+      const uploadResult = await storage.upload(storagePath, nodeBuffer, {
+        contentType: params.mimeType,
+        metadata: {
+          organizationId: orgId,
+          assetId: id,
+          prompt: params.prompt,
+        },
+      });
+
+      sha256 = uploadResult.sha256;
+
+      // 2. Strict Post-upload verification gate (exists + retrievable)
+      const exists = await storage.exists(storagePath);
+      if (!exists) {
+        throw new Error(
+          `Post-upload existence check failed: ${storagePath} not found in Supabase bucket`
+        );
       }
+
+      const verified = await storage.download(storagePath);
+      if (!verified || verified.sizeBytes !== byteLength) {
+        throw new Error(
+          `Post-upload download verification failed: size mismatch (expected ${byteLength}, got ${verified?.sizeBytes})`
+        );
+      }
+
+      storageWriteSuccess = true;
+    } catch (err: any) {
+      storageWriteSuccess = false;
+      errorDetails = `FAILED_STORAGE: ${err?.message || 'Supabase storage write error'}`;
+      console.error(`[CreativeAssetService] ${errorDetails}`);
     }
 
-    // Canonical public URL via API route — basePath-aware, works in dev (/ralion) and production (root)
+    // Canonical public URL via API route — basePath-aware
     const basePath = getAppBasePath();
     const publicUrl = `${basePath}/api/creatives/file/${filename}`;
 
-    // Determine asset status: only COMPLETED if binary is durably stored and verified
+    // Status: only COMPLETED if binary is durably stored in Supabase and verified
     const assetStatus: CreativeAsset['status'] = storageWriteSuccess ? 'COMPLETED' : 'FAILED';
-    if (!storageWriteSuccess) {
-      console.error(`[CreativeAssetService] FAILED_STORAGE: Asset ${id} (${filename}) could not be durably written. Marking FAILED.`);
-    }
 
     const asset: CreativeAsset = {
       id,
@@ -311,14 +307,20 @@ export class CreativeAssetService {
       provider: params.provider,
       status: assetStatus,
       prompt: params.prompt,
-      title: params.title || (params.prompt.length > 32 ? params.prompt.substring(0, 32) + '...' : params.prompt),
+      title:
+        params.title ||
+        (params.prompt.length > 32 ? params.prompt.substring(0, 32) + '...' : params.prompt),
       mimeType: params.mimeType,
-      storagePath: filePath,
+      storagePath,
+      storageProvider: storageWriteSuccess ? 'SUPABASE' : undefined,
+      bucket: 'creatives',
+      sha256: sha256 || undefined,
       publicUrl,
       previewUrl: publicUrl,
       rawPublicUrl: params.metadata?.rawPublicUrl,
       rawStoragePath: params.metadata?.rawStoragePath,
-      rawProviderAsset: params.metadata?.rawProviderAsset || params.metadata?.rawPublicUrl || publicUrl,
+      rawProviderAsset:
+        params.metadata?.rawProviderAsset || params.metadata?.rawPublicUrl || publicUrl,
       finalComposedAsset: params.metadata?.finalComposedAsset || publicUrl,
       model: params.metadata?.model,
       semanticScore: params.metadata?.semanticScore ?? params.metadata?.visualRelevanceScore,
@@ -334,23 +336,34 @@ export class CreativeAssetService {
       fileSizeBytes: byteLength || 35000,
       createdAt: new Date().toISOString(),
       completedAt: storageWriteSuccess ? new Date().toISOString() : undefined,
-      errorDetails: storageWriteSuccess ? undefined : 'FAILED_STORAGE: Binary could not be durably written.',
+      errorDetails,
       metadata: params.metadata || {},
     };
 
-    if (node && filePath && storageWriteSuccess) {
+    // Save metadata in Supabase storage for complete durability across process restarts
+    if (storageWriteSuccess) {
       try {
-        const metaPath = filePath.replace(/\.[^.]+$/, '.meta.json');
-        node.fs.writeFileSync(metaPath, JSON.stringify(asset, null, 2));
-      } catch {}
+        const metaBuffer = Buffer.from(JSON.stringify(asset, null, 2));
+        await storage.upload(`${filename}.meta.json`, metaBuffer, {
+          contentType: 'application/json',
+        });
+        await storage.upload(`${id}.meta.json`, metaBuffer, {
+          contentType: 'application/json',
+        });
+      } catch (metaErr) {
+        console.warn('[CreativeAssetService] Notice: Could not upload meta.json to Supabase:', metaErr);
+      }
     }
 
     assetRegistry.set(id, asset);
+    // Also index by filename for instant retrieval by the file API route
+    assetRegistry.set(filename, asset);
+
     return asset;
   }
 
   /**
-   * Save a raw, pre-composition binary buffer to durable storage.
+   * Save a raw, pre-composition binary buffer to durable Supabase storage.
    */
   static async saveRawBinaryAsset(params: {
     assetId: string;
@@ -367,21 +380,21 @@ export class CreativeAssetService {
           ? 'webp'
           : 'jpg';
     const filename = `${params.assetId}-raw.${ext}`;
-    
-    let rawStoragePath = '';
-    const node = await getNodeFs();
-    if (node && params.buffer) {
-      try {
-        const uploadDir = await getUploadDir();
-        rawStoragePath = node.path.join(uploadDir, filename);
-        const nodeBuffer = Buffer.isBuffer(params.buffer) ? params.buffer : Buffer.from(params.buffer);
-        node.fs.writeFileSync(rawStoragePath, nodeBuffer);
-      } catch (err) {
-        console.warn('[CreativeAssetService] Raw filesystem write notice:', err);
-      }
+    const rawStoragePath = filename;
+
+    const storage: AssetStorageProvider = getProductionStorageProvider();
+
+    try {
+      const nodeBuffer = Buffer.isBuffer(params.buffer)
+        ? params.buffer
+        : Buffer.from(params.buffer);
+      await storage.upload(rawStoragePath, nodeBuffer, {
+        contentType: params.mimeType,
+      });
+    } catch (err) {
+      console.warn('[CreativeAssetService] Raw Supabase storage write notice:', err);
     }
 
-    // Use canonical API route for raw assets too (basePath-aware)
     const basePath = getAppBasePath();
     const rawPublicUrl = `${basePath}/api/creatives/file/${filename}`;
     return { rawPublicUrl, rawStoragePath };
@@ -410,9 +423,13 @@ export class CreativeAssetService {
       provider: params.provider,
       status: params.status || 'QUEUED',
       prompt: params.prompt,
-      title: params.title || (params.prompt.length > 32 ? params.prompt.substring(0, 32) + '...' : params.prompt),
+      title:
+        params.title ||
+        (params.prompt.length > 32 ? params.prompt.substring(0, 32) + '...' : params.prompt),
       mimeType: params.mimeType || (params.type === 'VIDEO_REEL' ? 'video/mp4' : 'image/jpeg'),
       storagePath: '',
+      storageProvider: 'SUPABASE',
+      bucket: 'creatives',
       publicUrl: params.publicUrl || '',
       previewUrl: params.previewUrl,
       createdAt: new Date().toISOString(),
@@ -433,7 +450,10 @@ export class CreativeAssetService {
     const updated: CreativeAsset = {
       ...existing,
       ...updates,
-      completedAt: updates.status === 'COMPLETED' ? (updates.completedAt || new Date().toISOString()) : existing.completedAt,
+      completedAt:
+        updates.status === 'COMPLETED'
+          ? updates.completedAt || new Date().toISOString()
+          : existing.completedAt,
     };
 
     assetRegistry.set(id, updated);
@@ -441,94 +461,117 @@ export class CreativeAssetService {
   }
 
   /**
-   * Get an asset by ID with optional tenant isolation check.
+   * Get an asset by ID with tenant isolation check.
+   * If in memory, returns immediately.
    */
   static getAsset(id: string, requestingOrgId?: string): CreativeAsset | null {
+    const asset = assetRegistry.get(id) || null;
+
+    if (asset) {
+      if (requestingOrgId && requestingOrgId !== 'all' && asset.organizationId !== requestingOrgId) {
+        return null; // Deny cross-tenant asset retrieval
+      }
+      return asset;
+    }
+
+    return null;
+  }
+
+  /**
+   * Asynchronously get an asset by ID, checking Supabase Storage if not in memory.
+   */
+  static async getAssetAsync(id: string, requestingOrgId?: string): Promise<CreativeAsset | null> {
     let asset = assetRegistry.get(id) || null;
-    if (!asset && typeof window === 'undefined') {
+
+    if (!asset) {
       try {
-        const fs = require('fs');
-        const path = require('path');
-        const rootUpload = path.join(process.cwd(), 'apps', 'ralion', 'public', 'uploads', 'creatives');
-        const directUpload = path.join(process.cwd(), 'public', 'uploads', 'creatives');
-        const targetDir = fs.existsSync(rootUpload) ? rootUpload : (fs.existsSync(directUpload) ? directUpload : null);
-        if (targetDir) {
-          const metaPath = path.join(targetDir, `${id}.meta.json`);
-          if (fs.existsSync(metaPath)) {
-            asset = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
-            if (asset) assetRegistry.set(id, asset);
+        const storage = getProductionStorageProvider();
+        const metaPath = `${id}.meta.json`;
+        const downloaded = await storage.download(metaPath);
+        if (downloaded) {
+          asset = JSON.parse(downloaded.buffer.toString('utf-8'));
+          if (asset) {
+            assetRegistry.set(asset.id, asset);
+            if (asset.storagePath) assetRegistry.set(asset.storagePath, asset);
           }
         }
       } catch {}
     }
-    if (!asset) return null;
-    if (requestingOrgId && requestingOrgId !== 'all' && asset.organizationId !== requestingOrgId) {
-      return null; // Deny cross-tenant asset retrieval
+
+    if (asset) {
+      if (requestingOrgId && requestingOrgId !== 'all' && asset.organizationId !== requestingOrgId) {
+        return null; // Deny cross-tenant asset retrieval
+      }
+      return asset;
     }
-    return asset;
+
+    return null;
+  }
+
+  /**
+   * Locate an asset by filename (e.g. 'asset-1788194025026-2mae6.jpg')
+   * Supports tenant verification and cross-restart lookup.
+   */
+  static async getAssetByFilename(
+    filename: string,
+    requestingOrgId?: string
+  ): Promise<CreativeAsset | null> {
+    // 1. Direct registry lookup
+    let asset = assetRegistry.get(filename) || null;
+    if (!asset) {
+      // Find by id prefix
+      const id = filename.replace(/\.[^/.]+$/, '').replace(/-raw$/, '');
+      asset = assetRegistry.get(id) || null;
+    }
+
+    // 2. If not found in memory (e.g. after restart), search Supabase Storage
+    if (!asset) {
+      try {
+        const storage = getProductionStorageProvider();
+        const metaPath = `${filename}.meta.json`;
+        const downloaded = await storage.download(metaPath);
+        if (downloaded) {
+          asset = JSON.parse(downloaded.buffer.toString('utf-8'));
+          if (asset) {
+            assetRegistry.set(asset.id, asset);
+            assetRegistry.set(filename, asset);
+          }
+        }
+      } catch {}
+    }
+
+    if (asset) {
+      if (requestingOrgId && requestingOrgId !== 'all' && asset.organizationId !== requestingOrgId) {
+        return null; // Cross-tenant access denied
+      }
+      return asset;
+    }
+
+    return null;
   }
 
   /**
    * List all assets strictly for an organization.
    */
   static listAssets(organizationId?: string): CreativeAsset[] {
-    if (isNodeRuntime()) {
-      try {
-        const node = getNodeFs();
-        if (node) {
-          const cwd = process.cwd();
-          const hasLocalPublic = node.fs.existsSync(node.path.join(cwd, 'public'));
-          const candidateDirs = hasLocalPublic
-            ? [
-                node.path.join(cwd, 'public', 'uploads', 'creatives'),
-                node.path.join(cwd, 'uploads', 'creatives'),
-              ]
-            : [
-                node.path.join(cwd, 'apps', 'ralion', 'public', 'uploads', 'creatives'),
-                node.path.join(cwd, 'public', 'uploads', 'creatives'),
-                node.path.join(cwd, 'uploads', 'creatives'),
-              ];
-          for (const dir of candidateDirs) {
-            if (node.fs.existsSync(dir)) {
-              const files = node.fs.readdirSync(dir);
-              for (const file of files) {
-                const id = file.replace(/\.[^/.]+$/, '');
-                if (!assetRegistry.has(id)) {
-                  const ext = node.path.extname(file).toLowerCase();
-                  const isVid = ext === '.mp4' || ext === '.webm';
-                  const publicUrl = `/ralion/uploads/creatives/${file}`;
-                  assetRegistry.set(id, {
-                    id,
-                    organizationId: 'ras-ali-labs',
-                    type: isVid ? 'VIDEO_REEL' : 'POSTER_IMAGE',
-                    provider: isVid ? 'CogVideoX' : 'FLUX.1',
-                    status: 'COMPLETED',
-                    prompt: `Commercial creative asset (${file})`,
-                    title: `Creative Asset (${id.substring(0, 16)})`,
-                    mimeType: isVid ? 'video/mp4' : 'image/jpeg',
-                    storagePath: node.path.join(dir, file),
-                    publicUrl,
-                    previewUrl: publicUrl,
-                    createdAt: new Date().toISOString(),
-                    completedAt: new Date().toISOString(),
-                  });
-                }
-              }
-            }
-          }
-        }
-      } catch {}
-    }
-
     const all = Array.from(assetRegistry.values());
-    if (!organizationId || organizationId === 'all') return all.reverse();
-    return all.filter(a => a.organizationId === organizationId).reverse();
+    // Deduplicate by ID
+    const uniqueMap = new Map<string, CreativeAsset>();
+    for (const a of all) {
+      if (!uniqueMap.has(a.id)) {
+        uniqueMap.set(a.id, a);
+      }
+    }
+    const uniqueAssets = Array.from(uniqueMap.values());
+
+    if (!organizationId || organizationId === 'all') return uniqueAssets.reverse();
+    return uniqueAssets.filter((a) => a.organizationId === organizationId).reverse();
   }
 
   /**
    * Delete an asset by ID with tenant isolation verification.
    */
-  static deleteAsset(id: string, requestingOrgId?: string): boolean {
+  static async deleteAsset(id: string, requestingOrgId?: string): Promise<boolean> {
     const existing = assetRegistry.get(id);
     if (!existing) return false;
 
@@ -536,15 +579,17 @@ export class CreativeAssetService {
       return false; // Deny cross-tenant asset deletion
     }
 
-    if (existing.storagePath && isNodeRuntime()) {
+    if (existing.storagePath) {
       try {
-        const node = getNodeFs();
-        if (node && node.fs.existsSync(existing.storagePath)) {
-          node.fs.unlinkSync(existing.storagePath);
-        }
-      } catch {}
+        const storage = getProductionStorageProvider();
+        await storage.delete(existing.storagePath);
+        await storage.delete(`${existing.storagePath}.meta.json`);
+      } catch (err) {
+        console.warn('[CreativeAssetService] Supabase delete warning:', err);
+      }
     }
 
-    return assetRegistry.delete(id);
+    assetRegistry.delete(id);
+    return true;
   }
 }

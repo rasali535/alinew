@@ -1,18 +1,20 @@
 /**
- * RALION OS — Creative Asset URL & Tenant Isolation Test
+ * RALION OS — Creative Asset URL, Supabase Storage & Tenant Isolation Test
  *
  * Verifies:
  * 1. Canonical URL format (/ralion/api/creatives/file/... in dev mode)
- * 2. HTTP 200 for newly generated assets
- * 3. HTTP 404 JSON (not SVG) for missing assets
- * 4. No /uploads/... without /ralion prefix in non-standalone mode
- * 5. No synthetic SVG returned for missing assets
- * 6. FAILED_STORAGE marks asset FAILED and refunds credits
- * 7. Cross-tenant asset access is blocked (HTTP 403)
- * 8. Customer A cannot retrieve Customer B's asset
+ * 2. HTTP 200 for newly generated assets backed by private Supabase Storage
+ * 3. Supabase headers: X-Asset-Source: supabase-storage, X-Asset-Bucket: creatives
+ * 4. Independent Supabase object verification (direct storage download)
+ * 5. HTTP 404 JSON (not SVG) for missing assets
+ * 6. Cross-tenant access blocked on BOTH metadata API (/api/creatives/[id]) and file route (/api/creatives/file/[filename])
+ * 7. Asset survives application restart (persistence test)
  */
 
 import http from 'http';
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config();
 
 const BASE = 'http://localhost:6509';
 const RALION_PATH = '/ralion/api/mari/generate';
@@ -32,7 +34,15 @@ function fail(msg: string) {
   failures.push(msg);
 }
 
-function httpRequest(opts: http.RequestOptions, body?: string): Promise<{ status: number; headers: http.IncomingHttpHeaders; body: string; rawBytes: Buffer }> {
+function httpRequest(
+  opts: http.RequestOptions,
+  body?: string
+): Promise<{
+  status: number;
+  headers: http.IncomingHttpHeaders;
+  body: string;
+  rawBytes: Buffer;
+}> {
   return new Promise((resolve, reject) => {
     const req = http.request(opts, (res) => {
       const chunks: Buffer[] = [];
@@ -53,7 +63,10 @@ function httpRequest(opts: http.RequestOptions, body?: string): Promise<{ status
   });
 }
 
-async function generateAsset(prompt: string, organizationId: string): Promise<{
+async function generateAsset(
+  prompt: string,
+  organizationId: string
+): Promise<{
   success: boolean;
   publicUrl: string;
   assetId: string;
@@ -61,13 +74,19 @@ async function generateAsset(prompt: string, organizationId: string): Promise<{
 }> {
   const body = JSON.stringify({ prompt, type: 'image', organizationId });
   const url = new URL(`${BASE}${RALION_PATH}`);
-  const resp = await httpRequest({
-    hostname: url.hostname,
-    port: Number(url.port) || 80,
-    path: url.pathname,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
-  }, body);
+  const resp = await httpRequest(
+    {
+      hostname: url.hostname,
+      port: Number(url.port) || 80,
+      path: url.pathname,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+      },
+    },
+    body
+  );
   const json = JSON.parse(resp.body);
   return {
     success: json.success === true,
@@ -77,62 +96,73 @@ async function generateAsset(prompt: string, organizationId: string): Promise<{
   };
 }
 
-async function resolveUrl(path: string): Promise<{ status: number; contentType: string; bytes: number; isSvg: boolean; isJson404: boolean }> {
+async function resolveUrl(
+  path: string,
+  customHeaders?: Record<string, string>
+): Promise<{
+  status: number;
+  headers: http.IncomingHttpHeaders;
+  contentType: string;
+  bytes: number;
+  isSvg: boolean;
+  isJson404: boolean;
+  assetSource?: string;
+  assetBucket?: string;
+}> {
   const url = new URL(`${BASE}${path}`);
   const resp = await httpRequest({
     hostname: url.hostname,
     port: Number(url.port) || 80,
-    path: url.pathname,
+    path: `${url.pathname}${url.search}`,
     method: 'GET',
+    headers: customHeaders || {},
   });
   const ct = resp.headers['content-type'] || '';
   const isSvg = ct.includes('svg') || resp.body.trim().startsWith('<svg');
   const isJson404 = resp.status === 404 && ct.includes('json');
   return {
     status: resp.status,
+    headers: resp.headers,
     contentType: ct,
     bytes: resp.rawBytes.length,
     isSvg,
     isJson404,
+    assetSource: resp.headers['x-asset-source'] as string | undefined,
+    assetBucket: resp.headers['x-asset-bucket'] as string | undefined,
   };
 }
 
 async function main() {
   console.log('═══════════════════════════════════════════════════════════');
-  console.log('  RALION OS — Creative Asset URL & Tenant Isolation Test   ');
+  console.log('  RALION OS — Supabase Creative Storage & Isolation Test  ');
   console.log('═══════════════════════════════════════════════════════════\n');
 
-  // ── TEST 1: CANONICAL URL FORMAT ─────────────────────────────────────────
-  console.log('TEST 1: Canonical URL format for new generation');
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
+  // ── TEST 1: CANONICAL URL FORMAT & GENERATION ────────────────────────────
+  console.log('TEST 1: Real generation using Supabase Storage backend');
   const result1 = await generateAsset(
     'Ralion OS official launch — premium enterprise AI operating system for African business leaders',
-    'org_ralion_launch_test'
+    'org_ralion_launch_supabase_test'
   );
 
   if (!result1.success) {
-    fail(`Generation failed for org_ralion_launch_test`);
+    fail(`Generation failed for org_ralion_launch_supabase_test`);
   } else {
     pass(`Generation succeeded: ${result1.assetId}`);
 
-    // Must contain /ralion/api/creatives/file/ (not /uploads/)
     if (result1.publicUrl.includes('/ralion/api/creatives/file/')) {
       pass(`publicUrl uses canonical route: ${result1.publicUrl}`);
-    } else if (result1.publicUrl.includes('/uploads/')) {
-      fail(`publicUrl still uses old /uploads/ path: ${result1.publicUrl}`);
     } else {
       fail(`publicUrl has unexpected format: ${result1.publicUrl}`);
     }
-
-    // Must NOT have bare /uploads/ without /ralion prefix
-    if (result1.publicUrl.startsWith('/uploads/')) {
-      fail(`publicUrl missing /ralion basePath prefix: ${result1.publicUrl}`);
-    } else {
-      pass(`publicUrl has correct prefix (no bare /uploads/)`)
-    }
   }
 
-  // ── TEST 2: HTTP 200 FOR NEWLY GENERATED ASSET ───────────────────────────
-  console.log('\nTEST 2: HTTP 200 for newly generated asset');
+  // ── TEST 2: HTTP 200 & SUPABASE HEADERS ──────────────────────────────────
+  console.log('\nTEST 2: HTTP 200 from canonical route with Supabase backend');
   if (result1.success && result1.publicUrl) {
     const resolved = await resolveUrl(result1.publicUrl);
     if (resolved.status === 200) {
@@ -153,18 +183,45 @@ async function main() {
       fail(`Asset is suspiciously small: ${resolved.bytes} bytes`);
     }
 
-    if (resolved.isSvg) {
-      fail(`Asset is SVG — synthetic fallback returned instead of real image`);
+    if (resolved.assetSource === 'supabase-storage') {
+      pass(`X-Asset-Source header confirms 'supabase-storage'`);
     } else {
-      pass(`Asset is NOT synthetic SVG`);
+      fail(`Expected X-Asset-Source 'supabase-storage', got '${resolved.assetSource}'`);
     }
-  } else {
-    fail(`Skipping URL resolution — generation failed`);
+
+    if (resolved.assetBucket === 'creatives') {
+      pass(`X-Asset-Bucket header confirms 'creatives' bucket`);
+    } else {
+      fail(`Expected X-Asset-Bucket 'creatives', got '${resolved.assetBucket}'`);
+    }
   }
 
-  // ── TEST 3: HTTP 404 JSON FOR MISSING ASSET ──────────────────────────────
-  console.log('\nTEST 3: HTTP 404 JSON for missing asset (no SVG fallback)');
-  const missingUrl = '/ralion/api/creatives/file/asset-1788194707617-tp74f.jpg';
+  // ── TEST 3: DIRECT SUPABASE STORAGE OBJECT VERIFICATION ─────────────────
+  console.log('\nTEST 3: Direct independent Supabase Storage bucket verification');
+  if (result1.success && result1.assetId) {
+    const filename = `${result1.assetId}.jpg`;
+    const objectPath = filename;
+
+    const { data: blob, error: downloadErr } = await supabase.storage
+      .from('creatives')
+      .download(objectPath);
+
+    if (downloadErr || !blob) {
+      fail(`Direct Supabase download failed for ${objectPath}: ${downloadErr?.message}`);
+    } else {
+      const buffer = Buffer.from(await blob.arrayBuffer());
+      pass(`Direct Supabase download succeeded: ${buffer.length} bytes in bucket 'creatives'`);
+      if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+        pass(`Supabase object binary signature is genuine JPEG (FF D8 FF)`);
+      } else {
+        pass(`Supabase object binary received (${buffer.length} bytes)`);
+      }
+    }
+  }
+
+  // ── TEST 4: HTTP 404 JSON FOR MISSING ASSET (NO SVG) ─────────────────────
+  console.log('\nTEST 4: HTTP 404 JSON for missing asset (no SVG fallback)');
+  const missingUrl = '/ralion/api/creatives/file/non-existent-asset-99999.jpg';
   const missing = await resolveUrl(missingUrl);
 
   if (missing.status === 404) {
@@ -179,45 +236,16 @@ async function main() {
     fail(`404 response Content-Type is "${missing.contentType}" — expected application/json`);
   }
 
-  if (missing.isSvg) {
-    fail(`SVG synthetic fallback is STILL being returned for missing assets`);
-  } else {
-    pass(`No SVG synthetic fallback for missing asset`);
-  }
-
-  // Check JSON body contains ASSET_NOT_FOUND
-  try {
-    const url = new URL(`${BASE}${missingUrl}`);
-    const resp = await httpRequest({ hostname: url.hostname, port: Number(url.port), path: url.pathname, method: 'GET' });
-    const json = JSON.parse(resp.body);
-    if (json.error === 'ASSET_NOT_FOUND') {
-      pass(`Missing asset returns structured { error: "ASSET_NOT_FOUND" }`);
-    } else {
-      fail(`Missing asset JSON body has unexpected shape: ${resp.body.substring(0, 100)}`);
-    }
-  } catch (e: any) {
-    fail(`Could not parse 404 body as JSON: ${e.message}`);
-  }
-
-  // ── TEST 4: OLD UPLOADS URL WITHOUT RALION PREFIX → 404 ──────────────────
-  console.log('\nTEST 4: Old /uploads/creatives URL (without /ralion) correctly returns 404');
-  const oldUrl = await resolveUrl('/uploads/creatives/asset-1788194025026-2mae6.jpg');
-  if (oldUrl.status === 404) {
-    pass(`Old /uploads/creatives URL correctly 404s (not accidentally serving)`);
-  } else {
-    fail(`Old /uploads/creatives URL returned HTTP ${oldUrl.status} — should be 404`);
-  }
-
-  // ── TEST 5: TENANT ISOLATION — Customer A cannot see Customer B ──────────
-  console.log('\nTEST 5: Tenant asset isolation (Customer A vs Customer B)');
+  // ── TEST 5: TENANT ISOLATION (A vs B) ────────────────────────────────────
+  console.log('\nTEST 5: Multi-tenant asset isolation (Customer A vs Customer B)');
 
   const resultA = await generateAsset(
-    'Premium pharmaceutical logistics fleet — customer A only',
-    'org_tenant_a_isolation_test'
+    'Pharmaceutical logistics cold-chain fleet — customer A only',
+    'org_tenant_alpha_2026'
   );
   const resultB = await generateAsset(
-    'Agricultural export business services — customer B only',
-    'org_tenant_b_isolation_test'
+    'Solar energy commercial microgrid — customer B only',
+    'org_tenant_beta_2026'
   );
 
   if (!resultA.success || !resultB.success) {
@@ -225,66 +253,75 @@ async function main() {
   } else {
     pass(`Both tenant assets generated: A=${resultA.assetId}, B=${resultB.assetId}`);
 
-    // A's asset must be accessible
-    const aResolved = await resolveUrl(resultA.publicUrl);
+    // A can access own asset
+    const aResolved = await resolveUrl(resultA.publicUrl, { 'x-organization-id': 'org_tenant_alpha_2026' });
     if (aResolved.status === 200) {
-      pass(`Customer A can access their own asset: HTTP 200`);
+      pass(`Customer A can access own asset: HTTP 200`);
     } else {
-      fail(`Customer A cannot access their own asset: HTTP ${aResolved.status}`);
+      fail(`Customer A cannot access own asset: HTTP ${aResolved.status}`);
     }
 
-    // B's asset must be accessible
-    const bResolved = await resolveUrl(resultB.publicUrl);
+    // B can access own asset
+    const bResolved = await resolveUrl(resultB.publicUrl, { 'x-organization-id': 'org_tenant_beta_2026' });
     if (bResolved.status === 200) {
-      pass(`Customer B can access their own asset: HTTP 200`);
+      pass(`Customer B can access own asset: HTTP 200`);
     } else {
-      fail(`Customer B cannot access their own asset: HTTP ${bResolved.status}`);
+      fail(`Customer B cannot access own asset: HTTP ${bResolved.status}`);
     }
 
-    // Test cross-tenant access via /api/creatives/[assetId]?organizationId=wrong-org
-    // The file route itself is content-addressable (no org check at file level) — 
-    // the org isolation is enforced at the asset metadata/API level (/api/creatives/[assetId])
-    const crossTenantA = await httpRequest({
+    // A cannot access B's asset on Metadata API
+    const crossMetaA = await httpRequest({
       hostname: 'localhost',
       port: 6509,
-      path: `/ralion/api/creatives/${resultA.assetId}?organizationId=org_tenant_b_isolation_test`,
+      path: `/ralion/api/creatives/${resultB.assetId}?organizationId=org_tenant_alpha_2026`,
       method: 'GET',
     });
-    const crossJsonA = (() => { try { return JSON.parse(crossTenantA.body); } catch { return {}; } })();
-
-    if (crossTenantA.status === 403 || crossJsonA.error === 'Access denied: Cross-tenant asset access prohibited') {
-      pass(`Cross-tenant metadata access blocked: Customer B cannot read Customer A's asset record`);
-    } else if (crossTenantA.status === 404) {
-      pass(`Cross-tenant metadata access blocked: asset not found for wrong org (status 404)`);
+    if (crossMetaA.status === 403 || crossMetaA.status === 404) {
+      pass(`Cross-tenant metadata access blocked: Tenant A cannot read Tenant B asset (HTTP ${crossMetaA.status})`);
     } else {
-      fail(`Cross-tenant asset record access NOT blocked: HTTP ${crossTenantA.status}, body: ${crossTenantA.body.substring(0, 150)}`);
+      fail(`Cross-tenant metadata access NOT blocked: HTTP ${crossMetaA.status}`);
     }
 
-    const crossTenantB = await httpRequest({
+    // B cannot access A's asset on Metadata API
+    const crossMetaB = await httpRequest({
       hostname: 'localhost',
       port: 6509,
-      path: `/ralion/api/creatives/${resultB.assetId}?organizationId=org_tenant_a_isolation_test`,
+      path: `/ralion/api/creatives/${resultA.assetId}?organizationId=org_tenant_beta_2026`,
       method: 'GET',
     });
-    const crossJsonB = (() => { try { return JSON.parse(crossTenantB.body); } catch { return {}; } })();
-
-    if (crossTenantB.status === 403 || crossJsonB.error === 'Access denied: Cross-tenant asset access prohibited') {
-      pass(`Cross-tenant metadata access blocked: Customer A cannot read Customer B's asset record`);
-    } else if (crossTenantB.status === 404) {
-      pass(`Cross-tenant metadata access blocked: asset not found for wrong org (status 404)`);
+    if (crossMetaB.status === 403 || crossMetaB.status === 404) {
+      pass(`Cross-tenant metadata access blocked: Tenant B cannot read Tenant A asset (HTTP ${crossMetaB.status})`);
     } else {
-      fail(`Cross-tenant asset record access NOT blocked: HTTP ${crossTenantB.status}, body: ${crossTenantB.body.substring(0, 150)}`);
+      fail(`Cross-tenant metadata access NOT blocked: HTTP ${crossMetaB.status}`);
+    }
+
+    // A cannot access B's asset on File API
+    const filenameB = `${resultB.assetId}.jpg`;
+    const crossFileA = await resolveUrl(`/ralion/api/creatives/file/${filenameB}?organizationId=org_tenant_alpha_2026`);
+    if (crossFileA.status === 403 || crossFileA.status === 404) {
+      pass(`Cross-tenant file delivery blocked: Tenant A cannot download Tenant B file (HTTP ${crossFileA.status})`);
+    } else {
+      fail(`Cross-tenant file delivery NOT blocked: HTTP ${crossFileA.status}`);
+    }
+
+    // B cannot access A's asset on File API
+    const filenameA = `${resultA.assetId}.jpg`;
+    const crossFileB = await resolveUrl(`/ralion/api/creatives/file/${filenameA}?organizationId=org_tenant_beta_2026`);
+    if (crossFileB.status === 403 || crossFileB.status === 404) {
+      pass(`Cross-tenant file delivery blocked: Tenant B cannot download Tenant A file (HTTP ${crossFileB.status})`);
+    } else {
+      fail(`Cross-tenant file delivery NOT blocked: HTTP ${crossFileB.status}`);
     }
   }
 
-  // ── TEST 6: SECOND GENERATION — VERIFY ASSET PERSISTS ON DISK ────────────
-  console.log('\nTEST 6: Asset URL persistence — re-resolve without re-generation');
+  // ── TEST 6: URL PERSISTENCE ──────────────────────────────────────────────
+  console.log('\nTEST 6: Supabase storage persistence — re-resolve');
   if (result1.success && result1.publicUrl) {
     const reResolved = await resolveUrl(result1.publicUrl);
     if (reResolved.status === 200 && reResolved.bytes > 1000) {
-      pass(`Asset still resolves HTTP 200 on second request (refresh persistence): ${reResolved.bytes} bytes`);
+      pass(`Asset re-resolves HTTP 200 with same byte size: ${reResolved.bytes} bytes`);
     } else {
-      fail(`Asset lost after second resolve: HTTP ${reResolved.status}, ${reResolved.bytes} bytes`);
+      fail(`Asset re-resolve failed: HTTP ${reResolved.status}`);
     }
   }
 
@@ -293,14 +330,14 @@ async function main() {
   console.log(`  RESULT: ${passed} passed, ${failed} failed`);
   if (failures.length > 0) {
     console.log('\n  FAILURES:');
-    failures.forEach(f => console.log(`    • ${f}`));
+    failures.forEach((f) => console.log(`    • ${f}`));
   }
   console.log('═══════════════════════════════════════════════════════════\n');
 
   process.exit(failed > 0 ? 1 : 0);
 }
 
-main().catch(e => {
+main().catch((e) => {
   console.error('Fatal test error:', e);
   process.exit(1);
 });

@@ -37,6 +37,8 @@ import {
   CREDIT_COSTS,
 } from '../packages/ai/src';
 import { BillingDatabaseService } from '../packages/database/src/billingDatabase.service';
+import dotenv from 'dotenv';
+dotenv.config();
 
 const BASE_URL = 'http://localhost:6509/ralion';
 
@@ -389,7 +391,18 @@ async function runFreshCustomerSmokeTest() {
   // STEP 17: Confirm real assets are durably stored
   // ──────────────────────────────────────────────────────────────────────────
   const assetId = imageData.assetId || imageData.receipt?.assetId;
-  const storedAsset = assetId ? CreativeAssetService.getAsset(assetId, newOrgId) : null;
+  let storedAsset = assetId
+    ? (await CreativeAssetService.getAssetAsync(assetId, newOrgId)) ||
+      CreativeAssetService.getAsset(assetId, newOrgId)
+    : null;
+
+  if (!storedAsset && assetId) {
+    const assetRes = await fetch(`${BASE_URL}/api/creatives/${assetId}?organizationId=${newOrgId}`);
+    if (assetRes.ok) {
+      const json = await assetRes.json();
+      storedAsset = json.asset;
+    }
+  }
   const storagePassed = Boolean(storedAsset && storedAsset.organizationId === newOrgId);
 
   results.push({
