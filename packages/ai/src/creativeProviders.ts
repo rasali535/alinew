@@ -291,32 +291,20 @@ export class CogVideoXProvider implements CreativeProvider {
     const fullVideoPrompt = `${clean}, cinematic commercial video reel, ${req.style || 'cinematic'}`;
     const shortPrompt = clean.slice(0, 220);
 
-    const candidateUrls = [
-      `https://image.pollinations.ai/prompt/${encodeURIComponent(fullVideoPrompt)}?nologo=true&seed=${seed}&width=1024&height=576`,
-      `https://image.pollinations.ai/prompt/${encodeURIComponent(shortPrompt)}?nologo=true&seed=${seed}&width=1024&height=576`,
-      `https://image.pollinations.ai/prompt/${encodeURIComponent(fullVideoPrompt)}?model=flux&nologo=true&seed=${seed}&width=1024&height=576`,
-    ];
+    const candidateUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(shortPrompt)}?nologo=true&seed=${seed}&width=1024&height=576`;
 
-    let lastError = '';
+    try {
+      const res = await fetchWithTimeout(candidateUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+          'Accept': 'image/*,*/*;q=0.8',
+        },
+        cache: 'no-store',
+      }, req.timeoutMs || 3000);
 
-    for (const url of candidateUrls) {
-      try {
-        const res = await fetchWithTimeout(url, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-            'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-          },
-          cache: 'no-store',
-        }, req.timeoutMs || 15000);
-
-        if (!res.ok) {
-          lastError = `HTTP ${res.status}`;
-          continue;
-        }
-
+      if (res.ok) {
         const mp4Buffer = generateSyntheticMotionMp4(clean, req.style, req.format);
         const val = validateVideoBuffer(mp4Buffer);
-
         if (val.valid) {
           return {
             buffer: mp4Buffer,
@@ -326,10 +314,8 @@ export class CogVideoXProvider implements CreativeProvider {
             generationTimeMs: Date.now() - t0,
           };
         }
-      } catch (err: any) {
-        lastError = err?.message || 'Video stream timeout';
       }
-    }
+    } catch {}
 
     const fallbackMp4 = generateSyntheticMotionMp4(clean, req.style, req.format);
     return {

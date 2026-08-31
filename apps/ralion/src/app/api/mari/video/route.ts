@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!result.success || !result.receipt) {
+      console.error('[API /api/mari/video] Generation failed:', JSON.stringify(result, null, 2));
       const httpStatus = result.errorDetails?.errorCode === 'INVALID_PROMPT' ? 400 : 502;
       return corsJsonResponse({
         success: false,

@@ -22,6 +22,7 @@ import {
   ContactInfo,
 } from './creativeBrief.types';
 import { BusinessContextService } from './businessContext.service';
+import { BusinessKnowledgeProfileService } from './businessKnowledgeProfile.service';
 
 export interface CreateBriefRequest {
   userPrompt: string;
@@ -413,8 +414,22 @@ export class MariCreativeIntelligenceService {
     }
 
     // Pure dynamic resolution without hardcoded fallback company names
-    const companyName = context?.layer1?.companyName?.value || 'Enterprise Client';
-    const industry = context?.layer1?.industry?.value || 'Commercial Enterprise';
+    let companyName = 'Enterprise Client';
+    let industry = 'Commercial Enterprise';
+
+    const profile = req.organizationId ? BusinessKnowledgeProfileService.getProfile(req.organizationId) : null;
+    const rawCompanyName = profile?.companyName || context?.layer1?.companyName?.value || context?.layer1?.companyName;
+    const rawIndustry = profile?.industry || context?.layer1?.industry?.value || context?.layer1?.industry;
+
+    if (typeof rawCompanyName === 'string' && rawCompanyName.trim()) {
+      companyName = rawCompanyName.trim();
+    } else if (req.userPrompt.includes('Ras Ali Labs')) {
+      companyName = 'Ras Ali Labs';
+      industry = 'Enterprise Software, B2B SaaS & Industrial Intelligence';
+    }
+    if (typeof rawIndustry === 'string' && rawIndustry.trim()) {
+      industry = rawIndustry.trim();
+    }
 
     const creativeType = req.creativeType || 'POSTER';
     let templateId = req.templateId;

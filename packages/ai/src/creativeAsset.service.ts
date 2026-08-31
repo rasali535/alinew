@@ -10,6 +10,12 @@ export interface CreativeAsset {
   storagePath: string;
   publicUrl: string;
   previewUrl?: string;
+  rawPublicUrl?: string;
+  rawStoragePath?: string;
+  visualRelevanceScore?: number;
+  designQualityScore?: number;
+  promptStructureScore?: number;
+  visualQADetails?: Record<string, any>;
   fileSizeBytes?: number;
   createdAt: string;
   completedAt?: string;
@@ -286,6 +292,42 @@ export class CreativeAssetService {
 
     assetRegistry.set(id, asset);
     return asset;
+  }
+
+  /**
+   * Save a raw, pre-composition binary buffer to durable storage.
+   */
+  static async saveRawBinaryAsset(params: {
+    assetId: string;
+    organizationId?: string;
+    mimeType: string;
+    buffer: any;
+  }): Promise<{ rawPublicUrl: string; rawStoragePath: string }> {
+    const orgId = params.organizationId || 'default-org';
+    const ext = params.mimeType.includes('png')
+      ? 'png'
+      : params.mimeType.includes('svg')
+        ? 'svg'
+        : params.mimeType.includes('webp')
+          ? 'webp'
+          : 'jpg';
+    const filename = `${params.assetId}-raw.${ext}`;
+    
+    let rawStoragePath = '';
+    const node = await getNodeFs();
+    if (node && params.buffer) {
+      try {
+        const uploadDir = await getUploadDir();
+        rawStoragePath = node.path.join(uploadDir, filename);
+        const nodeBuffer = Buffer.isBuffer(params.buffer) ? params.buffer : Buffer.from(params.buffer);
+        node.fs.writeFileSync(rawStoragePath, nodeBuffer);
+      } catch (err) {
+        console.warn('[CreativeAssetService] Raw filesystem write notice:', err);
+      }
+    }
+
+    const rawPublicUrl = `/uploads/creatives/${filename}`;
+    return { rawPublicUrl, rawStoragePath };
   }
 
   /**

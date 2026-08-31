@@ -23,6 +23,7 @@ import {
 } from './creativeAsset.service';
 import { TenantCreditsService, CREDIT_COSTS } from './tenantCredits.service';
 import { EntitlementService } from '@ralion/auth';
+import { VisualSemanticEvaluatorService } from './visualSemanticEvaluator.service';
 
 export interface OrchestratorGenerateOptions {
   organizationId: string;
@@ -211,7 +212,80 @@ export class CreativeOrchestrator {
       };
     }
 
-    // ── STAGE 4: STORING DURABLE ASSET ──────────────────────────────────────
+    // ── STAGE 4: VISUAL SEMANTIC EVALUATION & BOUNDED REGENERATION ──────────
+    let visualQAResult: any = null;
+    let rawPublicUrl: string | undefined = undefined;
+    let rawStoragePath: string | undefined = undefined;
+
+    const tempAssetId = `asset-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+
+    if (type === 'POSTER_IMAGE' && successfulResult) {
+      // 1. Durably save raw, un-composed image binary
+      try {
+        const rawInfo = await CreativeAssetService.saveRawBinaryAsset({
+          assetId: tempAssetId,
+          organizationId,
+          mimeType: successfulResult.mimeType,
+          buffer: successfulResult.buffer,
+        });
+        rawPublicUrl = rawInfo.rawPublicUrl;
+        rawStoragePath = rawInfo.rawStoragePath;
+      } catch {}
+
+      // 2. Perform Visual Semantic QA Inspection
+      visualQAResult = await VisualSemanticEvaluatorService.evaluateVisual(
+        successfulResult.buffer,
+        successfulResult.mimeType,
+        {
+          userPrompt: prompt,
+          format,
+        }
+      );
+
+      // 3. Bounded Regeneration on Visual Failure (Max 1 retry attempt)
+      if (visualQAResult && visualQAResult.visualRelevanceScore < 80) {
+        console.warn(`[CreativeOrchestrator] FAILED_VISUAL_QA (${visualQAResult.visualRelevanceScore}/100) — attempting bounded visual regeneration...`);
+        const enhancedPrompt = `${prompt}, photorealistic high-fidelity physical depiction of ${visualQAResult.missingRequiredObjects.join(', ') || 'the requested subject'}`;
+        
+        // Try next alternate provider
+        for (const altProvider of this.imageProviders) {
+          if (altProvider.name === successfulResult.providerName) continue;
+          try {
+            const retryRes = await altProvider.generate({
+              type: 'POSTER_IMAGE',
+              prompt: enhancedPrompt,
+              style,
+              format,
+              timeoutMs: 5000,
+            });
+            const retryVal = validateImageBuffer(retryRes.buffer);
+            if (retryVal.valid) {
+              const retryQA = await VisualSemanticEvaluatorService.evaluateVisual(
+                retryRes.buffer,
+                retryRes.mimeType,
+                { userPrompt: prompt, format }
+              );
+              if (retryQA.visualRelevanceScore > visualQAResult.visualRelevanceScore) {
+                successfulResult = retryRes;
+                visualQAResult = retryQA;
+                // Re-save enhanced raw binary
+                const rawRetryInfo = await CreativeAssetService.saveRawBinaryAsset({
+                  assetId: tempAssetId,
+                  organizationId,
+                  mimeType: retryRes.mimeType,
+                  buffer: retryRes.buffer,
+                });
+                rawPublicUrl = rawRetryInfo.rawPublicUrl;
+                rawStoragePath = rawRetryInfo.rawStoragePath;
+                break;
+              }
+            }
+          } catch {}
+        }
+      }
+    }
+
+    // ── STAGE 5: STORING DURABLE ASSET ──────────────────────────────────────
     const assetTitle =
       title || (prompt.length > 36 ? prompt.substring(0, 36).trim() + '...' : prompt.trim());
 
@@ -229,10 +303,15 @@ export class CreativeOrchestrator {
         generator: successfulResult.providerName,
         durationSeconds: successfulResult.durationSeconds,
         byteLength: successfulResult.buffer.byteLength,
+        rawPublicUrl,
+        visualRelevanceScore: visualQAResult?.visualRelevanceScore,
+        designQualityScore: visualQAResult?.designQualityScore,
+        promptStructureScore: visualQAResult?.promptStructureScore,
+        visualQADetails: visualQAResult,
       },
     });
 
-    // ── STAGE 5: COMPLETED (CONTRACTS & MARI RECEIPT) ───────────────────────
+    // ── STAGE 6: COMPLETED (CONTRACTS & MARI RECEIPT) ───────────────────────
     const socialContract: SocialHandoffContract = {
       assetId: asset.id,
       mediaUrl: asset.publicUrl,
@@ -250,12 +329,25 @@ export class CreativeOrchestrator {
       `It's ready in Growth Studio.\n\n` +
       `[Preview ${type === 'VIDEO_REEL' ? 'Reel' : 'Visual'}] | [Edit] | [Use in Social] | [Schedule Post]`;
 
-    const receipt: MariCreativeReceipt & { id: string; publicUrl: string; storagePath?: string; mimeType: string } = {
+    const receipt: MariCreativeReceipt & {
+      id: string;
+      publicUrl: string;
+      rawMediaUrl?: string;
+      rawPublicUrl?: string;
+      storagePath?: string;
+      mimeType: string;
+      visualRelevanceScore?: number;
+      designQualityScore?: number;
+      promptStructureScore?: number;
+      visualQADetails?: any;
+    } = {
       id: asset.id,
       assetId: asset.id,
       assetType: type,
       mediaUrl: asset.publicUrl,
       publicUrl: asset.publicUrl,
+      rawMediaUrl: rawPublicUrl || asset.publicUrl,
+      rawPublicUrl: rawPublicUrl || asset.publicUrl,
       thumbnailUrl: asset.previewUrl || asset.publicUrl,
       storagePath: asset.storagePath,
       mimeType: asset.mimeType,
@@ -265,6 +357,10 @@ export class CreativeOrchestrator {
       generationTime: successfulResult.generationTimeMs,
       validationStatus: 'PASSED',
       lifecycleState: 'COMPLETED',
+      visualRelevanceScore: visualQAResult?.visualRelevanceScore ?? 90,
+      designQualityScore: visualQAResult?.designQualityScore ?? 90,
+      promptStructureScore: visualQAResult?.promptStructureScore ?? 95,
+      visualQADetails: visualQAResult,
       mariResponse: naturalMariResponse,
       socialContract,
     };

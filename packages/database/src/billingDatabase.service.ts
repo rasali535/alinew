@@ -17,11 +17,35 @@ import {
   PaymentProvider,
 } from './schema';
 
+// Global singleton maps for isomorphic Next.js dev & runtime support
+const globalBillingStore = globalThis as unknown as {
+  __ralion_billing_subscriptions?: Map<string, OrganizationSubscriptionRecord>;
+  __ralion_billing_accounts?: Map<string, BillingAccountRecord>;
+  __ralion_billing_transactions?: PaymentTransactionRecord[];
+  __ralion_billing_webhooks?: Map<string, BillingWebhookEventRecord>;
+};
+
+if (!globalBillingStore.__ralion_billing_subscriptions) globalBillingStore.__ralion_billing_subscriptions = new Map();
+if (!globalBillingStore.__ralion_billing_accounts) globalBillingStore.__ralion_billing_accounts = new Map();
+if (!globalBillingStore.__ralion_billing_transactions) globalBillingStore.__ralion_billing_transactions = [];
+if (!globalBillingStore.__ralion_billing_webhooks) globalBillingStore.__ralion_billing_webhooks = new Map();
+
 export class BillingDatabaseService {
-  private static subscriptions: Map<string, OrganizationSubscriptionRecord> = new Map();
-  private static billingAccounts: Map<string, BillingAccountRecord> = new Map();
-  private static transactions: PaymentTransactionRecord[] = [];
-  private static webhookEvents: Map<string, BillingWebhookEventRecord> = new Map();
+  private static get subscriptions(): Map<string, OrganizationSubscriptionRecord> {
+    return globalBillingStore.__ralion_billing_subscriptions!;
+  }
+  private static get billingAccounts(): Map<string, BillingAccountRecord> {
+    return globalBillingStore.__ralion_billing_accounts!;
+  }
+  private static get transactions(): PaymentTransactionRecord[] {
+    return globalBillingStore.__ralion_billing_transactions!;
+  }
+  private static set transactions(txs: PaymentTransactionRecord[]) {
+    globalBillingStore.__ralion_billing_transactions = txs;
+  }
+  private static get webhookEvents(): Map<string, BillingWebhookEventRecord> {
+    return globalBillingStore.__ralion_billing_webhooks!;
+  }
 
   /**
    * Clears in-memory stores for isolated testing.
