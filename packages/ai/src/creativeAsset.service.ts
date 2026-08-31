@@ -257,19 +257,7 @@ export class CreativeAssetService {
       }
     }
 
-    let dataUri = '';
-    if (params.buffer && params.type === 'POSTER_IMAGE') {
-      try {
-        const nodeBuffer = Buffer.isBuffer(params.buffer) ? params.buffer : Buffer.from(params.buffer);
-        if (params.mimeType.includes('svg')) {
-          dataUri = `data:image/svg+xml;utf8,${encodeURIComponent(nodeBuffer.toString('utf-8'))}`;
-        } else if (nodeBuffer.byteLength < 5 * 1024 * 1024) {
-          dataUri = `data:${params.mimeType};base64,${nodeBuffer.toString('base64')}`;
-        }
-      } catch {}
-    }
-
-    const publicUrl = dataUri || `/uploads/creatives/${filename}`;
+    const publicUrl = `/uploads/creatives/${filename}`;
 
     const asset: CreativeAsset = {
       id,
@@ -282,7 +270,7 @@ export class CreativeAssetService {
       mimeType: params.mimeType,
       storagePath: filePath,
       publicUrl,
-      previewUrl: dataUri || publicUrl,
+      previewUrl: publicUrl,
       fileSizeBytes: byteLength || 35000,
       createdAt: new Date().toISOString(),
       completedAt: new Date().toISOString(),

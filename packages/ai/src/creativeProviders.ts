@@ -333,7 +333,7 @@ export class CogVideoXProvider implements CreativeProvider {
             'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
           },
           cache: 'no-store',
-        }, req.timeoutMs || 4500);
+        }, req.timeoutMs || 15000);
 
         if (!res.ok) {
           lastError = `HTTP ${res.status}`;
@@ -384,7 +384,7 @@ export class FallbackVideoProvider implements CreativeProvider {
         'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
       },
       cache: 'no-store',
-    }, req.timeoutMs || 4500);
+    }, req.timeoutMs || 15000);
 
     if (!res.ok) {
       throw new Error(`Fallback Video Provider HTTP error ${res.status}`);

@@ -361,6 +361,7 @@ function generateLocalStrategicResponse(
     hasProducts ||
     (profile && profile.isVerified) ||
     (context?.layer1?.companyName?.provenance === 'VERIFIED') ||
+    (orgName && orgName !== 'My Business' && orgName !== 'Test Organization' && !orgName.toLowerCase().startsWith('org ') && !orgName.startsWith('org_')) ||
     isRasAli
   );
 

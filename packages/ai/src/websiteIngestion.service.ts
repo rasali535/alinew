@@ -364,13 +364,18 @@ export class WebsiteIngestionService {
         title: crawled.title,
       });
 
-      // 4. Ingest into BusinessKnowledgeProfileService
+      // 4. Ingest into BusinessKnowledgeProfileService and BusinessContextService
       try {
         const { BusinessKnowledgeProfileService } = require('./businessKnowledgeProfile.service');
         await BusinessKnowledgeProfileService.ingestWebsiteForTenant(orgId, crawled.normalizedUrl, {
           workspaceId: options?.workspaceId,
           overrideName: options?.overrideName,
           overrideIndustry: options?.overrideIndustry,
+        });
+        const { BusinessContextService } = require('./businessContext.service');
+        BusinessContextService.registerTenantProfile(orgId, {
+          companyName: options?.overrideName || crawled.title || orgId,
+          industry: options?.overrideIndustry || 'Commercial Enterprise',
         });
       } catch (e: any) {
         console.warn('[WebsiteIngestionService] BusinessKnowledgeProfile sync notice:', e.message);
