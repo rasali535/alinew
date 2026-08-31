@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Sparkles, X, Send, Bot, User, ChevronUp } from 'lucide-react';
+import { Sparkles, X, Send, Bot, User, ChevronUp, Zap } from 'lucide-react';
 import { processMariQuery } from '@ralion/ai';
 
 export const FloatingMariAi: React.FC = () => {
@@ -116,7 +116,7 @@ export const FloatingMariAi: React.FC = () => {
                   })()}
 
                   {m.sender === 'MARI' && (
-                    <div className="pt-1.5 mt-1.5 border-t border-zinc-700/40 flex justify-end">
+                    <div className="pt-1.5 mt-1.5 border-t border-zinc-700/40 flex flex-wrap justify-end gap-1.5">
                       <button
                         type="button"
                         onClick={() => {
@@ -138,6 +138,54 @@ export const FloatingMariAi: React.FC = () => {
                       >
                         <Sparkles className="w-2.5 h-2.5 text-purple-400" /> Send to Studio &rarr;
                       </button>
+
+                      {/* Parse bracketed buttons in text e.g. [Create Reel] | [Create Visual] | [Open Growth Studio] */}
+                      {(() => {
+                        const bracketMatches = m.text.match(/\[([A-Za-z0-9 &—–-]+)\]/g);
+                        if (!bracketMatches) return null;
+                        const knownActions: Record<string, string> = {
+                          'create reel': '/growth?tab=creatives',
+                          'create visual': '/growth?tab=creatives',
+                          'open growth studio': '/growth',
+                          'connect facebook': '/growth?tab=channels',
+                          'generate creative': '/growth?tab=creatives',
+                          'view crm pipeline': '/crm',
+                          'sync website': '/settings',
+                          'add business knowledge': '/settings',
+                          'review sales pipeline': '/crm',
+                          'view tasks queue': '/tasks',
+                          'open billing & finance': '/billing',
+                        };
+                        return bracketMatches.map((bm, bIdx) => {
+                          const label = bm.replace(/^\[|\]$/g, '').trim();
+                          const route = knownActions[label.toLowerCase()];
+                          if (!route) return null;
+                          return (
+                            <button
+                              key={`f-bm-${bIdx}`}
+                              type="button"
+                              onClick={() => {
+                                if (typeof window !== 'undefined' && route.includes('growth')) {
+                                  const clean = m.text
+                                    .replace(/!\[.*?\]\(.*?\)/g, '')
+                                    .replace(/[*#_`]/g, '')
+                                    .replace(/^(Social & Channel Intelligence|Good day!|Based on your|Here is|I recommend)[^\n]*\n+/gi, '')
+                                    .replace(/\[.*?\]/g, '')
+                                    .replace(/\s+/g, ' ')
+                                    .trim()
+                                    .substring(0, 280);
+                                  localStorage.setItem('ralion_creative_prompt', clean || m.text.substring(0, 200));
+                                }
+                                window.location.href = route;
+                                setIsOpen(false);
+                              }}
+                              className="text-[10px] font-semibold text-purple-300 hover:text-white px-2 py-0.5 rounded bg-zinc-800/80 border border-purple-500/30 flex items-center gap-1 transition-all"
+                            >
+                              <Zap className="w-2.5 h-2.5 text-purple-400" /> {label}
+                            </button>
+                          );
+                        });
+                      })()}
                     </div>
                   )}
                 </div>

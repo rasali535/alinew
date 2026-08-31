@@ -39,7 +39,10 @@ export async function POST(
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { global: { headers: { cookie: request.headers.get("cookie") || "" } } }
+      {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+        global: { headers: { cookie: request.headers.get("cookie") || "" } },
+      }
     );
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {

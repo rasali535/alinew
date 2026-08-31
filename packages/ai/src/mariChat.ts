@@ -591,6 +591,9 @@ export function processMariQuery(userQuery: string, contextData?: any): MariQuer
   const queryLower = userQuery.toLowerCase();
   const suggestedActions: Array<{ type: string; label: string; payload: any }> = [];
 
+  const orgName = contextData?.layer1?.businessName?.value || contextData?.organizationName || 'your enterprise';
+  const targetMarket = contextData?.layer1?.targetMarket?.value || 'commercial decision makers';
+
   if (queryLower.includes('crm') || queryLower.includes('deal') || queryLower.includes('customer') || queryLower.includes('sale') || queryLower.includes('pipeline')) {
     suggestedActions.push({ type: 'NAVIGATE', label: 'Review Sales Pipeline', payload: { route: '/crm' } });
   }
@@ -599,10 +602,10 @@ export function processMariQuery(userQuery: string, contextData?: any): MariQuer
       type: 'NAVIGATE',
       label: 'Create Reel in Growth Studio',
       payload: {
-        route: '/growth',
+        route: '/growth?tab=creatives',
         type: 'VIDEO_REEL',
         format: '16:9',
-        prompt: 'Create a cinematic 15–30 second B2B technology promotional video for Ras Ali Labs targeting SADC enterprise decision makers.',
+        prompt: `Create a cinematic 15–30 second commercial promotional video for ${orgName} targeting ${targetMarket}.`,
       },
     });
   }

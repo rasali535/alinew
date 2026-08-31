@@ -37,6 +37,8 @@ async function runCommercialCreativeQASuite() {
     layer1: {
       companyName: { value: 'Apex Health Logistics' },
       industry: { value: 'Healthcare & Cold-Chain Logistics' },
+      websiteKnowledge: { url: 'https://www.apexhealth.co.bw' },
+      contactEmail: { value: 'dispatch@apexhealth.co.bw' },
     },
   };
 
@@ -92,6 +94,8 @@ async function runCommercialCreativeQASuite() {
     layer1: {
       companyName: { value: 'Skyline Media Group' },
       industry: { value: 'Media Production & Brand Advertising' },
+      websiteKnowledge: { url: 'https://www.skylinemedia.co.bw' },
+      contactEmail: { value: 'projects@skylinemedia.co.bw' },
     },
   };
 

@@ -177,7 +177,7 @@ export default function MariAiPage() {
       const generatedBriefing = MariBriefingService.generateBriefing(context);
       setBriefing(generatedBriefing);
 
-      const stream = MariOrchestrationService.getActivityStream('ras-ali-labs');
+      const stream = MariOrchestrationService.getActivityStream(context.organizationId || activeOrgId);
       setActivityStream(stream);
 
       // Check if returning from a completed Growth/Social action
@@ -246,6 +246,104 @@ export default function MariAiPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isProcessing]);
 
+  // Helper to map action button text to safe routes
+  const getActionRouteForButton = (label: string): string => {
+    const b = label.toLowerCase();
+    if (b.includes('reel') || b.includes('visual') || b.includes('creative')) return '/growth?tab=creatives';
+    if (b.includes('growth') || b.includes('campaign')) return '/growth';
+    if (b.includes('facebook') || b.includes('social') || b.includes('connect')) return '/growth?tab=channels';
+    if (b.includes('crm') || b.includes('pipeline') || b.includes('lead') || b.includes('prospect') || b.includes('deal')) return '/crm';
+    if (b.includes('website') || b.includes('sync') || b.includes('settings') || b.includes('knowledge')) return '/settings';
+    if (b.includes('task') || b.includes('work') || b.includes('todo')) return '/tasks';
+    if (b.includes('bill') || b.includes('pricing') || b.includes('invoice') || b.includes('finance')) return '/billing';
+    return '/growth';
+  };
+
+  // Handle Action Execution & Real-Time Orchestration Loop
+  const handleActionExecute = async (action: MariActionPayload) => {
+    const actionLabel = action.label || action.title || action.type;
+    const rawRoute = (action.payload as any)?.route || (typeof action.payload === 'string' ? action.payload : getActionRouteForButton(actionLabel));
+    const targetRoute = (typeof rawRoute === 'string' && rawRoute.startsWith('/') && !rawRoute.includes('\n') && rawRoute.length < 200)
+      ? rawRoute
+      : '/growth';
+
+    const orgId = businessContext?.organizationId || activeOrgId || 'default-org';
+    const orgName = businessContext?.layer1?.companyName?.value || businessContext?.organizationName || 'Your Business';
+    const targetMarket = businessContext?.layer1?.targetMarket?.value || 'Executive Decision-Makers';
+    const topic = businessContext?.layer1?.valueProposition?.value || businessContext?.layer1?.industry?.value || 'Commercial Enterprise Solutions';
+
+    // Store creative prompt in localStorage if moving to Growth Studio
+    if (typeof window !== 'undefined' && targetRoute.includes('growth')) {
+      const creativePrompt = (action.payload as any)?.prompt || `${actionLabel} for ${orgName} targeting ${targetMarket}`;
+      localStorage.setItem('ralion_creative_prompt', creativePrompt);
+    }
+
+    // 1. Create typed recommendation contract
+    const recContract = MariOrchestrationService.createRecommendation({
+      organizationId: orgId,
+      type: targetRoute.includes('crm') ? 'CRM_FOLLOWUP' : 'CAMPAIGN_CREATE',
+      objective: `Execute: ${actionLabel}`,
+      reasoning: 'Proactively selected based on current high-impact business growth priorities.',
+      priority: 'HIGH',
+      expectedImpact: 'Commercial pipeline advance and audience reach velocity',
+      confidence: 0.95,
+      targetModule: targetRoute.includes('crm') ? 'crm' : 'growth',
+      action: actionLabel,
+      parameters: {
+        campaignName: actionLabel,
+        topic,
+        targetAudience: targetMarket,
+        platform: 'facebook',
+      },
+      sourceContext: {
+        activePipelineValue: growthProfile?.activePipelineValue || businessContext?.layer2.crm.totalPipelineValue.value || 84500,
+        followersCount: businessContext?.layer2.social.followersCount?.value || 107,
+        reachGrowthPct: businessContext?.layer2.social.reachGrowthPct?.value || 38.4,
+      },
+    });
+
+    // 2. Dispatch Action Result through Orchestrator
+    const actionResult = MariOrchestrationService.receiveActionResult({
+      organizationId: orgId,
+      recommendationId: recContract.recommendationId,
+      status: 'CREATED',
+      module: targetRoute.includes('crm') ? 'crm' : 'growth',
+      summary: `Prepared: ${actionLabel}`,
+      createdResource: {
+        id: `res-${Date.now()}`,
+        type: targetRoute.includes('crm') ? 'PROPOSAL_TOUCHPOINT' : 'CAMPAIGN',
+        title: actionLabel,
+      },
+    });
+
+    // 3. Immediately display Mari response in chat thread
+    setMessages(prev => [
+      ...prev,
+      {
+        id: `m-action-${Date.now()}`,
+        sender: 'MARI',
+        text: actionResult.mariResponseText,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        actionsSuggested: [
+          { type: 'NAVIGATE', label: 'Open Workspace Module', payload: { route: targetRoute } },
+          { type: 'NAVIGATE', label: 'Review Activity Stream', payload: { route: '/mari-ai' } },
+        ],
+      }
+    ]);
+
+    // 4. Refresh activity stream
+    const updatedStream = MariOrchestrationService.getActivityStream(orgId);
+    setActivityStream(updatedStream);
+
+    // 5. Navigate if it's a direct transition
+    const res = await executeMariAction(action);
+    if (res.success && action.type === 'NAVIGATE') {
+      setTimeout(() => {
+        router.push(targetRoute);
+      }, 600);
+    }
+  };
+
   // Handle Query Submission
   const handleSendQuery = async (queryText: string) => {
     if (!queryText.trim() || isProcessing) return;
@@ -300,77 +398,6 @@ export default function MariAiPage() {
       setMessages(prev => [...prev, errorMsg]);
     } finally {
       setIsProcessing(false);
-    }
-  };
-
-  // Handle Action Execution & Real-Time Orchestration Loop
-  const handleActionExecute = async (action: MariActionPayload) => {
-    const actionLabel = action.label || action.title || action.type;
-    const targetRoute = (action.payload as any)?.route || '/growth';
-
-    // 1. Create typed recommendation contract
-    const recContract = MariOrchestrationService.createRecommendation({
-      organizationId: businessContext?.organizationId || 'ras-ali-labs',
-      type: targetRoute.includes('crm') ? 'CRM_FOLLOWUP' : 'CAMPAIGN_CREATE',
-      objective: `Execute: ${actionLabel}`,
-      reasoning: 'Proactively selected based on current high-impact business growth priorities.',
-      priority: 'HIGH',
-      expectedImpact: 'Commercial pipeline advance and audience reach velocity',
-      confidence: 0.95,
-      targetModule: targetRoute.includes('crm') ? 'crm' : 'growth',
-      action: actionLabel,
-      parameters: {
-        campaignName: actionLabel,
-        topic: 'Commercial Energy & Sovereign Enterprise Infrastructure',
-        targetAudience: 'Executive Decision-Makers',
-        platform: 'facebook',
-      },
-      sourceContext: {
-        activePipelineValue: growthProfile?.activePipelineValue || businessContext?.layer2.crm.totalPipelineValue.value || 84500,
-        followersCount: businessContext?.layer2.social.followersCount?.value || 107,
-        reachGrowthPct: businessContext?.layer2.social.reachGrowthPct?.value || 38.4,
-      },
-    });
-
-    // 2. Dispatch Action Result through Orchestrator
-    const actionResult = MariOrchestrationService.receiveActionResult({
-      organizationId: businessContext?.organizationId || 'ras-ali-labs',
-      recommendationId: recContract.recommendationId,
-      status: 'CREATED',
-      module: targetRoute.includes('crm') ? 'crm' : 'growth',
-      summary: `Prepared: ${actionLabel}`,
-      createdResource: {
-        id: `res-${Date.now()}`,
-        type: targetRoute.includes('crm') ? 'PROPOSAL_TOUCHPOINT' : 'CAMPAIGN',
-        title: actionLabel,
-      },
-    });
-
-    // 3. Immediately display Mari response in chat thread
-    setMessages(prev => [
-      ...prev,
-      {
-        id: `m-action-${Date.now()}`,
-        sender: 'MARI',
-        text: actionResult.mariResponseText,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        actionsSuggested: [
-          { type: 'NAVIGATE', label: 'Open Workspace Module', payload: { route: targetRoute } },
-          { type: 'NAVIGATE', label: 'Review Activity Stream', payload: { route: '/mari-ai' } },
-        ],
-      }
-    ]);
-
-    // 4. Refresh activity stream
-    const updatedStream = MariOrchestrationService.getActivityStream(businessContext?.organizationId || 'ras-ali-labs');
-    setActivityStream(updatedStream);
-
-    // 5. Navigate if it's a direct transition
-    const res = await executeMariAction(action);
-    if (res.success && action.type === 'NAVIGATE') {
-      setTimeout(() => {
-        router.push(targetRoute);
-      }, 600);
     }
   };
 
@@ -891,21 +918,54 @@ export default function MariAiPage() {
                         return <div>{elements}</div>;
                       })()}
 
-                      {/* Suggested Action Chips */}
-                      {m.actionsSuggested && m.actionsSuggested.length > 0 && (
-                        <div className="pt-2.5 mt-2.5 border-t border-zinc-800/80 flex flex-wrap gap-2">
-                          {m.actionsSuggested.map((act, i) => (
-                            <button
-                              key={i}
-                              onClick={() => handleActionExecute(act)}
-                              className="px-2.5 py-1 rounded-lg bg-purple-950/50 border border-purple-500/40 hover:bg-purple-900/60 text-purple-200 text-[11px] font-semibold flex items-center gap-1 transition-all"
-                            >
-                              <ArrowRight className="w-3 h-3 text-purple-400" />
-                              {act.label || act.title || act.type}
-                            </button>
-                          ))}
-                        </div>
-                      )}
+                      {/* Suggested Action Chips & Parsed Bracket Actions */}
+                      {(() => {
+                        const directActions = m.actionsSuggested || [];
+                        const bracketMatches = m.sender === 'MARI' ? (m.text.match(/\[([A-Za-z0-9 &—–-]+)\]/g) || []) : [];
+                        const knownActionMap: Record<string, string> = {
+                          'create reel': '/growth?tab=creatives',
+                          'create visual': '/growth?tab=creatives',
+                          'open growth studio': '/growth',
+                          'connect facebook': '/growth?tab=channels',
+                          'generate creative': '/growth?tab=creatives',
+                          'view crm pipeline': '/crm',
+                          'sync website': '/settings',
+                          'add business knowledge': '/settings',
+                          'review sales pipeline': '/crm',
+                          'view tasks queue': '/tasks',
+                          'open billing & finance': '/billing',
+                          'draft prospect follow-ups': '/crm',
+                          'create growth campaign': '/growth',
+                        };
+
+                        const extractedActions = bracketMatches
+                          .map(bm => bm.replace(/^\[|\]$/g, '').trim())
+                          .filter(label => knownActionMap[label.toLowerCase()])
+                          .filter(label => !directActions.some(da => (da.label || '').toLowerCase() === label.toLowerCase()))
+                          .map(label => ({
+                            type: 'NAVIGATE' as const,
+                            label,
+                            payload: { route: knownActionMap[label.toLowerCase()] },
+                          }));
+
+                        const allActions = [...directActions, ...extractedActions];
+                        if (allActions.length === 0) return null;
+
+                        return (
+                          <div className="pt-2.5 mt-2.5 border-t border-zinc-800/80 flex flex-wrap gap-2">
+                            {allActions.map((act, i) => (
+                              <button
+                                key={i}
+                                onClick={() => handleActionExecute(act)}
+                                className="px-2.5 py-1 rounded-lg bg-purple-950/50 border border-purple-500/40 hover:bg-purple-900/60 text-purple-200 text-[11px] font-semibold flex items-center gap-1 transition-all"
+                              >
+                                <ArrowRight className="w-3 h-3 text-purple-400" />
+                                {'label' in act ? act.label : (act as any).title || act.type}
+                              </button>
+                            ))}
+                          </div>
+                        );
+                      })()}
 
                       <div className="flex items-center justify-between gap-2 mt-2 pt-1 text-[10px] text-zinc-500 font-mono">
                         <span>{m.timestamp}</span>

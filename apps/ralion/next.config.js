@@ -113,6 +113,15 @@ const nextConfig = {
       },
     ];
   },
+  async rewrites() {
+    return [
+      {
+        source: '/ralion/api/:path*',
+        destination: '/api/:path*',
+        basePath: false,
+      },
+    ];
+  },
   ...(isStandalone
     ? {
         async headers() {

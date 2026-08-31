@@ -177,6 +177,54 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
                   <Sparkles className="w-3 h-3 text-purple-400" />
                   Send Prompt to Creative Studio
                 </button>
+
+                {/* Parse bracketed buttons in text e.g. [Create Reel] | [Create Visual] | [Open Growth Studio] */}
+                {(() => {
+                  const bracketMatches = msg.text.match(/\[([A-Za-z0-9 &—–-]+)\]/g);
+                  if (!bracketMatches) return null;
+                  const knownActions: Record<string, string> = {
+                    'create reel': '/growth?tab=creatives',
+                    'create visual': '/growth?tab=creatives',
+                    'open growth studio': '/growth',
+                    'connect facebook': '/growth?tab=channels',
+                    'generate creative': '/growth?tab=creatives',
+                    'view crm pipeline': '/crm',
+                    'sync website': '/settings',
+                    'add business knowledge': '/settings',
+                    'review sales pipeline': '/crm',
+                    'view tasks queue': '/tasks',
+                    'open billing & finance': '/billing',
+                  };
+                  return bracketMatches.map((bm, bIdx) => {
+                    const label = bm.replace(/^\[|\]$/g, '').trim();
+                    const route = knownActions[label.toLowerCase()];
+                    if (!route) return null;
+                    return (
+                      <button
+                        key={`bm-${bIdx}`}
+                        onClick={() => {
+                          if (typeof window !== 'undefined' && route.includes('growth')) {
+                            const cleanPrompt = msg.text
+                              .replace(/!\[.*?\]\(.*?\)/g, '')
+                              .replace(/[*#_`]/g, '')
+                              .replace(/^(Social & Channel Intelligence|Good day!|Based on your|Here is|I recommend)[^\n]*\n+/gi, '')
+                              .replace(/\[.*?\]/g, '')
+                              .replace(/\s+/g, ' ')
+                              .trim()
+                              .substring(0, 280);
+                            localStorage.setItem('ralion_creative_prompt', cleanPrompt || msg.text.substring(0, 200));
+                          }
+                          if (onNavigate) onNavigate(route);
+                          onClose();
+                        }}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-zinc-900 border border-purple-500/30 text-[10px] font-semibold text-purple-300 hover:bg-purple-900/30 transition-all"
+                      >
+                        <Zap className="w-2.5 h-2.5 text-purple-400" />
+                        {label}
+                      </button>
+                    );
+                  });
+                })()}
               </div>
             )}
 
@@ -188,7 +236,10 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
                     key={aIdx}
                     onClick={() => {
                       if (act.type === 'NAVIGATE' && onNavigate) {
-                        onNavigate(act.payload.route);
+                        const route = typeof act.payload === 'object' && act.payload?.route
+                          ? act.payload.route
+                          : (typeof act.payload === 'string' && act.payload.startsWith('/') ? act.payload : '/growth');
+                        onNavigate(route);
                       }
                     }}
                     className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 border border-blue-500/30 text-[11px] font-semibold text-blue-400 hover:bg-blue-600/10 hover:border-blue-400 transition-all shadow-sm"

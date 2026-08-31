@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useOrganization } from '@ralion/auth';
 import { SubscriptionPlanId, BillingCycle } from '@ralion/database';
+import { getRalionApiUrl } from '@/lib/api-config';
 
 interface SubscriptionData {
   subscription: {
@@ -89,8 +90,8 @@ export default function BillingPage() {
     setLoading(true);
     try {
       const [subRes, histRes] = await Promise.all([
-        fetch(`/ralion/api/billing/subscription?organizationId=${organizationId}`),
-        fetch(`/ralion/api/billing/history?organizationId=${organizationId}`),
+        fetch(getRalionApiUrl(`/api/billing/subscription?organizationId=${organizationId}`)),
+        fetch(getRalionApiUrl(`/api/billing/history?organizationId=${organizationId}`)),
       ]);
 
       if (subRes.ok) {
@@ -121,7 +122,7 @@ export default function BillingPage() {
     try {
       const mockSubId = `I-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
 
-      const res = await fetch('/ralion/api/billing/paypal/verify', {
+      const res = await fetch(getRalionApiUrl('/api/billing/paypal/verify'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

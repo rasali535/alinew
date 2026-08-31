@@ -63,13 +63,17 @@ export async function executeMariAction(action: MariActionPayload): Promise<Mari
         outputData: { executionId: `exec-${Date.now()}` }
       };
 
-    case 'NAVIGATE':
-      const targetRoute = actionData.route || '/';
+    case 'NAVIGATE': {
+      let targetRoute = typeof actionData === 'string' ? actionData : (actionData.route || '/growth');
+      if (typeof targetRoute !== 'string' || !targetRoute.startsWith('/') || targetRoute.includes('\n') || targetRoute.length > 200) {
+        targetRoute = '/growth';
+      }
       return {
         success: true,
         message: `Navigating to ${targetRoute}`,
         outputData: { route: targetRoute }
       };
+    }
 
     default:
       return {

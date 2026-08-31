@@ -148,6 +148,44 @@ export interface HfGenerationResult {
  * Model priority (best quality):
  *   FLUX.2-dev → FLUX.1-dev → FLUX.1-schnell → FLUX.2-klein-4B
  */
+function getMariApiEndpoint(path: string): string {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  const configuredApiUrl = process.env.NEXT_PUBLIC_RALION_API_URL || process.env.NEXT_PUBLIC_APP_URL;
+  if (configuredApiUrl && configuredApiUrl.trim() !== '') {
+    const base = configuredApiUrl.replace(/\/+$/, '');
+    return `${base}${normalizedPath}`;
+  }
+
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.');
+    if (isLocalhost || process.env.NODE_ENV !== 'production') {
+      const port = window.location.port;
+      if (port === '6509' || port === '3000') {
+        return `${window.location.origin}${normalizedPath}`;
+      }
+      return `http://localhost:6509${normalizedPath}`;
+    }
+    // Web / production dynamic backend
+    return `https://ralion-dynamic-backend.onrender.com${normalizedPath}`;
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    return `https://ralion-dynamic-backend.onrender.com${normalizedPath}`;
+  }
+
+  return `http://localhost:6509${normalizedPath}`;
+}
+
+/**
+ * Generate an image via HuggingFace FLUX models.
+ * Routes through /api/mari/generate (server-side) to keep HF_API_KEY secure.
+ *
+ * Model priority (fast quality):
+ *   FLUX.1-schnell → FLUX.2-klein-4B → FLUX.1-dev → FLUX.2-dev
+ * Model priority (best quality):
+ *   FLUX.2-dev → FLUX.1-dev → FLUX.1-schnell → FLUX.2-klein-4B
+ */
 export async function generateHfImage(options: {
   prompt: string;
   model?: string;
@@ -158,15 +196,7 @@ export async function generateHfImage(options: {
   const directFluxUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?model=flux&width=1024&height=768&nologo=true&seed=${seed}`;
 
   try {
-    const isBrowser = typeof window !== 'undefined';
-    let endpoint = '/api/mari/generate';
-    if (isBrowser) {
-      const isRalionPath = window.location.pathname.startsWith('/ralion');
-      endpoint = isRalionPath ? '/ralion/api/mari/generate' : '/api/mari/generate';
-    } else {
-      const base = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:6509';
-      endpoint = `${base}/api/mari/generate`;
-    }
+    const endpoint = getMariApiEndpoint('/api/mari/generate');
 
     const res = await fetch(endpoint, {
       method: 'POST',
@@ -180,12 +210,24 @@ export async function generateHfImage(options: {
       signal: AbortSignal.timeout(10000),
     });
 
+    const contentType = res.headers.get('content-type') || '';
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[Mari AI Image Proxy] ${endpoint} → HTTP ${res.status} (${contentType})`);
+    }
+
     if (res.ok) {
-      const data = await res.json() as HfGenerationResult;
-      if (data.success && data.url) return data;
+      if (contentType.includes('application/json')) {
+        const data = await res.json() as HfGenerationResult;
+        if (data.success && data.url) return data;
+      } else {
+        console.warn(`[Mari AI] Endpoint ${endpoint} returned non-JSON Content-Type: ${contentType}`);
+      }
     }
   } catch (err: any) {
-    console.warn('[Mari AI] Proxy fetch notice, using direct FLUX pipeline:', err?.message);
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('[Mari AI] Proxy fetch notice, using direct FLUX pipeline:', err?.message);
+    }
   }
 
   // Guaranteed direct live FLUX image generator
@@ -211,15 +253,7 @@ export async function generateHfVideo(options: {
   const directVideoUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?model=flux-realism&width=1024&height=576&nologo=true&seed=${seed}`;
 
   try {
-    const isBrowser = typeof window !== 'undefined';
-    let endpoint = '/api/mari/generate';
-    if (isBrowser) {
-      const isRalionPath = window.location.pathname.startsWith('/ralion');
-      endpoint = isRalionPath ? '/ralion/api/mari/generate' : '/api/mari/generate';
-    } else {
-      const base = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:6509';
-      endpoint = `${base}/api/mari/generate`;
-    }
+    const endpoint = getMariApiEndpoint('/api/mari/generate');
 
     const res = await fetch(endpoint, {
       method: 'POST',
@@ -233,12 +267,24 @@ export async function generateHfVideo(options: {
       signal: AbortSignal.timeout(10000),
     });
 
+    const contentType = res.headers.get('content-type') || '';
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[Mari AI Video Proxy] ${endpoint} → HTTP ${res.status} (${contentType})`);
+    }
+
     if (res.ok) {
-      const data = await res.json() as HfGenerationResult;
-      if (data.success && data.url) return data;
+      if (contentType.includes('application/json')) {
+        const data = await res.json() as HfGenerationResult;
+        if (data.success && data.url) return data;
+      } else {
+        console.warn(`[Mari AI] Endpoint ${endpoint} returned non-JSON Content-Type: ${contentType}`);
+      }
     }
   } catch (err: any) {
-    console.warn('[Mari AI] Video proxy notice, using direct stream:', err?.message);
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('[Mari AI] Video proxy notice, using direct stream:', err?.message);
+    }
   }
 
   return {
@@ -263,13 +309,9 @@ export async function generateVideo(
   options: VideoGenerationOptions
 ): Promise<VideoGenerationResult> {
   try {
-    // Determine the correct base URL depending on execution context
-    const isBrowser = typeof window !== 'undefined';
-    const base = isBrowser
-      ? (window.location.origin + '/ralion')
-      : (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:6509/ralion');
+    const endpoint = getMariApiEndpoint('/api/mari/video');
 
-    const res = await fetch(`${base}/api/mari/video`, {
+    const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -279,12 +321,18 @@ export async function generateVideo(
       }),
     });
 
+    const contentType = res.headers.get('content-type') || '';
+
     if (!res.ok) {
       const errText = await res.text();
       return { success: false, error: `Proxy error ${res.status}: ${errText}` };
     }
 
-    return await res.json() as VideoGenerationResult;
+    if (contentType.includes('application/json')) {
+      return await res.json() as VideoGenerationResult;
+    }
+
+    return { success: false, error: `Proxy returned unexpected Content-Type: ${contentType}` };
   } catch (err: any) {
     return { success: false, error: err?.message || String(err) };
   }
