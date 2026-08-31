@@ -334,7 +334,7 @@ export class MariOrchestrationService {
     }
 
     // Default verified seed activity stream ONLY for master organization
-    const isMasterOrg = orgId === 'ras-ali-labs' || orgId === 'default-org';
+    const isMasterOrg = orgId === 'ras-ali-labs';
     if (!isMasterOrg) {
       return [];
     }

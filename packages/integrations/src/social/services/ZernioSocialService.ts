@@ -407,11 +407,11 @@ export class ZernioSocialService {
     postId?: string;
     postUrl?: string;
     platform: SocialPlatformType;
-    status: string;
-    publishedAt: string;
+    status?: string;
+    publishedAt?: string;
     error?: string;
   }> {
-    const isMasterOrg = !params.organizationId || params.organizationId === 'ras-ali-labs' || params.organizationId === 'default-org';
+    const isMasterOrg = params.organizationId === 'ras-ali-labs';
     
     // For non-master tenants, verify they are not hijacking the master profile/account
     if (!isMasterOrg) {

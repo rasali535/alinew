@@ -83,7 +83,7 @@ export default function BillingPage() {
   const [upgradingPlan, setUpgradingPlan] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'plans' | 'ledger' | 'transactions'>('plans');
 
-  const organizationId = organization?.id || 'default-org';
+  const organizationId = organization?.id || '';
   const orgName = organization?.name || 'Organization';
 
   const fetchBillingData = async () => {

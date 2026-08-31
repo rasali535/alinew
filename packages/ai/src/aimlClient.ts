@@ -206,7 +206,7 @@ export async function generateHfImage(options: {
         prompt: cleanPrompt,
         model: options.model,
         quality: options.quality || 'fast',
-        organizationId: options.organizationId || 'default-org',
+        organizationId: options.organizationId,
       }),
       signal: AbortSignal.timeout(10000),
     });
@@ -265,7 +265,7 @@ export async function generateHfVideo(options: {
         prompt: cleanPrompt,
         model: options.model,
         quality: options.quality || 'fast',
-        organizationId: options.organizationId || 'default-org',
+        organizationId: options.organizationId,
       }),
       signal: AbortSignal.timeout(10000),
     });

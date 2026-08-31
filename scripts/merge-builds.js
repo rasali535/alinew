@@ -124,10 +124,14 @@ try {
     fs.cpSync(desktopDist, path.join(outputDir, 'desktop'), { recursive: true });
   }
 
-  // 4. Ensure .htaccess with subfolder SPA routing is in build root
+  // 4. Ensure .htaccess with subfolder SPA routing is in build root and subfolders
   const htaccessSrc = path.join(rootDir, 'apps', 'website', 'public', '.htaccess');
   if (fs.existsSync(htaccessSrc)) {
     fs.copyFileSync(htaccessSrc, path.join(outputDir, '.htaccess'));
+    const ralionDir = path.join(outputDir, 'ralion');
+    if (fs.existsSync(ralionDir)) {
+      fs.copyFileSync(htaccessSrc, path.join(ralionDir, '.htaccess'));
+    }
   }
 
   console.log('Successfully merged all available builds into', outputDir);

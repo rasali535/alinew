@@ -1,7 +1,7 @@
 import {
   AssetStorageProvider,
   getProductionStorageProvider,
-} from './storage';
+} from './storage/index';
 
 export interface CreativeAsset {
   id: string;
@@ -231,7 +231,10 @@ export class CreativeAssetService {
     buffer: any;
     metadata?: Record<string, any>;
   }): Promise<CreativeAsset> {
-    const orgId = params.organizationId || 'default-org';
+    const orgId = params.organizationId;
+    if (!orgId || orgId === 'default-org') {
+      throw new Error('CreativeAssetService.saveBinaryAsset: Valid authenticated organizationId is required. Defaulting to default-org is prohibited.');
+    }
     const id = `asset-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const ext =
       params.type === 'VIDEO_REEL'
@@ -371,7 +374,10 @@ export class CreativeAssetService {
     mimeType: string;
     buffer: any;
   }): Promise<{ rawPublicUrl: string; rawStoragePath: string }> {
-    const orgId = params.organizationId || 'default-org';
+    const orgId = params.organizationId;
+    if (!orgId || orgId === 'default-org') {
+      throw new Error('CreativeAssetService.saveRawBinaryAsset: Valid authenticated organizationId is required.');
+    }
     const ext = params.mimeType.includes('png')
       ? 'png'
       : params.mimeType.includes('svg')
@@ -415,10 +421,14 @@ export class CreativeAssetService {
     previewUrl?: string;
     metadata?: Record<string, any>;
   }): CreativeAsset {
+    const orgId = params.organizationId;
+    if (!orgId || orgId === 'default-org') {
+      throw new Error('CreativeAssetService.createAssetRecord: Valid authenticated organizationId is required.');
+    }
     const id = `asset-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const asset: CreativeAsset = {
       id,
-      organizationId: params.organizationId || 'default-org',
+      organizationId: orgId,
       type: params.type,
       provider: params.provider,
       status: params.status || 'QUEUED',

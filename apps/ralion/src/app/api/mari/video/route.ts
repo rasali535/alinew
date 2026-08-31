@@ -17,11 +17,28 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const {
       prompt,
-      organizationId = 'default-org',
       model,
       style,
       title,
     } = body;
+
+    const organizationId =
+      body.organizationId ||
+      request.headers.get('x-organization-id') ||
+      request.headers.get('x-workspace-id') ||
+      request.headers.get('x-user-id');
+
+    if (!organizationId || organizationId === 'default-org') {
+      return corsJsonResponse(
+        {
+          success: false,
+          error: 'Unauthorized: A valid authenticated organizationId is required. Defaulting to default-org is forbidden.',
+          errorCode: 'TENANT_UNAUTHORIZED',
+        },
+        { status: 401 },
+        request
+      );
+    }
 
     if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
       return corsJsonResponse({ success: false, error: 'prompt is required' }, { status: 400 }, request);

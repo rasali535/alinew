@@ -266,8 +266,7 @@ export default function MariAiPage() {
     const targetRoute = (typeof rawRoute === 'string' && rawRoute.startsWith('/') && !rawRoute.includes('\n') && rawRoute.length < 200)
       ? rawRoute
       : '/growth';
-
-    const orgId = businessContext?.organizationId || activeOrgId || 'default-org';
+    const orgId = businessContext?.organizationId || activeOrgId || '';
     const orgName = businessContext?.layer1?.companyName?.value || businessContext?.organizationName || 'Your Business';
     const targetMarket = businessContext?.layer1?.targetMarket?.value || 'Executive Decision-Makers';
     const topic = businessContext?.layer1?.valueProposition?.value || businessContext?.layer1?.industry?.value || 'Commercial Enterprise Solutions';

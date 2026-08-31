@@ -203,7 +203,7 @@ export async function callMariAiApi(
     // ── 🎥 Video — CogVideoX / Prompt Animation Stream ───────────────────
     if (selection.endpoint === 'video') {
       const seed = Math.floor(Math.random() * 1000000);
-      const orgId = businessContext?.organizationId || 'default-org';
+      const orgId = businessContext?.organizationId;
       const hfVid = await generateHfVideo({ prompt, quality: 'fast', organizationId: orgId });
       const videoUrl = hfVid.success && hfVid.url
         ? hfVid.url
@@ -233,7 +233,7 @@ export async function callMariAiApi(
     // ── 🎨 Image — Black Forest Labs FLUX.1 (Real-Time Generation) ──────────
     if (selection.endpoint === 'image') {
       const seed = Math.floor(Math.random() * 1000000);
-      const orgId = businessContext?.organizationId || 'default-org';
+      const orgId = businessContext?.organizationId;
       const hfImg = await generateHfImage({ prompt, quality: 'fast', organizationId: orgId });
       const imgUrl = hfImg.success && hfImg.url
         ? hfImg.url

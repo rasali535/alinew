@@ -461,27 +461,40 @@ async function runFreshCustomerSmokeTest() {
     sourceIntelligence: {
       channel: 'facebook',
       pageName: fbPageData.pageName,
-      metricFocus: 'Reach & Conversion',
-      observedSignal: 'High engagement on pharma cold-chain security posts',
+      metricSummary: 'Reach & Conversion Lift',
+      insight: 'High engagement on pharma cold-chain security posts',
     },
-    orchestratedAction: {
-      campaignName: 'SADC Cold-Chain Authority 2026',
+    recommendation: {
+      actionType: 'CAMPAIGN_CREATE',
+      title: 'SADC Cold-Chain Authority 2026',
+      suggestedFormat: '1:1 Square',
+      strategicRationale: 'Target enterprise supply chain leaders',
+    },
+    creative: {
+      assetId: assetId,
       assetType: 'POSTER_IMAGE',
-      creativePrompt: imagePrompt,
-      scheduledTime: publishRecord.scheduledAt,
+      mediaUrl: imageData.url,
+      prompt: imagePrompt,
     },
-    learningImpact: {
-      leadsGenerated: 14,
-      reachLiftPercent: 42.5,
-      pipelineValueAdd: 65000,
+    publication: {
+      platform: 'facebook',
+      publishedAt: new Date().toISOString(),
+      postId: publishRecord.postId,
+      status: 'PUBLISHED',
     },
+    performance: {
+      reach: 12500,
+      engagementRatePct: 8.4,
+      clicks: 340,
+    },
+    learning: 'High organic engagement achieved with SADC cold-chain strategic narrative',
   });
 
   const memoryHistory = CreativeOrchestrator.getLearningHistory(newOrgId);
   const memoryPassed =
     memoryHistory.length > 0 &&
     memoryHistory[0].organizationId === newOrgId &&
-    memoryHistory[0].learningImpact?.leadsGenerated === 14;
+    memoryHistory[0].performance?.reach === 12500;
 
   results.push({
     step: 22,

@@ -14,7 +14,24 @@ export async function OPTIONS(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const organizationId = searchParams.get('organizationId') || 'default-org';
+  const organizationId =
+    searchParams.get('organizationId') ||
+    request.headers.get('x-organization-id') ||
+    request.headers.get('x-workspace-id') ||
+    request.headers.get('x-user-id');
+
+  if (!organizationId || organizationId === 'default-org') {
+    return corsJsonResponse(
+      {
+        success: false,
+        error: 'Unauthorized: A valid authenticated organizationId is required. Defaulting to default-org is forbidden.',
+        errorCode: 'TENANT_UNAUTHORIZED',
+      },
+      { status: 401 },
+      request
+    );
+  }
+
   const type = searchParams.get('type');
 
   let assets = CreativeAssetService.listAssets(organizationId);

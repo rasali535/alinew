@@ -4,23 +4,32 @@ DirectoryIndex index.html
   RewriteEngine On
   RewriteBase /
 
-  # 1. Do NOT rewrite static assets (JS, CSS, images, fonts, binaries, maps) to index.html
+  # 1. Reverse Proxy API routes to dynamic backend on Render
+  RewriteCond %{REQUEST_URI} ^/ralion/api/(.*)$ [NC]
+  RewriteRule ^ralion/api/(.*)$ https://ralion-dynamic-backend.onrender.com/api/$1 [P,L]
+
+  RewriteCond %{REQUEST_URI} ^/api/(.*)$ [NC]
+  RewriteRule ^api/(.*)$ https://ralion-dynamic-backend.onrender.com/api/$1 [P,L]
+
+  # 2. Do NOT rewrite static assets (JS, CSS, images, fonts, binaries, maps) to index.html
+  RewriteCond %{REQUEST_URI} !^/ralion/api/ [NC]
+  RewriteCond %{REQUEST_URI} !^/api/ [NC]
   RewriteCond %{REQUEST_URI} \.(js|css|png|jpg|jpeg|gif|ico|svg|webp|woff2?|ttf|eot|otf|wasm|json|map|exe|dmg|AppImage|deb|zip|tar\.gz)$ [NC]
   RewriteRule ^ - [L]
 
-  # 2. Ralion Next.js Sub-application (/ralion/...)
+  # 3. Ralion Next.js Sub-application (/ralion/...)
   RewriteCond %{REQUEST_URI} ^/ralion [NC]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule ^ralion/?.*$ /ralion/index.html [L]
 
-  # 3. Admin Next.js Sub-application (/admin/...)
+  # 4. Admin Next.js Sub-application (/admin/...)
   RewriteCond %{REQUEST_URI} ^/admin [NC]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule ^admin/?.*$ /admin/index.html [L]
 
-  # 4. Root Marketing SPA Rewrite Rules
+  # 5. Root Marketing SPA Rewrite Rules
   RewriteRule ^index\.html$ - [L]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d

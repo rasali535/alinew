@@ -25,8 +25,8 @@ export const ProductAccessGuard: React.FC<ProductAccessGuardProps> = ({ children
         return;
       }
 
-      // Verify product access for default or active org
-      const result = await ProductService.verifyProductAccess('default-org');
+      // Verify product access for active session user/tenant
+      const result = await ProductService.verifyProductAccess(session.user.id || 'ras-ali-labs');
       setAccess(result);
       setLoading(false);
     }

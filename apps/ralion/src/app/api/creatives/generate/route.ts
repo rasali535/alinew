@@ -52,12 +52,29 @@ export async function POST(request: NextRequest) {
       title,
       format = '1:1',
       style = 'Corporate Executive',
-      organizationId = 'default-org',
       campaign,
       platform,
       cta,
       mockFailure,
     } = body;
+
+    const organizationId =
+      body.organizationId ||
+      request.headers.get('x-organization-id') ||
+      request.headers.get('x-workspace-id') ||
+      request.headers.get('x-user-id');
+
+    if (!organizationId || organizationId === 'default-org') {
+      return corsJsonResponse(
+        {
+          success: false,
+          error: 'Unauthorized: A valid authenticated organizationId is required. Defaulting to default-org is forbidden.',
+          errorCode: 'TENANT_UNAUTHORIZED',
+        },
+        { status: 401 },
+        request
+      );
+    }
 
     const result = await CreativeOrchestrator.generate({
       organizationId,

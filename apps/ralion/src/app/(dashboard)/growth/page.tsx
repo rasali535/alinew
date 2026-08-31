@@ -1545,17 +1545,15 @@ Rules:
     }
 
     try {
-      const endpoint = getRalionApiUrl('/api/creatives/generate');
       const targetOrg = typeof window !== 'undefined'
-        ? (window.localStorage.getItem('ralion_active_org') || 'default-org')
-        : 'default-org';
+        ? (window.localStorage.getItem('ralion_active_org') || window.localStorage.getItem('ralion_user_id') || '')
+        : '';
 
       let asset: any = null;
 
       try {
-        const res = await fetch(endpoint, {
+        const res = await authFetch('/api/creatives/generate', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             type: type === 'poster' ? 'POSTER_IMAGE' : 'VIDEO_REEL',
             prompt: prompt.trim(),

@@ -7,6 +7,9 @@
  * Covering: Signup -> Onboarding -> Website Ingestion -> Mari AI -> Credits -> Creatives -> Social -> Role RBAC -> Cross-Tenant Attacks
  */
 
+import dotenv from 'dotenv';
+dotenv.config();
+
 import {
   WebsiteCrawlerService,
   BusinessKnowledgeProfileService,
@@ -376,7 +379,7 @@ async function runProductionSaaSSimulation() {
   // Attack 2: Customer B attempts to delete Customer A's asset
   let attack2Blocked = false;
   try {
-    const deleted = CreativeAssetService.deleteAsset(assetA_Id, CUSTOMER_B.organizationId);
+    const deleted = await CreativeAssetService.deleteAsset(assetA_Id, CUSTOMER_B.organizationId);
     if (!deleted) attack2Blocked = true;
   } catch (e: any) {
     attack2Blocked = true;

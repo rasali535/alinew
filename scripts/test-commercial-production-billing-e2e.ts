@@ -14,6 +14,9 @@
  * 6. Adversarial Cross-Tenant Billing & Subscription Hijack Rejections
  */
 
+import dotenv from 'dotenv';
+dotenv.config();
+
 import {
   BillingDatabaseService,
   SubscriptionPlanId,
