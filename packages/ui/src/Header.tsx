@@ -88,7 +88,7 @@ export const Header: React.FC<HeaderProps> = ({
               if (onOpenAdmin) {
                 onOpenAdmin();
               } else if (typeof window !== 'undefined') {
-                window.location.href = '/admin';
+                window.location.href = '/ralion/admin';
               }
             }}
             className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-amber-500/15 border border-amber-500/40 text-amber-300 hover:text-amber-100 hover:border-amber-400 hover:bg-amber-500/25 text-xs font-bold transition-all shadow-sm shadow-amber-500/10 cursor-pointer"

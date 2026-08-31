@@ -123,7 +123,7 @@ export default function DashboardLayout({
               window.location.href = platformUrl;
             }}
             onOpenAdmin={() => {
-              window.location.href = '/admin';
+              handleNavigate('/ralion/admin');
             }}
             onOpenMariAI={() => setIsMariDrawerOpen(true)}
             onToggleMobileSidebar={() => setIsMobileSidebarOpen(prev => !prev)}

@@ -233,7 +233,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* Admin Command Center Quick Access for Platform Admins */}
           {(isPlatformAdmin || userTier === 'PLATFORM_ADMIN') && (
             <button
-              onClick={() => { window.location.href = '/admin'; }}
+              onClick={() => {
+                if (onNavigate) {
+                  onNavigate('/ralion/admin');
+                } else if (typeof window !== 'undefined') {
+                  window.location.href = '/ralion/admin';
+                }
+              }}
               title="Open Platform Admin Command Center"
               className="w-full flex items-center justify-between px-2.5 py-2 rounded-lg bg-gradient-to-r from-amber-500/20 via-orange-500/15 to-amber-600/20 border border-amber-500/40 text-xs font-bold text-amber-300 hover:text-amber-100 hover:border-amber-400 hover:bg-amber-500/30 transition-all shadow-md shadow-amber-500/10 cursor-pointer group"
             >
@@ -263,7 +269,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {isCollapsed && (isPlatformAdmin || userTier === 'PLATFORM_ADMIN') && (
         <div className="px-2 pt-2">
           <button
-            onClick={() => { window.location.href = '/admin'; }}
+            onClick={() => {
+              if (onNavigate) {
+                onNavigate('/ralion/admin');
+              } else if (typeof window !== 'undefined') {
+                window.location.href = '/ralion/admin';
+              }
+            }}
             title="Admin Command Center"
             className="w-full flex items-center justify-center p-2 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/30 transition-all shadow-md"
           >

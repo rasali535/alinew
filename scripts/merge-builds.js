@@ -89,13 +89,20 @@ try {
 
       copyHtmlPages(serverAppDir);
 
-      // Ensure root index.html is the rich dashboard entry page
+      // Ensure root index.html is the rich dashboard/admin entry page
       const indexSrc = path.join(serverAppDir, 'index.html');
       const dashboardSrc = path.join(serverAppDir, 'dashboard.html');
+      const adminSrc = path.join(serverAppDir, 'admin.html');
+      const targetIndex = path.join(destDir, 'index.html');
+
       if (fs.existsSync(indexSrc)) {
-        fs.copyFileSync(indexSrc, path.join(destDir, 'index.html'));
+        fs.copyFileSync(indexSrc, targetIndex);
       } else if (fs.existsSync(dashboardSrc)) {
-        fs.copyFileSync(dashboardSrc, path.join(destDir, 'index.html'));
+        fs.copyFileSync(dashboardSrc, targetIndex);
+      } else if (fs.existsSync(adminSrc)) {
+        fs.copyFileSync(adminSrc, targetIndex);
+      } else if (fs.existsSync(path.join(destDir, 'admin', 'index.html'))) {
+        fs.copyFileSync(path.join(destDir, 'admin', 'index.html'), targetIndex);
       }
       console.log(`Successfully populated full Next.js static application for ${appName}`);
       return;
@@ -131,6 +138,10 @@ try {
     const ralionDir = path.join(outputDir, 'ralion');
     if (fs.existsSync(ralionDir)) {
       fs.copyFileSync(htaccessSrc, path.join(ralionDir, '.htaccess'));
+    }
+    const adminDir = path.join(outputDir, 'admin');
+    if (fs.existsSync(adminDir)) {
+      fs.copyFileSync(htaccessSrc, path.join(adminDir, '.htaccess'));
     }
   }
 
