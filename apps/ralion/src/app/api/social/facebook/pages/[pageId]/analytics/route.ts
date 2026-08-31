@@ -22,11 +22,29 @@ export async function GET(
     const context = await getCurrentRalionContext(request, { requireAuth: true });
 
     if (!context?.workspace?.id || !context?.user?.id) {
-      return corsJsonResponse(
-        { success: false, error: 'Unauthorized: Valid authenticated workspace and user required.' },
-        { status: 401 },
-        request
-      );
+      return authRequiredResponse(request);
+    }
+
+    // Verify page ownership if specific pageId is requested
+    if (pageId && pageId !== 'default') {
+      const supabase = getServiceSupabase();
+      const { data: conn } = await supabase
+        .from('social_connections')
+        .select('provider_account_id, zernio_account_id, metadata')
+        .eq('provider', 'facebook')
+        .or(`workspace_id.eq.${context.workspace.id},user_id.eq.${context.user.id}`)
+        .maybeSingle();
+
+      const pageMatched =
+        conn &&
+        (conn.provider_account_id === pageId ||
+          conn.zernio_account_id === pageId ||
+          conn.metadata?.pageId === pageId ||
+          conn.metadata?.zernioAccountId === pageId);
+
+      if (!pageMatched) {
+        return forbiddenResponse(request, 'You do not have access to this Facebook Page');
+      }
     }
 
     const analytics = await FacebookPageManagementService.getPageAnalytics({

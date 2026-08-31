@@ -199,7 +199,7 @@ export class FacebookPageManagementService {
     // Pull real live follower count from Meta Graph API / Zernio
     for (const c of existingConnections) {
       let liveFollowers = 0;
-      const targetPageId = c.provider_account_id || c.metadata?.pageId || '477334159265235';
+      const targetPageId = c.provider_account_id || c.metadata?.pageId;
 
       // 1. Try direct Meta Graph API with decrypted token
       let fbToken: string | null = null;
@@ -547,7 +547,7 @@ export class FacebookPageManagementService {
     }
 
     // 3. Query direct Meta Graph API posts feed (posts created directly on Facebook Page)
-    const targetPageId = params.pageId || conn.provider_account_id || conn.metadata?.pageId || '477334159265235';
+    const targetPageId = params.pageId || conn.provider_account_id || conn.metadata?.pageId;
     let fbToken: string | null = null;
     if (params.userId) {
       try {

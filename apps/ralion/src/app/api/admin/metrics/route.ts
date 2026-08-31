@@ -74,9 +74,14 @@ export async function GET(request: NextRequest) {
         if (masterFb) {
           adminFacebook = {
             id: masterFb.id,
+            resourceType: 'PLATFORM_RESOURCE',
+            classification: 'PLATFORM_OWNED',
+            isLocked: true,
+            protected: true,
             pageId: masterFb.metadata?.pageId || '477334159265235',
             pageName: masterFb.metadata?.pageName || masterFb.account_name || 'Ras Ali Labs',
             pageUsername: masterFb.metadata?.pageUsername || 'rasalibass',
+            organizationId: 'ras-ali-labs',
             connectionStatus: masterFb.connection_status || 'CONNECTED',
             tokenStatus: masterFb.token_status || 'TOKEN_VALID',
             followersCount: masterFb.followers_count || 108,
@@ -98,7 +103,13 @@ export async function GET(request: NextRequest) {
         if (masterZ) {
           adminZernio = {
             id: masterZ.id,
+            resourceType: 'PLATFORM_RESOURCE',
+            classification: 'PLATFORM_OWNED',
+            isLocked: true,
+            protected: true,
             providerProfileId: masterZ.provider_profile_id,
+            accountId: '6a82df7277555aae018b92b4',
+            organizationId: 'ras-ali-labs',
             profileName: masterZ.profile_name || 'Default',
             status: masterZ.status || 'ACTIVE',
             updatedAt: masterZ.updated_at,
