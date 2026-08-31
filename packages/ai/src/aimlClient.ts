@@ -190,6 +190,7 @@ export async function generateHfImage(options: {
   prompt: string;
   model?: string;
   quality?: 'fast' | 'best';
+  organizationId?: string;
 }): Promise<HfGenerationResult> {
   const cleanPrompt = options.prompt.trim();
   const seed = Math.floor(Math.random() * 1000000);
@@ -206,6 +207,7 @@ export async function generateHfImage(options: {
         prompt: cleanPrompt,
         model: options.model,
         quality: options.quality || 'fast',
+        organizationId: options.organizationId || 'default-org',
       }),
       signal: AbortSignal.timeout(10000),
     });
@@ -247,6 +249,7 @@ export async function generateHfVideo(options: {
   prompt: string;
   model?: string;
   quality?: 'fast' | 'best';
+  organizationId?: string;
 }): Promise<HfGenerationResult> {
   const cleanPrompt = options.prompt.trim();
   const seed = Math.floor(Math.random() * 1000000);
@@ -263,6 +266,7 @@ export async function generateHfVideo(options: {
         prompt: cleanPrompt,
         model: options.model,
         quality: options.quality || 'fast',
+        organizationId: options.organizationId || 'default-org',
       }),
       signal: AbortSignal.timeout(10000),
     });

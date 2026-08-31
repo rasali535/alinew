@@ -203,7 +203,8 @@ export async function callMariAiApi(
     // ── 🎥 Video — CogVideoX / Prompt Animation Stream ───────────────────
     if (selection.endpoint === 'video') {
       const seed = Math.floor(Math.random() * 1000000);
-      const hfVid = await generateHfVideo({ prompt, quality: 'fast' });
+      const orgId = businessContext?.organizationId || 'default-org';
+      const hfVid = await generateHfVideo({ prompt, quality: 'fast', organizationId: orgId });
       const videoUrl = hfVid.success && hfVid.url
         ? hfVid.url
         : `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt.trim())}?model=flux-realism&width=1024&height=576&nologo=true&seed=${seed}`;
@@ -231,8 +232,9 @@ export async function callMariAiApi(
 
     // ── 🎨 Image — Black Forest Labs FLUX.1 (Real-Time Generation) ──────────
     if (selection.endpoint === 'image') {
-      const hfImg = await generateHfImage({ prompt, quality: 'fast' });
       const seed = Math.floor(Math.random() * 1000000);
+      const orgId = businessContext?.organizationId || 'default-org';
+      const hfImg = await generateHfImage({ prompt, quality: 'fast', organizationId: orgId });
       const imgUrl = hfImg.success && hfImg.url
         ? hfImg.url
         : `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt.trim())}?model=flux&width=1024&height=768&nologo=true&seed=${seed}`;

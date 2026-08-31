@@ -55,6 +55,7 @@ export interface MariCreativeReceipt {
   assetId: string;
   assetType: CreativeAssetType;
   mediaUrl: string;
+  publicUrl?: string;
   thumbnailUrl: string;
   title: string;
   prompt: string;
