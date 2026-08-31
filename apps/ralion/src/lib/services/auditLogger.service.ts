@@ -120,16 +120,21 @@ export function sanitizeMetadata(data: any, depth = 0): any {
   return sanitized;
 }
 
+let _serviceSupabase: any = null;
+
 function getServiceSupabase() {
+  if (_serviceSupabase) return _serviceSupabase;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co';
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-  return createClient(url, key, {
+  _serviceSupabase = createClient(url, key, {
     auth: {
+      storageKey: 'ralion-audit-service',
       persistSession: false,
       autoRefreshToken: false,
       detectSessionInUrl: false,
     },
   });
+  return _serviceSupabase;
 }
 
 export class AuditLoggerService {

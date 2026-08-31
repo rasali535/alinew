@@ -53,6 +53,21 @@ export interface ContactInfo {
   location?: string;
 }
 
+export interface StructuredVisualPrompt {
+  subject: string;
+  environment: string;
+  action: string;
+  audience: string;
+  brandContext: string;
+  camera: string;
+  lighting: string;
+  composition: string;
+  negativeSpace: string;
+  style: string;
+  negativePrompts: string;
+  fullPrompt: string;
+}
+
 export interface StructuredCreativeBrief {
   id: string;
   organizationId?: string;
@@ -89,6 +104,7 @@ export interface StructuredCreativeBrief {
     prompt: string;
     style: string;
     negativeSpacePlacement: 'bottom' | 'top' | 'left' | 'right' | 'center';
+    structure?: StructuredVisualPrompt;
   };
 }
 

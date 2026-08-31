@@ -29,6 +29,7 @@ function getOrCreateBrowserClient(): SupabaseClient {
 
   const instance = createSupabaseClient(supabaseUrl, supabaseAnonKey, {
     auth: {
+      storageKey: 'ralion-app-auth-token',
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: !isDesktop, // Required on web so Supabase processes OAuth callback tokens

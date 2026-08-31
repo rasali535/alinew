@@ -10,6 +10,7 @@
 
 import {
   StructuredCreativeBrief,
+  StructuredVisualPrompt,
   CreativeFormat,
   CreativeType,
   CreativeTemplateId,
@@ -216,38 +217,187 @@ export class MariCreativeIntelligenceService {
   }
 
   /**
-   * Builds prompt with intentional negative space for typography layout
+   * Domain-Specific Visual Intelligence Engine
+   * Derives concrete physical visual cues for distinct commercial verticals
+   */
+  static deriveDomainVisualIntelligence(
+    userPrompt: string,
+    industry: string,
+    brandName: string
+  ): {
+    subject: string;
+    environment: string;
+    action: string;
+    audience: string;
+    camera: string;
+    lighting: string;
+  } {
+    const p = userPrompt.toLowerCase();
+    const ind = industry.toLowerCase();
+
+    // 1. Logistics / Freight / Transport
+    if (ind.includes('logistics') || ind.includes('freight') || ind.includes('transport') || ind.includes('cargo') || p.includes('truck') || p.includes('cargo') || p.includes('cold-chain') || p.includes('container') || p.includes('logistics')) {
+      const isRefrigerated = p.includes('refrigerat') || p.includes('cold') || p.includes('pharma');
+      const isCrossBorder = p.includes('border') || p.includes('botswana') || p.includes('sadc') || p.includes('cross-border');
+      return {
+        subject: isRefrigerated
+          ? 'Modern heavy-duty refrigerated cold-chain commercial freight truck with temperature telemetry units'
+          : 'Commercial heavy-duty transport logistics truck and intermodal cargo containers',
+        environment: isCrossBorder
+          ? 'SADC cross-border customs logistics checkpoint and paved freight transit corridor'
+          : 'High-volume intermodal logistics distribution hub with clean industrial freight bays',
+        action: 'Safely hauling commercial goods and temperature-sensitive freight across regional trade corridors',
+        audience: 'B2B supply chain directors, freight managers, and regional commercial exporters',
+        camera: '35mm cinematic commercial lens, low-angle dynamic perspective, sharp focal depth',
+        lighting: 'Crisp morning daylight with natural ambient rim lighting along vehicular contours',
+      };
+    }
+
+    // 2. Healthcare / Medical / Diagnostic / Clinical
+    if (ind.includes('health') || ind.includes('medical') || ind.includes('clinic') || ind.includes('cardio') || ind.includes('pharma') || p.includes('health') || p.includes('clinic') || p.includes('doctor') || p.includes('patient') || p.includes('cardio') || p.includes('medical')) {
+      const isCardio = p.includes('cardio') || p.includes('heart');
+      return {
+        subject: isCardio
+          ? 'Specialist African cardiologist reviewing high-resolution ultrasound echocardiogram telemetry'
+          : 'Professional African medical doctor and healthcare specialist in modern clinical attire',
+        environment: 'Ultra-modern state-of-the-art medical diagnostic clinic with pristine architectural design',
+        action: 'Providing specialized diagnostic consultations and expert patient wellness care',
+        audience: 'Patients seeking premium healthcare, family decision-makers, and corporate health managers',
+        camera: '50mm prime portrait lens, eye-level intimate framing, shallow depth of field',
+        lighting: 'Clean balanced high-key medical lighting with soft organic warmth',
+      };
+    }
+
+    // 3. Funeral Services / Memorial / Dignified Repatriation
+    if (ind.includes('funeral') || ind.includes('memorial') || p.includes('funeral') || p.includes('memorial') || p.includes('farewell')) {
+      return {
+        subject: 'Dignified serene memorial setting with elegant white floral arrangements and polished wood elements',
+        environment: 'Peaceful tranquil memorial garden chapel with soft natural architecture',
+        action: 'Honoring cherished family legacies with compassionate support and respectful reverence',
+        audience: 'Families seeking compassionate, trustworthy memorial and repatriation services',
+        camera: '85mm portrait telephoto lens, gentle soft-focus background, respectful composition',
+        lighting: 'Warm ambient golden-hour sunlight filtering through serene chapel windows',
+      };
+    }
+
+    // 4. Industrial Automation / Manufacturing / Robotics
+    if (ind.includes('manufactur') || ind.includes('industrial') || ind.includes('engineer') || ind.includes('automati') || p.includes('industrial') || p.includes('automation') || p.includes('robotic') || p.includes('factory') || p.includes('scada')) {
+      return {
+        subject: 'High-precision industrial automation robotics and SCADA digital control monitoring systems',
+        environment: 'Advanced modern smart manufacturing facility with automated assembly lines and clean industrial floor',
+        action: 'Industrial engineers and automated robotic arms operating with sub-millimeter precision',
+        audience: 'Industrial plant directors, manufacturing executives, and engineering leaders',
+        camera: '35mm wide-angle cinematic lens, deep dynamic range, crisp industrial clarity',
+        lighting: 'Controlled industrial studio lighting with subtle amber highlights and cool ambient shadows',
+      };
+    }
+
+    // 5. Media Production / Cinema / Advertising
+    if (ind.includes('media') || ind.includes('creative') || ind.includes('film') || ind.includes('broadcast') || p.includes('film') || p.includes('cinema') || p.includes('video production') || p.includes('camera')) {
+      return {
+        subject: 'Professional cinema camera rig with matte box and wireless monitor operated by creative director',
+        environment: 'High-end commercial soundstage production studio with lighting softboxes and control monitors',
+        action: 'Crafting high-impact cinematic brand commercials and broadcast media',
+        audience: 'Corporate marketing executives, brand managers, and commercial agencies',
+        camera: 'Cooke anamorphic cinema lens, cinematic flare, rich color science',
+        lighting: 'Dramatic 3-point editorial studio lighting with soft diffused key light',
+      };
+    }
+
+    // 6. Enterprise Software / Technology / Sovereign Intelligence (Default Tech)
+    return {
+      subject: 'African business executives and technology leaders interacting with high-resolution digital telemetry dashboards',
+      environment: 'Modern African enterprise executive operations hub with sleek architectural design and data displays',
+      action: 'Managing real-time enterprise operations, revenue velocity, and industrial workflows on sovereign software',
+      audience: 'SADC B2B enterprise decision-makers, CEOs, and technology executives',
+      camera: '50mm prime cinematic lens, eye-level perspective, crisp foreground focus with shallow depth of field',
+      lighting: 'Subtle corporate ambient lighting with cool cyan and warm amber technological accents',
+    };
+  }
+
+  /**
+   * Builds explicit 11-section structured visual prompt with intentional negative space
    */
   static buildVisualPrompt(
     userPrompt: string,
     industry: string,
-    templateId: CreativeTemplateId
-  ): { prompt: string; placement: 'bottom' | 'top' | 'left' | 'right' | 'center' } {
+    templateId: CreativeTemplateId,
+    brandName: string = 'Enterprise Client',
+    format: CreativeFormat = '1:1_SQUARE'
+  ): {
+    prompt: string;
+    placement: 'bottom' | 'top' | 'left' | 'right' | 'center';
+    structure: StructuredVisualPrompt;
+  } {
     let placement: 'bottom' | 'top' | 'left' | 'right' | 'center' = 'bottom';
-    let spaceDirective = 'clean open negative space in lower half composed for elegant headline typography';
+    let spaceDirective = 'clean open negative space in lower 35% of composition dedicated for headline typography';
 
     if (templateId === 'SPLIT_COMPOSITION') {
       placement = 'top';
-      spaceDirective = 'strong upper visual subject with clean horizontal division';
+      spaceDirective = 'strong upper visual subject with clean lower horizontal division for text layout';
     } else if (templateId === 'EDITORIAL_TYPOGRAPHY') {
       placement = 'right';
-      spaceDirective = 'framed subject on the right side with generous open negative space on the left';
+      spaceDirective = 'framed subject on the right side with generous open negative space on the left 45% for typography';
     } else if (templateId === 'SERVICE_FOCUS') {
       placement = 'center';
-      spaceDirective = 'central product/service focal point with uncluttered margins';
+      spaceDirective = 'central focal subject with uncluttered perimeter margins for surrounding badges and CTA';
     }
 
-    const cleanSubject = userPrompt
-      .replace(/\b(announcing|introducing|get|save|buy|call|visit|exclusive|offer|\d+%\s*off|poster|flyer|creative)\b/gi, '')
+    const domainCues = this.deriveDomainVisualIntelligence(userPrompt, industry, brandName);
+
+    // Extract user's core visual subject while stripping conversational command prefixes
+    let userSubject = userPrompt
+      .replace(/^["'\s]+|["'\s]+$/g, '')
+      .replace(/^(please\s+)?(create|generate|design|make|draw|show|render)\s+(a|an|the)?\s*(cinematic|premium|commercial|high-impact)?\s*(facebook|instagram|social)?\s*(poster|advertisement|ad|flyer|image|graphic|visual)\s*(for|promoting|featuring)?/i, '')
       .replace(/["']/g, '')
       .replace(/\s+/g, ' ')
       .trim();
 
-    const prompt = `Award-winning commercial photography of ${cleanSubject || industry}, ${spaceDirective}, professional studio lighting, 8k resolution, cinematic atmosphere, authentic contemporary African enterprise context`;
+    const subject = userSubject.length > 5 ? userSubject : domainCues.subject;
+    const environment = domainCues.environment;
+    const action = domainCues.action;
+    const audience = domainCues.audience;
+    const brandContext = `${brandName} ${industry} Commercial Campaign`;
+    const camera = domainCues.camera;
+    const lighting = domainCues.lighting;
+    const composition = `Strong focal subject, ${spaceDirective}`;
+    const negativeSpace = spaceDirective;
+    const style = 'Premium commercial advertising photography, authentic contemporary African corporate atmosphere, photorealistic 8k uhd';
+    const negativePrompts = 'text, watermark, logo, blurry, distorted humans, extra limbs, amateur drawing, generic stock photo look, jpeg artifacts';
+
+    const fullPrompt = [
+      `SUBJECT: ${subject}`,
+      `ENVIRONMENT: ${environment}`,
+      `ACTION: ${action}`,
+      `AUDIENCE: ${audience}`,
+      `BRAND CONTEXT: ${brandContext}`,
+      `CAMERA: ${camera}`,
+      `LIGHTING: ${lighting}`,
+      `COMPOSITION: ${composition}`,
+      `NEGATIVE SPACE: ${negativeSpace}`,
+      `STYLE: ${style}`,
+      `NEGATIVE: ${negativePrompts}`,
+    ].join('\n');
+
+    const structure: StructuredVisualPrompt = {
+      subject,
+      environment,
+      action,
+      audience,
+      brandContext,
+      camera,
+      lighting,
+      composition,
+      negativeSpace,
+      style,
+      negativePrompts,
+      fullPrompt,
+    };
 
     return {
-      prompt,
+      prompt: fullPrompt,
       placement,
+      structure,
     };
   }
 
@@ -279,10 +429,11 @@ export class MariCreativeIntelligenceService {
       templateId = flyerLayout;
     }
 
+    const format = req.format || (creativeType === 'FLYER' ? '4:5_PORTRAIT' : '1:1_SQUARE');
     const palette = MariCreativeIntelligenceService.derivePalette(industry, req.customColors);
     const typography = MariCreativeIntelligenceService.deriveTypography(industry);
     const copy = MariCreativeIntelligenceService.generateTenantCopy(companyName, industry, req.userPrompt, creativeType);
-    const visual = MariCreativeIntelligenceService.buildVisualPrompt(req.userPrompt, industry, templateId);
+    const visual = MariCreativeIntelligenceService.buildVisualPrompt(req.userPrompt, industry, templateId, companyName, format);
 
     // Extract genuine contact details if supplied; DO NOT invent fake data
     let resolvedContactDetails: ContactInfo | undefined = req.contactDetails;
@@ -302,7 +453,7 @@ export class MariCreativeIntelligenceService {
       campaignObjective: copy.offerBadge ? 'SPECIAL_OFFER' : 'LEAD_GENERATION',
       targetAudience: `Commercial clients and partners of ${companyName}`,
       platform: req.platform || 'facebook',
-      format: req.format || (creativeType === 'FLYER' ? '4:5_PORTRAIT' : '1:1_SQUARE'),
+      format,
       creativeType,
       templateId,
       posterLayout,
@@ -311,7 +462,6 @@ export class MariCreativeIntelligenceService {
       industry,
       headline: copy.headline,
       subheadline: copy.subheadline,
-      bodyCopy: `Delivering measurable commercial excellence and reliable regional support.`,
       keyBenefits: copy.benefits,
       offerBadge: copy.offerBadge,
       cta: copy.cta,
@@ -319,11 +469,12 @@ export class MariCreativeIntelligenceService {
       brandColors: palette,
       typographyStyle: typography,
       logoUrl: req.logoUrl,
-      logoPosition: req.logoPosition || 'top-right',
+      logoPosition: req.logoPosition || 'top-left',
       visualDirection: {
         prompt: visual.prompt,
-        style: 'Commercial Photorealism',
+        style: visual.structure.style,
         negativeSpacePlacement: visual.placement,
+        structure: visual.structure,
       },
     };
   }
