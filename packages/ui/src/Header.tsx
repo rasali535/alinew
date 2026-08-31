@@ -10,12 +10,14 @@ export interface HeaderProps {
   userRole?: string;
   user?: { name: string; role: string; email?: string };
   orgName?: string;
+  isAdmin?: boolean;
   activeBranch?: string;
   unreadNotifications?: number;
   exitUrl?: string;
   onExit?: () => void;
   onOpenSearch?: () => void;
   onOpenMariAI?: () => void;
+  onOpenAdmin?: () => void;
   onLogout?: () => void;
   onToggleMobileSidebar?: () => void;
 }
@@ -25,12 +27,14 @@ export const Header: React.FC<HeaderProps> = ({
   userRole = "ORGANIZATION_OWNER",
   user,
   orgName,
+  isAdmin = false,
   activeBranch = "Main HQ",
   unreadNotifications = 0,
   exitUrl = "https://rasalilabs.com",
   onExit,
   onOpenSearch,
   onOpenMariAI,
+  onOpenAdmin,
   onLogout,
   onToggleMobileSidebar,
 }) => {
@@ -77,10 +81,27 @@ export const Header: React.FC<HeaderProps> = ({
           <span className="font-medium text-zinc-300">{activeBranch}</span>
         </div>
 
+        {/* Quick Platform Admin Trigger */}
+        {isAdmin && (
+          <button
+            onClick={() => {
+              if (onOpenAdmin) {
+                onOpenAdmin();
+              } else if (typeof window !== 'undefined') {
+                window.location.href = '/admin';
+              }
+            }}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-amber-500/15 border border-amber-500/40 text-amber-300 hover:text-amber-100 hover:border-amber-400 hover:bg-amber-500/25 text-xs font-bold transition-all shadow-sm shadow-amber-500/10 cursor-pointer"
+          >
+            <span>👑</span>
+            <span className="hidden sm:inline">Admin Portal</span>
+          </button>
+        )}
+
         {/* Quick Mari AI Trigger */}
         <button
           onClick={onOpenMariAI}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-indigo-950/40 border border-indigo-500/30 text-indigo-300 hover:text-white hover:border-indigo-500/60 hover:bg-indigo-900/40 text-xs font-medium transition-all"
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-indigo-950/40 border border-indigo-500/30 text-indigo-300 hover:text-white hover:border-indigo-500/60 hover:bg-indigo-900/40 text-xs font-medium transition-all cursor-pointer"
         >
           <Sparkles className="w-3 h-3 text-indigo-400" />
           <span className="hidden sm:inline">Mari AI</span>

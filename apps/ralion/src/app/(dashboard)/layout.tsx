@@ -39,8 +39,10 @@ export default function DashboardLayout({
     setIsMobileSidebarOpen(false);
   }, [pathname]);
 
+  const isPlatformAdmin = (currentUser as any)?.isPlatformAdmin || (currentUser as any)?.role === 'PLATFORM_ADMIN' || currentUser?.email === 'ali@rasalilabs.com';
   const organizationName = currentUser?.orgName || (currentUser?.fullName ? `${currentUser.fullName}'s Workspace` : (currentUser?.email ? `${currentUser.email.split('@')[0]}'s Workspace` : 'Ralion Workspace'));
   const branchName = currentUser?.branchName || 'Main HQ Branch';
+  const displayTier = isPlatformAdmin ? 'PLATFORM_ADMIN' : (currentUser?.tier || 'COMMUNITY');
 
   const handleNavigate = (href: string) => {
     const isDesktop = typeof window !== 'undefined' && ((window as any).__RALION_DESKTOP__ || window.location.protocol === 'file:');
@@ -60,7 +62,8 @@ export default function DashboardLayout({
           <Sidebar
             currentPath={pathname}
             orgName={organizationName}
-            tier={currentUser?.tier || 'COMMUNITY'}
+            tier={displayTier}
+            isPlatformAdmin={isPlatformAdmin}
             platformUrl={process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com'}
             isCollapsed={isSidebarCollapsed}
             onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
@@ -84,7 +87,8 @@ export default function DashboardLayout({
               <Sidebar
                 currentPath={pathname}
                 orgName={organizationName}
-                tier={currentUser?.tier || 'COMMUNITY'}
+                tier={displayTier}
+                isPlatformAdmin={isPlatformAdmin}
                 platformUrl={process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com'}
                 isCollapsed={false}
                 onNavigate={handleNavigate}
@@ -106,16 +110,20 @@ export default function DashboardLayout({
           <Header
             user={{
               name: currentUser?.fullName || 'User',
-              role: currentUser?.tier === 'ENTERPRISE' ? 'ENTERPRISE_ADMIN' : currentUser?.tier === 'STANDARD' ? 'STANDARD_USER' : currentUser?.tier === 'PROFESSIONAL' ? 'PRO_OPERATOR' : 'ORGANIZATION_OWNER',
+              role: isPlatformAdmin ? 'PLATFORM_ADMIN' : currentUser?.tier === 'ENTERPRISE' ? 'ENTERPRISE_ADMIN' : currentUser?.tier === 'STANDARD' ? 'STANDARD_USER' : currentUser?.tier === 'PROFESSIONAL' ? 'PRO_OPERATOR' : 'ORGANIZATION_OWNER',
               email: currentUser?.email || 'user@example.com'
             }}
             orgName={organizationName}
+            isAdmin={isPlatformAdmin}
             activeBranch={branchName}
             unreadNotifications={0}
             exitUrl={process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com'}
             onExit={() => {
               const platformUrl = process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com';
               window.location.href = platformUrl;
+            }}
+            onOpenAdmin={() => {
+              window.location.href = '/admin';
             }}
             onOpenMariAI={() => setIsMariDrawerOpen(true)}
             onToggleMobileSidebar={() => setIsMobileSidebarOpen(prev => !prev)}

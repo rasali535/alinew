@@ -50,12 +50,24 @@ export const TierAccessGate: React.FC<TierAccessGateProps> = ({
     );
   }
 
+  const isPlatformAdmin =
+    (currentUser as any)?.isPlatformAdmin ||
+    (currentUser as any)?.role === 'PLATFORM_ADMIN' ||
+    currentUser?.email === 'ali@rasalilabs.com' ||
+    currentUser?.orgName === 'ras-ali-labs' ||
+    currentUser?.orgName === 'Ras Ali Labs';
+
+  if (isPlatformAdmin) {
+    return <>{children}</>;
+  }
+
   const isDevOrLocal = process.env.NODE_ENV === 'development' || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || (window as any).__RALION_DESKTOP__));
   const userTier = (currentUser?.tier || (typeof window !== 'undefined' ? localStorage.getItem('ralion_user_tier') : null) || (isDevOrLocal ? 'ENTERPRISE' : 'COMMUNITY')).toUpperCase();
 
   // Tier Hierarchy: ENTERPRISE > PROFESSIONAL > STANDARD > COMMUNITY
   const isAllowed =
     userTier === 'ENTERPRISE' ||
+    userTier === 'PLATFORM_ADMIN' ||
     (userTier === 'PROFESSIONAL' && (requiredTier === 'PROFESSIONAL' || requiredTier === 'STANDARD')) ||
     (userTier === 'STANDARD' && requiredTier === 'STANDARD');
 

@@ -52,6 +52,7 @@ export interface SidebarProps {
   tier?: string;
   orgName?: string;
   userName?: string;
+  isPlatformAdmin?: boolean;
   platformUrl?: string;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -65,6 +66,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   tier = 'COMMUNITY',
   orgName = 'Organization Workspace',
   userName,
+  isPlatformAdmin = false,
   platformUrl = 'https://portal.rasalilabs.com',
   isCollapsed = false,
   onToggleCollapse,
@@ -227,7 +229,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Exit / Return Portal Link */}
       {!isCollapsed && (
-        <div className="px-3 pt-2.5">
+        <div className="px-3 pt-2.5 space-y-1.5">
+          {/* Admin Command Center Quick Access for Platform Admins */}
+          {(isPlatformAdmin || userTier === 'PLATFORM_ADMIN') && (
+            <button
+              onClick={() => { window.location.href = '/admin'; }}
+              title="Open Platform Admin Command Center"
+              className="w-full flex items-center justify-between px-2.5 py-2 rounded-lg bg-gradient-to-r from-amber-500/20 via-orange-500/15 to-amber-600/20 border border-amber-500/40 text-xs font-bold text-amber-300 hover:text-amber-100 hover:border-amber-400 hover:bg-amber-500/30 transition-all shadow-md shadow-amber-500/10 cursor-pointer group"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-sm group-hover:scale-110 transition-transform">👑</span>
+                <span>Admin Command Center</span>
+              </div>
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/30 text-amber-200 border border-amber-400/40 font-mono">LIVE</span>
+            </button>
+          )}
+
           <button
             onClick={() => { window.location.href = platformUrl || '/'; }}
             title="Exit Ralion OS"
@@ -238,6 +255,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <span>Exit Platform</span>
             </div>
             <span className="text-[9px] text-zinc-500 font-mono">Exit</span>
+          </button>
+        </div>
+      )}
+
+      {/* Collapsed Admin Icon Trigger */}
+      {isCollapsed && (isPlatformAdmin || userTier === 'PLATFORM_ADMIN') && (
+        <div className="px-2 pt-2">
+          <button
+            onClick={() => { window.location.href = '/admin'; }}
+            title="Admin Command Center"
+            className="w-full flex items-center justify-center p-2 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/30 transition-all shadow-md"
+          >
+            <span className="text-sm">👑</span>
           </button>
         </div>
       )}

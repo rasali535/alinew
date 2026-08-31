@@ -8,6 +8,8 @@ export interface UserProfile {
   orgName?: string | null;
   branchName?: string | null;
   tier?: string | null;
+  role?: string | null;
+  isPlatformAdmin?: boolean;
   billingFrequency?: string | null;
 }
 
@@ -329,14 +331,22 @@ export class AuthService {
         console.warn('[AuthService] Profiles table query skipped:', err);
       }
 
+      const isPlatformAdmin =
+        user.user_metadata?.role === 'PLATFORM_ADMIN' ||
+        user.email === 'ali@rasalilabs.com' ||
+        user.user_metadata?.org_name === 'ras-ali-labs' ||
+        user.user_metadata?.org_name === 'Ras Ali Labs';
+
       return {
         id: user.id,
-        fullName: profile?.full_name || user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'User',
+        fullName: profile?.full_name || user.user_metadata?.full_name || user.user_metadata?.name || (isPlatformAdmin ? 'Ras Ali Labs Platform Admin' : user.email?.split('@')[0] || 'User'),
         avatarUrl: profile?.avatar_url || user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
         email: user.email || null,
-        orgName: user.user_metadata?.org_name || null,
-        branchName: user.user_metadata?.branch_name || null,
-        tier: user.user_metadata?.tier || null,
+        orgName: isPlatformAdmin ? 'Ras Ali Labs' : (user.user_metadata?.org_name || null),
+        branchName: user.user_metadata?.branch_name || 'Main HQ Branch',
+        tier: isPlatformAdmin ? 'ENTERPRISE' : (user.user_metadata?.tier || 'COMMUNITY'),
+        role: isPlatformAdmin ? 'PLATFORM_ADMIN' : (user.user_metadata?.role || 'ORGANIZATION_OWNER'),
+        isPlatformAdmin,
         billingFrequency: user.user_metadata?.billing_frequency || null,
       };
     } catch {
