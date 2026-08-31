@@ -17,6 +17,46 @@ import {
   SocialCapabilities,
 } from '../types';
 
+export const MASTER_PLATFORM_ZERNIO_PROFILE_ID = '6a82deac1a69158ef81cb2cd';
+export const MASTER_PLATFORM_ZERNIO_ACCOUNT_ID = '6a82df7277555aae018b92b4';
+export const MASTER_PLATFORM_FACEBOOK_PAGE_ID = '477334159265235';
+export const PLATFORM_ADMIN_ORGANIZATION_ID = 'ras-ali-labs';
+export const PLATFORM_ADMIN_USER_ID = '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf';
+
+export function assertMasterZernioAuthorization(actor: {
+  userId?: string;
+  organizationId?: string;
+  workspaceId?: string;
+  role?: string;
+  targetProfileId?: string;
+  targetAccountId?: string;
+  targetPageId?: string;
+  action: string;
+}): void {
+  const isMasterTarget =
+    actor.targetProfileId === MASTER_PLATFORM_ZERNIO_PROFILE_ID ||
+    actor.targetAccountId === MASTER_PLATFORM_ZERNIO_ACCOUNT_ID ||
+    actor.targetPageId === MASTER_PLATFORM_FACEBOOK_PAGE_ID;
+
+  if (isMasterTarget) {
+    const isPlatformAdmin =
+      actor.role === 'PLATFORM_ADMIN' ||
+      actor.userId === PLATFORM_ADMIN_USER_ID ||
+      actor.organizationId === PLATFORM_ADMIN_ORGANIZATION_ID ||
+      actor.workspaceId === PLATFORM_ADMIN_ORGANIZATION_ID;
+
+    if (!isPlatformAdmin) {
+      const err: any = new Error(
+        `[SecurityViolation] 403 Forbidden: Master Zernio profile '${MASTER_PLATFORM_ZERNIO_PROFILE_ID}' and Facebook Page '${MASTER_PLATFORM_FACEBOOK_PAGE_ID}' are immutable platform assets reserved exclusively for PLATFORM_ADMIN. Access denied for actor (user: ${actor.userId || 'unauthenticated'}, org: ${actor.organizationId || 'none'}). Action: ${actor.action}`
+      );
+      err.status = 403;
+      err.statusCode = 403;
+      err.code = 'FORBIDDEN_MASTER_PROFILE_ACCESS';
+      throw err;
+    }
+  }
+}
+
 export interface ZernioRequestOptions {
   idempotencyKey?: string;
   timeoutMs?: number;
@@ -195,7 +235,18 @@ export class ZernioSocialService {
   /**
    * Delete a profile and all associated social accounts
    */
-  static async deleteProfile(profileId: string): Promise<boolean> {
+  /**
+   * Delete a profile and all associated social accounts
+   */
+  static async deleteProfile(profileId: string, actor?: { userId?: string; organizationId?: string; role?: string }): Promise<boolean> {
+    if (profileId === MASTER_PLATFORM_ZERNIO_PROFILE_ID) {
+      const err: any = new Error(
+        `[SecurityViolation] 403 Forbidden: Master Zernio profile '${MASTER_PLATFORM_ZERNIO_PROFILE_ID}' is permanent and cannot be deleted.`
+      );
+      err.status = 403;
+      err.statusCode = 403;
+      throw err;
+    }
     await this.request<any>(`profiles/${profileId}`, 'DELETE');
     return true;
   }
@@ -210,8 +261,16 @@ export class ZernioSocialService {
   static async getConnectUrl(
     platform: SocialPlatformType,
     profileId: string,
-    redirectUri?: string
+    redirectUri?: string,
+    actor?: { userId?: string; organizationId?: string; role?: string }
   ): Promise<{ authUrl: string }> {
+    if (profileId === MASTER_PLATFORM_ZERNIO_PROFILE_ID) {
+      assertMasterZernioAuthorization({
+        ...actor,
+        targetProfileId: profileId,
+        action: 'CONNECT_OAUTH',
+      });
+    }
     const params = new URLSearchParams({ profileId });
     if (redirectUri) params.append('redirectUri', redirectUri);
 
@@ -275,7 +334,15 @@ export class ZernioSocialService {
   /**
    * Disconnect an account and revoke tokens remotely
    */
-  static async disconnectAccount(accountId: string): Promise<boolean> {
+  static async disconnectAccount(accountId: string, actor?: { userId?: string; organizationId?: string; role?: string }): Promise<boolean> {
+    if (accountId === MASTER_PLATFORM_ZERNIO_ACCOUNT_ID) {
+      const err: any = new Error(
+        `[SecurityViolation] 403 Forbidden: Master Zernio account '${MASTER_PLATFORM_ZERNIO_ACCOUNT_ID}' is permanent and cannot be disconnected.`
+      );
+      err.status = 403;
+      err.statusCode = 403;
+      throw err;
+    }
     await this.request<any>(`accounts/${accountId}`, 'DELETE');
     return true;
   }
@@ -291,43 +358,56 @@ export class ZernioSocialService {
     params: ZernioPostPayload | any,
     idempotencyKey?: string
   ): Promise<ZernioPostResult> {
-    // 1. Build standardized Zernio platforms array
+    // Enforce Master Profile authorization if master assets are targeted
+    const targetsMasterAccount =
+      (Array.isArray(params.platforms) && params.platforms.some((p: any) => p.accountId === MASTER_PLATFORM_ZERNIO_ACCOUNT_ID)) ||
+      (Array.isArray(params.accountIds) && params.accountIds.includes(MASTER_PLATFORM_ZERNIO_ACCOUNT_ID)) ||
+      params.accountId === MASTER_PLATFORM_ZERNIO_ACCOUNT_ID;
+
+    const targetsMasterPage =
+      (Array.isArray(params.platforms) && params.platforms.some((p: any) => p.platformSpecificData?.pageId === MASTER_PLATFORM_FACEBOOK_PAGE_ID || p.pageId === MASTER_PLATFORM_FACEBOOK_PAGE_ID)) ||
+      params.pageId === MASTER_PLATFORM_FACEBOOK_PAGE_ID ||
+      params.options?.pageId === MASTER_PLATFORM_FACEBOOK_PAGE_ID;
+
+    const targetsMasterProfile = params.profileId === MASTER_PLATFORM_ZERNIO_PROFILE_ID;
+
+    if (targetsMasterAccount || targetsMasterPage || targetsMasterProfile) {
+      assertMasterZernioAuthorization({
+        userId: params.userId,
+        organizationId: params.organizationId,
+        workspaceId: params.workspaceId,
+        role: params.role,
+        targetProfileId: targetsMasterProfile ? MASTER_PLATFORM_ZERNIO_PROFILE_ID : undefined,
+        targetAccountId: targetsMasterAccount ? MASTER_PLATFORM_ZERNIO_ACCOUNT_ID : undefined,
+        targetPageId: targetsMasterPage ? MASTER_PLATFORM_FACEBOOK_PAGE_ID : undefined,
+        action: 'PUBLISH_POST',
+      });
+    }
+
+    // 1. Build standardized Zernio platforms array without insecure fallbacks
     let platformsPayload: any[];
 
     if (Array.isArray(params.platforms) && params.platforms.length > 0) {
       platformsPayload = params.platforms.map((p: any) => {
-        const rawAccId = p.accountId || p.id || '6a82df7277555aae018b92b4';
-        const normalizedAccId = (typeof rawAccId === 'string' && rawAccId.length === 24 && /^[0-9a-fA-F]+$/.test(rawAccId))
-          ? rawAccId
-          : '6a82df7277555aae018b92b4';
-
-        const targetPageId = p.platformSpecificData?.pageId || p.pageId || '477334159265235';
+        const rawAccId = p.accountId || p.id;
+        if (!rawAccId) {
+          throw new Error('[ZernioSocialService] accountId is required for each platform target.');
+        }
 
         return {
           platform: p.platform || 'facebook',
-          accountId: normalizedAccId,
-          platformSpecificData: {
-            pageId: targetPageId,
-          },
+          accountId: rawAccId,
+          platformSpecificData: p.platformSpecificData || (p.pageId ? { pageId: p.pageId } : {}),
         };
       });
+    } else if (Array.isArray(params.accountIds) && params.accountIds.length > 0) {
+      platformsPayload = params.accountIds.map((accId: string) => ({
+        platform: 'facebook',
+        accountId: accId,
+        platformSpecificData: params.options?.pageId || params.pageId ? { pageId: params.options?.pageId || params.pageId } : {},
+      }));
     } else {
-      const rawAccounts = params.accountIds || params.accounts || ['6a82df7277555aae018b92b4'];
-      const targetPageId = params.options?.pageId || params.pageId || '477334159265235';
-
-      platformsPayload = rawAccounts.map((accId: string) => {
-        const normalizedAccId = (typeof accId === 'string' && accId.length === 24 && /^[0-9a-fA-F]+$/.test(accId))
-          ? accId
-          : '6a82df7277555aae018b92b4';
-
-        return {
-          platform: 'facebook',
-          accountId: normalizedAccId,
-          platformSpecificData: {
-            pageId: targetPageId,
-          },
-        };
-      });
+      throw new Error('[ZernioSocialService] At least one platform account target is required.');
     }
 
     // Format media items for Zernio schema: Array<{ url: string, type: 'image' | 'video' }>

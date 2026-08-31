@@ -235,14 +235,27 @@ export class ZernioProvider extends SocialProvider {
    * Publish content via Zernio POST /v1/posts
    */
   async publish(accessToken: string, params: PublishContentParams): Promise<PublishResponse> {
-    const profileId = params.zernioProfileId || '6a82deac1a69158ef81cb2cd';
-    const accountIds = (params.zernioAccountIds && params.zernioAccountIds.length > 0)
-      ? params.zernioAccountIds
-      : ['6a82df7277555aae018b92b4'];
-    const pageId =
-      (params.pageId && !params.pageId.startsWith('6a82') ? params.pageId : null) ||
-      (params.options?.pageId && !params.options.pageId.startsWith('6a82') ? params.options.pageId : null) ||
-      '477334159265235';
+    const profileId = params.zernioProfileId;
+    if (!profileId) {
+      return {
+        success: false,
+        error: '[ZernioProvider] Missing required zernioProfileId for tenant publishing.',
+        platform: 'facebook',
+        publishedAt: new Date().toISOString(),
+      };
+    }
+
+    const accountIds = params.zernioAccountIds || [];
+    const pageId = params.pageId || params.options?.pageId;
+
+    if (accountIds.length === 0 && !pageId) {
+      return {
+        success: false,
+        error: '[ZernioProvider] Missing target account or page ID for publishing.',
+        platform: 'facebook',
+        publishedAt: new Date().toISOString(),
+      };
+    }
 
     try {
       const res = await ZernioSocialService.createPost(
@@ -250,13 +263,17 @@ export class ZernioProvider extends SocialProvider {
           profileId,
           content: params.body,
           mediaUrls: params.mediaUrls,
-          platforms: accountIds.map((accId) => ({
-            platform: 'facebook',
-            accountId: (typeof accId === 'string' && accId.length === 24) ? accId : '6a82df7277555aae018b92b4',
-            platformSpecificData: {
-              pageId,
-            },
-          })),
+          platforms: accountIds.length > 0
+            ? accountIds.map((accId) => ({
+                platform: 'facebook',
+                accountId: accId,
+                platformSpecificData: pageId ? { pageId } : {},
+              }))
+            : [{
+                platform: 'facebook',
+                accountId: pageId!,
+                platformSpecificData: pageId ? { pageId } : {},
+              }],
           scheduledFor: params.options?.scheduledFor,
           publishNow: !params.options?.scheduledFor,
         },

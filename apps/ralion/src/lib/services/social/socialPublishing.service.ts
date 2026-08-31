@@ -13,6 +13,9 @@ import {
   SocialPlatformType,
   PublishResponse,
   InfrastructureProviderType,
+  assertMasterZernioAuthorization,
+  MASTER_PLATFORM_ZERNIO_PROFILE_ID,
+  MASTER_PLATFORM_FACEBOOK_PAGE_ID,
 } from '@ralion/integrations';
 import { SocialContentValidator } from './socialContentValidator.service';
 import { SocialTokenManager } from './socialTokenManager.service';
@@ -206,6 +209,33 @@ export class SocialPublishingService {
             publishedAt: new Date().toISOString(),
           };
           errors.push(`${platform}: Unauthorized page ID`);
+          return;
+        }
+      }
+
+      // Strictly verify that master platform assets are not used by non-admin actors
+      if (
+        params.pageId === MASTER_PLATFORM_FACEBOOK_PAGE_ID ||
+        conn.metadata?.pageId === MASTER_PLATFORM_FACEBOOK_PAGE_ID ||
+        conn.zernio_profile_id === MASTER_PLATFORM_ZERNIO_PROFILE_ID
+      ) {
+        try {
+          assertMasterZernioAuthorization({
+            userId: params.userId,
+            organizationId: params.organizationId,
+            workspaceId: params.workspaceId,
+            targetProfileId: conn.zernio_profile_id,
+            targetPageId: params.pageId || conn.metadata?.pageId,
+            action: 'PUBLISH_SOCIAL_POST',
+          });
+        } catch (authErr: any) {
+          platformResults[platform] = {
+            success: false,
+            error: authErr.message || '403 Forbidden: Master platform assets are restricted to PLATFORM_ADMIN.',
+            platform,
+            publishedAt: new Date().toISOString(),
+          };
+          errors.push(`${platform}: 403 Forbidden Master Profile Access`);
           return;
         }
       }
