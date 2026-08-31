@@ -20,6 +20,7 @@ import {
   CreativeAssetService,
   validateImageBuffer,
   validateVideoBuffer,
+  getAppBasePath,
 } from './creativeAsset.service';
 import { TenantCreditsService, CREDIT_COSTS } from './tenantCredits.service';
 import { EntitlementService } from '@ralion/auth';
@@ -331,7 +332,7 @@ export class CreativeOrchestrator {
         rawPublicUrl,
         rawStoragePath,
         rawProviderAsset: rawPublicUrl,
-        finalComposedAsset: `/uploads/creatives/${tempAssetId}.${successfulResult.mimeType.includes('png') ? 'png' : successfulResult.mimeType.includes('svg') ? 'svg' : 'jpg'}`,
+        finalComposedAsset: `${getAppBasePath()}/api/creatives/file/${tempAssetId}.${successfulResult.mimeType.includes('png') ? 'png' : successfulResult.mimeType.includes('svg') ? 'svg' : 'jpg'}`,
         provider: successfulResult.providerName,
         semanticScore: visualQAResult?.visualRelevanceScore ?? 90,
         designScore: visualQAResult?.designQualityScore ?? 90,
@@ -345,6 +346,21 @@ export class CreativeOrchestrator {
         visualQADetails: visualQAResult,
       },
     });
+
+    // Storage integrity gate: if storage write failed, never return a completed asset
+    if (asset.status === 'FAILED') {
+      TenantCreditsService.addCredits(organizationId, creditCost, 'Refund for storage failure');
+      return {
+        success: false,
+        status: 'FAILED',
+        userFacingMessage: "I created the creative, but I couldn't safely save it. Nothing has been published.",
+        errorDetails: {
+          errorCode: 'FAILED_STORAGE',
+          stage: 'DURABLE_STORAGE',
+          details: asset.errorDetails || 'Binary storage write failed or file existence verification failed.',
+        },
+      };
+    }
 
     // ── STAGE 6: COMPLETED (CONTRACTS & MARI RECEIPT) ───────────────────────
     const socialContract: SocialHandoffContract = {

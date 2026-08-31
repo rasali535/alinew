@@ -229,6 +229,20 @@ async function getUploadDir(): Promise<string> {
   return fallback;
 }
 
+/**
+ * Returns the Next.js application base path depending on deployment mode.
+ * - NEXT_STANDALONE=1 (Render/production): basePath is '' (root)
+ * - Otherwise (dev, Hostinger sub-path): basePath is '/ralion'
+ *
+ * All asset publicUrls must include this prefix so the browser can resolve them.
+ */
+export function getAppBasePath(): string {
+  if (typeof process !== 'undefined' && process.env.NEXT_STANDALONE === '1') {
+    return '';
+  }
+  return '/ralion';
+}
+
 export class CreativeAssetService {
   /**
    * Save a binary buffer to durable storage and create an asset record.
@@ -258,6 +272,7 @@ export class CreativeAssetService {
     
     let filePath = '';
     let byteLength = 0;
+    let storageWriteSuccess = false;
 
     const node = await getNodeFs();
     if (node && params.buffer) {
@@ -267,19 +282,34 @@ export class CreativeAssetService {
         const nodeBuffer = Buffer.isBuffer(params.buffer) ? params.buffer : Buffer.from(params.buffer);
         byteLength = nodeBuffer.byteLength;
         node.fs.writeFileSync(filePath, nodeBuffer);
+        // Storage existence verification before marking COMPLETED
+        const written = node.fs.existsSync(filePath) && node.fs.statSync(filePath).size > 0;
+        if (written) {
+          storageWriteSuccess = true;
+        } else {
+          console.error(`[CreativeAssetService] Storage integrity check FAILED: wrote ${filename} but file missing or empty`);
+        }
       } catch (err) {
-        console.warn('[CreativeAssetService] Filesystem write notice:', err);
+        console.error('[CreativeAssetService] Filesystem write error:', err);
       }
     }
 
-    const publicUrl = `/uploads/creatives/${filename}`;
+    // Canonical public URL via API route — basePath-aware, works in dev (/ralion) and production (root)
+    const basePath = getAppBasePath();
+    const publicUrl = `${basePath}/api/creatives/file/${filename}`;
+
+    // Determine asset status: only COMPLETED if binary is durably stored and verified
+    const assetStatus: CreativeAsset['status'] = storageWriteSuccess ? 'COMPLETED' : 'FAILED';
+    if (!storageWriteSuccess) {
+      console.error(`[CreativeAssetService] FAILED_STORAGE: Asset ${id} (${filename}) could not be durably written. Marking FAILED.`);
+    }
 
     const asset: CreativeAsset = {
       id,
       organizationId: orgId,
       type: params.type,
       provider: params.provider,
-      status: 'COMPLETED',
+      status: assetStatus,
       prompt: params.prompt,
       title: params.title || (params.prompt.length > 32 ? params.prompt.substring(0, 32) + '...' : params.prompt),
       mimeType: params.mimeType,
@@ -303,11 +333,12 @@ export class CreativeAssetService {
       visualQADetails: params.metadata?.visualQADetails,
       fileSizeBytes: byteLength || 35000,
       createdAt: new Date().toISOString(),
-      completedAt: new Date().toISOString(),
+      completedAt: storageWriteSuccess ? new Date().toISOString() : undefined,
+      errorDetails: storageWriteSuccess ? undefined : 'FAILED_STORAGE: Binary could not be durably written.',
       metadata: params.metadata || {},
     };
 
-    if (node && filePath) {
+    if (node && filePath && storageWriteSuccess) {
       try {
         const metaPath = filePath.replace(/\.[^.]+$/, '.meta.json');
         node.fs.writeFileSync(metaPath, JSON.stringify(asset, null, 2));
@@ -350,7 +381,9 @@ export class CreativeAssetService {
       }
     }
 
-    const rawPublicUrl = `/uploads/creatives/${filename}`;
+    // Use canonical API route for raw assets too (basePath-aware)
+    const basePath = getAppBasePath();
+    const rawPublicUrl = `${basePath}/api/creatives/file/${filename}`;
     return { rawPublicUrl, rawStoragePath };
   }
 
