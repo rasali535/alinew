@@ -1,120 +1,76 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 import { services } from '../../data/mock';
-import { ArrowUpRight, Music, Mic2, Video, Code, Palette, Bot } from 'lucide-react';
+import { ArrowRight, Bot, Cpu, ShieldCheck, Layers, Sparkles, Database, Workflow, CheckCircle2 } from 'lucide-react';
 
-// Icons map
-const iconMap = {
-    'Bassist': Music,
-    'Sound Engineer': Mic2,
-    'Videographer': Video,
-    'Developer': Code,
-    'Media & Branding': Palette,
-    'AI & Chatbots': Bot
-};
-
-// Image map (Using placeholders relevant to the service)
-const imageMap = {
-    'Bassist': '/assets/images/service-bassist.jpg',
-    'Sound Engineer': '/assets/images/service-sound.png',
-    'Videographer': '/assets/images/service-video.png',
-    'Developer': '/assets/images/service-dev.png',
-    'Media & Branding': '/assets/images/service-branding.png',
-    'AI & Chatbots': 'https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&q=80&w=1000'
-};
-
-const ServiceCard = ({ service, index }) => {
-    const Icon = iconMap[service.title] || Music;
-    const [isHovered, setIsHovered] = useState(false);
-
-    return (
-        <div
-            className="group relative h-[500px] w-full overflow-hidden rounded-2xl bg-[#0a0a0a] border border-white/10"
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
-        >
-            {/* Background Image with Zoom Effect */}
-            <div className="absolute inset-0 overflow-hidden">
-                <img
-                    src={imageMap[service.title]}
-                    alt={service.title}
-                    className="h-full w-full object-cover transition-transform duration-700 ease-out will-change-transform group-hover:scale-110 opacity-40 group-hover:opacity-30"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-brand-dark via-brand-dark/50 to-transparent" />
-            </div>
-
-            {/* Content Container */}
-            <div className="absolute inset-0 flex flex-col justify-between p-8 md:p-10">
-
-                {/* Top Section: Icon & Index */}
-                <div className="flex items-start justify-between">
-                    <div className="rounded-full bg-white/10 p-4 backdrop-blur-md transition-all duration-300 group-hover:bg-brand-gold/20 group-hover:text-brand-gold">
-                        <Icon size={32} className="text-white transition-colors duration-300 group-hover:text-brand-gold" />
-                    </div>
-                    <span className="text-xl font-light text-white/30 font-mono">
-                        0{index + 1}
-                    </span>
-                </div>
-
-                {/* Bottom Section: Title, Items, CTA */}
-                <div className="translate-y-4 transition-transform duration-500 ease-out group-hover:translate-y-0">
-                    <h3 className="mb-4 text-4xl font-light text-white md:text-5xl">
-                        {service.title}
-                    </h3>
-
-                    {/* Items List - Staggered Fade In */}
-                    <div className="mb-8 space-y-2">
-                        {service.items.map((item, idx) => (
-                            <div
-                                key={idx}
-                                className="flex items-center gap-2 text-sm text-white/60 transition-all duration-300 hover:text-white"
-                            >
-                                <span className="h-1 w-1 rounded-full bg-brand-gold" />
-                                {item}
-                            </div>
-                        ))}
-                    </div>
-
-                    <Link
-                        to={`/booking/${service.id}`}
-                        className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-6 py-3 text-sm text-white backdrop-blur-sm transition-all duration-300 hover:border-brand-gold hover:bg-brand-gold hover:text-black"
-                    >
-                        Start Project
-                        <ArrowUpRight size={16} />
-                    </Link>
-                </div>
-            </div>
-        </div>
-    );
-};
+const iconList = [Bot, Workflow, Cpu, ShieldCheck];
 
 const ServicesPageGrid = () => {
-    return (
-        <section className="bg-brand-dark py-20">
-            <div className="px-6 lg:px-12">
-                {/* Introduction */}
-                <div className="mb-16 max-w-2xl">
-                    <div className="flex items-center gap-2 mb-4">
-                        <div className="h-[1px] w-8 bg-brand-gold"></div>
-                        <span className="text-brand-gold text-sm uppercase tracking-widest">My Expertise</span>
+  return (
+    <section className="bg-[#181818] py-24 text-white">
+      <div className="max-w-7xl mx-auto px-6 lg:px-12">
+        {/* Introduction */}
+        <div className="mb-16 max-w-3xl">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-brand-gold text-xs font-semibold uppercase tracking-wider mb-4">
+            <Sparkles size={14} /> Enterprise Solutions & Engineering
+          </div>
+          <h1 className="text-4xl md:text-6xl font-extrabold text-white tracking-tight mb-4">
+            Enterprise AI Systems & Custom Infrastructure
+          </h1>
+          <p className="text-white/70 text-base md:text-lg leading-relaxed">
+            Ras Ali Labs engineers sovereign business operating systems, automated data pipelines, custom AI agents, and enterprise infrastructure for organizations across Africa and worldwide.
+          </p>
+        </div>
+
+        {/* Grid Layout */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-16">
+          {services.map((service, index) => {
+            const Icon = iconList[index % iconList.length];
+            return (
+              <div
+                key={service.id}
+                className="bg-[#1f1f1f] border border-white/10 hover:border-brand-gold/40 rounded-3xl p-8 transition-all flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-start justify-between mb-6">
+                    <div className="w-12 h-12 rounded-2xl bg-brand-gold/10 text-brand-gold flex items-center justify-center">
+                      <Icon size={24} />
                     </div>
-                    <h2 className="text-5xl md:text-6xl lg:text-7xl font-light text-white tracking-tight leading-none mb-6">
-                        Crafting Digital <br /> <span className="italic text-white/50">Masterpieces</span>
-                    </h2>
-                    <p className="text-white/60 text-lg">
-                        A comprehensive suite of creative and technical services designed to elevate your brand and bring your vision to life.
-                    </p>
+                    <span className="text-xs font-mono text-white/30 font-bold">
+                      0{index + 1}
+                    </span>
+                  </div>
+
+                  <h3 className="text-2xl font-bold text-white mb-2">
+                    {service.title}
+                  </h3>
+                  <p className="text-white/60 text-xs leading-relaxed mb-6">
+                    {service.description}
+                  </p>
+
+                  <div className="space-y-2 border-t border-white/10 pt-4 mb-8">
+                    {service.items.map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-2 text-xs text-white/80">
+                        <CheckCircle2 size={14} className="text-brand-gold shrink-0" />
+                        <span>{item}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
-                {/* Grid Layout */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
-                    {services.map((service, index) => (
-                        <ServiceCard key={service.id} service={service} index={index} />
-                    ))}
-                </div>
-            </div>
-        </section>
-    );
+                <Link
+                  to="/request-demo"
+                  className="w-full py-3.5 rounded-xl bg-white/10 hover:bg-brand-gold hover:text-black font-bold text-xs transition-all flex items-center justify-center gap-2"
+                >
+                  Consult on {service.title} <ArrowRight size={14} />
+                </Link>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
 };
 
 export default ServicesPageGrid;

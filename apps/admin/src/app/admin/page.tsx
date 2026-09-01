@@ -25,6 +25,10 @@ import {
   TrendingUp,
   Share2,
   Zap,
+  LogOut,
+  Bell,
+  UserPlus,
+  HelpCircle,
 } from 'lucide-react';
 
 interface MetricsData {
@@ -220,6 +224,20 @@ export default function PlatformAdminPortal() {
     }
   };
 
+  const [showHelpAlerts, setShowHelpAlerts] = useState(false);
+
+  const integrationAlerts = customers.filter(c => 
+    c.subscriptionTier === 'COMMUNITY' || 
+    c.status === 'PENDING' ||
+    (c.totalCreditsIssued <= 100 && c.totalCreditsConsumed >= 80)
+  ).map(c => ({
+    orgId: c.organizationId,
+    name: c.name,
+    email: c.ownerEmail,
+    tier: c.subscriptionTier,
+    reason: c.totalCreditsConsumed >= 80 ? 'Low credit balance — needs upgrade/credits' : 'New tenant onboarding — pending social integration & CRM setup'
+  }));
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-indigo-500 selection:text-white">
       {/* Top Banner */}
@@ -242,6 +260,82 @@ export default function PlatformAdminPortal() {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Notifications / Integration Alerts Button */}
+          <div className="relative">
+            <button
+              onClick={() => setShowHelpAlerts(!showHelpAlerts)}
+              className="relative flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 transition border border-zinc-700/50"
+              title="User Integrations & Help Requests"
+            >
+              <Bell className="w-3.5 h-3.5 text-amber-400" />
+              <span>Integrations & Help</span>
+              {integrationAlerts.length > 0 && (
+                <span className="w-5 h-5 rounded-full bg-amber-500 text-black text-[10px] font-bold flex items-center justify-center">
+                  {integrationAlerts.length}
+                </span>
+              )}
+            </button>
+
+            {/* Dropdown Panel */}
+            {showHelpAlerts && (
+              <div className="absolute right-0 mt-2 w-96 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl z-50 p-4">
+                <div className="flex items-center justify-between border-b border-zinc-800 pb-3 mb-3">
+                  <div className="flex items-center gap-2">
+                    <UserPlus className="w-4 h-4 text-amber-400" />
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider">User Integration & Help Queue</h4>
+                  </div>
+                  <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-bold">
+                    {integrationAlerts.length} Attention Needed
+                  </span>
+                </div>
+
+                <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+                  {integrationAlerts.length === 0 ? (
+                    <div className="text-center py-6 text-xs text-zinc-500">
+                      All users are integrated and operating normally.
+                    </div>
+                  ) : (
+                    integrationAlerts.map((alert, idx) => (
+                      <div key={idx} className="p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-xs space-y-1.5 hover:border-amber-500/40 transition">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-white">{alert.name}</span>
+                          <span className="text-[10px] px-2 py-0.5 bg-zinc-800 text-zinc-300 rounded font-mono">{alert.tier}</span>
+                        </div>
+                        <div className="text-zinc-400 text-[11px]">{alert.email}</div>
+                        <div className="text-amber-300/90 text-[11px] font-medium flex items-center gap-1">
+                          <HelpCircle className="w-3 h-3 text-amber-400 shrink-0" />
+                          <span>{alert.reason}</span>
+                        </div>
+                        <div className="pt-2 flex gap-2">
+                          <button
+                            onClick={() => {
+                              setSelectedOrgForCredit(alert.orgId);
+                              setCreditModalOpen(true);
+                              setShowHelpAlerts(false);
+                            }}
+                            className="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold"
+                          >
+                            Grant Credits
+                          </button>
+                          <button
+                            onClick={() => {
+                              setInspectingOrgId(alert.orgId);
+                              setInspectModalOpen(true);
+                              setShowHelpAlerts(false);
+                            }}
+                            className="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[10px] font-semibold"
+                          >
+                            Inspect Tenant
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           <button
             onClick={fetchPlatformData}
             disabled={loading}
@@ -250,6 +344,16 @@ export default function PlatformAdminPortal() {
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             Refresh Telemetry
           </button>
+
+          {/* EXIT BUTTON */}
+          <a
+            href="/dashboard"
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-xs font-bold text-red-300 transition border border-red-500/40 hover:border-red-500/70"
+            title="Exit Admin Command Center back to Workspace Dashboard"
+          >
+            <LogOut className="w-3.5 h-3.5 text-red-400" />
+            Exit Command Center
+          </a>
         </div>
       </header>
 

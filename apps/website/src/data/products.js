@@ -1,310 +1,314 @@
 // Enterprise Product Architecture for Ras Ali Labs Ecosystem
-// Central repository for Ralion OS, Ralion CRM, Ralion AI Growth Engine, Mari AI, and Ralion Trade.
+// Brand Hierarchy:
+// RAS ALI LABS — Building intelligent business operating systems
+// RALION OS — Empowered to Prosper | Your AI Business Operating System.
+// MARI AI — Your AI Business Growth Partner
 
 export const productsData = [
-  {
-    id: 'ralion-crm',
-    slug: 'ralion-crm',
-    name: 'Ralion CRM',
-    tagline: 'AI Customer Intelligence & Automated Sales Assistant',
-    category: 'Customer Intelligence / Sales Automation',
-    status: 'Available',
-    statusBadge: 'Priority Core Product',
-    badgeColor: 'bg-brand-gold/10 text-brand-gold border-brand-gold/20',
-    philosophy: 'Ralion does not just manage your business activity. It understands your business, predicts opportunities, and helps you grow.',
-    description: 'Ralion CRM combines AI customer intelligence, smart pipeline management, and an automated AI sales assistant into one predictive workspace.',
-    longDescription: `Ralion CRM is an AI-powered sales & customer intelligence platform that builds contextual memory around every client interaction. Powered by Mari AI reasoning agents, Ralion CRM automatically scores deal opportunities, triggers hyper-personalized follow-ups, identifies high-value leads, and delivers real-time business insights to accelerate revenue.`,
-    icon: 'UserCheck',
-    appUrl: '/ralion/crm',
-    accentColor: '#D4AF37',
-    cta: {
-      primary: { text: 'Start Free', href: '/ralion/community' },
-      secondary: { text: 'Request Demo', href: '/request-demo' },
-      login: { text: 'Login', href: '#auth' },
-      launch: { text: 'Launch Ralion CRM', href: '/ralion/crm' }
-    },
-    seo: {
-      title: 'Ralion CRM — AI Customer Intelligence & Sales Assistant | Ras Ali Labs',
-      description: 'Accelerate deal closing with Ralion CRM. AI customer intelligence, smart pipeline management, customer memory, and opportunity scoring.'
-    },
-    hero: {
-      title: 'Ralion CRM — AI Customer Intelligence',
-      tagline: 'AI Customer Intelligence & Automated Sales Assistant',
-      subtitle: 'Predict opportunities, automate client follow-ups, and convert leads with an AI sales assistant that remembers every interaction.',
-      stats: [
-        { label: 'Pipeline Automation', value: 'Instant' },
-        { label: 'Deal Velocity Increase', value: '3.4x' },
-        { label: 'Customer Memory Context', value: 'Sub-second' },
-        { label: 'Opportunity Accuracy', value: '98.5%' }
-      ]
-    },
-    features: [
-      {
-        id: 'customer-intelligence',
-        title: 'AI Customer Intelligence',
-        description: 'Deep customer profiling with automated intent detection, behavioral history, and predictive buying signals.',
-        icon: 'UserCheck'
-      },
-      {
-        id: 'sales-assistant',
-        title: 'AI Sales Assistant',
-        description: 'Mari AI co-pilot that drafts tailored email responses, prepares meeting briefs, and recommends next sales actions.',
-        icon: 'Bot'
-      },
-      {
-        id: 'pipeline-management',
-        title: 'Smart Pipeline Management',
-        description: 'Dynamic Kanban and list views with automated stage progression, stale deal alerts, and bottleneck detection.',
-        icon: 'BarChart3'
-      },
-      {
-        id: 'customer-memory',
-        title: 'Contextual Customer Memory',
-        description: 'Sub-second RAG search across past emails, call logs, contracts, and support tickets for instant background memory.',
-        icon: 'Database'
-      },
-      {
-        id: 'automated-followups',
-        title: 'Automated Follow-ups',
-        description: 'Event-driven follow-up triggers ensuring zero leads are forgotten or dropped across long sales cycles.',
-        icon: 'Zap'
-      },
-      {
-        id: 'opportunity-scoring',
-        title: 'Predictive Opportunity Scoring',
-        description: 'Algorithmic lead scoring ranking high-probability revenue deals based on client engagement and budget markers.',
-        icon: 'TrendingUp'
-      },
-      {
-        id: 'business-insights',
-        title: 'Real-time Business Insights',
-        description: 'Executive revenue dashboards forecasting monthly MRR, conversion rates, and sales rep performance.',
-        icon: 'PieChart'
-      }
-    ]
-  },
-  {
-    id: 'ralion-social-intelligence',
-    slug: 'ralion-social-intelligence',
-    name: 'Ralion Social Intelligence Marketing',
-    tagline: 'The AI Marketing Strategist & Brand Growth Platform',
-    category: 'AI Growth / Social Intelligence',
-    status: 'Available',
-    statusBadge: 'Priority Core Product',
-    badgeColor: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-    philosophy: 'Ralion does not just manage your business activity. It understands your business, predicts opportunities, and helps you grow.',
-    description: 'A unique AI-first system acting as your autonomous marketing strategist, generating brand strategy, listening to market signals, and executing CRM-connected campaigns.',
-    longDescription: `Ralion Social Intelligence Marketing is not another social media scheduler. It is an AI Brand Brain that learns your company voice, customer profiles, and products. It deploys Autonomous Marketing Agents for content planning, competitor monitoring, and engagement simulation, all connected to your CRM via our Business Memory Engine.`,
-    icon: 'TrendingUp',
-    appUrl: '/ralion/growth',
-    accentColor: '#A855F7',
-    cta: {
-      primary: { text: 'Start Free', href: '/ralion/community' },
-      secondary: { text: 'Request Demo', href: '/request-demo' },
-      login: { text: 'Login', href: '#auth' },
-      launch: { text: 'Launch Intelligence Engine', href: '/ralion/growth' }
-    },
-    seo: {
-      title: 'Ralion Social Intelligence Marketing | Ras Ali Labs',
-      description: 'Scale your enterprise with Ralion Social Intelligence Marketing. AI campaign planning, brand intelligence, social listening, and CRM-connected campaigns.'
-    },
-    hero: {
-      title: 'Ralion Social Intelligence Marketing',
-      tagline: 'AI Brand Brain & Autonomous Marketing Agents',
-      subtitle: 'Predict engagement, monitor competitors, and generate content strategies directly linked to your sales CRM pipeline.',
-      stats: [
-        { label: 'Campaign Creation', value: 'Autonomous' },
-        { label: 'Engagement Prediction', value: 'AI Simulator' },
-        { label: 'Brand Voice Learning', value: 'Contextual' },
-        { label: 'CRM Pipeline Link', value: 'Direct' }
-      ]
-    },
-    features: [
-      {
-        id: 'ai-brand-brain',
-        title: 'AI Brand Brain',
-        description: 'Learns your company voice, analyzes customer profiles, and internalizes product catalogs for perfectly aligned messaging.',
-        icon: 'Bot'
-      },
-      {
-        id: 'autonomous-agents',
-        title: 'Autonomous Marketing Agents',
-        description: 'Deploy agents for continuous content planning, campaign creation, audience analysis, and competitor monitoring.',
-        icon: 'Sparkles'
-      },
-      {
-        id: 'business-memory',
-        title: 'Business Memory Engine',
-        description: 'Directly connects your CRM pipeline, customer conversations, and marketing performance into a unified data ecosystem.',
-        icon: 'Database'
-      },
-      {
-        id: 'campaign-simulator',
-        title: 'AI Campaign Simulator',
-        description: 'Predict engagement rates, audience response, and optimal posting times before publishing.',
-        icon: 'Activity'
-      },
-      {
-        id: 'social-listening',
-        title: 'Social Intelligence',
-        description: 'Real-time sentiment monitoring across digital channels, tracking brand mentions, industry keywords, and buyer intent.',
-        icon: 'Globe'
-      },
-      {
-        id: 'content-strategy',
-        title: 'Content Strategy Generation',
-        description: 'Data-driven editorial calendars and topical clusters tailored to your enterprise brand tone of voice.',
-        icon: 'Layers'
-      }
-    ]
-  },
   {
     id: 'ralion',
     slug: 'ralion',
     name: 'Ralion OS',
-    tagline: 'Run your business with an AI-powered operating system.',
+    tagline: 'Empowered to Prosper',
     category: 'Enterprise AI Business Operating System',
     status: 'Available',
-    statusBadge: 'Featured Enterprise OS',
-    badgeColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-    philosophy: 'Ralion does not just manage your business activity. It understands your business, predicts opportunities, and helps you grow.',
-    description: 'Ralion combines business operations, automation, and artificial intelligence into one platform.',
-    longDescription: `Ralion OS is the AI-powered business operating system that helps organizations run, automate, and grow. Designed for modern enterprises, healthcare providers, logistics operators, and trade networks, Ralion unifies customer relationship management (CRM), tasks, document vaults, billing, analytics, and Mari AI intelligence into a single secure platform.`,
+    statusBadge: 'Flagship Platform',
+    badgeColor: 'bg-brand-gold/10 text-brand-gold border-brand-gold/20',
+    philosophy: 'Empowered to Prosper — intelligent operating systems engineered to eliminate friction and power the next generation of companies.',
+    description: 'An AI Business Operating System that brings business operations, customers, growth, social intelligence, automation, analytics and AI assistance into one intelligent workspace.',
+    longDescription: `Ralion OS is the flagship AI Business Operating System developed by Ras Ali Labs. Built with bank-grade multi-tenant security and row-level isolation, Ralion unifies customer relationship management (CRM), deal pipelines, growth campaigns, AI creative generation (FLUX & CogVideoX), multi-channel social publishing, and Mari AI assistance into one seamless command center.`,
     icon: 'Cpu',
     appUrl: '/ralion',
     accentColor: '#D4AF37',
     cta: {
-      primary: { text: 'Request Demo', href: '/request-demo' },
-      secondary: { text: 'Explore Solutions', href: '/solutions' },
-      login: { text: 'Login', href: '#auth' },
-      launch: { text: 'Launch Ralion OS', href: '/ralion' }
+      primary: { text: 'Start Ralion Free', href: '/ralion/register' },
+      secondary: { text: 'Book Enterprise Demo', href: '/request-demo' },
+      login: { text: 'Login', href: '/ralion/login' },
+      launch: { text: 'Launch Ralion OS', href: '/ralion/dashboard' }
     },
     seo: {
-      title: 'Ralion OS — The AI Business Operating System | Ras Ali Labs',
-      description: 'Empower your organization with intelligent workflows, automation, and AI-driven insights with Ralion OS.'
+      title: 'Ralion OS — Empowered to Prosper | AI Business Operating System',
+      description: 'Run your business with Ralion OS. Unified CRM, Mari AI growth partner, automated social intelligence, creative studio, and sovereign enterprise security.'
     },
     hero: {
-      title: 'Ralion OS — The AI Business Operating System',
-      tagline: 'Run your business with an AI-powered operating system.',
-      subtitle: 'Empower your organization with intelligent workflows, automation, and AI-driven insights.',
+      title: 'RALION OS',
+      tagline: 'Empowered to Prosper',
+      subtitle: 'Your AI Business Operating System. Unifying operations, customers, growth, social intelligence, and AI decision-making.',
       stats: [
-        { label: 'System Availability', value: '99.99%' },
-        { label: 'Workflow Automation', value: 'Real-time' },
-        { label: 'Industry Solutions', value: '4 Core OS' },
-        { label: 'Security & Auth', value: 'Enterprise Grade' }
+        { label: 'Platform Availability', value: '99.99%' },
+        { label: 'Closed-Loop Growth', value: 'Autonomous' },
+        { label: 'Industry Vertical OS', value: '5 Suites' },
+        { label: 'Data Security', value: 'Row-Level Isolation' }
       ]
     },
     features: [
       {
         id: 'business-ops',
         category: 'Business Operations',
-        title: 'Core Business Operations',
-        description: 'Manage customers, deal pipelines, tasks, document vaults, billing, and reports in a unified interface.',
-        items: ['CRM & Customers', 'Tasks & Projects', 'Document Vault', 'Billing & Invoices', 'Operational Reports']
+        title: 'Unified Operational Workspace',
+        description: 'Manage customers, deal pipelines, tasks, documents, billing, and operational reporting in a single interface.',
+        items: ['Customer CRM & Deals', 'Task & Project Boards', 'Encrypted Document Vault', 'Automated Invoicing', 'Executive Analytics']
       },
       {
-        id: 'ai-intelligence',
-        category: 'AI Intelligence',
-        title: 'Mari AI Intelligence',
-        description: 'Mari AI is your intelligent business assistant that understands your operations, documents, and workflows.',
-        items: ['Mari AI Assistant', 'Business Insights', 'Document Intelligence', 'Automated Recommendations']
+        id: 'ai-growth-partner',
+        category: 'Mari AI Growth Partner',
+        title: 'Mari AI Reasoning Engine',
+        description: 'Your embedded executive business partner that analyzes pipeline signals, formulates growth strategies, and directs creatives.',
+        items: ['Strategic Business Intelligence', 'Pipeline Forecasting', 'Market Research & Competitor Briefs', 'Automated Campaign Direction']
+      },
+      {
+        id: 'growth-studio',
+        category: 'Growth Studio',
+        title: 'AI Creative & Campaign Generation',
+        description: 'Studio-grade commercial poster generation with FLUX and video creative rendering with CogVideoX.',
+        items: ['FLUX Commercial Poster AI', 'CogVideoX 6-Second Video Reels', 'Multi-Channel Campaign Briefs', 'Brand Voice Alignment']
+      },
+      {
+        id: 'social-intelligence',
+        category: 'Social Intelligence',
+        title: 'Social Composer & Publishing',
+        description: 'Multi-channel social publishing, automated scheduling queues, and unified cross-platform engagement tracking.',
+        items: ['Facebook & Instagram Publishing', 'LinkedIn & X Content Queues', 'Unified Social Inbox', 'Performance Telemetry']
       },
       {
         id: 'industry-solutions',
         category: 'Industry Solutions',
         title: 'Specialized Industry OS',
-        description: 'Purpose-built operating systems tailored for specific enterprise sectors.',
-        items: ['Funeral OS', 'Logistics OS', 'Health OS', 'Trade OS']
+        description: 'Purpose-built operating systems tailored for high-trust sectors across the SADC corridor.',
+        items: ['Funeral OS', 'Logistics OS', 'Healthcare OS', 'Trade OS', 'Government OS']
       }
     ],
     industryOS: [
       {
         id: 'funeral-os',
         name: 'Funeral OS',
-        target: 'For funeral homes & mortuary services',
+        subtitle: 'Mortuary & Policyholder Management',
+        description: 'End-to-end mortuary intake, deceased case tracking, family relations, policyholder registers, and automated client notifications.',
         icon: 'Building2',
-        modules: [
-          'Case Management & Deceased Records',
-          'Family Management & Relations',
-          'Package Selection & Service Bundles',
-          'Inventory & Coffin Stock Control',
-          'Payments, Invoicing & Policy Sync'
-        ]
+        href: '/industries#funeral'
       },
       {
         id: 'logistics-os',
         name: 'Logistics OS',
-        target: 'For logistics & transport companies',
+        subtitle: 'Fleet Telemetry & SADC Corridors',
+        description: 'Cross-border fleet management, real-time vehicle telemetry, digital waybills, customs clearance, and border workflow automation.',
         icon: 'Truck',
-        modules: [
-          'Fleet Management & Telemetry',
-          'Real-time Vehicle & Cargo Tracking',
-          'Digital Waybills & Manifests',
-          'Customs & SADC Border Workflows'
-        ]
+        href: '/industries#logistics'
       },
       {
         id: 'health-os',
-        name: 'Health OS',
-        target: 'For clinics & healthcare providers',
+        name: 'Healthcare OS',
+        subtitle: 'Clinical Practice & Patient Records',
+        description: 'Manage patient case records, doctor appointments, consultation histories, electronic prescriptions, and medical billing.',
         icon: 'Activity',
-        modules: [
-          'Patient Case Records & History',
-          'Doctor Appointments & Schedules',
-          'Electronic Prescriptions',
-          'Medical Billing & Medical Aid Claims'
-        ]
+        href: '/industries#healthcare'
       },
       {
         id: 'trade-os',
         name: 'Trade OS',
-        target: 'For B2B commerce & distributors',
+        subtitle: 'B2B SADC Trade & Procurement',
+        description: 'Cross-border B2B procurement network connecting verified suppliers, buyers, and logistics providers with trade finance tracking.',
         icon: 'Globe',
-        modules: [
-          'Procurement & Purchase Orders',
-          'Supplier Catalog & Directory',
-          'Customer Orders & Fulfillment',
-          'Trade Analytics & Commodity Tracking'
-        ]
+        href: '/industries#trade'
+      },
+      {
+        id: 'government-os',
+        name: 'Government OS',
+        subtitle: 'Sovereign Digital Public Infrastructure',
+        description: 'Air-gapped data sovereignty, regulatory audit logging, citizen registry automation, and inter-departmental record exchange.',
+        icon: 'Building2',
+        href: '/industries#government'
       }
-    ],
-    mariAI: {
-      title: 'Mari AI — Your Intelligent Business Assistant',
-      subtitle: 'Mari AI is your intelligent business assistant that understands your operations, documents, and workflows.',
-      capabilities: [
-        { title: 'Ask Questions About Your Business', desc: 'Query operational metrics, revenue data, and customer histories in plain language.' },
-        { title: 'Generate Strategic Insights', desc: 'Receive proactive recommendations on conversion funnels, inventory levels, and bottlenecks.' },
-        { title: 'Search Company Knowledge', desc: 'Sub-second vector retrieval across all uploaded company documents, policies, and contracts.' },
-        { title: 'Assist Employees', desc: 'Guide staff through standardized operational procedures, case files, and client requests.' },
-        { title: 'Automate Repetitive Work', desc: 'Trigger document generation, email drafts, and database updates automatically.' }
-      ]
-    }
+    ]
   },
   {
-    id: 'mari-ai',
-    slug: 'mari-ai',
-    name: 'Mari AI Engine',
-    tagline: 'Reasoning AI Agents for Enterprise Intelligence',
-    category: 'Artificial Intelligence / LLM Studio',
+    id: 'ralion-mari-ai',
+    slug: 'ralion-mari-ai',
+    name: 'Mari AI',
+    tagline: 'Your AI Business Growth Partner',
+    category: 'Embedded AI Intelligence / Growth Partner',
     status: 'Available',
-    statusBadge: 'Core AI Engine',
+    statusBadge: 'Core Flagship AI',
     badgeColor: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-    description: 'Mari AI powers intelligent contextual reasoning, document knowledge extraction, and task automation across all Ras Ali Labs products.',
+    philosophy: 'Mari AI does not merely answer questions. Mari analyzes your business reality, discovers opportunities, and formulates strategies that drive revenue.',
+    description: 'An embedded executive AI growth partner that works within your tenant-scoped business context to deliver strategic insights, market research, and campaign direction.',
+    longDescription: `Mari AI is the flagship reasoning engine inside Ralion OS. Designed as an executive growth partner rather than a generic chatbot, Mari accesses your organization's permission-bounded business context to perform deep pipeline analysis, generate market research briefs, identify dormant revenue opportunities, and orchestrate automated creative campaigns.`,
     icon: 'Bot',
-    accentColor: '#A855F7'
+    appUrl: '/ralion/mari-ai',
+    accentColor: '#A855F7',
+    cta: {
+      primary: { text: 'Meet Mari AI', href: '/ralion/register' },
+      secondary: { text: 'Book Demo', href: '/request-demo' },
+      login: { text: 'Login', href: '/ralion/login' },
+      launch: { text: 'Launch Mari AI', href: '/ralion/mari-ai' }
+    },
+    seo: {
+      title: 'Mari AI — Your AI Business Growth Partner | Ralion OS',
+      description: 'Experience Mari AI. Executive business intelligence, strategic growth planning, automated creative direction, and closed-loop performance learning.'
+    },
+    hero: {
+      title: 'Mari AI',
+      tagline: 'Your AI Business Growth Partner',
+      subtitle: 'Embedded strategic intelligence that understands your pipeline, customers, and market opportunities.',
+      stats: [
+        { label: 'Strategic Reasoning', value: 'Autonomous' },
+        { label: 'Knowledge Scope', value: 'Tenant Isolated' },
+        { label: 'Campaign Direction', value: 'Closed-Loop' },
+        { label: 'Response Latency', value: '< 800ms' }
+      ]
+    },
+    features: [
+      {
+        id: 'strategic-advisor',
+        title: 'Executive Strategic Recommendations',
+        description: 'Proactive analysis of your sales pipeline, customer conversion rates, and revenue trends with actionable growth steps.',
+        icon: 'Bot'
+      },
+      {
+        id: 'market-research',
+        title: 'Automated Market & Competitor Intelligence',
+        description: 'Comprehensive industry research briefs analyzing market positioning, pricing benchmarks, and buyer sentiment.',
+        icon: 'Sparkles'
+      },
+      {
+        id: 'creative-orchestration',
+        title: 'Campaign & Creative Direction',
+        description: 'Directs Growth Studio to formulate copy, commercial poster prompts (FLUX), and video concepts (CogVideoX).',
+        icon: 'TrendingUp'
+      },
+      {
+        id: 'closed-loop-learning',
+        title: 'Continuous Performance Learning',
+        description: 'Analyzes engagement and lead conversions from published social campaigns to refine future recommendations.',
+        icon: 'Activity'
+      }
+    ]
   },
   {
-    id: 'ralion-trade',
-    slug: 'ralion-trade',
-    name: 'Ralion Trade',
-    tagline: 'Sovereign B2B Trade & Logistics Infrastructure',
-    category: 'Supply Chain / B2B Trade',
-    status: 'Live',
-    statusBadge: 'Trade Network',
+    id: 'ralion-crm',
+    slug: 'ralion-crm',
+    name: 'Ralion CRM',
+    tagline: 'Customer & Pipeline Intelligence',
+    category: 'Customer Intelligence / Pipeline Management',
+    status: 'Available',
+    statusBadge: 'Core Workspace Suite',
+    badgeColor: 'bg-brand-gold/10 text-brand-gold border-brand-gold/20',
+    philosophy: 'Ralion CRM connects customer memory directly to automated growth workflows and executive intelligence.',
+    description: 'Unified customer records, dynamic deal pipelines, contextual interaction history, and predictive opportunity scoring.',
+    longDescription: `Ralion CRM is the operational backbone of Ralion OS. It brings customer records, sales deals, interaction timelines, and document vaults together into a single predictive environment. Embedded with Mari AI, Ralion CRM scores deal velocity, automates client follow-ups, and surfaces high-value opportunities before they turn cold.`,
+    icon: 'UserCheck',
+    appUrl: '/ralion/crm',
+    accentColor: '#D4AF37',
+    cta: {
+      primary: { text: 'Start Free CRM', href: '/ralion/register' },
+      secondary: { text: 'Request Demo', href: '/request-demo' },
+      login: { text: 'Login', href: '/ralion/login' },
+      launch: { text: 'Launch Ralion CRM', href: '/ralion/crm' }
+    },
+    seo: {
+      title: 'Ralion CRM — Customer & Pipeline Intelligence | Ralion OS',
+      description: 'Accelerate deal closing with Ralion CRM. Contextual customer memory, dynamic pipelines, predictive opportunity scoring, and automated follow-ups.'
+    },
+    hero: {
+      title: 'Ralion CRM',
+      tagline: 'Customer & Pipeline Intelligence',
+      subtitle: 'Predict opportunities, automate follow-ups, and manage relationships in a unified intelligence workspace.',
+      stats: [
+        { label: 'Pipeline Automation', value: 'Real-time' },
+        { label: 'Deal Velocity', value: '+34%' },
+        { label: 'Customer Memory', value: 'Tenant Vault' },
+        { label: 'Lead Scoring', value: 'Predictive' }
+      ]
+    },
+    features: [
+      {
+        id: 'customer-memory',
+        title: 'Contextual Customer Memory',
+        description: 'Unified client timelines logging all interactions, documents, deals, and notes with sub-second retrieval.',
+        icon: 'Database'
+      },
+      {
+        id: 'deal-pipeline',
+        title: 'Dynamic Stage Progression',
+        description: 'Visual Kanban pipeline with automated bottlenecks detection, stale deal warnings, and revenue forecasting.',
+        icon: 'BarChart3'
+      },
+      {
+        id: 'mari-sales-copilot',
+        title: 'Mari AI Sales Co-Pilot',
+        description: 'Drafts personalized email responses, prepares meeting backgrounders, and scores conversion probability.',
+        icon: 'Bot'
+      },
+      {
+        id: 'automated-triggers',
+        title: 'Event-Driven Follow-ups',
+        description: 'Automated reminders and tasks triggered by deal stage changes, contract signings, or customer milestones.',
+        icon: 'Zap'
+      }
+    ]
+  },
+  {
+    id: 'ralion-growth-intelligence',
+    slug: 'ralion-growth-intelligence',
+    name: 'Growth Studio & Social Intelligence',
+    tagline: 'AI Creative Generation & Multi-Channel Publishing',
+    category: 'Growth Studio / Social Intelligence',
+    status: 'Available',
+    statusBadge: 'Growth Powerhouse',
     badgeColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-    description: 'Cross-border B2B trade infrastructure connecting buyers, sellers, customs brokers, and transport fleets across Africa.',
-    icon: 'Globe',
-    accentColor: '#10B981'
+    philosophy: 'Connect marketing directly to sales revenue through AI creative production and autonomous multi-channel distribution.',
+    description: 'Studio-grade commercial poster generation (FLUX), AI video reels (CogVideoX), multi-channel social publishing, and unified analytics.',
+    longDescription: `Ralion Growth Studio & Social Intelligence turns your brand into an autonomous content powerhouse. Working alongside Mari AI, the studio generates commercial-grade posters with FLUX, renders 6-second video reels with CogVideoX, and distributes scheduled content across Facebook, Instagram, LinkedIn, and X with complete engagement analytics.`,
+    icon: 'TrendingUp',
+    appUrl: '/ralion/growth',
+    accentColor: '#10B981',
+    cta: {
+      primary: { text: 'Start Growth Studio', href: '/ralion/register' },
+      secondary: { text: 'Request Demo', href: '/request-demo' },
+      login: { text: 'Login', href: '/ralion/login' },
+      launch: { text: 'Launch Growth Studio', href: '/ralion/growth' }
+    },
+    seo: {
+      title: 'Ralion Growth Studio & Social Intelligence | Ralion OS',
+      description: 'Scale your brand with AI creative generation (FLUX, CogVideoX), multi-channel social publishing, and closed-loop performance analytics.'
+    },
+    hero: {
+      title: 'Growth Studio & Social Intelligence',
+      tagline: 'AI Creative Studio & Multi-Channel Publishing',
+      subtitle: 'Generate commercial posters and video reels with AI, schedule across social networks, and track closed-loop revenue growth.',
+      stats: [
+        { label: 'Creative Studio', value: 'FLUX + CogVideoX' },
+        { label: 'Social Channels', value: 'Multi-Platform' },
+        { label: 'Campaign Speed', value: 'Instant' },
+        { label: 'Performance Feedback', value: 'Closed-Loop' }
+      ]
+    },
+    features: [
+      {
+        id: 'flux-studio',
+        title: 'FLUX Commercial Poster Studio',
+        description: 'Generate high-resolution advertising graphics and promotional posters tailored to your exact brand aesthetics.',
+        icon: 'Sparkles'
+      },
+      {
+        id: 'cogvideox-reels',
+        title: 'CogVideoX Video Creative Engine',
+        description: 'Render commercial short-form video reels for Instagram Reels, TikTok, and YouTube Shorts in seconds.',
+        icon: 'Activity'
+      },
+      {
+        id: 'social-composer',
+        title: 'Multi-Platform Social Composer',
+        description: 'Compose, preview, and schedule content across Facebook, Instagram, LinkedIn, and X from a single queue.',
+        icon: 'Share2'
+      },
+      {
+        id: 'performance-analytics',
+        title: 'Closed-Loop Engagement Telemetry',
+        description: 'Real-time impression, click, and conversion analytics fed directly back into Mari AI for continuous optimization.',
+        icon: 'BarChart3'
+      }
+    ]
   }
 ];
 

@@ -27,67 +27,82 @@ const Footer = () => {
                 className="h-12 md:h-14 w-auto object-contain"
               />
             </Link>
-            <p className="text-brand-gold font-bold text-xs tracking-wider uppercase mb-2">
-              Ras Ali Labs
+            <p className="text-brand-gold font-bold text-xs tracking-wider uppercase mb-1">
+              RALION OS
+            </p>
+            <p className="text-white/90 font-medium text-xs mb-2">
+              Empowered to Prosper
             </p>
             <p className="text-white/60 text-xs leading-relaxed mb-4">
-              Building AI-powered business operating systems that automate operations, connect teams, and accelerate growth.
+              Ras Ali Labs builds AI-powered business operating systems that combine intelligent automation, CRM, social intelligence, growth tools, and sovereign enterprise infrastructure.
             </p>
           </div>
 
-          {/* Core Products */}
+          {/* Core Platform Ecosystem */}
           <div>
-            <h4 className="text-white/40 text-xs font-bold uppercase tracking-wider mb-3">Products</h4>
+            <h4 className="text-white/40 text-xs font-bold uppercase tracking-wider mb-3">Ralion Ecosystem</h4>
             <div className="flex flex-col gap-2 text-xs">
               <Link to="/products/ralion" className="text-white/70 hover:text-brand-gold transition-colors">
-                Ralion Business OS
+                Ralion OS Overview
+              </Link>
+              <Link to="/products/ralion-mari-ai" className="text-white/70 hover:text-brand-gold transition-colors">
+                Mari AI Growth Partner
               </Link>
               <Link to="/products/ralion-crm" className="text-white/70 hover:text-brand-gold transition-colors">
                 Ralion CRM
               </Link>
-              <Link to="/products/ralion-social-intelligence" className="text-white/70 hover:text-brand-gold transition-colors">
-                Ralion Social Intelligence Marketing
+              <Link to="/products/ralion-growth-intelligence" className="text-white/70 hover:text-brand-gold transition-colors">
+                Growth Studio & Creatives
+              </Link>
+              <Link to="/products/ralion-growth-intelligence#social" className="text-white/70 hover:text-brand-gold transition-colors">
+                Social Intelligence & Publishing
+              </Link>
+              <Link to="/pricing" className="text-brand-gold font-medium hover:underline transition-colors">
+                Plans & Pricing
               </Link>
             </div>
           </div>
 
-          {/* Industry Solutions */}
+          {/* Industry Operating Systems */}
           <div>
-            <h4 className="text-white/40 text-xs font-bold uppercase tracking-wider mb-3">Solutions</h4>
+            <h4 className="text-white/40 text-xs font-bold uppercase tracking-wider mb-3">Industry OS</h4>
             <div className="flex flex-col gap-2 text-xs">
-              <Link to="/solutions" className="text-white/70 hover:text-brand-gold transition-colors">
-                Funeral OS
+              <Link to="/industries#funeral" className="text-white/70 hover:text-brand-gold transition-colors">
+                Ralion Funeral OS
               </Link>
-              <Link to="/solutions" className="text-white/70 hover:text-brand-gold transition-colors">
-                Logistics OS
+              <Link to="/industries#logistics" className="text-white/70 hover:text-brand-gold transition-colors">
+                Ralion Logistics OS
               </Link>
-              <Link to="/solutions" className="text-white/70 hover:text-brand-gold transition-colors">
-                Health OS
+              <Link to="/industries#healthcare" className="text-white/70 hover:text-brand-gold transition-colors">
+                Ralion Healthcare OS
               </Link>
-              <Link to="/solutions" className="text-white/70 hover:text-brand-gold transition-colors">
-                Trade OS
+              <Link to="/industries#trade" className="text-white/70 hover:text-brand-gold transition-colors">
+                Ralion Trade OS
+              </Link>
+              <Link to="/industries#government" className="text-white/70 hover:text-brand-gold transition-colors">
+                Ralion Government OS
               </Link>
             </div>
           </div>
 
           {/* Company & Support */}
           <div>
-            <h4 className="text-white/40 text-xs font-bold uppercase tracking-wider mb-3">Company</h4>
+            <h4 className="text-white/40 text-xs font-bold uppercase tracking-wider mb-3">Ras Ali Labs</h4>
             <div className="flex flex-col gap-2 text-xs">
               <Link to="/about" className="text-white/70 hover:text-brand-gold transition-colors">
-                About Ras Ali Labs
+                About Our Technology
               </Link>
-              <Link to="/industries" className="text-white/70 hover:text-brand-gold transition-colors">
-                Industries
-              </Link>
-              <Link to="/work" className="text-white/70 hover:text-brand-gold transition-colors">
-                Works & Projects
+              <Link to="/solutions" className="text-white/70 hover:text-brand-gold transition-colors">
+                Enterprise Solutions
               </Link>
               <Link to="/request-demo" className="text-brand-gold font-semibold hover:underline transition-colors">
-                Request Demo
+                Book Enterprise Demo
               </Link>
               <Link to="/support" className="text-white/70 hover:text-brand-gold transition-colors">
-                Support
+                Product Support
+              </Link>
+              <Link to="/ralion/register" className="text-white/70 hover:text-brand-gold transition-colors">
+                Start Ralion Free
               </Link>
             </div>
           </div>

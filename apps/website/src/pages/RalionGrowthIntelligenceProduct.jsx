@@ -7,16 +7,16 @@ import {
   TrendingUp,
   Sparkles,
   ShieldCheck,
-  Users,
-  Activity,
-  Layers,
   Share2,
   Zap,
   Globe,
   Bot,
   ArrowRight,
   Send,
-  CheckCircle2
+  CheckCircle2,
+  Activity,
+  Layers,
+  BarChart3
 } from 'lucide-react';
 
 const RalionGrowthIntelligenceProduct = () => {
@@ -30,168 +30,151 @@ const RalionGrowthIntelligenceProduct = () => {
     setLoadingStrategy(true);
     analytics.trackProductEvent('mari_ai_growth_demo', { prompt: strategyPrompt });
     const res = await generateMariAIResponse(
-      `Develop an enterprise AI growth strategy and content campaign plan for: ${strategyPrompt}`,
+      `Develop an enterprise AI growth strategy and creative campaign plan for: ${strategyPrompt}`,
       'meta-llama/Llama-3.3-70B-Instruct-Turbo',
-      'You are Mari AI Marketing Strategist inside Ralion AI Growth Engine. Provide a high-impact, brand intelligence strategy, audience analysis, and CRM-connected campaign plan.'
+      'You are Mari AI — Your AI Business Growth Partner inside Ralion OS. Formulate a commercial growth brief, FLUX poster directions, CogVideoX reel concepts, and multi-channel publishing schedule.'
     );
     setAiStrategy(res);
     setLoadingStrategy(false);
   };
 
   return (
-    <div className="min-h-screen bg-[#1c1c1c] text-white pt-28 pb-20 px-6 lg:px-12">
+    <div className="min-h-screen bg-[#181818] text-white pt-32 pb-24 px-6 lg:px-12">
       <SEO
-        title="Ralion Growth Intelligence — AI Marketing Platform | Ras Ali Labs"
-        description="Create, optimize and measure marketing campaigns using AI that understands your business."
+        title="Growth Studio & Social Intelligence | Ralion OS"
+        description="Autonomous AI creative studio (FLUX, CogVideoX), multi-channel social publishing, and closed-loop performance analytics."
+        url="/products/ralion-growth-intelligence"
       />
 
       <div className="max-w-7xl mx-auto">
         {/* Hero Section */}
-        <div className="text-center max-w-4xl mx-auto mb-16">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400 text-xs font-semibold uppercase tracking-wider mb-4">
-            <TrendingUp size={14} /> Priority Core Product • Ralion Growth Intelligence
+        <div className="text-center max-w-4xl mx-auto mb-20">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-semibold uppercase tracking-wider mb-4">
+            <TrendingUp size={14} /> Growth Studio & Social Intelligence
           </div>
-          <h1 className="text-4xl md:text-6xl font-extrabold mb-4 bg-gradient-to-r from-white via-white/90 to-white/70 bg-clip-text text-transparent">
-            Ralion Growth Intelligence
+          <h1 className="text-4xl md:text-6xl font-extrabold mb-4 tracking-tight bg-gradient-to-r from-white via-white/95 to-white/70 bg-clip-text text-transparent">
+            Autonomous Creative Studio & Social Intelligence
           </h1>
-          <p className="text-brand-gold font-bold text-lg mb-6">
-            "Create, optimize and measure marketing campaigns using AI that understands your business."
+          <p className="text-brand-gold font-bold text-xl md:text-2xl mb-6">
+            Empowered to Prosper — Turn your brand into a self-optimizing revenue engine.
           </p>
-          <p className="text-white/70 text-lg max-w-3xl mx-auto leading-relaxed mb-8">
-            Positioned as your autonomous AI Marketing Manager. The system understands your company goals, learns brand identity, generates campaigns, creates content, recommends actions, analyzes results, and connects marketing activity to revenue.
+          <p className="text-white/70 text-base md:text-lg max-w-3xl mx-auto leading-relaxed mb-10">
+            Generate studio-grade commercial posters with FLUX, render 6-second marketing video reels with CogVideoX, compose and schedule across Facebook, Instagram, LinkedIn, and X, and measure real closed-loop revenue growth.
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-4">
             <Link
-              to="/request-demo"
-              className="px-8 py-4 rounded-xl bg-gradient-to-r from-brand-gold to-amber-500 text-black font-bold text-sm hover:scale-105 transition-all shadow-lg shadow-brand-gold/20 flex items-center gap-2"
+              to="/ralion/register"
+              className="px-8 py-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-black font-bold text-sm hover:scale-105 transition-all shadow-xl shadow-emerald-500/25 flex items-center gap-2"
             >
-              Request Enterprise Demo <ArrowRight size={16} />
+              Start Growth Studio <ArrowRight size={16} />
             </Link>
             <Link
-              to="/ralion/community"
-              className="px-8 py-4 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-sm transition-all border border-white/10"
+              to="/request-demo"
+              className="px-8 py-4 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-sm transition-all border border-white/15"
             >
-              Start Free Community Edition
+              Book an Enterprise Demo
             </Link>
           </div>
         </div>
 
-        {/* Live Mari AI Growth Strategist Sandbox */}
-        <div className="bg-[#252525] border border-purple-500/30 rounded-3xl p-8 mb-20 shadow-2xl">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center">
+        {/* Interactive Mari AI Sandbox */}
+        <div className="bg-[#1f1f1f] border border-emerald-500/30 rounded-3xl p-8 mb-20 shadow-2xl">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
               <Sparkles size={20} />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-white">Interactive AI Marketing Strategist Sandbox</h3>
-              <p className="text-white/50 text-xs">Generate enterprise growth campaigns powered by Llama 3.3 70B & Mari AI Reasoning.</p>
+              <h3 className="text-xl font-bold text-white">Interactive Growth Brief Generator</h3>
+              <p className="text-white/50 text-xs">Simulate a campaign strategy brief generated by Mari AI.</p>
             </div>
           </div>
 
-          <form onSubmit={handleGenerateStrategy} className="space-y-4">
-            <div className="flex gap-3">
+          <form onSubmit={handleGenerateStrategy} className="space-y-4 mb-6">
+            <div className="flex flex-col sm:flex-row gap-3">
               <input
                 type="text"
-                placeholder="e.g. Launch SADC cross-border B2B trade campaign targeting logistics directors..."
+                placeholder="e.g. Launch a premium funeral cover campaign targeting corporate families in Botswana..."
                 value={strategyPrompt}
                 onChange={(e) => setStrategyPrompt(e.target.value)}
-                className="flex-1 bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-purple-400"
+                className="flex-1 bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white text-xs focus:outline-none focus:border-emerald-400"
               />
               <button
                 type="submit"
                 disabled={loadingStrategy}
-                className="py-3 px-6 rounded-xl bg-gradient-to-r from-purple-600 to-brand-gold text-white font-bold text-xs hover:scale-105 transition-transform flex items-center gap-2"
+                className="px-6 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs flex items-center justify-center gap-2 shrink-0 transition-colors"
               >
-                {loadingStrategy ? 'Generating Strategy...' : <><Send size={14} /> Generate Growth Plan</>}
+                {loadingStrategy ? 'Generating Strategy...' : 'Generate Brief'} <Send size={14} />
               </button>
             </div>
           </form>
 
           {aiStrategy && (
-            <div className="mt-4 p-4 rounded-xl bg-black/60 border border-purple-500/20 text-xs text-white/90 leading-relaxed font-mono">
-              <div className="text-purple-400 font-bold mb-1 flex items-center gap-1.5">
-                <Bot size={14} /> Mari AI Growth Strategist Output:
-              </div>
+            <div className="p-6 rounded-2xl bg-black/60 border border-emerald-500/20 text-xs text-white/90 leading-relaxed whitespace-pre-wrap">
+              <div className="text-brand-gold font-bold mb-2">Mari AI Strategic Blueprint:</div>
               {aiStrategy}
             </div>
           )}
         </div>
 
-        {/* Growth Engine Features Grid */}
-        <div className="mb-20">
-          <div className="text-center max-w-2xl mx-auto mb-12">
-            <span className="text-brand-gold text-xs font-bold uppercase tracking-widest block mb-2">
-              Autonomous Growth Architecture
-            </span>
-            <h2 className="text-3xl font-extrabold text-white">Features Beyond Traditional Schedulers</h2>
+        {/* 4 Core Pillars of Growth Studio */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-20">
+          <div className="bg-[#1f1f1f] border border-white/10 rounded-3xl p-6 hover:border-emerald-500/40 transition-all">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mb-4">
+              <Sparkles size={20} />
+            </div>
+            <h4 className="text-lg font-bold text-white mb-2">FLUX Poster Studio</h4>
+            <p className="text-white/60 text-xs leading-relaxed">
+              Generate commercial high-resolution advertising graphics and banners tailored to your product catalog.
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-[#252525] border border-white/10 rounded-3xl p-6 hover:border-purple-500/40 transition-all">
-              <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center mb-4">
-                <Sparkles size={20} />
-              </div>
-              <h4 className="text-lg font-bold text-white mb-2">AI Campaign Planning</h4>
-              <p className="text-white/60 text-xs leading-relaxed">Strategic multi-channel campaign blueprints generated automatically from your revenue targets.</p>
+          <div className="bg-[#1f1f1f] border border-white/10 rounded-3xl p-6 hover:border-brand-gold/40 transition-all">
+            <div className="w-10 h-10 rounded-xl bg-brand-gold/10 text-brand-gold flex items-center justify-center mb-4">
+              <Activity size={20} />
             </div>
+            <h4 className="text-lg font-bold text-white mb-2">CogVideoX Video Reels</h4>
+            <p className="text-white/60 text-xs leading-relaxed">
+              Render dynamic 6-second video reels for social channels without expensive production overhead.
+            </p>
+          </div>
 
-            <div className="bg-[#252525] border border-white/10 rounded-3xl p-6 hover:border-purple-500/40 transition-all">
-              <div className="w-10 h-10 rounded-xl bg-brand-gold/10 text-brand-gold flex items-center justify-center mb-4">
-                <ShieldCheck size={20} />
-              </div>
-              <h4 className="text-lg font-bold text-white mb-2">Brand Intelligence</h4>
-              <p className="text-white/60 text-xs leading-relaxed">Continuous monitoring of your brand positioning, tone of voice, and competitive market share.</p>
+          <div className="bg-[#1f1f1f] border border-white/10 rounded-3xl p-6 hover:border-purple-500/40 transition-all">
+            <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center mb-4">
+              <Share2 size={20} />
             </div>
+            <h4 className="text-lg font-bold text-white mb-2">Multi-Channel Publish</h4>
+            <p className="text-white/60 text-xs leading-relaxed">
+              Connect social accounts to compose, schedule, and publish content queues from a single unified hub.
+            </p>
+          </div>
 
-            <div className="bg-[#252525] border border-white/10 rounded-3xl p-6 hover:border-purple-500/40 transition-all">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mb-4">
-                <Users size={20} />
-              </div>
-              <h4 className="text-lg font-bold text-white mb-2">Audience Analysis</h4>
-              <p className="text-white/60 text-xs leading-relaxed">Deep customer demographic & psychographic segmentation derived directly from CRM data.</p>
+          <div className="bg-[#1f1f1f] border border-white/10 rounded-3xl p-6 hover:border-blue-500/40 transition-all">
+            <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center mb-4">
+              <BarChart3 size={20} />
             </div>
+            <h4 className="text-lg font-bold text-white mb-2">Closed-Loop Learning</h4>
+            <p className="text-white/60 text-xs leading-relaxed">
+              Real-time impressions, engagement, and conversion telemetry directly instruct Mari AI's next recommendations.
+            </p>
+          </div>
+        </div>
 
-            <div className="bg-[#252525] border border-white/10 rounded-3xl p-6 hover:border-purple-500/40 transition-all">
-              <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center mb-4">
-                <Activity size={20} />
-              </div>
-              <h4 className="text-lg font-bold text-white mb-2">Social Listening</h4>
-              <p className="text-white/60 text-xs leading-relaxed">Real-time sentiment monitoring tracking brand mentions, industry keywords, and purchase intent.</p>
-            </div>
-
-            <div className="bg-[#252525] border border-white/10 rounded-3xl p-6 hover:border-purple-500/40 transition-all">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center mb-4">
-                <Layers size={20} />
-              </div>
-              <h4 className="text-lg font-bold text-white mb-2">Content Strategy</h4>
-              <p className="text-white/60 text-xs leading-relaxed">Data-driven editorial calendars and topical clusters tailored to your target markets.</p>
-            </div>
-
-            <div className="bg-[#252525] border border-white/10 rounded-3xl p-6 hover:border-purple-500/40 transition-all">
-              <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center mb-4">
-                <Share2 size={20} />
-              </div>
-              <h4 className="text-lg font-bold text-white mb-2">Multi-Platform Creation</h4>
-              <p className="text-white/60 text-xs leading-relaxed">Automated generation of long-form articles, executive posts, press releases, and visual assets.</p>
-            </div>
-
-            <div className="bg-[#252525] border border-white/10 rounded-3xl p-6 hover:border-purple-500/40 transition-all">
-              <div className="w-10 h-10 rounded-xl bg-red-500/10 text-red-400 flex items-center justify-center mb-4">
-                <Zap size={20} />
-              </div>
-              <h4 className="text-lg font-bold text-white mb-2">Marketing Automation</h4>
-              <p className="text-white/60 text-xs leading-relaxed">Multi-step nurture workflows connecting engagement signals to sales demo bookings.</p>
-            </div>
-
-            <div className="bg-[#252525] border border-white/10 rounded-3xl p-6 hover:border-purple-500/40 transition-all">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mb-4">
-                <Globe size={20} />
-              </div>
-              <h4 className="text-lg font-bold text-white mb-2">CRM-Connected</h4>
-              <p className="text-white/60 text-xs leading-relaxed">Direct revenue attribution linking marketing campaigns to closed-won deals in Ralion CRM.</p>
+        {/* Enterprise Bottom Banner */}
+        <div className="bg-[#141414] border border-white/10 rounded-3xl p-8 flex flex-col md:flex-row items-center justify-between gap-6 text-xs text-white/70">
+          <div className="flex items-center gap-4">
+            <ShieldCheck size={32} className="text-emerald-400 shrink-0" />
+            <div>
+              <h4 className="text-white font-bold text-sm mb-0.5">Secure Social Connection Architecture</h4>
+              <p>Social authentication tokens are encrypted at rest with server-side secret isolation. Zero third-party data leaks.</p>
             </div>
           </div>
+          <Link
+            to="/ralion/register"
+            className="py-3 px-6 rounded-xl bg-emerald-500 text-black font-bold text-xs hover:scale-105 transition-transform shrink-0"
+          >
+            Launch Growth Studio
+          </Link>
         </div>
       </div>
     </div>

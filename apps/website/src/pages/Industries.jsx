@@ -1,88 +1,24 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import SEO from '../components/common/SEO';
+import { industryOperatingSystems } from '../data/mock';
 import { Building2, Truck, Activity, Landmark, Globe, CheckCircle2, ArrowRight, Sparkles, ShieldCheck } from 'lucide-react';
 
 const Industries = () => {
-  const industryList = [
-    {
-      id: 'funeral',
-      name: 'Ralion Funeral OS',
-      badge: 'Funeral OS',
-      subtitle: 'For Funeral Homes & Mortuary Services',
-      description: 'An AI-powered operating system designed for funeral service providers. Streamline deceased case tracking, family management, and package selection.',
-      icon: Building2,
-      features: [
-        'Case Management & Deceased Records',
-        'Family Management & Relations',
-        'Package Selection & Service Bundles',
-        'Inventory & Coffin Stock Control',
-        'Payments, Invoicing & Policy Sync'
-      ]
-    },
-    {
-      id: 'logistics',
-      name: 'Ralion Logistics OS',
-      badge: 'Logistics OS',
-      subtitle: 'For Cargo Transport & Logistics Operators',
-      description: 'An AI-powered operating system designed for logistics providers. Cross-border fleet management, real-time vehicle telemetry, and SADC corridor tracking.',
-      icon: Truck,
-      features: [
-        'Fleet Management & Telemetry',
-        'Real-time Vehicle & Cargo Tracking',
-        'Digital Waybills & Manifests',
-        'Customs & SADC Border Workflows'
-      ]
-    },
-    {
-      id: 'healthcare',
-      name: 'Ralion Healthcare OS',
-      badge: 'Healthcare OS',
-      subtitle: 'For Medical Clinics, Hospitals & Healthcare Providers',
-      description: 'An AI-powered operating system designed for healthcare providers. Manage patient case records, doctor appointments, and medical aid billing.',
-      icon: Activity,
-      features: [
-        'Patient Case Records & History',
-        'Doctor Appointments & Schedules',
-        'Electronic Prescriptions',
-        'Medical Billing & Medical Aid Claims'
-      ]
-    },
-    {
-      id: 'government',
-      name: 'Government & Public Sector',
-      badge: 'Sovereign Digital Infrastructure',
-      subtitle: 'For National Ministries, Agencies & Public Infrastructure',
-      description: 'Air-gapped data sovereignty, regulatory audit logging, USSD gateway bridges, and multi-departmental workflow orchestration.',
-      icon: Landmark,
-      features: [
-        'Data Sovereignty & On-Premise Enclaves',
-        'Full Regulatory Audit Trail Logging',
-        'USSD & SMS Citizen Gateway Integration',
-        'Multi-Departmental Process Sync'
-      ]
-    },
-    {
-      id: 'trade',
-      name: 'Ralion Trade OS',
-      badge: 'Trade OS',
-      subtitle: 'For B2B Commerce, Distributors & Exporters',
-      description: 'An AI-powered operating system designed for commerce. B2B procurement, supplier directory, customer order fulfillment, and trade analytics.',
-      icon: Globe,
-      features: [
-        'Procurement & Purchase Orders',
-        'Supplier Catalog & Directory',
-        'Customer Orders & Fulfillment',
-        'Trade Analytics & Commodity Tracking'
-      ]
-    }
-  ];
+  const iconMap = {
+    funeral: Building2,
+    logistics: Truck,
+    healthcare: Activity,
+    trade: Globe,
+    government: Landmark,
+  };
 
   return (
-    <div className="min-h-screen bg-[#1c1c1c] text-white pt-28 pb-20 px-6 lg:px-12">
+    <div className="min-h-screen bg-[#181818] text-white pt-32 pb-24 px-6 lg:px-12">
       <SEO
-        title="Industry Solutions | Ras Ali Labs"
-        description="Purpose-built enterprise AI operating systems for Funeral Management, Logistics, Healthcare, Government, and Trade."
+        title="Ralion Industry Operating Systems | Ras Ali Labs"
+        description="Specialized enterprise AI operating systems: Funeral OS, Logistics OS, Healthcare OS, Trade OS, and Government OS."
+        url="/industries"
       />
 
       <div className="max-w-7xl mx-auto">
@@ -91,41 +27,40 @@ const Industries = () => {
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-brand-gold text-xs font-semibold uppercase tracking-wider mb-4">
             <Sparkles size={14} /> Purpose-Built Operating Systems
           </div>
-          <h1 className="text-4xl md:text-6xl font-extrabold mb-4">
-            Enterprise Industry OS Solutions
+          <h1 className="text-4xl md:text-6xl font-extrabold mb-4 tracking-tight">
+            Ralion Industry Operating Systems
           </h1>
-          <p className="text-white/60 text-lg leading-relaxed">
-            Tailored AI operating systems engineered specifically for Funeral Management, Logistics, Healthcare, Government, and Trade.
+          <p className="text-white/70 text-base md:text-lg leading-relaxed">
+            Tailored AI business operating systems engineered specifically for Funeral Management, Logistics, Healthcare, B2B Trade, and Government Public Infrastructure.
           </p>
         </div>
 
         {/* Industry Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
-          {industryList.map((ind) => {
-            const IconComp = ind.icon;
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-20">
+          {industryOperatingSystems.map((ind) => {
+            const IconComp = iconMap[ind.id] || Building2;
             return (
               <div
                 key={ind.id}
                 id={ind.id}
-                className="bg-[#252525] border border-white/10 rounded-3xl p-8 hover:border-brand-gold/40 transition-all flex flex-col justify-between"
+                className="bg-[#1f1f1f] border border-white/10 rounded-3xl p-8 hover:border-brand-gold/40 transition-all flex flex-col justify-between"
               >
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <div className="w-12 h-12 rounded-2xl bg-brand-gold/10 text-brand-gold flex items-center justify-center">
                       <IconComp size={24} />
                     </div>
-                    <span className="px-3 py-1 rounded-full bg-brand-gold/20 text-brand-gold text-[10px] font-bold">
-                      {ind.badge}
+                    <span className="px-3 py-1 rounded-full bg-brand-gold/15 text-brand-gold text-[10px] font-bold">
+                      {ind.metrics}
                     </span>
                   </div>
 
                   <h3 className="text-2xl font-bold text-white mb-1">{ind.name}</h3>
-                  <p className="text-brand-gold text-xs font-medium mb-3">{ind.subtitle}</p>
-
+                  <p className="text-brand-gold text-xs font-semibold mb-3">{ind.tagline}</p>
                   <p className="text-white/60 text-xs mb-6 leading-relaxed">{ind.description}</p>
 
                   <div className="space-y-2 border-t border-white/10 pt-4 mb-8">
-                    {ind.features.map((feat, idx) => (
+                    {ind.capabilities.map((feat, idx) => (
                       <div key={idx} className="flex items-center gap-2 text-xs text-white/80">
                         <CheckCircle2 size={14} className="text-brand-gold shrink-0" />
                         <span>{feat}</span>
@@ -146,7 +81,7 @@ const Industries = () => {
         </div>
 
         {/* Enterprise Security Banner */}
-        <div className="bg-black/40 border border-white/10 rounded-3xl p-8 flex flex-col md:flex-row items-center justify-between gap-6 text-xs text-white/70">
+        <div className="bg-[#141414] border border-white/10 rounded-3xl p-8 flex flex-col md:flex-row items-center justify-between gap-6 text-xs text-white/70">
           <div className="flex items-center gap-4">
             <ShieldCheck size={32} className="text-brand-gold shrink-0" />
             <div>

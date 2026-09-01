@@ -12,7 +12,9 @@ import {
   ChevronDown,
   ChevronUp,
   LifeBuoy,
-  FileText
+  FileText,
+  Sparkles,
+  ShieldCheck
 } from 'lucide-react';
 
 const Support = () => {
@@ -20,27 +22,27 @@ const Support = () => {
 
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
-  const [category, setCategory] = useState('Technical Support');
+  const [category, setCategory] = useState('Ralion OS & Platform');
   const [submitting, setSubmitting] = useState(false);
   const [submittedTicket, setSubmittedTicket] = useState(null);
   const [openFaq, setOpenFaq] = useState(null);
 
   const faqs = [
     {
-      q: 'How does Supabase Single Sign-On (SSO) work across Ras Ali Labs products?',
-      a: 'Your account credentials work seamlessly across Ralion OS, Mari AI, and Ralion Trade. Row-Level Security (RLS) ensures your organization data is isolated and encrypted.'
+      q: 'How does multi-tenant data isolation work in Ralion OS?',
+      a: 'Ralion OS enforces cryptographic tenant isolation and row-level database security. Your business records, customer pipelines, and proprietary knowledge vaults are never shared with other organizations or used to train public AI models.'
     },
     {
-      q: 'Can I upgrade or downgrade my Ralion subscription anytime?',
-      a: 'Yes! You can upgrade from Community Edition to Professional or Enterprise anytime under /account or /pricing with instant feature activation.'
+      q: 'How do monthly AI credits work and when do they replenish?',
+      a: 'Every paid plan (Starter, Professional, Enterprise) and the Free Community tier includes a recurring monthly credit allocation. Credits replenish automatically on your billing renewal date.'
     },
     {
-      q: 'How do I download the Ralion Desktop Application?',
-      a: 'Visit the Download Center at /downloads to get official installers for Windows (.exe), macOS (.dmg), and Linux (.AppImage).'
+      q: 'How do I connect Facebook, Instagram, or other social channels?',
+      a: 'Navigate to Growth Studio / Social Settings inside your Ralion dashboard. Click "Connect Channel" and authenticate via our secure OAuth flow. Your tokens are encrypted at rest with server-side isolation.'
     },
     {
-      q: 'How do Mari AI reasoning credits reset?',
-      a: 'Free Community Edition includes 1,000 Mari AI executions monthly. Professional plans include 50,000 monthly executions and custom model fine-tuning.'
+      q: 'Can I request a custom industry operating system for my sector?',
+      a: 'Yes! Ras Ali Labs engineers custom industry operating systems (such as Funeral OS, Logistics OS, Healthcare OS, Trade OS, and Government OS) tailored to specific enterprise requirements and compliance frameworks.'
     }
   ];
 
@@ -66,62 +68,63 @@ const Support = () => {
       setSubmitting(false);
       setSubject('');
       setMessage('');
-    }, 900);
+    }, 800);
   };
 
   return (
-    <div className="min-h-screen bg-[#1c1c1c] text-white pt-28 pb-20 px-6 lg:px-12">
+    <div className="min-h-screen bg-[#181818] text-white pt-32 pb-24 px-6 lg:px-12">
       <SEO
-        title="Customer Support & Help Center | Ras Ali Labs"
-        description="Get support for Ralion, Mari AI, and Ras Ali Labs products. Submit support tickets and search FAQs."
+        title="Product Support & Help Center | Ralion OS"
+        description="Get official product support for Ralion OS, Mari AI, Billing, Credits, Social Integrations, and Enterprise Architecture."
+        url="/support"
       />
 
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="text-center max-w-3xl mx-auto mb-16">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-brand-gold text-xs font-semibold uppercase tracking-wider mb-4">
-            <LifeBuoy size={14} /> 24/7 Customer Support & Help Center
+            <LifeBuoy size={14} /> Product Support & Help Center
           </div>
-          <h1 className="text-4xl md:text-5xl font-extrabold mb-4">
-            How can we help you today?
+          <h1 className="text-4xl md:text-5xl font-extrabold mb-4 tracking-tight">
+            How can our engineering team assist you?
           </h1>
-          <p className="text-white/60 text-lg">
-            Search our knowledge base, review quick answers, or open a direct ticket with our support engineering team.
+          <p className="text-white/70 text-base md:text-lg leading-relaxed">
+            Search common questions, manage your Ralion workspace, or open a direct ticket with our support engineers in Gaborone.
           </p>
         </div>
 
         {/* Support Options Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
-          <div className="bg-[#252525] border border-white/10 p-6 rounded-3xl text-center">
+          <div className="bg-[#1f1f1f] border border-white/10 p-6 rounded-3xl text-center">
             <div className="w-12 h-12 rounded-2xl bg-brand-gold/10 text-brand-gold flex items-center justify-center mx-auto mb-4">
               <Mail size={24} />
             </div>
-            <h3 className="text-lg font-bold text-white mb-1">Email Support</h3>
+            <h3 className="text-lg font-bold text-white mb-1">Email Product Support</h3>
             <p className="text-white/50 text-xs mb-4">Direct response within 24 hours</p>
-            <a href="mailto:ali@rasalilabs.com" className="text-brand-gold text-xs font-bold hover:underline">
-              ali@rasalilabs.com
+            <a href="mailto:contact@rasalilabs.com" className="text-brand-gold text-xs font-bold hover:underline">
+              contact@rasalilabs.com
             </a>
           </div>
 
-          <div className="bg-[#252525] border border-white/10 p-6 rounded-3xl text-center">
+          <div className="bg-[#1f1f1f] border border-white/10 p-6 rounded-3xl text-center">
             <div className="w-12 h-12 rounded-2xl bg-purple-500/10 text-purple-400 flex items-center justify-center mx-auto mb-4">
               <Phone size={24} />
             </div>
-            <h3 className="text-lg font-bold text-white mb-1">Phone / WhatsApp</h3>
+            <h3 className="text-lg font-bold text-white mb-1">Phone & WhatsApp</h3>
             <p className="text-white/50 text-xs mb-4">Gaborone Support Line</p>
             <a href="https://wa.me/26777150423" target="_blank" rel="noopener noreferrer" className="text-purple-400 text-xs font-bold hover:underline">
               +267 77 150 423
             </a>
           </div>
 
-          <div className="bg-[#252525] border border-white/10 p-6 rounded-3xl text-center">
+          <div className="bg-[#1f1f1f] border border-white/10 p-6 rounded-3xl text-center">
             <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto mb-4">
               <FileText size={24} />
             </div>
-            <h3 className="text-lg font-bold text-white mb-1">Documentation</h3>
-            <p className="text-white/50 text-xs mb-4">Search user guides & API specs</p>
+            <h3 className="text-lg font-bold text-white mb-1">Documentation & Guides</h3>
+            <p className="text-white/50 text-xs mb-4">Platform architecture & API specs</p>
             <a href="/docs" className="text-emerald-400 text-xs font-bold hover:underline">
-              Browse Docs Portal
+              Browse Knowledge Base
             </a>
           </div>
         </div>
@@ -129,9 +132,9 @@ const Support = () => {
         {/* Ticket Submission Form & FAQ Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 mb-16">
           {/* Ticket Form */}
-          <div className="lg:col-span-7 bg-[#252525] border border-white/10 rounded-3xl p-8 shadow-2xl">
+          <div className="lg:col-span-7 bg-[#1f1f1f] border border-white/10 rounded-3xl p-8 shadow-2xl">
             <h3 className="text-2xl font-bold text-white mb-2">Submit Support Ticket</h3>
-            <p className="text-white/50 text-xs mb-6">Database Table: <code className="text-brand-gold font-mono">support_tickets</code></p>
+            <p className="text-white/50 text-xs mb-6">Direct ticket routing to Ralion Support Engineers</p>
 
             {submittedTicket ? (
               <div className="p-6 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs space-y-3">
@@ -142,7 +145,7 @@ const Support = () => {
                 <div>Subject: <strong className="text-white">{submittedTicket.subject}</strong></div>
                 <div>Status: <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">{submittedTicket.status}</span></div>
                 <p className="text-white/70 pt-2 border-t border-emerald-500/20">
-                  Our engineering team has received your ticket. We will respond via email to {user?.email || 'your registered address'}.
+                  Our team has received your ticket. We will reply to {user?.email || 'your registered address'}.
                 </p>
                 <button
                   onClick={() => setSubmittedTicket(null)}
@@ -158,13 +161,14 @@ const Support = () => {
                   <select
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
-                    className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-brand-gold"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white text-xs focus:outline-none focus:border-brand-gold"
                   >
-                    <option value="Technical Support">Technical Support</option>
-                    <option value="Billing & Subscription">Billing & Subscription</option>
+                    <option value="Ralion OS & Platform">Ralion OS & Platform</option>
                     <option value="Mari AI Assistance">Mari AI Assistance</option>
-                    <option value="USSD Gateway & Integrations">USSD Gateway & Integrations</option>
-                    <option value="Feature Request">Feature Request</option>
+                    <option value="Billing, Invoices & Credits">Billing, Invoices & Credits</option>
+                    <option value="Social Integrations & Publishing">Social Integrations & Publishing</option>
+                    <option value="Organization & Workspace Setup">Organization & Workspace Setup</option>
+                    <option value="Enterprise Architecture & SLA">Enterprise Architecture & SLA</option>
                   </select>
                 </div>
 
@@ -173,10 +177,10 @@ const Support = () => {
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Issue connecting Supabase RLS or Mari AI prompt"
+                    placeholder="e.g. Issue connecting Facebook Page or credit allocation inquiry"
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
-                    className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-brand-gold"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white text-xs focus:outline-none focus:border-brand-gold"
                   />
                 </div>
 
@@ -185,10 +189,10 @@ const Support = () => {
                   <textarea
                     required
                     rows={5}
-                    placeholder="Describe your issue or inquiry in detail..."
+                    placeholder="Describe your issue, organization context, or question in detail..."
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
-                    className="w-full bg-black/50 border border-white/10 rounded-xl p-4 text-white text-sm focus:outline-none focus:border-brand-gold"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl p-4 text-white text-xs focus:outline-none focus:border-brand-gold"
                   ></textarea>
                 </div>
 
@@ -214,14 +218,14 @@ const Support = () => {
               <div
                 key={idx}
                 onClick={() => setOpenFaq(openFaq === idx ? null : idx)}
-                className="cursor-pointer bg-[#252525] border border-white/10 p-5 rounded-2xl transition-all hover:border-brand-gold/30"
+                className="cursor-pointer bg-[#1f1f1f] border border-white/10 p-5 rounded-2xl transition-all hover:border-brand-gold/30"
               >
-                <div className="flex items-center justify-between font-bold text-white text-sm">
+                <div className="flex items-center justify-between font-bold text-white text-xs">
                   <span>{faq.q}</span>
-                  {openFaq === idx ? <ChevronUp size={16} className="text-brand-gold" /> : <ChevronDown size={16} className="text-white/40" />}
+                  {openFaq === idx ? <ChevronUp size={16} className="text-brand-gold shrink-0 ml-2" /> : <ChevronDown size={16} className="text-white/40 shrink-0 ml-2" />}
                 </div>
                 {openFaq === idx && (
-                  <p className="text-white/60 text-xs mt-3 pt-3 border-t border-white/10 leading-relaxed">
+                  <p className="text-white/65 text-xs mt-3 pt-3 border-t border-white/10 leading-relaxed">
                     {faq.a}
                   </p>
                 )}

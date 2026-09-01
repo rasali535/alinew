@@ -34,7 +34,7 @@ const Header = () => {
           />
           <div className="hidden sm:flex flex-col border-l border-white/15 pl-3">
             <span className="text-white font-bold text-sm tracking-wider uppercase">Ras Ali Labs</span>
-            <span className="text-brand-gold text-[10px] tracking-widest uppercase font-medium">Enterprise AI Systems</span>
+            <span className="text-brand-gold text-[10px] tracking-widest uppercase font-medium">Empowered to Prosper</span>
           </div>
         </Link>
 
@@ -50,7 +50,7 @@ const Header = () => {
                     {link.name}
                     <ChevronDown size={12} className="transition-transform group-hover:rotate-180" />
                   </button>
-                  <div className="absolute top-full left-0 w-64 bg-[#1c1c1c]/95 backdrop-blur-xl border border-white/10 rounded-xl p-4 shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 translate-y-2 group-hover:translate-y-0 z-50">
+                  <div className="absolute top-full left-0 w-72 bg-[#1c1c1c]/95 backdrop-blur-xl border border-white/10 rounded-xl p-4 shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 translate-y-2 group-hover:translate-y-0 z-50">
                     {link.dropdown.map((section, idx) => (
                       <div key={idx} className={idx > 0 ? "mt-4 pt-4 border-t border-white/5" : ""}>
                         <div className="text-[10px] text-brand-gold uppercase tracking-widest font-bold mb-2 px-2">{section.title}</div>
@@ -88,8 +88,8 @@ const Header = () => {
           })}
         </div>
 
-        {/* Right Section: Request Demo & Auth */}
-        <div className="hidden lg:flex items-center gap-5">
+        {/* Right Section: CTAs & Auth */}
+        <div className="hidden lg:flex items-center gap-4">
           <div className="flex flex-col items-end text-right border-r border-white/10 pr-4">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -100,9 +100,16 @@ const Header = () => {
 
           <Link
             to="/request-demo"
+            className="px-3.5 py-2 rounded-full text-white/80 hover:text-white text-xs font-medium hover:bg-white/5 transition-all"
+          >
+            Book Demo
+          </Link>
+
+          <Link
+            to="/ralion/register"
             className="px-4 py-2 rounded-full bg-gradient-to-r from-brand-gold to-amber-500 text-black text-xs font-bold hover:shadow-lg hover:shadow-brand-gold/20 hover:scale-105 transition-all duration-300 flex items-center gap-1.5"
           >
-            Request Demo <ArrowRight size={12} />
+            Start Ralion <ArrowRight size={12} />
           </Link>
 
           {/* User Account Dropdown */}

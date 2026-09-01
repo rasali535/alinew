@@ -24,7 +24,7 @@ const getApiUrl = () => {
         }
     }
 
-    console.log('--- Ziggy Debug ---');
+    console.log('--- Mari AI Debug ---');
     console.log('Environment variable VITE_API_URL:', import.meta.env.VITE_API_URL);
     console.log('Computed API_URL:', url);
     console.log('-------------------');
@@ -46,39 +46,35 @@ const chatAxios = axios.create({
 });
 
 // Mascot Image Path
-const MASCOT_IMAGE = '/assets/images/ziggie-mascot.jpeg';
+const MASCOT_IMAGE = '/assets/images/logo.png';
 
 const QUICK_REPLIES = {
-    '🚀 Enterprise Solutions': "Ras Ali Labs provides advanced Enterprise AI technology. Here are our core offerings:\n\n1. Ralion OS (Business Operating System)\n2. Custom LLM & Mari AI Agents\n3. Sovereign Cloud & Database Architecture\n4. USSD-to-Web Infrastructure\n\nWhich area are you looking to explore?",
-    '📅 Request Demo': "Let's innovate together! ⚡ I can help you schedule a demo or consultation with the Ras Ali Labs team.\n\nPlease tell me what you specifically need (e.g., 'I want to see Ralion CRM in action' or 'We need a custom AI agent'), and share your email/phone so we can confirm the slot.",
-    '📍 Location': "Ras Ali Labs is headquartered in Gaborone, Botswana. 🇧🇼 We build sovereign digital infrastructure for enterprises globally.",
-    '🤖 Who is Ziggy?': "Greetings! I'm Ziggy, the primary AI assistant for Ras Ali Labs. I'm powered by the Mari AI reasoning engine. I'm here to guide you through our enterprise systems, documentation, and help connect you with our engineering team."
+    '🚀 Ralion OS Platform': "Ralion OS is an AI Business Operating System that brings business operations, CRM, growth strategy, social intelligence, and automated creative generation into one unified workspace.\n\nKey capabilities include:\n1. Mari AI Growth Partner\n2. Ralion CRM & Pipeline Intelligence\n3. Growth Studio (FLUX & CogVideoX AI)\n4. Social Intelligence & Publishing\n5. Sovereign Multi-Tenant Security\n\nWould you like to explore a specific capability or start a free trial?",
+    '💎 Mari AI Capabilities': "I'm Mari AI — Your AI Business Growth Partner embedded directly inside Ralion OS. Working within your organization's secure business context, I assist with:\n\n• Strategic Growth & Market Analysis\n• Customer & Pipeline Forecasting\n• Automated Social Campaign & Creative Direction\n• Closed-Loop Analytics Optimization\n\nHow can I help accelerate your business today?",
+    '💳 Plans & Pricing': "Ralion OS offers 4 transparent tiers:\n\n• **Community**: Free Forever (100 credits/mo)\n• **Starter**: $19/mo (1,000 credits/mo)\n• **Professional**: $49/mo (5,000 credits/mo)\n• **Enterprise**: $199/mo (25,000 credits/mo)\n\nAll paid plans include live PayPal subscription billing, multi-workspace isolation, and credit quotas.",
+    '📍 About Ras Ali Labs': "Ras Ali Labs (Pty) Ltd is an African enterprise AI technology company based in Gaborone, Botswana. 🇧🇼\n\nOur philosophy is 'Empowered to Prosper' — engineering sovereign business operating systems that power the next generation of companies."
 };
 
 const LOCAL_KNOWLEDGBASE = [
     {
-        patterns: [/service/i, /what.*do/i, /offer/i, /help.*with/i],
-        response: "Ras Ali Labs offers premium Enterprise AI and Software solutions:\n\n• **Enterprise AI**: Custom LLMs, Mari AI Reasoning Agents, and Vector Database Search.\n• **Business Operating Systems**: Implementation of Ralion OS tailored for Funeral, Logistics, and Health sectors.\n• **Software Architecture**: Micro-frontends, Supabase integrations, and high-performance React applications.\n• **Automation**: Event-driven business triggers and USSD-to-Web gateways.\n\nWhich of these solutions are you looking for?"
+        patterns: [/service/i, /what.*do/i, /offer/i, /help.*with/i, /product/i],
+        response: "Ras Ali Labs builds AI Business Operating Systems and enterprise infrastructure:\n\n• **RALION OS**: Flagship AI Business Operating System.\n• **MARI AI**: Your AI Business Growth Partner.\n• **Growth Studio & Social**: AI creative generation, multi-channel publishing, and performance learning.\n• **Industry OS**: Tailored operating systems for Funeral, Logistics, Healthcare, Trade, and Government.\n\nWhich solution would you like to explore?"
     },
     {
         patterns: [/demo/i, /book/i, /hire/i, /schedule/i, /consultation/i, /meeting/i],
-        response: "Ready to transform your enterprise? 🚀 To schedule a demo or consultation with Ras Ali Labs, just drop your details (Name, Email/Phone) and tell me a bit about your organization's needs. I'll make sure our engineering team connects with you ASAP!"
+        response: "Ready to empower your business? 🚀 To schedule an enterprise demonstration or consult with our team in Gaborone, please share your details (Name, Email, Organization) and we'll arrange a walkthrough of Ralion OS!"
     },
     {
         patterns: [/who.*ras/i, /about.*ras/i, /company/i, /labs/i],
-        response: "Ras Ali Labs is a premier enterprise AI technology company based in Gaborone, Botswana. 🇧🇼\n\nWe build intelligent operating systems, business automation platforms, and sovereign digital infrastructure designed to help organizations automate operations and make smarter decisions."
-    },
-    {
-        patterns: [/work/i, /portfolio/i, /project/i, /example/i, /product/i, /system/i],
-        response: "Our ecosystem includes several flagship products and platforms! 🚀\n\n• **Ralion OS**: The comprehensive AI business operating system.\n• **Mari AI Engine**: Embedded reasoning and document intelligence.\n• **TradeGrid Africa**: Sovereign B2B trade infrastructure.\n• **Custom Platforms**: Various high-performance digital platforms across logistics, education, and finance.\n\nYou can explore our 'Products' or 'Works' sections for a deeper look."
+        response: "Ras Ali Labs (Pty) Ltd is an African enterprise AI technology company based in Gaborone, Botswana. 🇧🇼\n\nWe build intelligent business operating systems that become part of how organizations operate, combining automated workflows, sovereign data isolation, and embedded AI growth intelligence."
     },
     {
         patterns: [/price/i, /cost/i, /how.*much/i, /rate/i, /pricing/i],
-        response: "Enterprise pricing varies depending on the scale of the implementation, required AI reasoning capabilities, and infrastructure demands. 💎 To give you an accurate quote for Ralion OS or a custom build, we'll need a few details about your enterprise. Shall we get your contact info so our team can send you a breakdown?"
+        response: "Ralion OS offers 4 simple plans:\n\n• **Community**: Free Forever ($0/mo, 100 AI credits)\n• **Starter**: $19/month (1,000 AI credits)\n• **Professional**: $49/month (5,000 AI credits)\n• **Enterprise**: $199/month (25,000 AI credits)\n\nYou can start immediately or upgrade through our secure subscription portal."
     },
     {
-        patterns: [/hello/i, /hi /i, /yo/i, /hey/i],
-        response: "Greetings! Ziggy here. Systems online. How can I assist you with Ras Ali Labs' enterprise solutions today?"
+        patterns: [/hello/i, /hi /i, /yo/i, /hey/i, /mari/i],
+        response: "Greetings! I'm Mari AI — Your AI Business Growth Partner for Ralion OS. How can I assist you with your business operations or growth strategy today?"
     }
 ];
 
@@ -117,16 +113,16 @@ export default function Chatbot() {
             await chatAxios.post('/api/leads', {
                 sessionId,
                 ...leadFormData,
-                source: 'ziggy_web_intro'
+                source: 'mari_ai_web_intro'
             });
 
             localStorage.setItem('chat_lead_info', JSON.stringify(leadFormData));
             setShowLeadForm(false);
-            setMessages(prev => [...prev, { role: 'assistant', content: `Excellent! Nice to meet you, ${leadFormData.name}. 🚀 How can I help you explore Ras Ali Labs' ecosystem today?` }]);
+            setMessages(prev => [...prev, { role: 'assistant', content: `Excellent! Welcome, ${leadFormData.name}. 🚀 I'm Mari AI, your Business Growth Partner. How can I assist you in exploring Ralion OS today?` }]);
         } catch (error) {
             console.error('Failed to save lead info:', error);
             setShowLeadForm(false);
-            setMessages(prev => [...prev, { role: 'assistant', content: "Thanks for the info! How can I help you with our enterprise solutions today?" }]);
+            setMessages(prev => [...prev, { role: 'assistant', content: "Thank you! How can I assist you with Ralion OS and enterprise AI solutions today?" }]);
         } finally {
             setIsLoading(false);
         }
@@ -141,7 +137,7 @@ export default function Chatbot() {
             setMessages([
                 {
                     role: 'assistant',
-                    content: "Greetings! I'm Ziggy, the AI assistant for Ras Ali Labs. ⚡ I'm here to help you navigate our enterprise systems, Ralion OS, and AI automation solutions.\n\nI can assist you with product demos, documentation, or technical consultations.\n\nBefore we dive in, what's your name?"
+                    content: "Greetings! I'm Mari AI — Your AI Business Growth Partner for Ralion OS. ⚡\n\nI can assist you with platform capabilities, growth workflows, enterprise security, or connecting with our engineering team in Botswana.\n\nTo get started, what's your name?"
                 }
             ]);
         } else {
@@ -149,7 +145,7 @@ export default function Chatbot() {
             setMessages([
                 {
                     role: 'assistant',
-                    content: `Welcome back, ${leadInfo.name}! 🚀 Ziggy here. How can I assist you with our enterprise solutions today?`
+                    content: `Welcome back, ${leadInfo.name}! 🚀 Mari AI here. How can I assist your business growth today?`
                 }
             ]);
         }
@@ -162,18 +158,18 @@ export default function Chatbot() {
 
         if (!storedSessionId) {
             try {
-                console.log('Ziggy attempting connection to:', `${API_URL}/api/sessions`);
+                console.log('Mari AI attempting connection to:', `${API_URL}/api/sessions`);
                 const response = await chatAxios.post('/api/sessions', {
                     userId: `user-${Math.random().toString(36).substr(2, 9)}`,
-                    metadata: { source: 'web_ziggy' }
+                    metadata: { source: 'web_mari_ai' }
                 });
                 storedSessionId = response.data?.id;
                 if (storedSessionId) {
                     localStorage.setItem('chat_session_id', storedSessionId);
-                    console.log('Ziggy Connected! Session:', storedSessionId);
+                    console.log('Mari AI Connected! Session:', storedSessionId);
                 }
             } catch (error) {
-                console.warn('Ziggy Connection Notice:', error.message);
+                console.warn('Mari AI Connection Notice:', error.message);
                 storedSessionId = `session-local-${Math.random().toString(36).substr(2, 9)}-${Date.now()}`;
                 localStorage.setItem('chat_session_id', storedSessionId);
             }
@@ -235,7 +231,6 @@ export default function Chatbot() {
         );
 
         if (localMatch) {
-            // Artificial delay for "Ziggy is thinking" vibe
             setTimeout(() => {
                 setMessages(prev => [...prev, { role: 'assistant', content: localMatch.response }]);
                 setIsLoading(false);
@@ -245,10 +240,10 @@ export default function Chatbot() {
 
         // --- PHASE 2: AI Backend Call ---
         // Check sessionId, retry init if missing
-        let currentSessionId = sessionId;
-        if (!currentSessionId) {
-            currentSessionId = await initChatSession();
-            if (!currentSessionId) {
+        let activeSessionId = sessionId;
+        if (!activeSessionId) {
+            activeSessionId = await initChatSession();
+            if (!activeSessionId) {
                 setMessages(prev => [...prev, { role: 'assistant', content: "I'm having trouble connecting to the server. Please try again later." }]);
                 setIsLoading(false);
                 return;
@@ -257,14 +252,14 @@ export default function Chatbot() {
 
         try {
             const response = await chatAxios.post('/api/chat', {
-                sessionId: currentSessionId,
+                sessionId: activeSessionId,
                 message: userMessage
             });
 
-            const assistantMessage = response.data.response;
-            setMessages(prev => [...prev, { role: 'assistant', content: assistantMessage }]);
+            const reply = response.data?.response;
+            setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
         } catch (error) {
-            console.error('Ziggy Send Error:', {
+            console.error('Mari AI Send Error:', {
                 message: error.message,
                 status: error.response?.status,
                 data: error.response?.data,
@@ -361,21 +356,21 @@ export default function Chatbot() {
             )}>
                 {isOpen && (
                     <Card className="w-[350px] sm:w-[400px] h-[550px] shadow-xl border-border flex flex-col bg-background border-green-500/20">
-                        <CardHeader className="p-4 border-b bg-green-500/10 flex flex-row items-center justify-between space-y-0">
+                        <CardHeader className="p-4 border-b bg-brand-gold/10 flex flex-row items-center justify-between space-y-0">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full border border-green-500/30 overflow-hidden shadow-sm bg-white">
+                                <div className="w-10 h-10 rounded-full border border-brand-gold/30 overflow-hidden shadow-sm bg-black p-1 flex items-center justify-center">
                                     <img
                                         src={MASCOT_IMAGE}
-                                        alt="Ziggy Mascot"
-                                        className="w-full h-full object-cover"
+                                        alt="Mari AI"
+                                        className="w-full h-full object-contain"
                                     />
                                 </div>
                                 <div>
-                                    <CardTitle className="text-base font-bold bg-clip-text text-transparent bg-gradient-to-r from-green-500 to-emerald-400">Ziggy</CardTitle>
-                                    <p className="text-xs text-muted-foreground">Ras Ali Labs AI Assistant</p>
+                                    <CardTitle className="text-base font-bold bg-clip-text text-transparent bg-gradient-to-r from-brand-gold to-amber-400">Mari AI</CardTitle>
+                                    <p className="text-xs text-muted-foreground">Your AI Business Growth Partner</p>
                                 </div>
                             </div>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-green-500/20" onClick={() => setIsOpen(false)}>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-brand-gold/20" onClick={() => setIsOpen(false)}>
                                 <X className="h-4 w-4" />
                             </Button>
                         </CardHeader>

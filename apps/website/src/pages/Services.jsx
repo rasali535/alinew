@@ -1,20 +1,18 @@
 import React from 'react';
 import SEO from '../components/common/SEO';
 import ServicesPageGrid from '../components/sections/ServicesPageGrid';
-import AILabsSection from '../components/sections/AILabsSection';
 
 const Services = () => {
-    return (
-        <div className="pt-20">
-            <SEO
-                title="Services | Ras Ali"
-                description="Professional services by Ras Ali including Web Development, UI/UX Design, Corporate Branding, and Custom Software Solutions."
-                url="/services"
-            />
-            <ServicesPageGrid />
-            <AILabsSection />
-        </div>
-    );
+  return (
+    <div>
+      <SEO
+        title="Enterprise AI Systems & Solutions | Ras Ali Labs"
+        description="Ras Ali Labs engineers sovereign business operating systems, automated data pipelines, custom AI agents, and enterprise infrastructure."
+        url="/services"
+      />
+      <ServicesPageGrid />
+    </div>
+  );
 };
 
 export default Services;
