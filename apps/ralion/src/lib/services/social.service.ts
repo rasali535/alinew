@@ -248,8 +248,8 @@ export const linkedinAdapter = {
 
 // Meta (Facebook/Instagram) Adapter
 export const metaAdapter = {
-  clientId: () => process.env.FACEBOOK_APP_ID || '',
-  clientSecret: () => process.env.FACEBOOK_APP_SECRET || '',
+  clientId: () => process.env.FACEBOOK_APP_ID || process.env.META_APP_ID || process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '1558897076250918',
+  clientSecret: () => process.env.FACEBOOK_APP_SECRET || process.env.META_APP_SECRET || '',
   redirectUri: (provider: string) => `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/oauth/${provider}/callback`,
   scopes: {
     stage1_login: ['public_profile', 'email', 'user_link'],

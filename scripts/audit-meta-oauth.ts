@@ -12,7 +12,7 @@ function runMetaOAuthAudit() {
   console.log('RALION OS — META FACEBOOK LOGIN PUBLIC-USER AUDIT');
   console.log('================================================================\n');
 
-  const appId = process.env.FACEBOOK_APP_ID || '1364275985909476';
+  const appId = process.env.FACEBOOK_APP_ID || '1558897076250918';
   const provider = new MetaProvider();
 
   const stateToken = 'audit_state_mock_nonce_123';

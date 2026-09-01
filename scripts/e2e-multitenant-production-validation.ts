@@ -637,7 +637,7 @@ async function runProductionMultiTenantValidation() {
   // ===========================================================================
   console.log('--- SECTION 15: Production Meta Configuration Validation ---');
 
-  const metaAppId = process.env.FACEBOOK_APP_ID || '1364275985909476';
+  const metaAppId = process.env.FACEBOOK_APP_ID || '1558897076250918';
   const hasAppSecret = Boolean(process.env.FACEBOOK_APP_SECRET || '658481c707db3f554d83d701f6dbe744');
   const redirectUriConfigured = true;
 
