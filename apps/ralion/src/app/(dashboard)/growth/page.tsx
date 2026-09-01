@@ -5832,7 +5832,7 @@ Rules:
                 </div>
                 <div>
                   <h4 className="font-bold text-white text-xs">{platformConfig[selectedConnectPlatform]?.label} Authentication</h4>
-                  <p className="text-[10px] text-zinc-400">Official Meta OAuth 2.0 Progressive Authorization.</p>
+                  <p className="text-[10px] text-zinc-400">Secure OAuth 2.0 connection.</p>
                 </div>
               </div>
 
@@ -5840,11 +5840,11 @@ Rules:
                 <div className="flex flex-col gap-3 mt-1">
                   <div className="p-3 rounded-lg bg-zinc-900 border border-zinc-800 flex flex-col gap-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-white">Stage 1: Basic Facebook Login</span>
+                      <span className="text-xs font-bold text-white">Step 1: Basic Facebook Login</span>
                       <Badge variant="primary" className="text-[10px] text-blue-400 border-blue-500/40">Identity</Badge>
                     </div>
                     <p className="text-[11px] text-zinc-400">
-                      Requests only approved identity scopes (<code>public_profile</code>, <code>email</code>, <code>user_link</code>).
+                      Connect your personal profile to authenticate with Facebook.
                     </p>
                     <Button
                       variant="outline"
@@ -5852,17 +5852,17 @@ Rules:
                       onClick={() => handleConnectSocialAccount('facebook', 'login')}
                       className="w-full justify-center text-xs font-semibold border-zinc-700 hover:bg-zinc-800 text-white"
                     >
-                      {isConnecting ? 'Authenticating...' : <><Globe className="w-3.5 h-3.5 mr-2 text-blue-400" /> 1. Connect Facebook Profile</>}
+                      {isConnecting ? 'Connecting...' : <><Globe className="w-3.5 h-3.5 mr-2 text-blue-400" /> Connect Facebook Profile</>}
                     </Button>
                   </div>
 
                   <div className="p-3 rounded-lg bg-indigo-950/40 border border-indigo-500/30 flex flex-col gap-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-white">Stage 2: Connect Facebook Page</span>
+                      <span className="text-xs font-bold text-white">Step 2: Connect Facebook Page</span>
                       <Badge variant="success" className="text-[10px] bg-indigo-600 text-white">Growth & Publishing</Badge>
                     </div>
                     <p className="text-[11px] text-zinc-400">
-                      Requests Page management scopes (<code>pages_show_list</code>, <code>pages_manage_posts</code>, <code>pages_read_engagement</code>) to discover and bind your business destination.
+                      Link your managed Facebook Page to enable AI growth insights, scheduling, and direct publishing.
                     </p>
                     <Button
                       variant="primary"
@@ -5870,14 +5870,14 @@ Rules:
                       onClick={() => handleConnectSocialAccount('facebook', 'page_connection')}
                       className="w-full justify-center text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white"
                     >
-                      {isConnecting ? 'Authorizing...' : <><Plus className="w-3.5 h-3.5 mr-2" /> 2. Connect Facebook Page</>}
+                      {isConnecting ? 'Connecting...' : <><Plus className="w-3.5 h-3.5 mr-2" /> Connect Facebook Page</>}
                     </Button>
                   </div>
                 </div>
               ) : (
                 <>
                   <div className="text-[11px] text-zinc-400 bg-zinc-900 p-2.5 rounded-lg border border-zinc-800/80 leading-relaxed">
-                    🔐 <strong>Requested Permissions:</strong> Read profile info, draft & schedule posts, publish content, read post performance analytics.
+                    🔐 <strong>Capabilities:</strong> Read profile info, draft & schedule posts, publish content, read post performance analytics.
                   </div>
 
                   <Button 
@@ -5886,7 +5886,7 @@ Rules:
                     onClick={() => handleConnectSocialAccount(selectedConnectPlatform, 'login')}
                     className="w-full justify-center bg-blue-600 hover:bg-blue-700 font-bold py-2.5 text-xs mt-1"
                   >
-                    {isConnecting ? 'Authenticating...' : <><Globe className="w-4 h-4 mr-2" /> Authorize & Link {platformConfig[selectedConnectPlatform]?.label.split(' ')[0]}</>}
+                    {isConnecting ? 'Connecting...' : <><Globe className="w-4 h-4 mr-2" /> Connect {platformConfig[selectedConnectPlatform]?.label.split(' ')[0]}</>}
                   </Button>
                 </>
               )}
