@@ -219,6 +219,79 @@ export class SocialProviderOrchestrator {
   }
 
   /**
+   * Resolves authorized social provider for a tenant operation.
+   * Distinguishes:
+   * 1. AVAILABLE EXISTING AUTHORIZED CONNECTION -> returns { provider: 'META' | 'ZERNIO', connectionId: '...', status: 'AUTHORIZED' }
+   * 2. NO AUTHORIZED CONNECTION -> returns { provider: null, status: 'NO_AUTHORIZED_CONNECTION' }
+   *
+   * CRITICAL GUARANTEE:
+   * - NEVER returns { action: 'CREATE_ZERNIO_ACCOUNT' }
+   * - NEVER triggers or prompts Zernio signup/onboarding during customer flows.
+   */
+  static async resolveSocialProvider(params: {
+    organizationId?: string;
+    workspaceId?: string;
+    userId?: string;
+    platform: SocialPlatformType;
+    capability: SocialCapability;
+    metaAvailable?: boolean;
+    existingZernioConnection?: { id: string; status?: string; capabilities?: any } | null;
+  }): Promise<{
+    provider: InfrastructureProvider | null;
+    connectionId?: string;
+    status: 'AUTHORIZED' | 'NO_AUTHORIZED_CONNECTION';
+    error?: string;
+  }> {
+    const orgId = params.organizationId || params.workspaceId || params.userId || 'unknown-org';
+
+    // 1. Check if Meta is available and authorized
+    const isMetaOk = params.metaAvailable !== false;
+    if (isMetaOk) {
+      return {
+        provider: 'META',
+        status: 'AUTHORIZED',
+      };
+    }
+
+    // 2. Meta authorization failed or unavailable: check for existing authorized Zernio connection
+    let existingZernio = params.existingZernioConnection;
+
+    if (existingZernio === undefined) {
+      // Query database for an existing active Zernio connection for this tenant
+      try {
+        const supabase = getServiceSupabase();
+        const { data: conn } = await supabase
+          .from('social_connections')
+          .select('id, connection_status, infrastructure_provider, zernio_account_id, capabilities')
+          .eq('organization_id', orgId)
+          .eq('provider', params.platform)
+          .eq('infrastructure_provider', 'zernio')
+          .eq('connection_status', 'CONNECTED')
+          .maybeSingle();
+
+        if (conn) {
+          existingZernio = conn;
+        }
+      } catch {}
+    }
+
+    if (existingZernio && (existingZernio.status === 'AUTHORIZED' || (existingZernio as any).connection_status === 'CONNECTED' || (existingZernio as any).id)) {
+      return {
+        provider: 'ZERNIO',
+        connectionId: existingZernio.id,
+        status: 'AUTHORIZED',
+      };
+    }
+
+    // 3. No existing authorized Zernio connection: remain inside Ralion recovery state
+    return {
+      provider: null,
+      status: 'NO_AUTHORIZED_CONNECTION',
+      error: `Your Facebook account is connected, but Facebook Page access is not yet available for this app.`,
+    };
+  }
+
+  /**
    * Executes a social action with automatic silent failover.
    * If primary provider fails due to permissions or temporary outage, seamlessly fails over to secondary.
    */

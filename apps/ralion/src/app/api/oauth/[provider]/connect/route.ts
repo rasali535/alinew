@@ -59,39 +59,6 @@ export async function GET(
       intent,
     });
 
-    // Check if routed to Zernio infrastructure
-    const normalizedPlatform = (provider === 'twitter' ? 'x' : provider) as any;
-    const routing = await SocialProviderRouter.resolveRouting({
-      platform: normalizedPlatform,
-      workspaceId,
-      organizationId: orgId,
-      userId,
-    });
-
-    if (routing.provider === 'zernio' && routing.zernioProfileId) {
-      try {
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://rasalilabs.com';
-        const callbackUrl = `${appUrl}/ralion/growth?connected=${provider}&provider=zernio`;
-        const zernioConnect = await ZernioSocialService.getConnectUrl(
-          normalizedPlatform,
-          routing.zernioProfileId,
-          callbackUrl
-        );
-        if (zernioConnect?.authUrl) {
-          return corsJsonResponse({
-            success: true,
-            provider,
-            authorizationUrl: zernioConnect.authUrl,
-            infrastructure: 'zernio',
-            profileId: routing.zernioProfileId,
-            stateToken,
-          }, undefined, request);
-        }
-      } catch (zErr: any) {
-        console.warn(`[OAuth Connect] Zernio routing fallback for ${provider}:`, zErr.message);
-      }
-    }
-
     // Build provider-specific authorization URL with credential checks
     let authorizationUrl: string;
     switch (provider) {

@@ -1293,13 +1293,15 @@ Rules:
       if (oauthError === 'meta_permission_unavailable') {
         setOauthAlert({
           type: 'error',
-          message: `⚠️ Facebook login is connected, but your Facebook Page permissions are not yet available for this app.`
+          message: `Your Facebook account is connected, but Facebook Page access is not yet available for this app.`,
+          actionLabel: 'Retry Page Connection',
+          onRetry: () => handleConnectSocialAccount('facebook', 'page_connection'),
         });
       } else {
-        setOauthAlert({ type: 'error', message: `❌ OAuth notice: ${decodeURIComponent(oauthError)}` });
+        setOauthAlert({ type: 'error', message: `❌ Connection notice: ${decodeURIComponent(oauthError)}` });
       }
       router.replace('/ralion/growth', { scroll: false });
-      setTimeout(() => setOauthAlert(null), 10000);
+      setTimeout(() => setOauthAlert(null), 12000);
     }
   }, [searchParams]);
 
@@ -2114,12 +2116,17 @@ Rules:
             {oauthAlert.onRetry && (
               <button
                 onClick={oauthAlert.onRetry}
-                className="px-3 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-all inline-flex items-center gap-1 shadow"
+                className="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all inline-flex items-center gap-1 shadow"
               >
-                Retry
+                {oauthAlert.actionLabel || 'Retry Page Connection'}
               </button>
             )}
-            <button onClick={() => setOauthAlert(null)} className="text-zinc-400 hover:text-white ml-1 px-1">✕</button>
+            <button
+              onClick={() => setOauthAlert(null)}
+              className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium transition-all"
+            >
+              Continue without Facebook
+            </button>
           </div>
         </div>
       )}
