@@ -19,15 +19,24 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ provider: string }> }
 ) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  const growthRedirect = `${appUrl}/ralion/growth`;
+  const rawAppUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://rasalilabs.com/ralion').replace(/\/+$/, '');
+  const cleanBase = rawAppUrl.endsWith('/ralion') ? rawAppUrl : `${rawAppUrl}/ralion`;
+  const growthRedirect = `${cleanBase}/growth`;
+
+  const callbackPath = request.nextUrl.pathname;
+  let providerName = 'unknown';
 
   try {
     const { provider } = await params;
+    providerName = provider;
     const searchParams = request.nextUrl.searchParams;
     const code = searchParams.get('code');
     const state = searchParams.get('state');
     const errorParam = searchParams.get('error');
+    const errorReason = searchParams.get('error_reason');
+    const errorDescription = searchParams.get('error_description');
+
+    console.log(`[OAuth Callback Received] path=${callbackPath} | provider=${provider} | hasCode=${Boolean(code)} | hasState=${Boolean(state)} | error=${errorParam || 'none'}`);
 
     // Handle user-denied access or Meta permission restriction
     if (errorParam) {
@@ -39,6 +48,8 @@ export async function GET(
         } catch {}
       }
 
+      console.warn(`[OAuth Callback Provider Error] provider=${provider} | intent=${intent} | error=${errorParam} | reason=${errorReason || ''} | desc=${errorDescription || ''}`);
+
       if (intent === 'page_connection' || errorParam.includes('access_denied') || errorParam.includes('unavailable')) {
         return NextResponse.redirect(`${growthRedirect}?facebook=page_permission_pending&oauth_error=meta_permission_unavailable&provider=facebook&stage=2`);
       }
@@ -46,12 +57,16 @@ export async function GET(
     }
 
     if (!code || !state) {
+      console.warn(`[OAuth Callback Warning] Missing code or state | path=${callbackPath} | provider=${provider}`);
       return NextResponse.redirect(`${growthRedirect}?oauth_error=missing_params&provider=${provider}`);
     }
 
     // Verify CSRF state token
     const verified = verifyOAuthState(state);
+    console.log(`[OAuth Callback Verification] valid=${verified.valid} | provider=${provider} | intent=${verified.intent || 'login'} | orgId=${verified.organizationId || 'none'}`);
+
     if (!verified.valid) {
+      console.warn(`[OAuth Callback Warning] Invalid CSRF state | path=${callbackPath} | provider=${provider}`);
       return NextResponse.redirect(`${growthRedirect}?oauth_error=invalid_state&provider=${provider}`);
     }
 
@@ -221,13 +236,17 @@ export async function GET(
 
     // Clear the PKCE verifier cookie
     const stageQuery = intent === 'page_connection' ? '&stage=2&page_connected=true' : '&stage=1&profile_connected=true';
-    const redirectResponse = NextResponse.redirect(`${growthRedirect}?connected=${provider}&handle=${encodeURIComponent(profile.handle)}${stageQuery}`);
+    const finalRedirectUrl = `${growthRedirect}?connected=${provider}&handle=${encodeURIComponent(profile.handle)}${stageQuery}`;
+    console.log(`[OAuth Callback Success] Redirecting to ${finalRedirectUrl} | user=${userId} | org=${organizationId} | handle=${profile.handle}`);
+    const redirectResponse = NextResponse.redirect(finalRedirectUrl);
     redirectResponse.cookies.set(`oauth_verifier_${provider}`, '', { maxAge: 0, path: '/' });
 
     return redirectResponse;
   } catch (error: any) {
-    console.error('[OAuth Callback Error]', error);
-    return NextResponse.redirect(`${growthRedirect}?oauth_error=${encodeURIComponent(error.message || 'oauth_failed')}`);
+    const rawMsg = error?.message || 'oauth_failed';
+    const sanitizedError = rawMsg.replace(/([a-f0-9]{24,})/gi, '[REDACTED_SECRET]');
+    console.error(`[OAuth Callback Exception] class=${error?.name || 'Error'} | provider=${providerName} | message=${sanitizedError}`);
+    return NextResponse.redirect(`${growthRedirect}?oauth_error=${encodeURIComponent(sanitizedError)}`);
   }
 }
 

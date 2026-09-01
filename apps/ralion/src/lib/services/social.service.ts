@@ -198,7 +198,7 @@ export async function updateLastSynced(userId: string, provider: string) {
 export const linkedinAdapter = {
   clientId: () => process.env.LINKEDIN_CLIENT_ID || '',
   clientSecret: () => process.env.LINKEDIN_CLIENT_SECRET || '',
-  redirectUri: () => `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/oauth/linkedin/callback`,
+  redirectUri: () => getOAuthRedirectUri('linkedin'),
   scopes: ['openid', 'profile', 'email', 'w_member_social'],
 
   getAuthUrl(state: string): string {
@@ -246,11 +246,18 @@ export const linkedinAdapter = {
   async fetchPosts(accessToken: string): Promise<SocialPost[]> { return []; }
 };
 
+// Base redirect URI helper guaranteeing no duplicate /ralion subpaths
+function getOAuthRedirectUri(provider: string): string {
+  const rawAppUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://rasalilabs.com/ralion').replace(/\/+$/, '');
+  const cleanBase = rawAppUrl.endsWith('/ralion') ? rawAppUrl : `${rawAppUrl}/ralion`;
+  return `${cleanBase}/api/oauth/${provider}/callback`;
+}
+
 // Meta (Facebook/Instagram) Adapter
 export const metaAdapter = {
   clientId: () => process.env.FACEBOOK_APP_ID || process.env.META_APP_ID || process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '1558897076250918',
   clientSecret: () => process.env.FACEBOOK_APP_SECRET || process.env.META_APP_SECRET || '',
-  redirectUri: (provider: string) => `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/oauth/${provider}/callback`,
+  redirectUri: (provider: string) => getOAuthRedirectUri(provider),
   scopes: {
     stage1_login: ['public_profile', 'email'],
     stage2_pages: ['pages_show_list', 'pages_read_engagement', 'pages_manage_posts', 'pages_manage_metadata'],
@@ -262,9 +269,10 @@ export const metaAdapter = {
     const baseScopes = intent === 'page_connection'
       ? [...this.scopes.stage1_login, ...this.scopes.stage2_pages]
       : this.scopes.stage1_login;
+    const redirectUri = this.redirectUri(provider);
     const params = new URLSearchParams({
       client_id: this.clientId(),
-      redirect_uri: this.redirectUri(provider),
+      redirect_uri: redirectUri,
       state,
       scope: baseScopes.join(','),
       response_type: 'code',
@@ -279,15 +287,39 @@ export const metaAdapter = {
     return await res.json();
   },
 
-  async exchangeCode(code: string, provider: string = 'facebook'): Promise<{ accessToken: string; expiresIn: number }> {
-    const params = new URLSearchParams({ client_id: this.clientId(), client_secret: this.clientSecret(),
-      redirect_uri: this.redirectUri(provider), code });
+  async exchangeCode(code: string, provider: string = 'facebook', customRedirectUri?: string): Promise<{ accessToken: string; expiresIn: number }> {
+    const redirectUri = customRedirectUri || this.redirectUri(provider);
+    console.log(`[OAuth Diagnostic] Starting Meta code exchange | provider=${provider} | redirect_uri=${redirectUri}`);
+    const params = new URLSearchParams({
+      client_id: this.clientId(),
+      client_secret: this.clientSecret(),
+      redirect_uri: redirectUri,
+      code
+    });
     const res = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?${params}`);
-    if (!res.ok) throw new Error(`Meta token exchange failed: ${await res.text()}`);
+    console.log(`[OAuth Diagnostic] Meta token exchange HTTP status: ${res.status} ${res.statusText}`);
+    if (!res.ok) {
+      const errText = await res.text();
+      let sanitized = 'Meta token exchange failed';
+      try {
+        const parsed = JSON.parse(errText);
+        sanitized = parsed.error?.message || errText;
+      } catch {}
+      console.error(`[OAuth Diagnostic] Meta code exchange error (${res.status}): ${sanitized}`);
+      throw new Error(`Meta token exchange failed (${res.status}): ${sanitized}`);
+    }
     const data = await res.json();
-    const longRes = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${this.clientId()}&client_secret=${this.clientSecret()}&fb_exchange_token=${data.access_token}`);
-    const longData = await longRes.json();
-    return { accessToken: longData.access_token || data.access_token, expiresIn: longData.expires_in || 5183944 };
+    console.log(`[OAuth Diagnostic] Meta code exchange finished successfully | hasAccessToken=${Boolean(data.access_token)}`);
+    try {
+      const longRes = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${this.clientId()}&client_secret=${this.clientSecret()}&fb_exchange_token=${data.access_token}`);
+      if (longRes.ok) {
+        const longData = await longRes.json();
+        return { accessToken: longData.access_token || data.access_token, expiresIn: longData.expires_in || 5183944 };
+      }
+    } catch (longErr: any) {
+      console.warn('[OAuth Diagnostic] Long-lived token exchange notice:', longErr.message);
+    }
+    return { accessToken: data.access_token, expiresIn: data.expires_in || 5183944 };
   },
 
   async getPages(userAccessToken: string) {
@@ -349,7 +381,7 @@ export const metaAdapter = {
 export const xAdapter = {
   clientId: () => process.env.TWITTER_CLIENT_ID || '',
   clientSecret: () => process.env.TWITTER_CLIENT_SECRET || '',
-  redirectUri: () => `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/oauth/x/callback`,
+  redirectUri: () => getOAuthRedirectUri('x'),
   scopes: ['tweet.read', 'tweet.write', 'users.read', 'offline.access'],
 
   getAuthUrl(state: string, codeChallenge: string): string {
@@ -420,7 +452,7 @@ export const xAdapter = {
 export const tiktokAdapter = {
   clientKey: () => process.env.TIKTOK_CLIENT_KEY || '',
   clientSecret: () => process.env.TIKTOK_CLIENT_SECRET || '',
-  redirectUri: () => `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/oauth/tiktok/callback`,
+  redirectUri: () => getOAuthRedirectUri('tiktok'),
   scopes: ['user.info.basic', 'video.list', 'video.upload'],
 
   getAuthUrl(state: string, codeChallenge: string): string {
@@ -468,7 +500,7 @@ export const tiktokAdapter = {
 export const youtubeAdapter = {
   clientId: () => process.env.GOOGLE_CLIENT_ID || '',
   clientSecret: () => process.env.GOOGLE_CLIENT_SECRET || '',
-  redirectUri: (provider: string = 'youtube') => `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/oauth/${provider}/callback`,
+  redirectUri: (provider: string = 'youtube') => getOAuthRedirectUri(provider),
   scopes: ['https://www.googleapis.com/auth/youtube.readonly', 'https://www.googleapis.com/auth/youtube.upload', 'openid', 'profile', 'email'],
 
   getAuthUrl(state: string, provider: string = 'youtube'): string {
