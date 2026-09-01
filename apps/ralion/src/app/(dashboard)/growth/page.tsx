@@ -441,6 +441,7 @@ Rules:
   const [isConnectingPage, setIsConnectingPage] = useState(false);
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [facebookEntitlement, setFacebookEntitlement] = useState({ limit: 1, current: 0, remaining: 1, planName: 'Starter' });
+  const [facebookPageStatus, setFacebookPageStatus] = useState<'NOT_CONNECTED' | 'PAGE_ACCESS_PENDING' | 'CONNECTED'>('NOT_CONNECTED');
 
   // ── Facebook Page Workspace Sub-Tabs ─────────────────────────────────────
   const [pageWorkspaceTab, setPageWorkspaceTab] = useState<'OVERVIEW' | 'POSTS' | 'ANALYTICS' | 'MARI_GROWTH' | 'MARKET_INTEL'>('OVERVIEW');
@@ -1269,14 +1270,30 @@ Rules:
     const handle = searchParams.get('handle');
     const oauthError = searchParams.get('oauth_error');
     const stage = searchParams.get('stage');
+    const facebookParam = searchParams.get('facebook');
+
+    if (facebookParam === 'page_permission_pending' || oauthError === 'meta_permission_unavailable') {
+      setFacebookPageStatus('PAGE_ACCESS_PENDING');
+      setOauthAlert({
+        type: 'error',
+        message: `Your Facebook account is connected, but Facebook Page access is not currently available for this app.`,
+        actionLabel: 'Retry Page Connection',
+        onRetry: () => handleConnectSocialAccount('facebook', 'page_connection'),
+      });
+      loadConnectedAccounts();
+      router.replace('/ralion/growth', { scroll: false });
+      setTimeout(() => setOauthAlert(null), 12000);
+      return;
+    }
 
     if (connected) {
-      if (connected === 'facebook' && stage === '1') {
+      if (connected === 'facebook' && (stage === '1' || facebookParam === 'account_connected')) {
         setOauthAlert({
           type: 'success',
           message: `✅ Facebook login connected (${handle || ''}). You can now connect your managed Facebook Page below.`
         });
-      } else if (connected === 'facebook' && stage === '2') {
+      } else if (connected === 'facebook' && (stage === '2' || facebookParam === 'page_connected')) {
+        setFacebookPageStatus('CONNECTED');
         setOauthAlert({
           type: 'success',
           message: `🎉 Facebook Page connected successfully! Destination: ${handle || ''}`
@@ -1290,16 +1307,7 @@ Rules:
       router.replace('/ralion/growth', { scroll: false });
       setTimeout(() => setOauthAlert(null), 8000);
     } else if (oauthError) {
-      if (oauthError === 'meta_permission_unavailable') {
-        setOauthAlert({
-          type: 'error',
-          message: `Your Facebook account is connected, but Facebook Page access is not yet available for this app.`,
-          actionLabel: 'Retry Page Connection',
-          onRetry: () => handleConnectSocialAccount('facebook', 'page_connection'),
-        });
-      } else {
-        setOauthAlert({ type: 'error', message: `❌ Connection notice: ${decodeURIComponent(oauthError)}` });
-      }
+      setOauthAlert({ type: 'error', message: `❌ Connection notice: ${decodeURIComponent(oauthError)}` });
       router.replace('/ralion/growth', { scroll: false });
       setTimeout(() => setOauthAlert(null), 12000);
     }
@@ -3081,7 +3089,55 @@ Rules:
       {/* ==================================== */}
       {activeTab === 'ACCOUNTS' && (
         <div className="flex flex-col gap-6">
-          {(!fbConn && availableFacebookPages.length === 0) ? (
+          {facebookPageStatus === 'PAGE_ACCESS_PENDING' || (fbConn && availableFacebookPages.length === 0 && !activeFbPage) ? (
+            <div className="p-6 rounded-3xl bg-gradient-to-br from-zinc-900/90 via-zinc-950 to-zinc-900 border border-amber-500/30 shadow-2xl flex flex-col gap-5">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center font-bold text-lg text-blue-400">
+                    fb
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base font-bold text-white">Facebook Account</h3>
+                      <Badge variant="success" className="text-[10px] px-2 py-0.5">✓ Connected</Badge>
+                    </div>
+                    <p className="text-xs text-zinc-400 mt-0.5 font-mono">
+                      {fbConn?.handle || '@facebook_user'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="warning" className="text-xs px-2.5 py-1 font-bold bg-amber-500/10 text-amber-300 border border-amber-500/30">
+                    ⚠️ Facebook Page: Page access is currently unavailable
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-amber-950/20 border border-amber-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="text-xs text-amber-200/90 leading-relaxed">
+                  Your Facebook account is connected, but Facebook Page access is not currently available for this app.
+                </div>
+                <div className="flex items-center gap-2.5 shrink-0">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => handleConnectSocialAccount('facebook', 'page_connection')}
+                    className="text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5"
+                  >
+                    Retry Page Connection
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setFacebookPageStatus('NOT_CONNECTED')}
+                    className="text-xs border-zinc-700 text-zinc-300 hover:text-white"
+                  >
+                    Continue Without Facebook
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : (!fbConn && availableFacebookPages.length === 0) ? (
             /* Clean Empty State for Unconnected Tenants */
             <div className="p-8 rounded-3xl bg-gradient-to-br from-indigo-950/40 via-zinc-900 to-zinc-950 border border-zinc-800 shadow-2xl flex flex-col items-center text-center gap-6 py-16">
               <div className="w-20 h-20 rounded-3xl bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center font-black text-3xl text-indigo-400 shadow-2xl shadow-indigo-600/30">

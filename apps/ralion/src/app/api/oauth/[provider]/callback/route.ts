@@ -29,8 +29,19 @@ export async function GET(
     const state = searchParams.get('state');
     const errorParam = searchParams.get('error');
 
-    // Handle user-denied access
+    // Handle user-denied access or Meta permission restriction
     if (errorParam) {
+      let intent = 'login';
+      if (state) {
+        try {
+          const verified = verifyOAuthState(state);
+          if (verified.intent) intent = verified.intent;
+        } catch {}
+      }
+
+      if (intent === 'page_connection' || errorParam.includes('access_denied') || errorParam.includes('unavailable')) {
+        return NextResponse.redirect(`${growthRedirect}?facebook=page_permission_pending&oauth_error=meta_permission_unavailable&provider=facebook&stage=2`);
+      }
       return NextResponse.redirect(`${growthRedirect}?oauth_error=${encodeURIComponent(errorParam)}&provider=${provider}`);
     }
 
@@ -88,7 +99,7 @@ export async function GET(
 
           if (!pages || pages.length === 0) {
             // Permission or app availability failure on Page scopes
-            return NextResponse.redirect(`${growthRedirect}?oauth_error=meta_permission_unavailable&provider=facebook&stage=2`);
+            return NextResponse.redirect(`${growthRedirect}?facebook=page_permission_pending&oauth_error=meta_permission_unavailable&provider=facebook&stage=2`);
           }
 
           const firstPage = pages[0];
