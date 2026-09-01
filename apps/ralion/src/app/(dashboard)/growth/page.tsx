@@ -492,12 +492,12 @@ Rules:
       const res = await authFetch('/api/social/facebook/pages');
       if (res.ok) {
         const data = await res.json();
+        if (data.entitlement) {
+          setFacebookEntitlement(data.entitlement);
+        }
         if (data.pages && Array.isArray(data.pages)) {
           setAvailableFacebookPages(data.pages);
           return data.pages;
-        }
-        if (data.entitlement) {
-          setFacebookEntitlement(data.entitlement);
         }
       }
       return [];
@@ -6322,7 +6322,7 @@ Rules:
 export default function GrowthPage() {
   return (
     <TierAccessGate
-      requiredTier="STANDARD"
+      requiredTier="COMMUNITY"
       featureName="Ralion Growth AI"
       description="Ralion Growth AI powers Facebook Page ingestion, multi-channel social publishing, video reel generation, and AI marketing campaigns. Available starting with Standard Plan ($1/day) or Professional."
     >

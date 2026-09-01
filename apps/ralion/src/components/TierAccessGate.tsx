@@ -1,13 +1,14 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { Card, Button, Badge } from '@ralion/ui';
 import { Lock, Sparkles, ShieldCheck, ArrowRight, Zap, TrendingUp, Layers } from 'lucide-react';
 import { AuthService, UserProfile } from '@/lib/services/auth.service';
+import { getRalionApiUrl } from '@/lib/api-config';
 
 interface TierAccessGateProps {
-  requiredTier: 'STANDARD' | 'PROFESSIONAL' | 'ENTERPRISE';
+  requiredTier: 'COMMUNITY' | 'STANDARD' | 'PROFESSIONAL' | 'ENTERPRISE';
   featureName: string;
   description?: string;
   children: React.ReactNode;
@@ -20,10 +21,13 @@ export const TierAccessGate: React.FC<TierAccessGateProps> = ({
   children,
 }) => {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [serverPlan, setServerPlan] = useState<string | null>(null);
+  const [subStatus, setSubStatus] = useState<string>('ACTIVE');
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    AuthService.getCurrentUser().then((user) => {
+  const evaluateTierAccess = useCallback(async () => {
+    try {
+      const user = await AuthService.getCurrentUser();
       if (user) {
         setCurrentUser(user);
       } else {
@@ -38,9 +42,50 @@ export const TierAccessGate: React.FC<TierAccessGateProps> = ({
           });
         }
       }
+
+      const orgId = user?.orgName || (typeof window !== 'undefined' ? localStorage.getItem('ralion_active_workspace_id') || localStorage.getItem('ralion_organization_id') : null);
+
+      // Fetch server-authoritative subscription state
+      if (orgId && orgId !== 'default-org') {
+        try {
+          const res = await fetch(getRalionApiUrl(`/api/billing/subscription?organizationId=${encodeURIComponent(orgId)}`));
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success && data.subscription) {
+              setServerPlan(data.subscription.planId || data.effectivePlan?.planId || null);
+              setSubStatus(data.subscription.status || 'ACTIVE');
+            }
+          }
+        } catch (e) {
+          console.warn('[TierAccessGate] Server subscription query note:', e);
+        }
+      }
+    } catch (err) {
+      console.warn('[TierAccessGate] Auth check note:', err);
+    } finally {
       setLoading(false);
-    });
+    }
   }, []);
+
+  useEffect(() => {
+    evaluateTierAccess();
+
+    const handleSubUpdated = () => {
+      evaluateTierAccess();
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('ralion_subscription_updated', handleSubUpdated);
+      window.addEventListener('ralion_organization_updated', handleSubUpdated);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('ralion_subscription_updated', handleSubUpdated);
+        window.removeEventListener('ralion_organization_updated', handleSubUpdated);
+      }
+    };
+  }, [evaluateTierAccess]);
 
   if (loading) {
     return (
@@ -61,15 +106,32 @@ export const TierAccessGate: React.FC<TierAccessGateProps> = ({
     return <>{children}</>;
   }
 
-  const isDevOrLocal = process.env.NODE_ENV === 'development' || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || (window as any).__RALION_DESKTOP__));
-  const userTier = (currentUser?.tier || (typeof window !== 'undefined' ? localStorage.getItem('ralion_user_tier') : null) || (isDevOrLocal ? 'ENTERPRISE' : 'COMMUNITY')).toUpperCase();
+  const localTier = typeof window !== 'undefined' ? localStorage.getItem('ralion_user_tier') : null;
+  const rawTier = (serverPlan || currentUser?.tier || localTier || 'COMMUNITY').toUpperCase();
+  const normalizedUserTier = rawTier === 'STARTER' ? 'STANDARD' : rawTier;
+  const normalizedReqTier = (requiredTier === 'STARTER' as any ? 'STANDARD' : requiredTier).toUpperCase();
 
-  // Tier Hierarchy: ENTERPRISE > PROFESSIONAL > STANDARD > COMMUNITY
+  // Tier Hierarchy: ENTERPRISE > PROFESSIONAL > STANDARD / STARTER > COMMUNITY
   const isAllowed =
-    userTier === 'ENTERPRISE' ||
-    userTier === 'PLATFORM_ADMIN' ||
-    (userTier === 'PROFESSIONAL' && (requiredTier === 'PROFESSIONAL' || requiredTier === 'STANDARD')) ||
-    (userTier === 'STANDARD' && requiredTier === 'STANDARD');
+    normalizedReqTier === 'COMMUNITY' ||
+    normalizedUserTier === 'ENTERPRISE' ||
+    normalizedUserTier === 'PLATFORM_ADMIN' ||
+    (normalizedUserTier === 'PROFESSIONAL' && (normalizedReqTier === 'PROFESSIONAL' || normalizedReqTier === 'STANDARD' || normalizedReqTier === 'COMMUNITY')) ||
+    (normalizedUserTier === 'STANDARD' && (normalizedReqTier === 'STANDARD' || normalizedReqTier === 'COMMUNITY'));
+
+  // Development logger for plan gate decisions (without leaking secrets)
+  if (process.env.NODE_ENV !== 'production' || (typeof window !== 'undefined' && window.location.hostname === 'localhost')) {
+    console.log(
+      `[PlanGate]\n` +
+      `organizationId=${currentUser?.orgName || 'none'}\n` +
+      `selectedPlan=${serverPlan || localTier || 'none'}\n` +
+      `currentPlan=${normalizedUserTier}\n` +
+      `subscriptionStatus=${subStatus}\n` +
+      `entitled=${isAllowed}\n` +
+      `feature=${featureName}\n` +
+      `decision=${isAllowed ? 'ALLOW' : 'GATE_REQUIRED'}`
+    );
+  }
 
   if (isAllowed) {
     return <>{children}</>;
@@ -97,7 +159,7 @@ export const TierAccessGate: React.FC<TierAccessGateProps> = ({
 
         <p className="text-xs text-zinc-400 max-w-md mx-auto leading-relaxed mb-6">
           {description ||
-            `You are currently on the ${userTier} plan. Upgrade to ${requiredTier} to unlock ${featureName}, live automation, and advanced operational modules.`}
+            `You are currently on the ${normalizedUserTier} plan. Upgrade to ${requiredTier} to unlock ${featureName}, live automation, and advanced operational modules.`}
         </p>
 
         {/* Feature Comparison Box */}
@@ -167,7 +229,7 @@ export const TierAccessGate: React.FC<TierAccessGateProps> = ({
 
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          {userTier === 'COMMUNITY' && (
+          {normalizedUserTier === 'COMMUNITY' && (
             <Link href="/billing?tier=standard" className="w-full sm:w-auto">
               <Button
                 variant="primary"

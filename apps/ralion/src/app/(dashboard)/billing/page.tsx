@@ -74,7 +74,7 @@ interface CreditLedgerRow {
 }
 
 export default function BillingPage() {
-  const { organization } = useOrganization();
+  const { organization, refreshOrganization } = useOrganization();
   const [subData, setSubData] = useState<SubscriptionData | null>(null);
   const [transactions, setTransactions] = useState<TransactionRow[]>([]);
   const [creditLedger, setCreditLedger] = useState<CreditLedgerRow[]>([]);
@@ -83,15 +83,22 @@ export default function BillingPage() {
   const [upgradingPlan, setUpgradingPlan] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'plans' | 'ledger' | 'transactions'>('plans');
 
-  const organizationId = organization?.id || '';
+  const fallbackOrgId = typeof window !== 'undefined'
+    ? localStorage.getItem('ralion_active_workspace_id') || localStorage.getItem('ralion_organization_id') || ''
+    : '';
+  const organizationId = organization?.id || fallbackOrgId;
   const orgName = organization?.name || 'Organization';
 
   const fetchBillingData = async () => {
+    if (!organizationId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const [subRes, histRes] = await Promise.all([
-        fetch(getRalionApiUrl(`/api/billing/subscription?organizationId=${organizationId}`)),
-        fetch(getRalionApiUrl(`/api/billing/history?organizationId=${organizationId}`)),
+        fetch(getRalionApiUrl(`/api/billing/subscription?organizationId=${encodeURIComponent(organizationId)}`)),
+        fetch(getRalionApiUrl(`/api/billing/history?organizationId=${encodeURIComponent(organizationId)}`)),
       ]);
 
       if (subRes.ok) {
@@ -135,6 +142,12 @@ export default function BillingPage() {
 
       const result = await res.json();
       if (result.success) {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('ralion_user_tier', planId);
+          window.dispatchEvent(new Event('ralion_subscription_updated'));
+          window.dispatchEvent(new Event('ralion_organization_updated'));
+        }
+        await refreshOrganization?.();
         await fetchBillingData();
         alert(`🎉 Subscription upgraded to ${planId} plan (${billingCycle})! Entitlements and credits updated.`);
       } else {

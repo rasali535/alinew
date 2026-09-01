@@ -23,7 +23,15 @@ export async function GET(request: NextRequest) {
   const query = searchParams.get('q')?.toLowerCase() || '';
 
   const profiles = BusinessKnowledgeProfileService.listProfiles();
-  const customerProfiles = profiles.filter(p => p.organizationId !== 'ras-ali-labs');
+  const subs = BillingDatabaseService.listSubscriptions();
+
+  const orgIdSet = new Set<string>();
+  profiles.forEach(p => {
+    if (p.organizationId && p.organizationId !== 'ras-ali-labs') orgIdSet.add(p.organizationId);
+  });
+  subs.forEach(s => {
+    if (s.organizationId && s.organizationId !== 'ras-ali-labs') orgIdSet.add(s.organizationId);
+  });
 
   // Supabase social lookups
   let socialMap: Record<string, { meta: 'CONNECTED' | 'DISCONNECTED'; zernio: 'CONNECTED' | 'DISCONNECTED' }> = {};
@@ -47,14 +55,16 @@ export async function GET(request: NextRequest) {
     } catch {}
   }
 
-  const customers: CustomerSummaryItem[] = customerProfiles.map(p => {
-    const orgId = p.organizationId;
+  const customers: CustomerSummaryItem[] = Array.from(orgIdSet).map(orgId => {
     const isSuspended = PlatformAdminService.isTenantSuspended(orgId);
+    const p = profiles.find(prof => prof.organizationId === orgId);
 
     let plan = 'COMMUNITY';
+    let subStatus = 'ACTIVE';
     try {
       const sub = BillingDatabaseService.getSubscription(orgId);
       plan = sub.planId;
+      subStatus = sub.status;
     } catch {}
 
     let balance = 0;
@@ -70,15 +80,15 @@ export async function GET(request: NextRequest) {
     return {
       id: orgId,
       organizationId: orgId,
-      name: (typeof (p as any).companyName === 'string' ? (p as any).companyName : (p as any).companyName?.value) || orgId,
+      name: (p && ((typeof (p as any).companyName === 'string' ? (p as any).companyName : (p as any).companyName?.value))) || orgId,
       ownerEmail: `${orgId}@customer.ralion.io`,
       plan,
       credits: balance,
       creditsConsumed: consumed,
-      status: isSuspended ? 'SUSPENDED' : 'ACTIVE',
-      createdAt: p.companyName?.lastUpdated || new Date().toISOString(),
-      lastActive: p.companyName?.lastUpdated || new Date().toISOString(),
-      websiteIngestionStatus: p.websiteUrl?.value ? 'VERIFIED' : 'NONE',
+      status: isSuspended ? 'SUSPENDED' : (subStatus === 'PAST_DUE' ? 'SUSPENDED' : 'ACTIVE'),
+      createdAt: p?.companyName?.lastUpdated || new Date().toISOString(),
+      lastActive: p?.companyName?.lastUpdated || new Date().toISOString(),
+      websiteIngestionStatus: p?.websiteUrl?.value ? 'VERIFIED' : 'NONE',
       metaStatus: socialMap[orgId]?.meta || 'DISCONNECTED',
       zernioStatus: socialMap[orgId]?.zernio || 'DISCONNECTED',
       mariStatus: 'ACTIVE',

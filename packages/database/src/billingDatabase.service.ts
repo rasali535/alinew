@@ -122,6 +122,13 @@ export class BillingDatabaseService {
     return null;
   }
 
+  /**
+   * Lists all registered organization subscriptions.
+   */
+  static listSubscriptions(): OrganizationSubscriptionRecord[] {
+    return Array.from(this.subscriptions.values()).map(s => ({ ...s }));
+  }
+
   // ═════════════════════════════════════════════════════════════════════════════
   // BILLING ACCOUNT MANAGEMENT
   // ═════════════════════════════════════════════════════════════════════════════

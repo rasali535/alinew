@@ -93,6 +93,8 @@ export interface NormalizedPageAnalytics {
   lastSyncedAt: string;
 }
 
+import { EntitlementService } from '@ralion/auth';
+
 export class FacebookPageManagementService {
   /**
    * Resolve organization subscription entitlement for Facebook Pages
@@ -109,17 +111,26 @@ export class FacebookPageManagementService {
     }
 
     const supabase = getServiceSupabase();
-    let limit = 1; // Default Starter tier limit
+    let limit = 1; // Default Community tier limit
+    let planName = 'Community (Free Forever)';
 
     if (organizationId && organizationId !== 'default-org') {
-      const { data: ent } = await supabase
-        .from('organization_social_entitlements')
-        .select('facebook_page_limit')
-        .eq('organization_id', organizationId)
-        .maybeSingle();
+      try {
+        const { plan } = EntitlementService.getEffectivePlan(organizationId);
+        if (plan) {
+          limit = plan.planId === 'ENTERPRISE' ? 999 : plan.planId === 'PROFESSIONAL' ? 3 : plan.planId === 'STARTER' ? 2 : 1;
+          planName = plan.name;
+        }
+      } catch {
+        const { data: ent } = await supabase
+          .from('organization_social_entitlements')
+          .select('facebook_page_limit')
+          .eq('organization_id', organizationId)
+          .maybeSingle();
 
-      if (ent?.facebook_page_limit) {
-        limit = ent.facebook_page_limit;
+        if (ent?.facebook_page_limit) {
+          limit = ent.facebook_page_limit;
+        }
       }
     }
 
@@ -150,7 +161,7 @@ export class FacebookPageManagementService {
       current,
       remaining,
       upgradeRequired: current >= limit,
-      planName: limit === 1 ? 'Community / Starter' : limit <= 3 ? 'Professional' : 'Enterprise Agency',
+      planName,
     };
   }
 
