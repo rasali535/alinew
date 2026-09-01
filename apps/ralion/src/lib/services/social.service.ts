@@ -252,10 +252,10 @@ export const metaAdapter = {
   clientSecret: () => process.env.FACEBOOK_APP_SECRET || process.env.META_APP_SECRET || '',
   redirectUri: (provider: string) => `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/oauth/${provider}/callback`,
   scopes: {
-    stage1_login: ['public_profile', 'email', 'user_link'],
+    stage1_login: ['public_profile', 'email'],
     stage2_pages: ['pages_show_list', 'pages_read_engagement', 'pages_manage_posts', 'pages_manage_metadata'],
-    facebook: ['public_profile', 'email', 'user_link'],
-    instagram: ['public_profile', 'email', 'user_link']
+    facebook: ['public_profile', 'email'],
+    instagram: ['public_profile', 'email']
   },
 
   getAuthUrl(state: string, provider: string = 'facebook', intent: 'login' | 'page_connection' = 'login'): string {

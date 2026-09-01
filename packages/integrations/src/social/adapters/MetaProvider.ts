@@ -23,8 +23,7 @@ export class MetaProvider extends SocialProvider {
   readonly displayName = 'Facebook';
   readonly defaultScopes = [
     'public_profile',
-    'email',
-    'user_link'
+    'email'
   ];
 
   readonly pageScopes = [

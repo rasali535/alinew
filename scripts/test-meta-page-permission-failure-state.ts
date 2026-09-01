@@ -75,9 +75,9 @@ async function runMetaPagePermissionFailureStateTests() {
   assert(
     stage1Scopes.includes('public_profile') &&
     stage1Scopes.includes('email') &&
-    stage1Scopes.includes('user_link') &&
+    !stage1Scopes.includes('user_link') &&
     !stage1Scopes.some(s => s.startsWith('pages_')),
-    'TEST 1: Stage 1 requests ONLY approved identity scopes',
+    'TEST 1: Stage 1 requests ONLY approved identity scopes (public_profile, email)',
     `Scopes: ${stage1Scopes.join(', ')}`
   );
 

@@ -68,9 +68,9 @@ async function runMetaProgressiveAuthorizationTests() {
   assert(
     stage1Scopes.includes('public_profile') &&
     stage1Scopes.includes('email') &&
-    stage1Scopes.includes('user_link') &&
+    !stage1Scopes.includes('user_link') &&
     !stage1Scopes.some(s => s.startsWith('pages_')),
-    'Stage 1 requests ONLY approved identity scopes (public_profile, email, user_link)',
+    'Stage 1 requests ONLY approved identity scopes (public_profile, email)',
     `Actual Scopes: ${stage1Scopes.join(', ')} | Zero Page scopes requested in Stage 1`
   );
 
