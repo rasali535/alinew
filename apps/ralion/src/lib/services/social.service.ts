@@ -252,15 +252,31 @@ export const metaAdapter = {
   clientSecret: () => process.env.FACEBOOK_APP_SECRET || '',
   redirectUri: (provider: string) => `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/oauth/${provider}/callback`,
   scopes: {
-    facebook: ['public_profile', 'email'],
-    instagram: ['public_profile', 'email']
+    stage1_login: ['public_profile', 'email', 'user_link'],
+    stage2_pages: ['pages_show_list', 'pages_read_engagement', 'pages_manage_posts', 'pages_manage_metadata'],
+    facebook: ['public_profile', 'email', 'user_link'],
+    instagram: ['public_profile', 'email', 'user_link']
   },
 
-  getAuthUrl(state: string, provider: string = 'facebook'): string {
-    const scopes = provider === 'instagram' ? this.scopes.instagram : this.scopes.facebook;
-    const params = new URLSearchParams({ client_id: this.clientId(), redirect_uri: this.redirectUri(provider),
-      state, scope: scopes.join(','), response_type: 'code' });
+  getAuthUrl(state: string, provider: string = 'facebook', intent: 'login' | 'page_connection' = 'login'): string {
+    const baseScopes = intent === 'page_connection'
+      ? [...this.scopes.stage1_login, ...this.scopes.stage2_pages]
+      : this.scopes.stage1_login;
+    const params = new URLSearchParams({
+      client_id: this.clientId(),
+      redirect_uri: this.redirectUri(provider),
+      state,
+      scope: baseScopes.join(','),
+      response_type: 'code',
+      ...(intent === 'page_connection' ? { auth_type: 'rerequest' } : {})
+    });
     return `https://www.facebook.com/v19.0/dialog/oauth?${params}`;
+  },
+
+  async getUserProfile(userAccessToken: string) {
+    const res = await fetch(`https://graph.facebook.com/v19.0/me?fields=id,name,email,picture.type(large)&access_token=${userAccessToken}`);
+    if (!res.ok) return null;
+    return await res.json();
   },
 
   async exchangeCode(code: string, provider: string = 'facebook'): Promise<{ accessToken: string; expiresIn: number }> {

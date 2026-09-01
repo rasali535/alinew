@@ -24,6 +24,10 @@ export class MetaProvider extends SocialProvider {
   readonly defaultScopes = [
     'public_profile',
     'email',
+    'user_link'
+  ];
+
+  readonly pageScopes = [
     'pages_show_list',
     'pages_read_engagement',
     'pages_manage_posts',
@@ -61,15 +65,37 @@ export class MetaProvider extends SocialProvider {
     };
   }
 
-  getAuthorizationUrl(state: string, redirectUri: string, additionalScopes: string[] = []): string {
-    const scopes = Array.from(new Set([...this.defaultScopes, ...additionalScopes])).join(',');
+  getAuthorizationUrl(
+    state: string,
+    redirectUri: string,
+    options?: { intent?: 'login' | 'page_connection'; additionalScopes?: string[] } | string[]
+  ): string {
+    let intent: 'login' | 'page_connection' = 'login';
+    let additional: string[] = [];
+
+    if (Array.isArray(options)) {
+      additional = options;
+      // If caller explicitly passed page scopes, treat intent as page_connection
+      if (options.some(s => s.startsWith('pages_'))) {
+        intent = 'page_connection';
+      }
+    } else if (options && typeof options === 'object') {
+      intent = options.intent || 'login';
+      additional = options.additionalScopes || [];
+    }
+
+    const baseScopes = intent === 'page_connection'
+      ? [...this.defaultScopes, ...this.pageScopes]
+      : this.defaultScopes;
+
+    const scopes = Array.from(new Set([...baseScopes, ...additional])).join(',');
     const params = new URLSearchParams({
       client_id: this.getAppId(),
       redirect_uri: redirectUri,
       state,
       scope: scopes,
       response_type: 'code',
-      auth_type: 'rerequest'
+      ...(intent === 'page_connection' ? { auth_type: 'rerequest' } : {})
     });
     return `https://www.facebook.com/v19.0/dialog/oauth?${params.toString()}`;
   }

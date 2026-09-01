@@ -97,24 +97,94 @@ export function decryptToken(encryptedEnvelope: string): string {
   return encryptedEnvelope;
 }
 
-export function generateOAuthState(workspaceId: string, provider: string): string {
+export interface OAuthStateOptions {
+  userId?: string;
+  organizationId?: string;
+  workspaceId: string;
+  provider: string;
+  intent?: 'login' | 'page_connection' | 'connect';
+  ttlMs?: number;
+}
+
+export interface VerifiedOAuthState {
+  workspaceId: string;
+  organizationId: string;
+  userId: string;
+  provider: string;
+  intent: 'login' | 'page_connection' | 'connect';
+  issuedAt: number;
+  expiresAt: number;
+  valid: boolean;
+}
+
+export function generateOAuthState(
+  workspaceOrOptions: string | OAuthStateOptions,
+  providerParam?: string
+): string {
   const nonce = crypto.randomBytes(16).toString('hex');
-  const payload = JSON.stringify({ workspaceId, provider, nonce, ts: Date.now() });
-  const payloadBase64 = Buffer.from(payload).toString('base64url');
+  const now = Date.now();
+
+  let payload: Record<string, any>;
+  if (typeof workspaceOrOptions === 'string') {
+    const workspaceId = workspaceOrOptions;
+    const provider = providerParam || '';
+    payload = {
+      workspaceId,
+      organizationId: workspaceId,
+      userId: '',
+      provider,
+      intent: 'login',
+      nonce,
+      ts: now,
+      exp: now + 15 * 60 * 1000,
+    };
+  } else {
+    const ttl = workspaceOrOptions.ttlMs || 15 * 60 * 1000;
+    payload = {
+      workspaceId: workspaceOrOptions.workspaceId,
+      organizationId: workspaceOrOptions.organizationId || workspaceOrOptions.workspaceId,
+      userId: workspaceOrOptions.userId || '',
+      provider: workspaceOrOptions.provider,
+      intent: workspaceOrOptions.intent || 'login',
+      nonce,
+      ts: now,
+      exp: now + ttl,
+    };
+  }
+
+  const payloadBase64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
   const key = getDerivedKey();
   const signature = crypto.createHmac('sha256', key).update(payloadBase64).digest('base64url');
   return `${payloadBase64}.${signature}`;
 }
 
-export function verifyOAuthState(stateToken: string): { workspaceId: string; provider: string; valid: boolean } {
+export function verifyOAuthState(stateToken: string): VerifiedOAuthState {
   try {
     if (!stateToken || typeof stateToken !== 'string') {
-      return { workspaceId: '', provider: '', valid: false };
+      return {
+        workspaceId: '',
+        organizationId: '',
+        userId: '',
+        provider: '',
+        intent: 'login',
+        issuedAt: 0,
+        expiresAt: 0,
+        valid: false,
+      };
     }
 
     const parts = stateToken.split('.');
     if (parts.length !== 2) {
-      return { workspaceId: '', provider: '', valid: false };
+      return {
+        workspaceId: '',
+        organizationId: '',
+        userId: '',
+        provider: '',
+        intent: 'login',
+        issuedAt: 0,
+        expiresAt: 0,
+        valid: false,
+      };
     }
 
     const [payloadBase64, signature] = parts;
@@ -124,20 +194,45 @@ export function verifyOAuthState(stateToken: string): { workspaceId: string; pro
     const sigBuf = Buffer.from(signature);
     const expBuf = Buffer.from(expectedSignature);
     if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
-      return { workspaceId: '', provider: '', valid: false };
+      return {
+        workspaceId: '',
+        organizationId: '',
+        userId: '',
+        provider: '',
+        intent: 'login',
+        issuedAt: 0,
+        expiresAt: 0,
+        valid: false,
+      };
     }
 
     const decoded = Buffer.from(payloadBase64, 'base64url').toString('utf-8');
     const parsed = JSON.parse(decoded);
-    // Enforce 15-minute maximum lifetime on OAuth CSRF state tokens
-    const isNotExpired = Date.now() - (parsed.ts || 0) < 15 * 60 * 1000;
+    const now = Date.now();
+    const expiresAt = parsed.exp || (parsed.ts ? parsed.ts + 15 * 60 * 1000 : 0);
+    const isNotExpired = expiresAt > now;
+
     return {
       workspaceId: parsed.workspaceId || '',
+      organizationId: parsed.organizationId || parsed.workspaceId || '',
+      userId: parsed.userId || '',
       provider: parsed.provider || '',
+      intent: (parsed.intent as any) || 'login',
+      issuedAt: parsed.ts || 0,
+      expiresAt,
       valid: !!parsed.workspaceId && !!parsed.provider && isNotExpired,
     };
   } catch {
-    return { workspaceId: '', provider: '', valid: false };
+    return {
+      workspaceId: '',
+      organizationId: '',
+      userId: '',
+      provider: '',
+      intent: 'login',
+      issuedAt: 0,
+      expiresAt: 0,
+      valid: false,
+    };
   }
 }
 

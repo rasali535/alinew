@@ -1268,17 +1268,38 @@ Rules:
     const connected = searchParams.get('connected');
     const handle = searchParams.get('handle');
     const oauthError = searchParams.get('oauth_error');
+    const stage = searchParams.get('stage');
 
     if (connected) {
-      setOauthAlert({ type: 'success', message: `✅ ${connected.charAt(0).toUpperCase() + connected.slice(1)} connected successfully! Account: ${handle || ''}` });
+      if (connected === 'facebook' && stage === '1') {
+        setOauthAlert({
+          type: 'success',
+          message: `✅ Facebook login connected (${handle || ''}). You can now connect your managed Facebook Page below.`
+        });
+      } else if (connected === 'facebook' && stage === '2') {
+        setOauthAlert({
+          type: 'success',
+          message: `🎉 Facebook Page connected successfully! Destination: ${handle || ''}`
+        });
+      } else {
+        setOauthAlert({ type: 'success', message: `✅ ${connected.charAt(0).toUpperCase() + connected.slice(1)} connected successfully! Account: ${handle || ''}` });
+      }
       loadConnectedAccounts();
+      fetchFacebookPages();
       // Clean URL
       router.replace('/ralion/growth', { scroll: false });
-      setTimeout(() => setOauthAlert(null), 6000);
-    } else if (oauthError) {
-      setOauthAlert({ type: 'error', message: `❌ OAuth failed: ${decodeURIComponent(oauthError)}` });
-      router.replace('/ralion/growth', { scroll: false });
       setTimeout(() => setOauthAlert(null), 8000);
+    } else if (oauthError) {
+      if (oauthError === 'meta_permission_unavailable') {
+        setOauthAlert({
+          type: 'error',
+          message: `⚠️ Facebook login is connected, but your Facebook Page permissions are not yet available for this app.`
+        });
+      } else {
+        setOauthAlert({ type: 'error', message: `❌ OAuth notice: ${decodeURIComponent(oauthError)}` });
+      }
+      router.replace('/ralion/growth', { scroll: false });
+      setTimeout(() => setOauthAlert(null), 10000);
     }
   }, [searchParams]);
 
@@ -1338,17 +1359,16 @@ Rules:
       setIsConnectModalOpen(false);
       setManualAccountHandle('');
       setManualAccessToken('');
-      setOauthAlert({ type: 'success', message: `✅ ${platformConfig[selectedConnectPlatform]?.label} connected successfully!` });
-      setTimeout(() => setOauthAlert(null), 5000);
+      loadConnectedAccounts();
     } catch (err: any) {
-      alert(`Failed to save connection: ${err.message}`);
+      alert(`Failed to save manual connection: ${err.message}`);
     } finally {
       setIsConnecting(false);
     }
   };
 
   // ── Real OAuth Connect: fetch auth URL → redirect browser ─────────────────
-  const handleConnectSocialAccount = async (providerKey: string) => {
+  const handleConnectSocialAccount = async (providerKey: string, intent: 'login' | 'page_connection' = 'login') => {
     setIsConnecting(true);
     try {
       // Check if custom OAuth endpoint is available and returns JSON
@@ -1359,7 +1379,7 @@ Rules:
           headers['Authorization'] = `Bearer ${session.access_token}`;
         }
 
-        const res = await fetch(getRalionApiUrl(`/api/oauth/${providerKey}/connect/`), {
+        const res = await fetch(getRalionApiUrl(`/api/oauth/${providerKey}/connect?intent=${intent}`), {
           credentials: 'include',
           headers,
         });
@@ -5812,22 +5832,64 @@ Rules:
                 </div>
                 <div>
                   <h4 className="font-bold text-white text-xs">{platformConfig[selectedConnectPlatform]?.label} Authentication</h4>
-                  <p className="text-[10px] text-zinc-400">Redirects to official authorization consent page.</p>
+                  <p className="text-[10px] text-zinc-400">Official Meta OAuth 2.0 Progressive Authorization.</p>
                 </div>
               </div>
 
-              <div className="text-[11px] text-zinc-400 bg-zinc-900 p-2.5 rounded-lg border border-zinc-800/80 leading-relaxed">
-                🔐 <strong>Requested Permissions:</strong> Read profile info, draft & schedule posts, publish content, read post performance analytics.
-              </div>
+              {selectedConnectPlatform === 'facebook' ? (
+                <div className="flex flex-col gap-3 mt-1">
+                  <div className="p-3 rounded-lg bg-zinc-900 border border-zinc-800 flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-white">Stage 1: Basic Facebook Login</span>
+                      <Badge variant="primary" className="text-[10px] text-blue-400 border-blue-500/40">Identity</Badge>
+                    </div>
+                    <p className="text-[11px] text-zinc-400">
+                      Requests only approved identity scopes (<code>public_profile</code>, <code>email</code>, <code>user_link</code>).
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleConnectSocialAccount('facebook', 'login')}
+                      className="w-full justify-center text-xs font-semibold border-zinc-700 hover:bg-zinc-800 text-white"
+                    >
+                      {isConnecting ? 'Authenticating...' : <><Globe className="w-3.5 h-3.5 mr-2 text-blue-400" /> 1. Connect Facebook Profile</>}
+                    </Button>
+                  </div>
 
-              <Button 
-                variant="primary" 
-                size="sm" 
-                onClick={() => handleConnectSocialAccount(selectedConnectPlatform)}
-                className="w-full justify-center bg-blue-600 hover:bg-blue-700 font-bold py-2.5 text-xs mt-1"
-              >
-                {isConnecting ? 'Authenticating...' : <><Globe className="w-4 h-4 mr-2" /> Authorize & Link {platformConfig[selectedConnectPlatform]?.label.split(' ')[0]}</>}
-              </Button>
+                  <div className="p-3 rounded-lg bg-indigo-950/40 border border-indigo-500/30 flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-white">Stage 2: Connect Facebook Page</span>
+                      <Badge variant="success" className="text-[10px] bg-indigo-600 text-white">Growth & Publishing</Badge>
+                    </div>
+                    <p className="text-[11px] text-zinc-400">
+                      Requests Page management scopes (<code>pages_show_list</code>, <code>pages_manage_posts</code>, <code>pages_read_engagement</code>) to discover and bind your business destination.
+                    </p>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => handleConnectSocialAccount('facebook', 'page_connection')}
+                      className="w-full justify-center text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white"
+                    >
+                      {isConnecting ? 'Authorizing...' : <><Plus className="w-3.5 h-3.5 mr-2" /> 2. Connect Facebook Page</>}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="text-[11px] text-zinc-400 bg-zinc-900 p-2.5 rounded-lg border border-zinc-800/80 leading-relaxed">
+                    🔐 <strong>Requested Permissions:</strong> Read profile info, draft & schedule posts, publish content, read post performance analytics.
+                  </div>
+
+                  <Button 
+                    variant="primary" 
+                    size="sm" 
+                    onClick={() => handleConnectSocialAccount(selectedConnectPlatform, 'login')}
+                    className="w-full justify-center bg-blue-600 hover:bg-blue-700 font-bold py-2.5 text-xs mt-1"
+                  >
+                    {isConnecting ? 'Authenticating...' : <><Globe className="w-4 h-4 mr-2" /> Authorize & Link {platformConfig[selectedConnectPlatform]?.label.split(' ')[0]}</>}
+                  </Button>
+                </>
+              )}
             </div>
           ) : (
             <div className="flex flex-col gap-3">

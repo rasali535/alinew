@@ -258,8 +258,8 @@ export class AuthService {
 
     const defaultScopes: Record<string, string> = {
       linkedin_oidc: 'openid profile email w_member_social',
-      facebook: 'public_profile,email,pages_show_list,pages_read_engagement,pages_manage_posts',
-      instagram: 'public_profile,email,pages_show_list,pages_read_engagement,pages_manage_posts,instagram_basic',
+      facebook: 'public_profile,email,user_link',
+      instagram: 'public_profile,email,user_link',
       google: 'email profile https://www.googleapis.com/auth/youtube.readonly',
       twitter: 'tweet.read tweet.write users.read offline.access',
       github: 'read:user user:email'

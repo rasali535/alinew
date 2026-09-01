@@ -39,10 +39,14 @@ export async function GET(
     }
 
     // Verify CSRF state token
-    const { workspaceId: userId, valid } = verifyOAuthState(state);
-    if (!valid) {
+    const verified = verifyOAuthState(state);
+    if (!verified.valid) {
       return NextResponse.redirect(`${growthRedirect}?oauth_error=invalid_state&provider=${provider}`);
     }
+
+    const userId = verified.userId || verified.workspaceId;
+    const organizationId = verified.organizationId || verified.workspaceId;
+    const intent = verified.intent || 'login';
 
     // Retrieve PKCE code verifier from cookie
     const codeVerifier = request.cookies.get(`oauth_verifier_${provider}`)?.value || '';
@@ -72,17 +76,58 @@ export async function GET(
         const tokens = await metaAdapter.exchangeCode(code, 'facebook');
         accessToken = tokens.accessToken;
         expiresAt = new Date(Date.now() + tokens.expiresIn * 1000);
-        // Get managed pages
-        const pages = await metaAdapter.getPages(accessToken);
-        const firstPage = pages[0];
-        if (firstPage) {
+
+        if (intent === 'page_connection') {
+          // Stage 2: Discover and connect managed Facebook Page
+          let pages: any[] = [];
+          try {
+            pages = await metaAdapter.getPages(accessToken);
+          } catch (pageErr: any) {
+            console.warn('[OAuth Callback] Page discovery note:', pageErr.message);
+          }
+
+          if (!pages || pages.length === 0) {
+            // Permission or app availability failure on Page scopes
+            return NextResponse.redirect(`${growthRedirect}?oauth_error=meta_permission_unavailable&provider=facebook&stage=2`);
+          }
+
+          const firstPage = pages[0];
           pageId = firstPage.id;
-          profile = { handle: `@${firstPage.name.toLowerCase().replace(/\s+/g, '_')}`, name: firstPage.name, avatar: firstPage.avatar, followersCount: firstPage.followers };
-          extraMeta = { pageAccessToken: firstPage.accessToken, pages };
+          profile = {
+            handle: `@${firstPage.name.toLowerCase().replace(/\s+/g, '_')}`,
+            name: firstPage.name,
+            avatar: firstPage.avatar,
+            followersCount: firstPage.followers || 0,
+            pageId: firstPage.id,
+          };
+          extraMeta = {
+            pageAccessToken: firstPage.accessToken,
+            pages,
+            stage: 2,
+            organizationId,
+          };
+          accountLabel = 'Facebook Business Page';
         } else {
-          profile = { handle: '@facebook_page', name: 'Facebook Page', followersCount: 0 };
+          // Stage 1: Basic Facebook Login / Profile Link
+          let userProfile: any = null;
+          try {
+            userProfile = await metaAdapter.getUserProfile(accessToken);
+          } catch {}
+
+          profile = {
+            handle: userProfile?.name ? `@${userProfile.name.toLowerCase().replace(/\s+/g, '_')}` : '@facebook_user',
+            name: userProfile?.name || 'Facebook User',
+            avatar: userProfile?.picture?.data?.url,
+            followersCount: 0,
+          };
+          extraMeta = {
+            stage: 1,
+            facebookUserId: userProfile?.id,
+            email: userProfile?.email,
+            organizationId,
+          };
+          accountLabel = 'Facebook Profile (Connected)';
         }
-        accountLabel = 'Facebook Business Page';
         break;
       }
       case 'instagram': {
@@ -164,7 +209,8 @@ export async function GET(
     });
 
     // Clear the PKCE verifier cookie
-    const redirectResponse = NextResponse.redirect(`${growthRedirect}?connected=${provider}&handle=${encodeURIComponent(profile.handle)}`);
+    const stageQuery = intent === 'page_connection' ? '&stage=2&page_connected=true' : '&stage=1&profile_connected=true';
+    const redirectResponse = NextResponse.redirect(`${growthRedirect}?connected=${provider}&handle=${encodeURIComponent(profile.handle)}${stageQuery}`);
     redirectResponse.cookies.set(`oauth_verifier_${provider}`, '', { maxAge: 0, path: '/' });
 
     return redirectResponse;

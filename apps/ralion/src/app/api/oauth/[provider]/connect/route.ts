@@ -32,6 +32,8 @@ export async function GET(
 ) {
   try {
     const { provider } = await params;
+    const { searchParams } = new URL(request.url);
+    const intent = (searchParams.get('intent') || 'login') as 'login' | 'page_connection';
 
     // Verify user is authenticated with server-authoritative context
     const context = await getCurrentRalionContext(request, { requireAuth: true });
@@ -48,8 +50,14 @@ export async function GET(
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = await generateCodeChallenge(codeVerifier);
 
-    // Generate CSRF state token embedding userId + provider
-    const stateToken = generateOAuthState(userId, provider);
+    // Generate CSRF state token embedding userId + orgId + workspaceId + intent
+    const stateToken = generateOAuthState({
+      userId,
+      organizationId: orgId,
+      workspaceId,
+      provider,
+      intent,
+    });
 
     // Check if routed to Zernio infrastructure
     const normalizedPlatform = (provider === 'twitter' ? 'x' : provider) as any;
@@ -98,7 +106,7 @@ export async function GET(
         if (!metaAdapter.clientId()) {
           return corsJsonResponse({ success: false, error: 'Meta (Facebook/Instagram) is not configured. Please add FACEBOOK_APP_ID and FACEBOOK_APP_SECRET to .env.local or use Zernio' }, { status: 400 }, request);
         }
-        authorizationUrl = metaAdapter.getAuthUrl(stateToken, provider as 'facebook' | 'instagram');
+        authorizationUrl = metaAdapter.getAuthUrl(stateToken, provider as 'facebook' | 'instagram', intent);
         break;
       case 'x':
       case 'twitter':
