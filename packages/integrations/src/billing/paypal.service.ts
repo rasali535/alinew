@@ -93,11 +93,11 @@ export class PayPalService {
   static getPlanId(planId: SubscriptionPlanId): string {
     switch (planId) {
       case 'STARTER':
-        return process.env.PAYPAL_PLAN_ID_STARTER || 'P-RALION-STARTER-19';
+        return process.env.PAYPAL_PLAN_ID_STARTER || 'P-6PM95410S65731425NKLT7TQ';
       case 'PROFESSIONAL':
-        return process.env.PAYPAL_PLAN_ID_PROFESSIONAL || 'P-RALION-PRO-49';
+        return process.env.PAYPAL_PLAN_ID_PROFESSIONAL || 'P-3MR29753W57981825NKLT7TY';
       case 'ENTERPRISE':
-        return process.env.PAYPAL_PLAN_ID_ENTERPRISE || 'P-RALION-ENT-199';
+        return process.env.PAYPAL_PLAN_ID_ENTERPRISE || 'P-7A1329455A563464TNKLT7UA';
       case 'COMMUNITY':
       default:
         throw new Error(`[PayPalService] Community tier ($0/mo) does not require a PayPal subscription.`);

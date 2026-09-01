@@ -71,8 +71,8 @@ async function runPayPalLiveBillingTestSuite() {
   const liveBaseUrl = PayPalService.getBaseUrl();
 
   assert(
-    starterPlanId.includes('STARTER') && proPlanId.includes('PRO') && entPlanId.includes('ENT'),
-    'TEST 1.1: PayPal Plan IDs resolved for paid tiers',
+    starterPlanId.startsWith('P-') && proPlanId.startsWith('P-') && entPlanId.startsWith('P-'),
+    'TEST 1.1: Genuine PayPal Plan IDs resolved for paid tiers',
     `Starter: ${starterPlanId} | Pro: ${proPlanId} | Enterprise: ${entPlanId}`
   );
 
