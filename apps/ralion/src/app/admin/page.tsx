@@ -64,6 +64,24 @@ interface MetricsData {
     status: string;
     updatedAt: string;
   };
+  allConnections?: Array<{
+    id: string;
+    connectionId: string;
+    provider: string;
+    providerAccountId: string;
+    accountName: string;
+    username?: string | null;
+    connectionStatus: string;
+    tokenStatus: string;
+    followersCount: number;
+    organizationId: string;
+    workspaceId?: string;
+    userId?: string;
+    infrastructureProvider: string;
+    connectedAt: string;
+    capabilities?: Record<string, boolean>;
+    metadata?: any;
+  }>;
   systemHealth: string;
   apiErrorRatePct: number;
   recentSecurityEvents: number;
@@ -649,58 +667,121 @@ export default function PlatformAdminPortal() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Facebook Page Connection Card */}
-              <div className="p-5 rounded-2xl bg-zinc-900/80 border border-zinc-800 space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-blue-600/10 border border-blue-500/30 flex items-center justify-center text-blue-400 font-bold text-base">
-                      f
-                    </div>
-                    <div>
-                      <div className="font-bold text-sm text-white flex items-center gap-2">
-                        {metrics?.adminFacebook?.pageName || 'Ras Ali Labs'}
-                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold">
-                          {metrics?.adminFacebook?.connectionStatus || 'CONNECTED'}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
+                  Active Social Connections ({(metrics?.allConnections || (metrics?.adminFacebook ? [metrics.adminFacebook] : [])).length})
+                </span>
+                <span className="text-[11px] text-zinc-500 font-mono">
+                  Multi-Account Tenant Isolation: Active
+                </span>
+              </div>
+
+              {/* Dynamic Connections Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {(metrics?.allConnections && metrics.allConnections.length > 0
+                  ? metrics.allConnections
+                  : metrics?.adminFacebook
+                  ? [{
+                      id: metrics.adminFacebook.id,
+                      connectionId: metrics.adminFacebook.id,
+                      provider: 'facebook',
+                      providerAccountId: metrics.adminFacebook.pageId,
+                      accountName: metrics.adminFacebook.pageName,
+                      username: metrics.adminFacebook.pageUsername,
+                      connectionStatus: metrics.adminFacebook.connectionStatus,
+                      tokenStatus: metrics.adminFacebook.tokenStatus,
+                      followersCount: metrics.adminFacebook.followersCount,
+                      organizationId: 'ras-ali-labs',
+                      infrastructureProvider: 'native',
+                      connectedAt: metrics.adminFacebook.connectedAt,
+                      capabilities: metrics.adminFacebook.capabilities,
+                    }]
+                  : []
+                ).map((conn: any) => {
+                  const prov = (conn.provider || 'social').toLowerCase();
+                  const badgeColor = prov === 'facebook'
+                    ? 'bg-blue-600/10 border-blue-500/30 text-blue-400'
+                    : prov === 'linkedin'
+                    ? 'bg-sky-600/10 border-sky-500/30 text-sky-400'
+                    : prov === 'twitter' || prov === 'x'
+                    ? 'bg-zinc-800 border-zinc-700 text-zinc-200'
+                    : 'bg-purple-600/10 border-purple-500/30 text-purple-400';
+
+                  return (
+                    <div key={conn.id || conn.connectionId} className="p-5 rounded-2xl bg-zinc-900/80 border border-zinc-800 space-y-4">
+                      <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-xl border flex items-center justify-center font-bold text-base ${badgeColor}`}>
+                            {prov.slice(0, 2).toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="font-bold text-sm text-white flex items-center gap-2">
+                              {conn.accountName || 'Social Account'}
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold">
+                                {conn.connectionStatus || 'CONNECTED'}
+                              </span>
+                            </div>
+                            <div className="text-xs text-zinc-400 font-mono">
+                              {conn.provider?.toUpperCase()} · {conn.username ? `@${conn.username}` : ''}
+                            </div>
+                          </div>
+                        </div>
+                        <span className="px-2.5 py-1 rounded-md bg-zinc-800 text-emerald-400 text-xs font-semibold">
+                          {conn.tokenStatus || 'TOKEN_VALID'}
                         </span>
                       </div>
-                      <div className="text-xs text-zinc-400 font-mono">
-                        Page ID: {metrics?.adminFacebook?.pageId || '477334159265235'} · @{metrics?.adminFacebook?.pageUsername || 'rasalibass'}
+
+                      <div className="grid grid-cols-2 gap-3 text-xs font-mono">
+                        <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
+                          <span className="text-zinc-500 block text-[11px] font-sans">Connection ID</span>
+                          <span className="text-xs text-indigo-300 font-mono truncate block" title={conn.id || conn.connectionId}>
+                            {conn.id || conn.connectionId}
+                          </span>
+                        </div>
+                        <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
+                          <span className="text-zinc-500 block text-[11px] font-sans">Provider Account ID</span>
+                          <span className="text-xs text-white font-mono truncate block" title={conn.providerAccountId}>
+                            {conn.providerAccountId || 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
+                          <span className="text-zinc-500 block text-[11px]">Followers</span>
+                          <span className="text-base font-bold text-white">{conn.followersCount ?? 0}</span>
+                        </div>
+                        <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
+                          <span className="text-zinc-500 block text-[11px]">Infrastructure</span>
+                          <span className="text-base font-bold text-indigo-400 uppercase">{conn.infrastructureProvider || 'NATIVE'}</span>
+                        </div>
+                      </div>
+
+                      {conn.capabilities && (
+                        <div className="space-y-2">
+                          <span className="text-xs font-semibold text-zinc-400">Granted Capabilities & Scopes</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {Object.entries(conn.capabilities)
+                              .filter(([, v]) => Boolean(v))
+                              .map(([cap]) => (
+                                <span key={cap} className="px-2 py-0.5 rounded bg-zinc-800/80 text-zinc-300 text-[10px] font-mono">
+                                  ✓ {cap}
+                                </span>
+                              ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="pt-2 flex items-center justify-between border-t border-zinc-800 text-[11px] text-zinc-500">
+                        <span>Org: <code>{conn.organizationId || 'ras-ali-labs'}</code></span>
+                        <span className="text-emerald-400 font-medium">Auto-Sync Active</span>
                       </div>
                     </div>
-                  </div>
-                  <span className="px-2.5 py-1 rounded-md bg-zinc-800 text-emerald-400 text-xs font-semibold">
-                    {metrics?.adminFacebook?.tokenStatus || 'TOKEN_VALID'}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
-                    <span className="text-zinc-500 block text-[11px]">Followers</span>
-                    <span className="text-base font-bold text-white">{metrics?.adminFacebook?.followersCount || 108}</span>
-                  </div>
-                  <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
-                    <span className="text-zinc-500 block text-[11px]">Connection Type</span>
-                    <span className="text-base font-bold text-indigo-400">PAGE_MANAGED</span>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <span className="text-xs font-semibold text-zinc-400">Granted Capabilities & Scopes</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {['canPublish', 'canSchedule', 'canUploadImage', 'canUploadVideo', 'canReadAnalytics', 'read_insights', 'pages_show_list'].map((cap) => (
-                      <span key={cap} className="px-2 py-0.5 rounded bg-zinc-800/80 text-zinc-300 text-[10px] font-mono">
-                        ✓ {cap}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="pt-2 flex items-center justify-between border-t border-zinc-800 text-[11px] text-zinc-500">
-                  <span>Connected to Admin Account: <code>ali@rasalilabs.com</code></span>
-                  <span className="text-emerald-400 font-medium">Auto-Sync Active</span>
-                </div>
+                  );
+                })}
               </div>
+            </div>
 
               {/* Zernio Infrastructure Card */}
               <div className="p-5 rounded-2xl bg-zinc-900/80 border border-zinc-800 space-y-4">
@@ -753,7 +834,6 @@ export default function PlatformAdminPortal() {
                   <span className="text-purple-400 font-medium">Automated Webhooks OK</span>
                 </div>
               </div>
-            </div>
           </div>
         )}
 

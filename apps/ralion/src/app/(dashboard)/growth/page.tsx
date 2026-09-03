@@ -450,6 +450,11 @@ Rules:
 
   const [marketResearchReport, setMarketResearchReport] = useState<any | null>(null);
   const [facebookPagePosts, setFacebookPagePosts] = useState<any[]>([]);
+  /**
+   * Authoritative per-connection post cache: Record<socialConnectionId, post[]>
+   * Keyed by socialConnectionId so switching accounts never shows the previous account's posts.
+   */
+  const [connectionPosts, setConnectionPosts] = useState<Record<string, any[]>>({});
   const [mariGrowthScore, setMariGrowthScore] = useState<any | null>(null);
   const [mariInsights, setMariInsights] = useState<any[]>([]);
   const [mari7DayPlan, setMari7DayPlan] = useState<any | null>(null);
@@ -726,22 +731,26 @@ Rules:
     }
   }, []);
 
-  // ── Load live Facebook Page Posts directly from Zernio / Facebook API ─────
-  const fetchLiveFacebookPosts = useCallback(async (pagesOverride?: any[]) => {
+  // ── Load Posts for Selected Connection (Authoritative Account Isolation) ─
+  /**
+   * Fetch posts for a specific social connection by its authoritative ID.
+   * Scoped strictly to socialConnectionId — never falls back to a default account.
+   */
+  const fetchPostsForConnection = useCallback(async (socialConnectionId: string) => {
+    if (!socialConnectionId) return;
     try {
-      const pages = pagesOverride || availableFacebookPages;
-      const activeFbPage = pages.find((p: any) => p.isCurrentDestination || p.status === 'CONNECTED') || pages[0];
-      const pageId = activeFbPage?.pageId || selectedPageForConnect || 'default';
-      const res = await authFetch(`/api/social/facebook/pages/${pageId}/posts`);
+      const res = await authFetch(`/api/social/posts/by-connection?socialConnectionId=${encodeURIComponent(socialConnectionId)}`);
       if (res.ok) {
         const data = await res.json();
         if (data.posts && Array.isArray(data.posts)) {
+          const provider = data.provider || 'facebook';
+
           const livePosts: ContentPost[] = data.posts.map((p: any) => ({
             id: p.id,
-            title: p.title || 'Facebook Post',
+            title: p.title || `${provider} Post`,
             body: p.body || '',
-            platform: 'facebook' as const,
-            hashtags: p.hashtags || ['#RasAliLabs', '#RalionOS', '#EnterpriseAI'],
+            platform: provider as any,
+            hashtags: p.hashtags || ['#RalionOS', '#Growth'],
             status: p.status === 'published' ? 'published' : p.status === 'scheduled' ? 'scheduled' : 'draft',
             publishedAt: p.publishedAt ? new Date(p.publishedAt).toLocaleString() : undefined,
             rawPublishedAt: p.publishedAt || p.createdAt || p.published_at || p.created_time || p.scheduledFor || new Date().toISOString(),
@@ -751,14 +760,33 @@ Rules:
             engagement: p.engagement || { likes: 0, shares: 0, reach: 0, comments: 0 },
           }));
 
+          // Store in per-connection cache
+          setConnectionPosts(prev => ({ ...prev, [socialConnectionId]: data.posts }));
+
+          // For facebook accounts, also populate legacy facebookPagePosts state
+          if (provider === 'facebook') {
+            setFacebookPagePosts(data.posts);
+          }
+
           setPosts(livePosts);
-          setFacebookPagePosts(data.posts);
         }
       }
     } catch (err) {
-      console.warn('[Growth] Live posts fetch notice:', err);
+      console.warn('[Growth] Posts fetch notice:', err);
     }
-  }, [availableFacebookPages, selectedPageForConnect]);
+  }, []);
+
+  // Backward-compatible wrapper for existing facebook callers
+  const fetchLiveFacebookPosts = useCallback(async (pagesOverride?: any[]) => {
+    const pages = pagesOverride || availableFacebookPages;
+    const activeFbPage = pages.find((p: any) => p.isCurrentDestination || p.status === 'CONNECTED') || pages[0];
+    const fbConn = connectedAccounts.find(a => a.id === selectedAccountId && a.provider === 'facebook')
+      || connectedAccounts.find(a => a.provider === 'facebook');
+    const targetConnId = activeFbPage?.id || fbConn?.id;
+    if (targetConnId) {
+      await fetchPostsForConnection(targetConnId);
+    }
+  }, [availableFacebookPages, connectedAccounts, selectedAccountId, fetchPostsForConnection]);
 
   // ── Media File Upload Handler (Image & Video) ───────────────────────────
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1094,19 +1122,25 @@ Rules:
         (a) => a.provider === 'facebook' && a.status === 'connected'
       );
 
+      // Load posts for the authoritative account (selected or first connected)
+      const initialAccount = accounts.find(a => a.id === selectedAccountId) || accounts[0];
+      if (initialAccount?.id) {
+        await fetchPostsForConnection(initialAccount.id);
+      }
+
       if (hasFacebook) {
         const pages = await fetchFacebookPages();
         await Promise.allSettled([
-          fetchLiveFacebookPosts(pages),
           fetchInboxConversations(),
           fetchPostComments(),
           fetchMariGrowthData(),
           fetchMarketResearchData(),
           fetchBusinessLearningData(),
         ]);
-      } else {
+      } else if (accounts.length === 0) {
         // Reset to clean empty state when no account connected
         setFacebookPagePosts([]);
+        setConnectionPosts({});
         setPostComments([]);
         setInboxConversations([]);
         setAvailableFacebookPages([]);
@@ -1902,15 +1936,16 @@ Rules:
 
     setPublishingPostId(postId);
     try {
-      const targetPlatform = post.platform || 'facebook';
-      const targetConn =
-        (selectedAccountId && connectedAccounts.find(a => a.id === selectedAccountId && (a.provider === targetPlatform || !targetPlatform))) ||
-        connectedAccounts.find(a => a.id === selectedAccountId) ||
-        connectedAccounts.find(a => a.provider === targetPlatform) ||
-        connectedAccounts[0];
-      const activeFbPage = availableFacebookPages.find(p => p.pageId === targetConn?.providerAccountId || p.id === targetConn?.id || p.pageId === targetConn?.id)
-        || availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') 
-        || availableFacebookPages[0];
+      const targetConn = (selectedAccountId && connectedAccounts.find(a => a.id === selectedAccountId))
+        || (post.platform && connectedAccounts.find(a => a.provider === post.platform))
+        || connectedAccounts[0];
+      const targetPlatform = post.platform || targetConn?.provider || 'facebook';
+      const isFacebookTarget = targetPlatform === 'facebook';
+      const activeFbPage = isFacebookTarget
+        ? (availableFacebookPages.find(p => p.pageId === targetConn?.providerAccountId || p.id === targetConn?.id || p.pageId === targetConn?.id)
+           || availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') 
+           || availableFacebookPages[0])
+        : null;
 
       const payload = {
         title: post.title,
@@ -1919,8 +1954,8 @@ Rules:
         mediaUrls: post.mediaUrl ? [post.mediaUrl] : undefined,
         mediaTypes: post.mediaType ? [post.mediaType] : undefined,
         authorName: targetConn?.label || activeFbPage?.name || 'Social Account',
-        socialConnectionId: targetConn?.id || (targetPlatform === 'facebook' ? activeFbPage?.id : undefined),
-        pageId: targetPlatform === 'facebook' ? (activeFbPage?.pageId || undefined) : undefined,
+        socialConnectionId: targetConn?.id,
+        pageId: isFacebookTarget ? (activeFbPage?.pageId || targetConn?.providerAccountId || undefined) : undefined,
       };
 
       const res = await authFetch('/api/social/publish', {
@@ -3234,6 +3269,7 @@ Rules:
                       key={acc.id}
                       onClick={() => {
                         setSelectedAccountId(acc.id);
+                        fetchPostsForConnection(acc.id);
                         try {
                           const supabase = createClient();
                           supabase.auth.getUser().then(({ data }) => {
@@ -3469,7 +3505,7 @@ Rules:
               <div className="flex gap-1.5 bg-zinc-950 p-1.5 rounded-2xl border border-zinc-800 w-full sm:w-fit overflow-x-auto">
                 {[
                   { id: 'OVERVIEW', label: 'Overview & Score', icon: BarChart2 },
-                  { id: 'POSTS', label: `Page Posts (${facebookPagePosts.length})`, icon: Share2 },
+                  { id: 'POSTS', label: `Page Posts (${(connectionPosts[selectedAccountId ?? ''] ?? (activeAcc?.provider === 'facebook' ? facebookPagePosts : [])).length})`, icon: Share2 },
                   { id: 'ANALYTICS', label: '30-Day Growth', icon: TrendingUp },
                   { id: 'MARI_GROWTH', label: 'Mari AI Intelligence', icon: Sparkles },
                   { id: 'MARKET_INTEL', label: 'Market Research & Competition', icon: Globe },
@@ -3564,35 +3600,39 @@ Rules:
                   </span>
                 </div>
 
-                {(activeAcc?.provider === 'facebook' ? facebookPagePosts : dateFilteredPosts.filter(p => p.platform === activeAcc?.provider)).length === 0 ? (
-                  <div className="p-8 rounded-2xl bg-zinc-950/60 border border-zinc-800/80 text-center flex flex-col items-center gap-2">
-                    <Share2 className="w-8 h-8 text-zinc-600" />
-                    <p className="text-xs font-semibold text-zinc-300">No published posts yet for {activeAcc?.label || 'this account'}</p>
-                    <p className="text-[11px] text-zinc-500">Create a post above to publish directly to {activeAcc?.provider?.toUpperCase() || 'your account'}.</p>
-                  </div>
-                ) : (
-                  (activeAcc?.provider === 'facebook' ? facebookPagePosts : dateFilteredPosts.filter(p => p.platform === activeAcc?.provider)).map((post: any) => (
-                    <div key={post.id} className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 flex flex-col md:flex-row items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <Badge variant="purple" className="text-[9px] font-mono">
-                            {post.source === 'RALION' ? 'Published via Ralion' : `Published on ${activeAcc?.provider?.toUpperCase() || 'Social'}`}
-                          </Badge>
-                          <span className="text-[10px] text-zinc-500 font-mono">{post.publishedAt || post.scheduledAt || 'Recent'}</span>
-                        </div>
-                        <h4 className="text-sm font-bold text-white">{post.title}</h4>
-                        <p className="text-xs text-zinc-300 mt-1 leading-relaxed">{post.body}</p>
-                        
-                        <div className="flex items-center gap-4 mt-3 pt-3 border-t border-zinc-900 text-[11px] text-zinc-400">
-                          <span>❤️ <strong>{post.engagement?.likes || 0}</strong> likes</span>
-                          <span>💬 <strong>{post.engagement?.comments || 0}</strong> comments</span>
-                          <span>↗ <strong>{post.engagement?.shares || 0}</strong> shares</span>
-                          <span>👁️ <strong className="text-emerald-400">{post.engagement?.reach || 0}</strong> reach</span>
+                {(() => {
+                  const activeConnId = selectedAccountId ?? connectedAccounts[0]?.id ?? '';
+                  const activePosts = connectionPosts[activeConnId] ?? (activeAcc?.provider === 'facebook' ? facebookPagePosts : []);
+                  return activePosts.length === 0 ? (
+                    <div className="p-8 rounded-2xl bg-zinc-950/60 border border-zinc-800/80 text-center flex flex-col items-center gap-2">
+                      <Share2 className="w-8 h-8 text-zinc-600" />
+                      <p className="text-xs font-semibold text-zinc-300">No published posts yet for {activeAcc?.label || 'this account'}</p>
+                      <p className="text-[11px] text-zinc-500">Create a post above to publish directly to {activeAcc?.provider?.toUpperCase() || 'your account'}.</p>
+                    </div>
+                  ) : (
+                    activePosts.map((post: any) => (
+                      <div key={post.id} className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 flex flex-col md:flex-row items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <Badge variant="purple" className="text-[9px] font-mono">
+                              {post.source === 'RALION' ? 'Published via Ralion' : `Published on ${activeAcc?.provider?.toUpperCase() || 'Social'}`}
+                            </Badge>
+                            <span className="text-[10px] text-zinc-500 font-mono">{post.publishedAt || post.scheduledAt || 'Recent'}</span>
+                          </div>
+                          <h4 className="text-sm font-bold text-white">{post.title}</h4>
+                          <p className="text-xs text-zinc-300 mt-1 leading-relaxed">{post.body}</p>
+                          
+                          <div className="flex items-center gap-4 mt-3 pt-3 border-t border-zinc-900 text-[11px] text-zinc-400">
+                            <span>❤️ <strong>{post.engagement?.likes || 0}</strong> likes</span>
+                            <span>💬 <strong>{post.engagement?.comments || 0}</strong> comments</span>
+                            <span>↗ <strong>{post.engagement?.shares || 0}</strong> shares</span>
+                            <span>👁️ <strong className="text-emerald-400">{post.engagement?.reach || 0}</strong> reach</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))
-                )}
+                    ))
+                  );
+                })()}
               </div>
             )}
 
@@ -5650,22 +5690,25 @@ Rules:
               <div className="mt-1 p-2.5 rounded-xl bg-zinc-950 border border-indigo-500/40 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
                   <div className="w-7 h-7 rounded-lg bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center font-bold text-xs text-indigo-400">
-                    fb
+                    {(connectedAccounts.find(a => a.id === selectedAccountId)?.provider || connectedAccounts[0]?.provider || 'fb').slice(0, 2).toUpperCase()}
                   </div>
                   <div>
                     {(() => {
-                      const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
-                      const activeConn = connectedAccounts.find(a => a.provider === 'facebook');
-                      const name = activeFbPage?.name || activeConn?.label || 'Facebook Page';
-                      const handle = activeFbPage?.username || activeConn?.handle || '@facebook';
-                      const pageId = activeFbPage?.pageId || activeConn?.id || 'Connected';
+                      const activeAcc = connectedAccounts.find(a => a.id === selectedAccountId) || connectedAccounts[0];
+                      const activeFbPage = (activeAcc?.provider === 'facebook')
+                        ? (availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0])
+                        : null;
+                      const name = activeAcc?.label || activeFbPage?.name || 'Social Account';
+                      const handle = activeAcc?.handle || activeFbPage?.username || `@${activeAcc?.provider || 'social'}`;
+                      const pageId = activeAcc?.providerAccountId || activeFbPage?.pageId || activeAcc?.id || 'Connected';
+                      const prov = (activeAcc?.provider || 'fb').slice(0, 2).toUpperCase();
                       return (
                         <>
                           <div className="text-xs font-bold text-white flex items-center gap-1.5">
                             ✓ {name}
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                           </div>
-                          <p className="text-[10px] text-zinc-400 font-mono">{handle} • ID: {pageId}</p>
+                          <p className="text-[10px] text-zinc-400 font-mono">{handle} • {prov} • ID: {pageId}</p>
                         </>
                       );
                     })()}
@@ -5848,15 +5891,16 @@ Rules:
 
                 setIsConnecting(true);
 
-                const targetPlatform = newPost.platform || 'facebook';
-                const targetConn =
-                  (selectedAccountId && connectedAccounts.find(a => a.id === selectedAccountId && (a.provider === targetPlatform || !targetPlatform))) ||
-                  connectedAccounts.find(a => a.id === selectedAccountId) ||
-                  connectedAccounts.find(a => a.provider === targetPlatform) ||
-                  connectedAccounts[0];
-                const activeFbPage = availableFacebookPages.find(p => p.pageId === targetConn?.providerAccountId || p.id === targetConn?.id || p.pageId === targetConn?.id)
-                  || availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') 
-                  || availableFacebookPages[0];
+                const targetConn = (selectedAccountId && connectedAccounts.find(a => a.id === selectedAccountId))
+                  || (newPost.platform && connectedAccounts.find(a => a.provider === newPost.platform))
+                  || connectedAccounts[0];
+                const targetPlatform = newPost.platform || targetConn?.provider || 'facebook';
+                const isFacebookTarget = targetPlatform === 'facebook';
+                const activeFbPage = isFacebookTarget
+                  ? (availableFacebookPages.find(p => p.pageId === targetConn?.providerAccountId || p.id === targetConn?.id || p.pageId === targetConn?.id)
+                     || availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') 
+                     || availableFacebookPages[0])
+                  : null;
 
                 const payload = {
                   title: topic || 'Social Post',
@@ -5866,8 +5910,8 @@ Rules:
                   mediaTypes: newPost.mediaType ? [newPost.mediaType] : undefined,
                   scheduledFor: newPost.scheduledAt || undefined,
                   authorName: targetConn?.label || activeFbPage?.name || 'Social Account',
-                  socialConnectionId: targetConn?.id || (targetPlatform === 'facebook' ? activeFbPage?.id : undefined),
-                  pageId: targetPlatform === 'facebook' ? (activeFbPage?.pageId || undefined) : undefined,
+                  socialConnectionId: targetConn?.id,
+                  pageId: isFacebookTarget ? (activeFbPage?.pageId || targetConn?.providerAccountId || undefined) : undefined,
                 };
 
                 try {

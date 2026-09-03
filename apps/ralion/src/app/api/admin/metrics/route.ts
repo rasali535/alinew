@@ -64,13 +64,37 @@ export async function GET(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
 
+  let allConnections: any[] = [];
   if (supabaseUrl && serviceKey) {
     try {
       const supabase = createClient(supabaseUrl, serviceKey);
-      const { data: fbConns } = await supabase.from('social_connections').select('*');
+      const { data: fbConns } = await supabase.from('social_connections').select('*').order('created_at', { ascending: false });
       if (fbConns) {
         connectedMetaCount = fbConns.filter(c => c.connection_status === 'CONNECTED').length;
-        const masterFb = fbConns.find(c => c.provider === 'facebook' && (c.metadata?.pageId === '477334159265235' || c.account_name === 'Ras Ali Labs'));
+        allConnections = fbConns.map(c => ({
+          id: c.id,
+          connectionId: c.id,
+          provider: c.provider,
+          providerAccountId: c.provider_account_id || c.metadata?.pageId || c.id,
+          accountName: c.account_name || c.metadata?.pageName || c.metadata?.name || 'Social Account',
+          username: c.username || c.metadata?.pageUsername || null,
+          connectionStatus: c.connection_status || 'CONNECTED',
+          tokenStatus: c.token_status || 'TOKEN_VALID',
+          followersCount: Number(c.followers_count || c.metadata?.followers_count || 0),
+          organizationId: c.organization_id || c.workspace_id || 'ras-ali-labs',
+          workspaceId: c.workspace_id,
+          userId: c.user_id,
+          infrastructureProvider: c.infrastructure_provider || 'native',
+          connectedAt: c.connected_at || c.created_at,
+          capabilities: c.capabilities || c.metadata?.capabilities || {
+            canPublish: true,
+            canSchedule: true,
+            canReadAnalytics: true,
+          },
+          metadata: c.metadata || {},
+        }));
+
+        const masterFb = fbConns.find(c => c.provider === 'facebook' && (c.metadata?.pageId === '477334159265235' || c.account_name === 'Ras Ali Labs')) || fbConns.find(c => c.provider === 'facebook');
         if (masterFb) {
           adminFacebook = {
             id: masterFb.id,
@@ -78,10 +102,10 @@ export async function GET(request: NextRequest) {
             classification: 'PLATFORM_OWNED',
             isLocked: true,
             protected: true,
-            pageId: masterFb.metadata?.pageId || '477334159265235',
+            pageId: masterFb.metadata?.pageId || masterFb.provider_account_id || '477334159265235',
             pageName: masterFb.metadata?.pageName || masterFb.account_name || 'Ras Ali Labs',
-            pageUsername: masterFb.metadata?.pageUsername || 'rasalibass',
-            organizationId: 'ras-ali-labs',
+            pageUsername: masterFb.metadata?.pageUsername || masterFb.username || 'rasalibass',
+            organizationId: masterFb.organization_id || masterFb.workspace_id || 'ras-ali-labs',
             connectionStatus: masterFb.connection_status || 'CONNECTED',
             tokenStatus: masterFb.token_status || 'TOKEN_VALID',
             followersCount: masterFb.followers_count || 108,
@@ -99,7 +123,7 @@ export async function GET(request: NextRequest) {
       const { data: zConns } = await supabase.from('social_provider_profiles').select('*');
       if (zConns) {
         connectedZernioCount = zConns.filter(c => c.status === 'ACTIVE').length;
-        const masterZ = zConns.find(c => c.provider === 'zernio' && c.provider_profile_id === '6a82deac1a69158ef81cb2cd');
+        const masterZ = zConns.find(c => c.provider === 'zernio' && c.provider_profile_id === '6a82deac1a69158ef81cb2cd') || zConns[0];
         if (masterZ) {
           adminZernio = {
             id: masterZ.id,
@@ -108,8 +132,8 @@ export async function GET(request: NextRequest) {
             isLocked: true,
             protected: true,
             providerProfileId: masterZ.provider_profile_id,
-            accountId: '6a82df7277555aae018b92b4',
-            organizationId: 'ras-ali-labs',
+            accountId: masterZ.account_id || '6a82df7277555aae018b92b4',
+            organizationId: masterZ.organization_id || 'ras-ali-labs',
             profileName: masterZ.profile_name || 'Default',
             status: masterZ.status || 'ACTIVE',
             updatedAt: masterZ.updated_at,
@@ -142,6 +166,7 @@ export async function GET(request: NextRequest) {
       connectedZernioProfiles: connectedZernioCount,
       adminFacebook,
       adminZernio,
+      allConnections,
       systemHealth: 'UP',
       apiErrorRatePct: 0.0,
       recentSecurityEvents: securityEvents.length,

@@ -403,6 +403,8 @@ export class SocialPublishingService {
           scheduled_for: isScheduled ? params.scheduledFor?.toISOString() : null,
           published_at: isScheduled ? null : new Date().toISOString(),
           author_name: params.authorName || 'Ralion User',
+          // Tag every post with its explicit social connection so reads can be scoped per-account
+          social_connection_id: explicitConnection?.id || params.socialConnectionId || null,
         })
         .select()
         .maybeSingle();

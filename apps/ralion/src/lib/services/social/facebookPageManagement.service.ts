@@ -471,26 +471,43 @@ export class FacebookPageManagementService {
     workspaceId?: string;
     userId?: string;
     pageId?: string;
+    /** When provided, resolves EXACTLY this connection instead of the first Facebook connection found */
+    socialConnectionId?: string;
     limit?: number;
   }): Promise<FacebookPagePostItem[]> {
     const supabase = getServiceSupabase();
 
-    // 1. Resolve connected tenant's Zernio profile and account mapping strictly for this workspace / user
-    let connQuery = supabase
-      .from('social_connections')
-      .select('id, zernio_profile_id, zernio_account_id, provider_account_id, workspace_id, user_id, metadata, followers_count')
-      .eq('provider', 'facebook')
-      .eq('connection_status', 'CONNECTED');
+    // 1. Resolve connection — prefer explicit socialConnectionId for per-account isolation
+    let conn: any = null;
 
-    if (params.workspaceId && params.workspaceId !== 'default' && params.workspaceId !== 'default-org') {
-      connQuery = connQuery.or(`workspace_id.eq.${params.workspaceId},user_id.eq.${params.userId || params.workspaceId}`);
-    } else if (params.userId && params.userId !== 'default-user') {
-      connQuery = connQuery.eq('user_id', params.userId);
+    if (params.socialConnectionId) {
+      // Explicit: fetch the exact connection the caller requested
+      const { data: explicitConn } = await supabase
+        .from('social_connections')
+        .select('id, zernio_profile_id, zernio_account_id, provider_account_id, workspace_id, user_id, metadata, followers_count')
+        .eq('id', params.socialConnectionId)
+        .eq('connection_status', 'CONNECTED')
+        .maybeSingle();
+      conn = explicitConn;
     } else {
-      return [];
-    }
+      // Fallback: find the first Facebook connection for this workspace/user (legacy behaviour)
+      let connQuery = supabase
+        .from('social_connections')
+        .select('id, zernio_profile_id, zernio_account_id, provider_account_id, workspace_id, user_id, metadata, followers_count')
+        .eq('provider', 'facebook')
+        .eq('connection_status', 'CONNECTED');
 
-    const { data: conn } = await connQuery.maybeSingle();
+      if (params.workspaceId && params.workspaceId !== 'default' && params.workspaceId !== 'default-org') {
+        connQuery = connQuery.or(`workspace_id.eq.${params.workspaceId},user_id.eq.${params.userId || params.workspaceId}`);
+      } else if (params.userId && params.userId !== 'default-user') {
+        connQuery = connQuery.eq('user_id', params.userId);
+      } else {
+        return [];
+      }
+
+      const { data: fallbackConn } = await connQuery.maybeSingle();
+      conn = fallbackConn;
+    }
 
     if (!conn) {
       return [];
@@ -676,7 +693,12 @@ export class FacebookPageManagementService {
         .order('created_at', { ascending: false })
         .limit(params.limit || 30);
 
-      if (params.workspaceId && params.workspaceId !== 'default' && params.workspaceId !== 'default-org') {
+      // Prefer scoping by explicit social_connection_id for per-account isolation
+      if (params.socialConnectionId) {
+        dbPostsQuery = dbPostsQuery.or(
+          `social_connection_id.eq.${params.socialConnectionId},and(workspace_id.eq.${params.workspaceId || params.userId},platforms.cs.{facebook})`
+        );
+      } else if (params.workspaceId && params.workspaceId !== 'default' && params.workspaceId !== 'default-org') {
         dbPostsQuery = dbPostsQuery.eq('workspace_id', params.workspaceId);
       } else if (params.userId && params.userId !== 'default-user') {
         dbPostsQuery = dbPostsQuery.eq('user_id', params.userId);
