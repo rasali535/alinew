@@ -170,6 +170,7 @@ export interface SocialAccount {
   scopes: string[];
   avatarUrl?: string;
   followers?: string;
+  providerAccountId?: string;
 }
 
 const initialGeneratedContent: GeneratedContentItem[] = [];
