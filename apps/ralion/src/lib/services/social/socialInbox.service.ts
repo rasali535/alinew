@@ -10,10 +10,10 @@ import { SocialTokenManager } from './socialTokenManager.service';
 
 function getServiceSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co';
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.placeholder';
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!key) {
+    throw new Error('[SocialInbox] Missing SUPABASE_SERVICE_ROLE_KEY environment variable.');
+  }
   return createClient(url, key, {
     auth: {
       persistSession: false,

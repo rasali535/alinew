@@ -76,15 +76,11 @@ export function selectBestAimlModel(prompt: string): SelectedModelInfo {
 }
 
 // ============================================================
-// Gemini API Keys — ordered by preference (verified working first)
+// Gemini API Keys — loaded strictly from environment variables
 // ============================================================
 const GEMINI_KEYS: string[] = [
   process.env.GEMINI_API_KEY,
   process.env.NEXT_PUBLIC_GEMINI_API_KEY,
-  // Project: rasalilabs (771869610143) — verified 200 OK with gemini-2.5-flash
-  "AQ.Ab8RN6LHIgVR8Zti6ifRmdpEKXKguMi1mbTZ951Mdn0mFzBhxA",
-  // Project: mari-ai (982725901666) — secondary key
-  "AQ.Ab8RN6IRj0O9lVvQ4iNUoUjSDosss7Nsot3qoQT5A_An-Wienw",
 ].filter(Boolean) as string[];
 
 // ============================================================
@@ -154,18 +150,20 @@ async function callGeminiApi(
         text = sanitizeWebRefusalText(text, prompt);
 
         const usageMetadata = data.usageMetadata;
-        const promptTokens = usageMetadata?.promptTokenCount || estimateTokenCount(fullPrompt);
-        const completionTokens = usageMetadata?.candidatesTokenCount || estimateTokenCount(text);
-        const totalTokens = usageMetadata?.totalTokenCount || (promptTokens + completionTokens);
+        let usage: MariTokenUsage | undefined = undefined;
+
+        if (usageMetadata?.promptTokenCount !== undefined && usageMetadata?.candidatesTokenCount !== undefined) {
+          usage = {
+            promptTokens: usageMetadata.promptTokenCount,
+            completionTokens: usageMetadata.candidatesTokenCount,
+            totalTokens: usageMetadata.totalTokenCount ?? (usageMetadata.promptTokenCount + usageMetadata.candidatesTokenCount),
+          };
+        }
 
         return {
           text,
-          usage: {
-            promptTokens,
-            completionTokens,
-            totalTokens,
-          },
-        };
+          ...(usage ? { usage } : {}),
+        } as any;
       }
     } catch {}
   }
@@ -373,8 +371,8 @@ function generateLocalStrategicResponse(
 
   const pipelineVal = context?.layer2?.crm?.totalPipelineValue?.value || 0;
   const activeClients = context?.layer2?.crm?.activeCustomersCount?.value || 0;
-  const reachGrowth = context?.layer2?.social?.reachGrowthPct?.value || (isRasAli ? 34 : 0);
-  const followers = context?.layer2?.social?.followersCount?.value || (isRasAli ? 107 : 0);
+  const reachGrowth = context?.layer2?.social?.reachGrowthPct?.value || 0;
+  const followers = context?.layer2?.social?.followersCount?.value || 0;
 
   let responseText = '';
 

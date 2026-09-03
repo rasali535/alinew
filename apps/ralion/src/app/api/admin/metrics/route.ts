@@ -64,13 +64,16 @@ export async function GET(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
 
+  let connectedUsersCount = 0;
   let allConnections: any[] = [];
   if (supabaseUrl && serviceKey) {
     try {
       const supabase = createClient(supabaseUrl, serviceKey);
       const { data: fbConns } = await supabase.from('social_connections').select('*').order('created_at', { ascending: false });
       if (fbConns) {
-        connectedMetaCount = fbConns.filter(c => c.connection_status === 'CONNECTED').length;
+        const activeConns = fbConns.filter(c => c.connection_status === 'CONNECTED');
+        connectedMetaCount = activeConns.length;
+        connectedUsersCount = new Set(activeConns.map(c => c.user_id || c.workspace_id).filter(Boolean)).size;
         allConnections = fbConns.map(c => ({
           id: c.id,
           connectionId: c.id,
@@ -162,6 +165,8 @@ export async function GET(request: NextRequest) {
         videos: videoAssets.length,
         successRate: 100,
       },
+      connectedUsers: connectedUsersCount,
+      activeSocialConnections: connectedMetaCount,
       connectedMetaAccounts: connectedMetaCount,
       connectedZernioProfiles: connectedZernioCount,
       adminFacebook,

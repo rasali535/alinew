@@ -2132,10 +2132,14 @@ Rules:
 
   const activeAcc = connectedAccounts.find(a => a.id === selectedAccountId) || connectedAccounts[0];
   const fbConn = (activeAcc && activeAcc.provider === 'facebook') ? activeAcc : connectedAccounts.find(a => a.provider === 'facebook');
-  const activeFbPage = availableFacebookPages.find(p => p.pageId === activeAcc?.providerAccountId || p.id === activeAcc?.id || p.pageId === activeAcc?.id)
-    || availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') 
-    || availableFacebookPages[0];
-  const fbFollowersCount = Number(activeFbPage?.followersCount) || (activeAcc?.followers ? Number(String(activeAcc.followers).replace(/,/g, '')) : (fbConn?.followers ? Number(String(fbConn.followers).replace(/,/g, '')) : 0));
+  const isSelectedFacebook = activeAcc?.provider === 'facebook';
+  const activeFbPage = isSelectedFacebook 
+    ? (availableFacebookPages.find(p => p.pageId === activeAcc?.providerAccountId || p.id === activeAcc?.id) || null)
+    : null;
+  const currentAccountName = activeAcc?.label || activeFbPage?.name || 'Social Account';
+  const currentAccountHandle = activeAcc?.handle || activeFbPage?.username || '';
+  const currentAccountId = activeAcc?.providerAccountId || activeFbPage?.pageId || activeAcc?.id || '';
+  const fbFollowersCount = Number(activeFbPage?.followersCount) || (activeAcc?.followers ? Number(String(activeAcc.followers).replace(/,/g, '')) : 0);
 
   // Dynamic Spline Series & Timeframe Bucketed Computation
   const { splineChartSeries, dynamicDateLabels } = React.useMemo(() => {
@@ -2384,21 +2388,21 @@ Rules:
           <div className="p-4 rounded-2xl bg-zinc-900/90 border border-zinc-800 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 shadow-xl">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center font-black text-white text-base shadow-lg shadow-indigo-600/30">
-                {activeFbPage?.name?.slice(0, 3).toUpperCase() || 'RAL'}
+                {currentAccountName.slice(0, 3).toUpperCase()}
               </div>
               <div>
                 <div className="flex items-center gap-2">
                   <h2 className="text-base font-black text-white flex items-center gap-1.5">
-                    {activeFbPage?.name || fbConn?.label || 'Facebook Page'}
-                    {(activeFbPage?.username || fbConn?.handle) && (
+                    {currentAccountName}
+                    {currentAccountHandle && (
                       <span className="text-xs font-mono text-indigo-400 font-normal">
-                        ({activeFbPage?.username || fbConn?.handle})
+                        ({currentAccountHandle})
                       </span>
                     )}
                   </h2>
-                  {(activeFbPage || fbConn) ? (
+                  {activeAcc?.status === 'connected' ? (
                     <Badge variant="success" className="text-[10px] font-bold py-0.5 px-2 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Meta Live Connected
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Connected
                     </Badge>
                   ) : (
                     <Badge variant="default" className="text-[10px] font-bold py-0.5 px-2">
@@ -2409,10 +2413,10 @@ Rules:
                 <p className="text-[11px] text-zinc-400 mt-0.5 flex items-center gap-1.5 font-sans">
                   <Clock className="w-3 h-3 text-zinc-500" />
                   Stats measured as per workspace timezone: <span className="text-zinc-300 font-semibold">CAT (UTC+2 • Gaborone)</span>
-                  {(activeFbPage?.pageId || fbConn?.id) && (
+                  {currentAccountId && (
                     <>
                       <span className="text-zinc-600">•</span>
-                      <span className="text-zinc-500 font-mono">Page ID: {activeFbPage?.pageId || fbConn?.id}</span>
+                      <span className="text-zinc-500 font-mono">Account ID: {currentAccountId}</span>
                     </>
                   )}
                 </p>

@@ -46,6 +46,25 @@ export async function POST(request: NextRequest) {
       answerText = ruleResponse.answer;
     }
 
+    // Real provider-reported token usage
+    const realUsage = apiResult?.usage || null;
+
+    if (realUsage && orgId) {
+      try {
+        const { MariTokenTelemetryService } = require('@ralion/ai');
+        MariTokenTelemetryService.recordUsage({
+          organizationId: orgId,
+          userId: body.userId || 'system',
+          requestId: body.requestId || `req_${Date.now()}`,
+          provider: 'google',
+          model: modelUsed,
+          inputTokens: realUsage.promptTokens,
+          outputTokens: realUsage.completionTokens,
+          totalTokens: realUsage.totalTokens,
+        });
+      } catch {}
+    }
+
     return corsJsonResponse({
       success: true,
       answer: answerText,
@@ -53,16 +72,8 @@ export async function POST(request: NextRequest) {
       ragContext: ragContext.includes('No matching') ? null : ragContext,
       modelUsed,
       contextVersion: context.version,
-      usage: apiResult?.usage || {
-        promptTokens: Math.ceil((query.length + 40) / 4),
-        completionTokens: Math.ceil(answerText.length / 4),
-        totalTokens: Math.ceil((query.length + 40 + answerText.length) / 4),
-      },
-      tokens: apiResult?.tokens || apiResult?.usage || {
-        promptTokens: Math.ceil((query.length + 40) / 4),
-        completionTokens: Math.ceil(answerText.length / 4),
-        totalTokens: Math.ceil((query.length + 40 + answerText.length) / 4),
-      },
+      usage: realUsage,
+      usageStatus: realUsage ? 'VERIFIED_PROVIDER_REPORTED' : 'Usage unavailable',
     }, undefined, request);
   } catch (err: any) {
     return corsJsonResponse({

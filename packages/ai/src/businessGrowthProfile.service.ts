@@ -115,35 +115,13 @@ export class BusinessGrowthProfileService {
     const l3 = context.layer3;
     const timestamp = new Date().toISOString();
 
-    const pipelineVal = l2.crm.totalPipelineValue.value;
-    const followers = l2.social.followersCount?.value || 107;
-    const reachGrowth = l2.social.reachGrowthPct?.value || 38.4;
-    const pendingTasks = l2.operations.pendingTasksCount.value;
+    const pipelineVal = l2.crm.totalPipelineValue.value || 0;
+    const followers = l2.social.followersCount?.value || 0;
+    const reachGrowth = l2.social.reachGrowthPct?.value || 0.0;
+    const pendingTasks = l2.operations.pendingTasksCount.value || 0;
 
-    const isRasAli = orgId === 'ras-ali-labs';
-
-    // Existing memory records or seed initial verified history for Ras Ali Labs
-    const existingMemories: GrowthMemoryRecord[] = profileStore[orgId]?.growthMemory || (isRasAli ? [
-      {
-        id: 'gm-1',
-        recommendation: 'Launch short-form video demonstration series',
-        decision: 'ACCEPTED',
-        actionTaken: 'Created and published 2 weekly video reels on Facebook',
-        timestamp: '2026-08-20',
-        expectedOutcome: '+20% audience engagement',
-        actualOutcome: '+38.4% reach surge and 62% of total page reactions',
-        resultMetrics: { reachDelta: '+38.4%', videoMultiplier: '2.3x' },
-        lessonsLearned: 'Short-form video demonstrates highest commercial intent for this B2B audience.',
-      },
-      {
-        id: 'gm-2',
-        recommendation: 'Automate untargeted paid ads',
-        decision: 'REJECTED',
-        rejectionReason: 'Current focus is organic high-intent B2B authority building',
-        timestamp: '2026-08-18',
-        lessonsLearned: 'Organization prioritizes organic authority and direct sales over generic paid boosts.',
-      },
-    ] : []);
+    // Existing memory records
+    const existingMemories: GrowthMemoryRecord[] = profileStore[orgId]?.growthMemory || [];
 
     // Evaluate Growth Score Drivers
     const positiveDrivers: string[] = [
@@ -291,16 +269,16 @@ export class BusinessGrowthProfileService {
     if (!profileStore[orgId]) {
       profileStore[orgId] = {
         organizationId: orgId,
-        businessName: 'Ralion Enterprise',
-        industry: 'Enterprise Software',
-        targetMarket: 'B2B',
-        idealCustomerProfile: 'Enterprise Leaders',
-        revenueModel: 'SaaS',
-        activePipelineValue: 84500,
-        activeCustomersCount: 5,
-        activeProspectsCount: 3,
+        businessName: orgId.replace(/^org[-_]/, '').replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'My Business',
+        industry: 'Not specified',
+        targetMarket: 'Not specified',
+        idealCustomerProfile: 'Not specified',
+        revenueModel: 'Commercial',
+        activePipelineValue: 0,
+        activeCustomersCount: 0,
+        activeProspectsCount: 0,
         marketingChannels: [],
-        growthScore: { score: 88, drivers: { positive: [], negative: [] }, explanation: '' },
+        growthScore: { score: 0, drivers: { positive: [], negative: [] }, explanation: 'Awaiting connected channels' },
         highestImpactMove: {} as any,
         opportunities: [],
         risks: [],

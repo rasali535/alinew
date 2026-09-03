@@ -17,10 +17,10 @@ import { FacebookCommentsService } from './facebookComments.service';
 
 function getServiceSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co';
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpZHNmaWhhZ3d0dGxtaGZ5bm1mIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjgyMzk0NSwiZXhwIjoyMDk4Mzk5OTQ1fQ.mpparRo7a5t5B7uOlWBxiRI7NDsVGfmxkPUEbxSYBfA';
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!key) {
+    throw new Error('[FacebookPageManagement] Missing SUPABASE_SERVICE_ROLE_KEY environment variable.');
+  }
   return createClient(url, key, {
     auth: {
       persistSession: false,
@@ -548,8 +548,10 @@ export class FacebookPageManagementService {
     }
 
     // 2. Query live published/scheduled posts from Zernio infrastructure (with includeExternal=true)
-    try {
-      const zernioData = await ZernioSocialService.getPosts(profileId, { includeExternal: true });
+    // Only query Zernio if this connection has a valid Zernio profile ID (prevents leaking master account posts)
+    if (profileId) {
+      try {
+        const zernioData = await ZernioSocialService.getPosts(profileId, { includeExternal: true });
       const zPosts = zernioData?.posts || (Array.isArray(zernioData) ? zernioData : []);
 
       if (Array.isArray(zPosts) && zPosts.length > 0) {
@@ -583,8 +585,9 @@ export class FacebookPageManagementService {
           });
         });
       }
-    } catch (zErr) {
-      console.warn('[FacebookPageManagement] Zernio live posts query notice:', zErr);
+      } catch (zErr) {
+        console.warn('[FacebookPageManagement] Zernio live posts query notice:', zErr);
+      }
     }
 
     // 3. Query direct Meta Graph API posts feed (posts created directly on Facebook Page)
@@ -607,7 +610,10 @@ export class FacebookPageManagementService {
     if (fbToken && targetPageId) {
       try {
         const fields = 'id,message,created_time,full_picture,shares,reactions.summary(total_count).limit(0).as(likes),comments.summary(total_count).limit(0).as(comments)';
-        const fbRes = await fetch(`https://graph.facebook.com/v19.0/${targetPageId}/posts?fields=${fields}&limit=25&access_token=${encodeURIComponent(fbToken)}`);
+        const fbRes = await fetch(
+          `https://graph.facebook.com/v19.0/${targetPageId}/posts?fields=${fields}&limit=25&access_token=${encodeURIComponent(fbToken)}`,
+          { signal: AbortSignal.timeout(8000) }
+        );
         if (fbRes.ok) {
           const fbJson = await fbRes.json();
           const fbFeed = fbJson.data || [];
@@ -644,8 +650,8 @@ export class FacebookPageManagementService {
       }
     }
 
-    // Historical comments feed if accountId is present
-    if (accountId) {
+    // Historical comments feed if accountId and profileId are present
+    if (accountId && profileId) {
       try {
         const feedData = await ZernioSocialService.getHistoricalFacebookPosts(profileId, accountId);
         const feedPosts = feedData?.data || (Array.isArray(feedData) ? feedData : []);
@@ -693,11 +699,9 @@ export class FacebookPageManagementService {
         .order('created_at', { ascending: false })
         .limit(params.limit || 30);
 
-      // Prefer scoping by explicit social_connection_id for per-account isolation
+      // Strict scoping by explicit social_connection_id for per-account isolation
       if (params.socialConnectionId) {
-        dbPostsQuery = dbPostsQuery.or(
-          `social_connection_id.eq.${params.socialConnectionId},and(workspace_id.eq.${params.workspaceId || params.userId},platforms.cs.{facebook})`
-        );
+        dbPostsQuery = dbPostsQuery.eq('social_connection_id', params.socialConnectionId);
       } else if (params.workspaceId && params.workspaceId !== 'default' && params.workspaceId !== 'default-org') {
         dbPostsQuery = dbPostsQuery.eq('workspace_id', params.workspaceId);
       } else if (params.userId && params.userId !== 'default-user') {
@@ -750,43 +754,55 @@ export class FacebookPageManagementService {
     workspaceId?: string;
     userId?: string;
     pageId?: string;
+    socialConnectionId?: string;
   }): Promise<NormalizedPageAnalytics> {
     const supabase = getServiceSupabase();
 
-    // 1. Resolve connected tenant's connection strictly for this workspace / user
-    let connQuery = supabase
-      .from('social_connections')
-      .select('zernio_profile_id, zernio_account_id, provider_account_id, account_name, followers_count, metadata')
-      .eq('provider', 'facebook')
-      .eq('connection_status', 'CONNECTED');
+    let conn: any = null;
 
-    if (params.workspaceId && params.workspaceId !== 'default' && params.workspaceId !== 'default-org') {
-      connQuery = connQuery.or(`workspace_id.eq.${params.workspaceId},user_id.eq.${params.userId || params.workspaceId}`);
-    } else if (params.userId && params.userId !== 'default-user') {
-      connQuery = connQuery.eq('user_id', params.userId);
+    if (params.socialConnectionId) {
+      const { data: explicitConn } = await supabase
+        .from('social_connections')
+        .select('id, zernio_profile_id, zernio_account_id, provider_account_id, account_name, followers_count, metadata')
+        .eq('id', params.socialConnectionId)
+        .eq('connection_status', 'CONNECTED')
+        .maybeSingle();
+      conn = explicitConn;
     } else {
-      // Unscoped request -> return empty analytics
-      return {
-        pageId: params.pageId || 'none',
-        pageName: 'No Connected Page',
-        followers: 0,
-        followerGrowth30d: 0,
-        followerGrowthPercentage: 0,
-        totalPosts30d: 0,
-        engagementRate: 0,
-        totalReach30d: 0,
-        totalImpressions30d: 0,
-        totalLikes30d: 0,
-        totalComments30d: 0,
-        totalShares30d: 0,
-        topContentType: 'text',
-        lastSyncedAt: new Date().toISOString(),
-      };
+      let connQuery = supabase
+        .from('social_connections')
+        .select('id, zernio_profile_id, zernio_account_id, provider_account_id, account_name, followers_count, metadata')
+        .eq('provider', 'facebook')
+        .eq('connection_status', 'CONNECTED');
+
+      if (params.workspaceId && params.workspaceId !== 'default' && params.workspaceId !== 'default-org') {
+        connQuery = connQuery.or(`workspace_id.eq.${params.workspaceId},user_id.eq.${params.userId || params.workspaceId}`);
+      } else if (params.userId && params.userId !== 'default-user') {
+        connQuery = connQuery.eq('user_id', params.userId);
+      } else {
+        return {
+          pageId: params.pageId || 'none',
+          pageName: 'No Connected Page',
+          followers: 0,
+          followerGrowth30d: 0,
+          followerGrowthPercentage: 0,
+          totalPosts30d: 0,
+          engagementRate: 0,
+          totalReach30d: 0,
+          totalImpressions30d: 0,
+          totalLikes30d: 0,
+          totalComments30d: 0,
+          totalShares30d: 0,
+          topContentType: 'text',
+          lastSyncedAt: new Date().toISOString(),
+        };
+      }
+
+      const { data: fallbackConn } = await connQuery.maybeSingle();
+      conn = fallbackConn;
     }
 
-    const { data: conn } = await connQuery.maybeSingle();
-
-    if (!conn || !conn.zernio_profile_id) {
+    if (!conn) {
       return {
         pageId: params.pageId || 'none',
         pageName: 'No Connected Page',
@@ -808,7 +824,7 @@ export class FacebookPageManagementService {
     const profileId = conn.zernio_profile_id;
     const accountId = conn.zernio_account_id;
     const pageName = conn.account_name || conn.metadata?.pageName || conn.metadata?.name || 'Facebook Page';
-    const followers = Number(conn.followers_count) || Number(conn.metadata?.followers_count) || Number(conn.metadata?.followers) || (conn.account_name?.includes('Ras Ali') ? 107 : 0);
+    const followers = Number(conn.followers_count) || Number(conn.metadata?.followers_count) || Number(conn.metadata?.followers) || 0;
 
     let totalPosts = 0;
     let totalLikes = 0;
@@ -816,8 +832,7 @@ export class FacebookPageManagementService {
     let totalShares = 0;
     let totalReach = 0;
 
-    // 1. Fetch live analytics overview from Zernio
-    if (accountId) {
+    if (accountId && profileId) {
       try {
         const analyticsOverview = await ZernioSocialService.getAnalyticsOverview(profileId, accountId);
         if (analyticsOverview?.overview?.totalPosts) {
@@ -828,12 +843,12 @@ export class FacebookPageManagementService {
       }
     }
 
-    // 2. Aggregate metrics from live posts
     try {
       const livePosts = await this.getPagePosts({
         organizationId: params.organizationId,
         workspaceId: params.workspaceId,
         userId: params.userId,
+        socialConnectionId: conn.id || params.socialConnectionId,
         limit: 50,
       });
 
@@ -851,22 +866,22 @@ export class FacebookPageManagementService {
     const totalEngagement = totalLikes + totalComments + totalShares;
     const engagementRate = totalReach > 0
       ? Number(((totalEngagement / totalReach) * 100).toFixed(1))
-      : totalPosts > 0 ? Number(((totalEngagement / (totalPosts * 250)) * 100).toFixed(1)) : 0;
+      : 0;
 
     return {
       pageId: params.pageId || conn.provider_account_id || 'none',
       pageName,
       followers,
-      followerGrowth30d: totalPosts > 0 ? 14 : 0,
-      followerGrowthPercentage: totalPosts > 0 ? 12.9 : 0,
+      followerGrowth30d: 0,
+      followerGrowthPercentage: 0,
       totalPosts30d: totalPosts,
       engagementRate: Math.max(engagementRate, 0),
       totalReach30d: totalReach,
-      totalImpressions30d: totalReach ? Math.round(totalReach * 1.4) : 0,
+      totalImpressions30d: totalReach > 0 ? Math.round(totalReach * 1.4) : 0,
       totalLikes30d: totalLikes,
       totalComments30d: totalComments,
       totalShares30d: totalShares,
-      topContentType: 'video',
+      topContentType: 'text',
       lastSyncedAt: new Date().toISOString(),
     };
   }

@@ -23,9 +23,7 @@ function getOrCreateBrowserClient(): SupabaseClient {
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
     'https://yidsfihagwttlmhfynmf.supabase.co';
 
-  const supabaseAnonKey =
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpZHNmaWhhZ3d0dGxtaGZ5bm1mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4MjM5NDUsImV4cCI6MjA5ODM5OTk0NX0.r-hhC-BT3WCf9JLq-HeTHXIFkulM5XkorUEfkqMhc-g';
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
   const instance = createSupabaseClient(supabaseUrl, supabaseAnonKey, {
     auth: {

@@ -65,11 +65,17 @@ export interface ZernioRequestOptions {
 
 export class ZernioSocialService {
   private static BASE_URL = process.env.ZERNIO_API_BASE_URL || 'https://zernio.com/api/v1';
-  private static SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co';
-  private static SUPABASE_ANON_KEY =
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    '';
+  private static getSupabaseUrl(): string {
+    return process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co';
+  }
+
+  private static getSupabaseKey(): string {
+    return (
+      process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      ''
+    );
+  }
 
   /**
    * Securely retrieve ZERNIO_API_KEY from server-side environment
@@ -83,7 +89,7 @@ export class ZernioSocialService {
    * Check if Zernio API key or Supabase Secrets bridge is configured on the server
    */
   static isConfigured(): boolean {
-    return !!this.getApiKey() || !!this.SUPABASE_URL;
+    return !!this.getApiKey() || !!this.getSupabaseUrl();
   }
 
   /**
@@ -108,10 +114,12 @@ export class ZernioSocialService {
       headers['Authorization'] = `Bearer ${directKey}`;
     } else {
       // Route securely through Supabase Edge Function bridge (which has ZERNIO_API_KEY in Supabase Secrets)
-      url = `${this.SUPABASE_URL.replace(/\/$/, '')}/functions/v1/zernio-bridge/${endpoint.replace(/^\//, '')}`;
-      if (this.SUPABASE_ANON_KEY) {
-        headers['apikey'] = this.SUPABASE_ANON_KEY;
-        headers['Authorization'] = `Bearer ${this.SUPABASE_ANON_KEY}`;
+      const supabaseUrl = this.getSupabaseUrl();
+      const supabaseKey = this.getSupabaseKey();
+      url = `${supabaseUrl.replace(/\/$/, '')}/functions/v1/zernio-bridge/${endpoint.replace(/^\//, '')}`;
+      if (supabaseKey) {
+        headers['apikey'] = supabaseKey;
+        headers['Authorization'] = `Bearer ${supabaseKey}`;
       }
     }
 

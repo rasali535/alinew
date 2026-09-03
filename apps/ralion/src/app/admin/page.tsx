@@ -44,6 +44,8 @@ interface MetricsData {
     videos: number;
     successRate: number;
   };
+  connectedUsers?: number;
+  activeSocialConnections?: number;
   connectedMetaAccounts: number;
   connectedZernioProfiles: number;
   adminFacebook?: {
@@ -667,10 +669,23 @@ export default function PlatformAdminPortal() {
               </p>
             </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 rounded-xl bg-zinc-900/70 border border-zinc-800">
+                <span className="text-xs font-medium uppercase tracking-wider text-zinc-400 block mb-1">Connected Users</span>
+                <span className="text-2xl font-bold text-white font-mono">{metrics?.connectedUsers ?? 0}</span>
+                <span className="text-[11px] text-zinc-500 block mt-1">Distinct authorized users with active connections</span>
+              </div>
+              <div className="p-4 rounded-xl bg-zinc-900/70 border border-zinc-800">
+                <span className="text-xs font-medium uppercase tracking-wider text-zinc-400 block mb-1">Active Social Connections</span>
+                <span className="text-2xl font-bold text-white font-mono">{(metrics?.allConnections || (metrics?.adminFacebook ? [metrics.adminFacebook] : [])).length}</span>
+                <span className="text-[11px] text-zinc-500 block mt-1">Total account bindings across all platforms</span>
+              </div>
+            </div>
+
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
-                  Active Social Connections ({(metrics?.allConnections || (metrics?.adminFacebook ? [metrics.adminFacebook] : [])).length})
+                  Social Accounts Registry
                 </span>
                 <span className="text-[11px] text-zinc-500 font-mono">
                   Multi-Account Tenant Isolation: Active

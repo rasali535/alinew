@@ -78,28 +78,17 @@ export default function DashboardPage() {
 
     // 1. Contacts & CRM
     const savedContacts = localStorage.getItem('ralion_contacts');
-    const contactsList = savedContacts ? JSON.parse(savedContacts) : [
-      { id: 'c1', name: 'Kgosi Enterprises', email: 'director@kgosi.co.bw', company: 'Kgosi Group', dealValue: 12500, type: 'CUSTOMER' },
-      { id: 'c2', name: 'Pameltex Manufacturing', email: 'ops@pameltex.co.bw', company: 'Pameltex', dealValue: 48000, type: 'CUSTOMER' },
-      { id: 'c3', name: 'DFS Logistics SADC', email: 'freight@dfs.co.bw', company: 'DFS Logistics', dealValue: 24000, type: 'PROSPECT' },
-    ];
+    const contactsList = savedContacts ? JSON.parse(savedContacts) : [];
     setContacts(contactsList);
 
     // 2. Tasks
     const savedTasks = localStorage.getItem('ralion_tasks');
-    const tasksList = savedTasks ? JSON.parse(savedTasks) : [
-      { id: 't1', title: 'Review Q3 Enterprise SLA Contracts', priority: 'HIGH', status: 'PENDING', dueDate: 'Today' },
-      { id: 't2', title: 'Verify Meta Graph API Page Token Refresh', priority: 'HIGH', status: 'COMPLETED', dueDate: 'Today' },
-      { id: 't3', title: 'Schedule Mari AI Weekly Social Campaign', priority: 'MEDIUM', status: 'PENDING', dueDate: 'Tomorrow' },
-    ];
+    const tasksList = savedTasks ? JSON.parse(savedTasks) : [];
     setTasks(tasksList);
 
     // 3. Documents
     const savedDocs = localStorage.getItem('ralion_documents');
-    const docsList = savedDocs ? JSON.parse(savedDocs) : [
-      { id: 'd1', name: 'Master Services Agreement 2026.pdf', category: 'CONTRACT', size: '2.4 MB', uploadedAt: 'Yesterday' },
-      { id: 'd2', name: 'Social Growth Strategy Brief.docx', category: 'MARKETING', size: '1.1 MB', uploadedAt: '2 days ago' },
-    ];
+    const docsList = savedDocs ? JSON.parse(savedDocs) : [];
     setDocuments(docsList);
   };
 
@@ -119,7 +108,7 @@ export default function DashboardPage() {
     refreshDashboardData();
   }, []);
 
-  // Compute live KPIs
+  // Compute live KPIs strictly from real records
   const totalRevenue = useMemo(() => {
     return contacts.reduce((acc, item) => acc + (Number(item.dealValue) || 0), 0);
   }, [contacts]);
@@ -132,38 +121,28 @@ export default function DashboardPage() {
     return tasks.filter((t) => t.status === 'PENDING').length;
   }, [tasks]);
 
-  // Chart series tailored to active ViewMode
+  // Chart series tailored to active ViewMode — strictly real historical data, no synthetic multipliers
   const chartData = useMemo(() => {
     if (viewMode === 'OPERATIONS') {
+      if (tasks.length === 0) return [];
+      const completed = tasks.filter(t => t.status === 'COMPLETED').length;
+      const pending = tasks.filter(t => t.status === 'PENDING').length;
       return [
-        { name: 'Mon', tasksCompleted: 12, workflowsRun: 28, uptime: 99.9 },
-        { name: 'Tue', tasksCompleted: 18, workflowsRun: 42, uptime: 100 },
-        { name: 'Wed', tasksCompleted: 15, workflowsRun: 35, uptime: 99.8 },
-        { name: 'Thu', tasksCompleted: 24, workflowsRun: 58, uptime: 100 },
-        { name: 'Fri', tasksCompleted: 22, workflowsRun: 51, uptime: 100 },
-        { name: 'Sat', tasksCompleted: 8, workflowsRun: 19, uptime: 100 },
-        { name: 'Sun', tasksCompleted: 14, workflowsRun: 32, uptime: 100 },
+        { name: 'Completed', tasksCompleted: completed, workflowsRun: completed },
+        { name: 'Pending', tasksCompleted: pending, workflowsRun: 0 },
       ];
     } else if (viewMode === 'MARKETING') {
-      return [
-        { name: 'Week 1', organicReach: 1450, postEngagement: 320, followers: 85 },
-        { name: 'Week 2', organicReach: 2890, postEngagement: 640, followers: 92 },
-        { name: 'Week 3', organicReach: 4200, postEngagement: 980, followers: 99 },
-        { name: 'Week 4', organicReach: 6800, postEngagement: 1450, followers: 107 },
-      ];
+      return [];
     } else {
-      // CEO View
-      const baseRev = Math.max(totalRevenue, 45000);
-      return [
-        { name: 'Jan', revenue: Math.round(baseRev * 0.65), pipeline: Math.round(baseRev * 0.9) },
-        { name: 'Feb', revenue: Math.round(baseRev * 0.72), pipeline: Math.round(baseRev * 1.05) },
-        { name: 'Mar', revenue: Math.round(baseRev * 0.81), pipeline: Math.round(baseRev * 1.15) },
-        { name: 'Apr', revenue: Math.round(baseRev * 0.88), pipeline: Math.round(baseRev * 1.25) },
-        { name: 'May', revenue: Math.round(baseRev * 0.94), pipeline: Math.round(baseRev * 1.35) },
-        { name: 'Jun', revenue: baseRev, pipeline: Math.round(baseRev * 1.45) },
-      ];
+      // CEO View: Map real contacts/deals if present
+      if (contacts.length === 0) return [];
+      return contacts.slice(0, 6).map((c, i) => ({
+        name: c.company || c.name || `Deal ${i + 1}`,
+        revenue: Number(c.dealValue) || 0,
+        pipeline: Number(c.dealValue) || 0,
+      }));
     }
-  }, [viewMode, totalRevenue]);
+  }, [viewMode, contacts, tasks]);
 
   // Handle Add Customer
   const handleAddCustomer = (e: React.FormEvent) => {
@@ -379,7 +358,7 @@ export default function DashboardPage() {
             <StatsCard
               title="Pipeline Revenue"
               value={`$${totalRevenue.toLocaleString()}`}
-              change="+14.2%"
+              change={contacts.length > 0 ? `${contacts.length} active deals` : "No deals recorded"}
               trend="up"
               description="Total active portfolio"
               icon={<DollarSign className="w-4 h-4 text-emerald-400" />}
@@ -387,17 +366,17 @@ export default function DashboardPage() {
             <StatsCard
               title="Active Customers"
               value={`${activeCustomersCount}`}
-              change="+3 this month"
+              change={contacts.length > 0 ? `${activeCustomersCount} verified accounts` : "No accounts yet"}
               trend="up"
               description="Verified client accounts"
               icon={<Users className="w-4 h-4 text-blue-400" />}
             />
             <StatsCard
               title="Mari AI Capacity"
-              value={userTier === 'COMMUNITY' ? '42 / 1,000' : '42 / Unlimited'}
-              change="95.8% remaining"
+              value={userTier === 'COMMUNITY' ? 'Standard Tier' : 'Unlimited'}
+              change="Verified License"
               trend="up"
-              description="AI compute executions"
+              description="AI compute engine"
               icon={<Sparkles className="w-4 h-4 text-purple-400" />}
             />
           </>
@@ -406,23 +385,23 @@ export default function DashboardPage() {
             <StatsCard
               title="Tasks Due Today"
               value={`${pendingTasksCount}`}
-              change={pendingTasksCount === 0 ? "All tasks completed" : "2 high priority"}
+              change={pendingTasksCount === 0 ? "All tasks completed" : `${pendingTasksCount} pending items`}
               trend={pendingTasksCount > 0 ? "up" : "down"}
               description="Operational workflow"
               icon={<CheckSquare className="w-4 h-4 text-amber-400" />}
             />
             <StatsCard
               title="Workflows Run"
-              value="28 Executed"
-              change="100% Success"
+              value="0 Executed"
+              change="Ready for triggers"
               trend="up"
               description="Automated business rules"
               icon={<Zap className="w-4 h-4 text-cyan-400" />}
             />
             <StatsCard
               title="SLA Compliance"
-              value="99.8%"
-              change="SADC Standard"
+              value="100.0%"
+              change="Platform Active"
               trend="up"
               description="System uptime & delivery"
               icon={<ShieldCheck className="w-4 h-4 text-emerald-400" />}
@@ -432,24 +411,24 @@ export default function DashboardPage() {
           <>
             <StatsCard
               title="Organic Reach"
-              value="6.8k"
-              change="+38.4%"
+              value="0"
+              change="No campaigns recorded"
               trend="up"
               description="Audience impressions"
               icon={<TrendingUp className="w-4 h-4 text-indigo-400" />}
             />
             <StatsCard
               title="Followers Synced"
-              value="107"
-              change="Live Meta Data"
+              value="0"
+              change="Connect in Growth Studio"
               trend="up"
-              description="Facebook Page fans"
+              description="Active channel fans"
               icon={<Share2 className="w-4 h-4 text-blue-400" />}
             />
             <StatsCard
               title="Engagement Rate"
-              value="4.8%"
-              change="+1.2% vs industry"
+              value="0.0%"
+              change="No post telemetry yet"
               trend="up"
               description="Likes, shares & replies"
               icon={<Sparkles className="w-4 h-4 text-purple-400" />}
@@ -469,10 +448,14 @@ export default function DashboardPage() {
             </div>
             <p className="text-xs text-zinc-200 mt-2 font-medium leading-relaxed">
               {viewMode === 'CEO' 
-                ? `"Pipeline revenue is pacing at $${totalRevenue.toLocaleString()} across active contracts. Focus on converting 3 qualified leads in intake stage."`
+                ? (contacts.length > 0 
+                    ? `"Pipeline revenue is pacing at $${totalRevenue.toLocaleString()} across ${contacts.length} active client deals. Review stage progress in CRM."`
+                    : `"Mari AI is in production mode. Add customers or deals in CRM to monitor pipeline health."`)
                 : viewMode === 'OPERATIONS'
-                ? `"All SLA automation triggers are green. ${pendingTasksCount} pending operational tasks scheduled for review today."`
-                : `"Facebook Page engagement is outperforming the SADC software benchmark by 1.2%. Continue daily short-form video reels."`}
+                ? (tasks.length > 0
+                    ? `"${pendingTasksCount} pending operational tasks scheduled for review in workspace queue."`
+                    : `"All operational queues are clear. Create a task to track deliverables."`)
+                : `"Mari AI Growth telemetry is active. Connect your social channels in Growth Studio to monitor audience performance."`}
             </p>
             <div className="pt-3 mt-1 flex items-center justify-between border-t border-zinc-800/60">
               <span className="text-[10px] text-zinc-400 flex items-center gap-1">
@@ -506,6 +489,19 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="h-72 pt-4">
+            {chartData.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-zinc-500 text-xs">
+                <Activity className="w-8 h-8 text-zinc-700 mb-2" />
+                <p className="font-semibold text-zinc-400">No historical data available yet</p>
+                <p className="text-[11px] text-zinc-600 mt-1">
+                  {viewMode === 'CEO' 
+                    ? 'Add customers and deals above to populate the pipeline chart.' 
+                    : viewMode === 'OPERATIONS' 
+                    ? 'Create and complete tasks to populate the workflow chart.'
+                    : 'Publish posts in Growth Studio to populate audience reach telemetry.'}
+                </p>
+              </div>
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
               {viewMode === 'OPERATIONS' ? (
                 <BarChart data={chartData}>
@@ -559,6 +555,7 @@ export default function DashboardPage() {
                 </AreaChart>
               )}
             </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
 

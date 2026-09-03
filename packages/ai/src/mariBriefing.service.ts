@@ -196,7 +196,9 @@ export class MariBriefingService {
         type: 'RECOMMENDATION',
         title: 'Midweek Peak Reach Campaign Push',
         summary: 'Schedule automated social updates on Wednesday at 14:00 to capitalize on peak audience activity.',
-        evidence: `Social audience activity analysis (${l2.social.followersCount?.value || 107} fans).`,
+        evidence: l2.social.followersCount?.value 
+          ? `Social audience activity analysis (${l2.social.followersCount.value} fans).` 
+          : 'Social audience activity analysis based on connected channels.',
         confidence: 0.93,
         provenance: 'AI_RECOMMENDATION',
         priority: 'MEDIUM',

@@ -6,14 +6,17 @@
 
 import * as crypto from 'crypto';
 
-const RAW_SECRET =
-  process.env.OAUTH_ENCRYPTION_KEY ||
-  process.env.OAUTH_TOKEN_ENCRYPTION_SECRET ||
-  'ralion-enterprise-oauth-secret-key-32bytes-secure!';
+function getRawSecret(): string {
+  return (
+    process.env.OAUTH_ENCRYPTION_KEY ||
+    process.env.OAUTH_TOKEN_ENCRYPTION_SECRET ||
+    'ralion-os-aes256-key-change-in-production-32b'
+  );
+}
 
 // Derive a guaranteed 32-byte (256-bit) key using SHA-256
 function getDerivedKey(): Buffer {
-  return crypto.createHash('sha256').update(RAW_SECRET).digest();
+  return crypto.createHash('sha256').update(getRawSecret()).digest();
 }
 
 /**

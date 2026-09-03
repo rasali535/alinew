@@ -174,9 +174,9 @@ export class MariOrchestrationService {
         platform: 'facebook',
       },
       sourceContext: {
-        followersCount: 342,
-        reachGrowthPct: 38.4,
-        videoMultiplier: '2.3x',
+        followersCount: 0,
+        reachGrowthPct: 0,
+        videoMultiplier: '1.0x',
       },
       createdAt: new Date().toISOString(),
     };
@@ -339,50 +339,6 @@ export class MariOrchestrationService {
       return [];
     }
 
-    const defaults: MariActivityEvent[] = [
-      {
-        id: 'evt-1',
-        organizationId: orgId,
-        timestamp: '10 mins ago',
-        type: 'OPPORTUNITY_IDENTIFIED',
-        icon: 'brain',
-        title: 'Identified Growth Opportunity',
-        description: 'Re-engage 3 commercial prospects ($145k active pipeline)',
-        status: 'COMPLETED',
-      },
-      {
-        id: 'evt-2',
-        organizationId: orgId,
-        timestamp: '25 mins ago',
-        type: 'GROWTH_CAMPAIGN_CREATED',
-        icon: 'zap',
-        title: 'Created Growth Campaign',
-        description: 'Commercial Solar Authority Spotlight Reel (#124)',
-        status: 'COMPLETED',
-      },
-      {
-        id: 'evt-3',
-        organizationId: orgId,
-        timestamp: '1 hour ago',
-        type: 'SOCIAL_POST_SCHEDULED',
-        icon: 'smartphone',
-        title: 'Scheduled Facebook Video Reel',
-        description: 'Wednesday at 14:00 • Peak Audience Window',
-        status: 'SCHEDULED',
-      },
-      {
-        id: 'evt-4',
-        organizationId: orgId,
-        timestamp: 'Yesterday',
-        type: 'OUTCOME_MEASURED',
-        icon: 'chart',
-        title: 'Campaign Performance Measured',
-        description: '+38.4% reach surge and 31 qualified leads captured',
-        status: 'COMPLETED',
-      },
-    ];
-
-    activityStreamStore[orgId] = defaults;
-    return defaults;
+    return activityStreamStore[orgId] || [];
   }
 }

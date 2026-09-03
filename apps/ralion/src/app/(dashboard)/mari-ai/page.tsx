@@ -208,18 +208,43 @@ export default function MariAiPage() {
         }
       }
 
-      // Initial greeting grounded in the business growth partner role
+      // Initial greeting grounded in truthful learning gate
       if (messages.length === 0 && !returnGreetingAdded) {
+        const isFbConn = Boolean(context.layer2.social.isConnected && context.layer2.social.connectedPageName?.value !== 'Not Connected');
+        const isWebConn = Boolean(context.layer1.websiteKnowledge?.value && context.layer1.websiteKnowledge.value.status === 'INGESTED');
+
+        let greetingText = `Welcome, ${userName}! I don't know your business yet. Connect your Facebook Page to let me learn how your business presents itself, who it reaches, and how your content performs.`;
+        let suggestedActions: any[] = [
+          { type: 'NAVIGATE', label: 'Connect Facebook Page', payload: { route: '/growth' } },
+          { type: 'NAVIGATE', label: 'Add Website URL', payload: { route: '/mari-ai?tab=KNOWLEDGE' } },
+        ];
+
+        if (isFbConn && isWebConn) {
+          greetingText = `Good day, ${userName}! I have built a combined business knowledge profile from your Facebook Page (${context.layer2.social.connectedPageName?.value}) and verified website. What business goal should we focus on today?`;
+          suggestedActions = [
+            { type: 'NAVIGATE', label: 'Plan Next Campaign', payload: { route: '/growth' } },
+            { type: 'NAVIGATE', label: 'Review Pipeline', payload: { route: '/crm' } },
+          ];
+        } else if (isFbConn) {
+          greetingText = `Good day, ${userName}! I have analyzed your Facebook Page (${context.layer2.social.connectedPageName?.value}) with ${context.layer2.social.followersCount?.value || 0} followers. Add your business website anytime for deeper company intelligence.`;
+          suggestedActions = [
+            { type: 'NAVIGATE', label: 'View Social Telemetry', payload: { route: '/growth' } },
+            { type: 'NAVIGATE', label: 'Add Website Context', payload: { route: '/mari-ai?tab=KNOWLEDGE' } },
+          ];
+        } else if (isWebConn) {
+          greetingText = `Good day, ${userName}! I have ingested your website (${context.layer1.websiteUrl?.value}). Connect your Facebook Page to unlock audience reach and content intelligence.`;
+          suggestedActions = [
+            { type: 'NAVIGATE', label: 'Connect Facebook', payload: { route: '/growth' } },
+          ];
+        }
+
         setMessages([
           {
             id: 'm-welcome',
             sender: 'MARI',
-            text: `Good day, ${userName}! I'm up to date with your business. Your active pipeline is $${profile.activePipelineValue.toLocaleString()} across commercial deals, and Facebook audience reach is surging +${profile.marketingChannels[0]?.reachGrowthPct || 38.4}%. What is our primary growth target for today?`,
+            text: greetingText,
             timestamp: 'Just now',
-            actionsSuggested: [
-              { type: 'NAVIGATE', label: 'Draft Prospect Follow-ups', payload: { route: '/crm' } },
-              { type: 'NAVIGATE', label: 'Create Growth Campaign', payload: { route: '/growth' } },
-            ],
+            actionsSuggested: suggestedActions,
           }
         ]);
       }
@@ -295,9 +320,9 @@ export default function MariAiPage() {
         platform: 'facebook',
       },
       sourceContext: {
-        activePipelineValue: growthProfile?.activePipelineValue || businessContext?.layer2.crm.totalPipelineValue.value || 84500,
-        followersCount: businessContext?.layer2.social.followersCount?.value || 107,
-        reachGrowthPct: businessContext?.layer2.social.reachGrowthPct?.value || 38.4,
+        activePipelineValue: growthProfile?.activePipelineValue || businessContext?.layer2.crm.totalPipelineValue.value || 0,
+        followersCount: businessContext?.layer2.social.followersCount?.value || 0,
+        reachGrowthPct: businessContext?.layer2.social.reachGrowthPct?.value || 0,
       },
     });
 
@@ -584,9 +609,41 @@ export default function MariAiPage() {
       </div>
 
       {/* ─────────────────────────────────────────────────────────────────────────
-          2. HIGHEST IMPACT MOVE & GROWTH SCORE CARD
+          2. LEARNING GATE / HIGHEST IMPACT MOVE & GROWTH SCORE CARD
       ───────────────────────────────────────────────────────────────────────── */}
-      {activeTab === 'GROWTH_PARTNER' && growthProfile && (
+      {activeTab === 'GROWTH_PARTNER' && !(Boolean(businessContext?.layer2.social.isConnected && businessContext.layer2.social.connectedPageName?.value !== 'Not Connected') || Boolean(businessContext?.layer1.websiteKnowledge?.value && businessContext.layer1.websiteKnowledge.value.status === 'INGESTED')) && (
+        <Card className="p-10 bg-zinc-950/90 border border-purple-500/30 text-center flex flex-col items-center justify-center gap-5 rounded-3xl shadow-2xl my-2">
+          <div className="w-16 h-16 rounded-2xl bg-purple-600/20 border border-purple-500/40 flex items-center justify-center text-purple-400">
+            <Sparkles className="w-8 h-8" />
+          </div>
+          <div className="max-w-xl">
+            <h3 className="text-xl font-black text-white">Mari AI Learning Gate: Connect Real Sources</h3>
+            <p className="text-sm text-zinc-300 mt-2 leading-relaxed">
+              Mari does not claim to know your business until you connect at least one verified business source. Connect your Facebook Page to let Mari learn how your business presents itself, who it reaches, and how your content performs.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <Button
+              variant="primary"
+              size="md"
+              onClick={() => router.push('/growth')}
+              className="bg-purple-600 hover:bg-purple-500 text-white font-bold flex items-center gap-2"
+            >
+              <Share2 className="w-4 h-4" /> Connect Facebook Page (Required)
+            </Button>
+            <Button
+              variant="outline"
+              size="md"
+              onClick={() => setActiveTab('KNOWLEDGE')}
+              className="border-zinc-700 text-zinc-300 hover:text-white flex items-center gap-2"
+            >
+              <FileText className="w-4 h-4 text-cyan-400" /> Add Website (Optional)
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {activeTab === 'GROWTH_PARTNER' && (Boolean(businessContext?.layer2.social.isConnected && businessContext.layer2.social.connectedPageName?.value !== 'Not Connected') || Boolean(businessContext?.layer1.websiteKnowledge?.value && businessContext.layer1.websiteKnowledge.value.status === 'INGESTED')) && growthProfile && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* Priority Growth Move (2 Cols) */}
           <Card className="lg:col-span-2 bg-gradient-to-br from-indigo-950/40 via-zinc-900 to-purple-950/40 border-indigo-500/30 shadow-xl flex flex-col justify-between">
@@ -1339,11 +1396,11 @@ export default function MariAiPage() {
                 </li>
                 <li className="flex items-center justify-between">
                   <span className="text-zinc-400">Facebook Followers</span>
-                  <span className="font-semibold text-pink-400 font-mono">{businessContext?.layer2.social.followersCount?.value || 107} fans</span>
+                  <span className="font-semibold text-pink-400 font-mono">{businessContext?.layer2.social.followersCount?.value ?? 0} fans</span>
                 </li>
                 <li className="flex items-center justify-between">
                   <span className="text-zinc-400">Operational SLA</span>
-                  <span className="font-semibold text-emerald-400 font-mono">{businessContext?.layer2.operations.slaUptimePct.value || 99.8}%</span>
+                  <span className="font-semibold text-emerald-400 font-mono">{businessContext?.layer2.operations.slaUptimePct.value ?? 100}%</span>
                 </li>
               </ul>
             </Card>
@@ -1359,7 +1416,7 @@ export default function MariAiPage() {
               <ul className="space-y-2 text-xs text-zinc-300">
                 <li className="flex items-center justify-between">
                   <span className="text-zinc-400">Accepted Decisions</span>
-                  <span className="font-semibold text-white font-mono">{businessContext?.layer3.acceptedRecommendations.length || 2} Recs</span>
+                  <span className="font-semibold text-white font-mono">{businessContext?.layer3.acceptedRecommendations.length ?? 0} Recs</span>
                 </li>
                 <li className="flex items-center justify-between">
                   <span className="text-zinc-400">Strategic Focus</span>

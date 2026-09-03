@@ -78,15 +78,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // 3. Other providers: query social_posts by social_connection_id or provider+workspace
-    const { data: dbPosts } = await supabase
+    // 3. Other providers: query social_posts strictly by social_connection_id
+    const { data: dbPosts, error: dbErr } = await supabase
       .from('social_posts')
       .select('*')
-      .or(
-        `social_connection_id.eq.${socialConnectionId},and(workspace_id.eq.${context.workspace.id},platforms.cs.{${provider}})`
-      )
+      .eq('social_connection_id', socialConnectionId)
       .order('created_at', { ascending: false })
       .limit(limit);
+
+    if (dbErr) {
+      console.warn('[PostsByConnection] Local DB query note:', dbErr.message);
+    }
 
     const normalizedPosts = (dbPosts || []).map((p: any) => ({
       id: p.id,
@@ -115,6 +117,8 @@ export async function GET(request: NextRequest) {
         provider,
         posts: normalizedPosts,
         total: normalizedPosts.length,
+        dataAvailable: normalizedPosts.length > 0,
+        ...((normalizedPosts.length === 0 && provider !== 'facebook') ? { reason: 'provider_post_retrieval_unavailable' } : {})
       },
       undefined,
       request

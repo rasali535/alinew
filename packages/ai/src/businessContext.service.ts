@@ -95,6 +95,8 @@ export interface BusinessContext {
   layer2: Layer2BusinessState;
   layer3: Layer3MariMemory;
   credits: MariCreditsUsage;
+  primarySource?: string;
+  hasVerifiedKnowledge?: boolean;
 }
 
 export interface TenantProfileOverride {
@@ -148,6 +150,7 @@ export class BusinessContextService {
         tasks?: any[];
         documents?: any[];
         fbPage?: any;
+        websiteKnowledge?: any;
         tier?: string;
         customKnowledge?: Partial<Layer1BusinessKnowledge>;
       };
@@ -176,7 +179,7 @@ export class BusinessContextService {
     } catch {}
 
     // 1. Layer 1: Business Knowledge & Ingested Website
-    const websiteKnowledge = WebsiteIngestionService.getWebsiteKnowledge(orgId);
+    const websiteKnowledge = options?.localOverrides?.websiteKnowledge || WebsiteIngestionService.getWebsiteKnowledge(orgId);
     let fbPage = options?.localOverrides?.fbPage;
     if (!fbPage && typeof window !== 'undefined' && window.localStorage) {
       try {
@@ -191,7 +194,7 @@ export class BusinessContextService {
             if (fb) {
               fbPage = {
                 name: fb.accountName || fb.name || fb.pageName || fb.handle || 'Facebook Page',
-                fanCount: fb.followers || fb.followersCount || fb.fanCount || 107,
+                fanCount: fb.followers || fb.followersCount || fb.fanCount || 0,
                 id: fb.id || fb.accountId || 'fb_page_1',
               };
             }
@@ -215,146 +218,127 @@ export class BusinessContextService {
       registeredProfile?.companyName ||
       knowledgeProfile?.isVerified ||
       isWkValid ||
-      isSocialPageConnected ||
-      isRasAli
+      isSocialPageConnected
     );
 
     // Resolve Organization Name (Prioritize Registered Profile -> Knowledge Profile -> Facebook Page -> Website Title)
     let orgName = registeredProfile?.companyName || knowledgeProfile?.companyName?.value || (isSocialPageConnected ? fbPage.name : '') || websiteKnowledge?.title || '';
     if (!orgName) {
-      if (isRasAli) {
-        orgName = 'Ras Ali Labs';
-      } else if (isTest) {
+      if (isTest) {
         orgName = 'Test Organization';
       } else {
         orgName = orgId.replace(/^org[-_]/, '').replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'My Business';
       }
     }
 
-    // 1. Layer 1: Business Knowledge & Ingested Website
+    const primarySource = (isSocialPageConnected && isWkValid)
+      ? 'Facebook + Website'
+      : isSocialPageConnected
+      ? 'Facebook'
+      : isWkValid
+      ? 'Website'
+      : 'Unverified Workspace';
+
+    const contactsList = options?.localOverrides?.contacts || [];
+    const hasRealContacts = contactsList.length > 0;
+    const tasksList = options?.localOverrides?.tasks || [];
+    const hasRealTasks = tasksList.length > 0;
+
+    // 1. Layer 1: Business Knowledge & Ingested Website (Truthful Learning Gate)
     const layer1: Layer1BusinessKnowledge = {
       companyName: {
         value: orgName,
         provenance: hasVerifiedKnowledge ? 'VERIFIED' : 'UNVERIFIED',
-        source: knowledgeProfile ? 'Business Knowledge Profile' : (registeredProfile ? 'Registered Profile' : 'Workspace Name'),
-        confidence: hasVerifiedKnowledge ? 1.0 : 0.2,
+        source: knowledgeProfile ? 'Business Knowledge Profile' : (registeredProfile ? 'Registered Profile' : (isSocialPageConnected ? 'Facebook Page' : 'Workspace Identity')),
+        confidence: hasVerifiedKnowledge ? 1.0 : 0.0,
         lastVerifiedAt: timestamp,
       },
       legalIdentity: {
-        value: isRasAli ? 'Ras Ali Labs (Pty) Ltd — Reg. BW-2024-882109' : (hasVerifiedKnowledge ? `${orgName} Registered Business` : 'Unverified Business'),
+        value: registeredProfile?.companyName ? `${registeredProfile.companyName} Registered Entity` : (hasVerifiedKnowledge ? `${orgName} Commercial Entity` : 'Unverified Business'),
         provenance: hasVerifiedKnowledge ? 'VERIFIED' : 'UNVERIFIED',
         source: 'Corporate Registration Record',
-        confidence: hasVerifiedKnowledge ? 1.0 : 0.1,
+        confidence: hasVerifiedKnowledge ? 1.0 : 0.0,
         lastVerifiedAt: timestamp,
       },
       websiteUrl: {
-        value: registeredProfile?.websiteUrl || knowledgeProfile?.websiteUrl?.value || websiteKnowledge?.websiteUrl || (isRasAli ? 'https://www.rasalilabs.com' : 'Not configured'),
-        provenance: (websiteKnowledge || knowledgeProfile) ? 'VERIFIED' : 'USER_PROVIDED',
-        source: 'Verified Domain Registry',
-        confidence: (websiteKnowledge || knowledgeProfile) ? 1.0 : 0.0,
+        value: registeredProfile?.websiteUrl || knowledgeProfile?.websiteUrl?.value || websiteKnowledge?.websiteUrl || 'Not configured',
+        provenance: (websiteKnowledge || knowledgeProfile) ? 'VERIFIED' : 'UNVERIFIED',
+        source: isWkValid ? 'Website Ingestion' : 'Not configured',
+        confidence: isWkValid ? 1.0 : 0.0,
         lastVerifiedAt: timestamp,
       },
       websiteKnowledge: {
-        value: websiteKnowledge,
-        provenance: websiteKnowledge?.provenance || (hasVerifiedKnowledge ? 'VERIFIED' : 'UNVERIFIED'),
-        source: websiteKnowledge ? 'Ingested Public Website' : 'Not Ingested',
-        confidence: websiteKnowledge ? 0.98 : 0.0,
+        value: websiteKnowledge || null,
+        provenance: websiteKnowledge?.provenance || (isWkValid ? 'VERIFIED' : 'UNVERIFIED'),
+        source: isWkValid ? 'Ingested Public Website' : 'Not Ingested',
+        confidence: isWkValid ? 0.98 : 0.0,
         lastVerifiedAt: websiteKnowledge?.lastSuccessfulSync || timestamp,
       },
       tagline: {
-        value: registeredProfile?.tagline || knowledgeProfile?.tagline?.value || (isRasAli 
-          ? 'Empowering African and Global Enterprises to Prosper Through Sovereign Intelligent OS'
-          : (hasVerifiedKnowledge ? `Empowering ${orgName}` : 'Empowered to Prosper')),
+        value: registeredProfile?.tagline || knowledgeProfile?.tagline?.value || (hasVerifiedKnowledge ? `Empowering ${orgName}` : 'Not configured'),
         provenance: hasVerifiedKnowledge ? 'VERIFIED' : 'UNVERIFIED',
-        source: 'Brand Settings',
-        confidence: hasVerifiedKnowledge ? 0.95 : 0.2,
+        source: primarySource,
+        confidence: hasVerifiedKnowledge ? 0.9 : 0.0,
         lastVerifiedAt: timestamp,
       },
       industry: {
-        value: registeredProfile?.industry || knowledgeProfile?.industry?.value || (isRasAli 
-          ? 'Enterprise Software, B2B SaaS & Industrial Intelligence'
-          : (hasVerifiedKnowledge ? 'Commercial Enterprise' : 'Unspecified')),
+        value: registeredProfile?.industry || knowledgeProfile?.industry?.value || (hasVerifiedKnowledge ? 'Commercial Enterprise' : 'Unspecified'),
         provenance: hasVerifiedKnowledge ? 'VERIFIED' : 'UNVERIFIED',
-        source: 'Organization Registration',
-        confidence: hasVerifiedKnowledge ? 1.0 : 0.0,
+        source: primarySource,
+        confidence: hasVerifiedKnowledge ? 0.9 : 0.0,
         lastVerifiedAt: timestamp,
       },
       targetMarket: {
-        value: registeredProfile?.targetMarket || (knowledgeProfile?.targetMarkets?.value ? knowledgeProfile.targetMarkets.value.join(', ') : '') || (isRasAli
-          ? 'SADC B2B Enterprises, Healthcare, Logistics, Funeral Services & Public Sector'
-          : (hasVerifiedKnowledge ? 'Regional Commercial Enterprises & Clients' : 'Unspecified')),
+        value: registeredProfile?.targetMarket || (knowledgeProfile?.targetMarkets?.value ? knowledgeProfile.targetMarkets.value.join(', ') : '') || (hasVerifiedKnowledge ? 'Regional Commercial Clients' : 'Unspecified'),
         provenance: hasVerifiedKnowledge ? 'USER_PROVIDED' : 'UNVERIFIED',
-        source: 'Market Strategy Plan',
-        confidence: hasVerifiedKnowledge ? 0.95 : 0.0,
+        source: primarySource,
+        confidence: hasVerifiedKnowledge ? 0.85 : 0.0,
         lastVerifiedAt: timestamp,
       },
       brandVoice: {
-        value: registeredProfile?.brandVoice || knowledgeProfile?.brandVoice?.value || 'Professional, Trustworthy, Customer-Focused',
-        provenance: 'USER_PROVIDED',
-        source: 'Brand Guidelines',
-        confidence: hasVerifiedKnowledge ? 0.96 : 0.3,
+        value: registeredProfile?.brandVoice || knowledgeProfile?.brandVoice?.value || (hasVerifiedKnowledge ? 'Professional, Customer-Focused' : 'Professional, Neutral'),
+        provenance: hasVerifiedKnowledge ? 'USER_PROVIDED' : 'UNVERIFIED',
+        source: primarySource,
+        confidence: hasVerifiedKnowledge ? 0.9 : 0.2,
         lastVerifiedAt: timestamp,
       },
       valueProposition: {
-        value: registeredProfile?.valueProposition || (knowledgeProfile?.valuePropositions?.value ? knowledgeProfile.valuePropositions.value.join('; ') : '') || (isRasAli
-          ? 'Sovereign enterprise software with native offline resilience, RBAC security, zero-data-loss guarantees, and African commercial workflow alignment.'
-          : (hasVerifiedKnowledge ? `Streamlined commercial execution and services for ${orgName}.` : 'No verified value proposition recorded yet.')),
+        value: registeredProfile?.valueProposition || (knowledgeProfile?.valuePropositions?.value ? knowledgeProfile.valuePropositions.value.join('; ') : '') || (hasVerifiedKnowledge ? `Commercial products and services for ${orgName}.` : 'No verified business knowledge sources connected yet.'),
         provenance: hasVerifiedKnowledge ? 'VERIFIED' : 'UNVERIFIED',
-        source: 'Value Proposition Ledger',
-        confidence: hasVerifiedKnowledge ? 0.97 : 0.0,
+        source: primarySource,
+        confidence: hasVerifiedKnowledge ? 0.9 : 0.0,
         lastVerifiedAt: timestamp,
       },
       productsAndServices: {
-        value: registeredProfile?.productsAndServices || knowledgeProfile?.products?.value || (isRasAli ? [
-          { name: 'Ralion OS Core (CRM, Documents, Tasks)', category: 'Core Operating System' },
-          { name: 'Mari AI Command Center & Growth Partner', category: 'Artificial Intelligence' },
-          { name: 'Ralion Growth Studio', category: 'Social Media & Marketing' },
-          { name: 'Industry OS Suites (Health, Logistics, Funeral, Trade)', category: 'Vertical OS' },
-        ] : []),
-        provenance: hasVerifiedKnowledge ? 'VERIFIED' : 'UNVERIFIED',
-        source: 'Product Catalog',
-        confidence: hasVerifiedKnowledge ? 1.0 : 0.0,
+        value: registeredProfile?.productsAndServices || knowledgeProfile?.products?.value || [],
+        provenance: hasVerifiedKnowledge && (registeredProfile?.productsAndServices || knowledgeProfile?.products?.value) ? 'VERIFIED' : 'UNVERIFIED',
+        source: primarySource,
+        confidence: (registeredProfile?.productsAndServices || knowledgeProfile?.products?.value) ? 1.0 : 0.0,
         lastVerifiedAt: timestamp,
       },
       strategicGoals: {
-        value: registeredProfile?.strategicGoals || (isRasAli ? [
-          'Expand SADC B2B enterprise customer base',
-          'Accelerate short-form video engagement on Facebook and LinkedIn',
-          'Maintain 99.8%+ SLA uptime and zero-data-loss integrity',
-        ] : (hasVerifiedKnowledge ? [
-          'Grow customer revenue and active client pipeline',
-          'Build strong digital audience engagement',
-        ] : [])),
-        provenance: hasVerifiedKnowledge ? 'USER_PROVIDED' : 'UNVERIFIED',
+        value: registeredProfile?.strategicGoals || [],
+        provenance: hasVerifiedKnowledge && registeredProfile?.strategicGoals ? 'USER_PROVIDED' : 'UNVERIFIED',
         source: 'Executive Strategy',
-        confidence: 0.94,
+        confidence: registeredProfile?.strategicGoals ? 0.9 : 0.0,
         lastVerifiedAt: timestamp,
       },
       uploadedDocumentsCount: {
-        value: options?.localOverrides?.documents?.length ?? (isRasAli ? 3 : 0),
+        value: options?.localOverrides?.documents?.length || 0,
         provenance: 'VERIFIED',
         source: 'Document Vault',
         confidence: 1.0,
         lastVerifiedAt: timestamp,
       },
       knowledgeSources: [
-        { id: 'k-web', title: `Website Knowledge (${websiteKnowledge?.websiteUrl || 'rasalilabs.com'})`, category: 'WEBSITE', updatedAt: websiteKnowledge?.lastSuccessfulSync || timestamp, status: websiteKnowledge ? 'VERIFIED' : 'PENDING' },
-        { id: 'k-prof', title: 'Company Identity & Registration Profile', category: 'PROFILE', updatedAt: timestamp, status: 'VERIFIED' },
-        { id: 'k-prod', title: 'Products & Services Catalog', category: 'PRODUCTS', updatedAt: timestamp, status: 'VERIFIED' },
-        { id: 'k-brand', title: 'Brand Guidelines & Tone of Voice', category: 'BRAND', updatedAt: timestamp, status: 'USER_PROVIDED' },
-        { id: 'k-strat', title: 'Enterprise Sales Strategy & Playbook', category: 'SALES', updatedAt: timestamp, status: 'USER_PROVIDED' },
-        { id: 'k-sop', title: 'Standard Operating Procedures & SLAs', category: 'SOP', updatedAt: timestamp, status: 'VERIFIED' },
-        { id: 'k-crm', title: 'Live CRM Portfolio Ledger', category: 'CRM', updatedAt: timestamp, status: 'CONNECTED' },
-        { id: 'k-soc', title: 'Meta Graph API Social Telemetry', category: 'SOCIAL', updatedAt: timestamp, status: 'CONNECTED' },
-        { id: 'k-mem', title: 'Mari Growth Memory Store', category: 'MEMORY', updatedAt: timestamp, status: 'CONNECTED' },
+        ...(isWkValid ? [{ id: 'k-web', title: `Website Knowledge (${websiteKnowledge?.websiteUrl})`, category: 'WEBSITE', updatedAt: websiteKnowledge?.lastSuccessfulSync || timestamp, status: 'VERIFIED' as const }] : []),
+        ...(isSocialPageConnected ? [{ id: 'k-soc', title: `Facebook Page (${fbPage?.name})`, category: 'SOCIAL', updatedAt: timestamp, status: 'CONNECTED' as const }] : []),
+        ...(hasRealContacts ? [{ id: 'k-crm', title: 'Live CRM Ledger', category: 'CRM', updatedAt: timestamp, status: 'CONNECTED' as const }] : []),
+        ...(hasRealTasks ? [{ id: 'k-tasks', title: 'Operational Tasks', category: 'OPERATIONS', updatedAt: timestamp, status: 'CONNECTED' as const }] : []),
       ],
     };
 
-    // 2. Layer 2: Live Business State
-    // Derive strictly from provided inputs or verified Ras Ali Labs data — never inject fake numbers
-    const contactsList = options?.localOverrides?.contacts || [];
-    const hasRealContacts = contactsList.length > 0;
-    
+    // 2. Layer 2: Live Business State — Derived strictly from live records, never fake numbers
     // Live CRM telemetry calculation
     let totalPipeline = 0;
     let activeCustCount = 0;
@@ -366,57 +350,45 @@ export class BusinessContextService {
       activeCustCount = contactsList.filter((c: any) => c.type === 'CUSTOMER' || !c.type).length;
       prospectsCount = contactsList.filter((c: any) => c.type === 'PROSPECT').length;
       recentDeals = contactsList.slice(0, 3).map((c: any) => ({
-        name: c.name || c.company || 'Enterprise Deal',
-        value: Number(c.dealValue) || 10000,
+        name: c.name || c.company || 'Client Deal',
+        value: Number(c.dealValue) || 0,
         stage: c.stage || 'PROPOSAL',
       }));
-    } else if (isRasAli) {
-      // Verified baseline live CRM state for Ras Ali Labs
-      totalPipeline = 84500;
-      activeCustCount = 5;
-      prospectsCount = 3;
-      recentDeals = [
-        { name: 'Kgosi Group Enterprise Deployment', value: 12500, stage: 'PROPOSAL' },
-        { name: 'Pameltex Manufacturing OS', value: 48000, stage: 'CONTRACT' },
-        { name: 'DFS Logistics SADC Fleet Tier', value: 24000, stage: 'INTAKE' },
-      ];
     }
 
-    const tasksList = options?.localOverrides?.tasks || [];
-    const hasRealTasks = tasksList.length > 0;
     const pendingTasks = hasRealTasks 
       ? tasksList.filter((t: any) => t.status === 'PENDING').length 
-      : (isRasAli ? 2 : 0);
+      : 0;
     const highPriTasks = hasRealTasks 
       ? tasksList.filter((t: any) => t.status === 'PENDING' && t.priority === 'HIGH').length 
-      : (isRasAli ? 1 : 0);
+      : 0;
 
-    const isSocialConnected = Boolean(isSocialPageConnected || isRasAli);
-    const followers = fbPage?.fanCount ?? (isRasAli ? 107 : 0);
-    const pageName = fbPage?.name ?? (isRasAli ? 'Ras Ali Labs Facebook Page' : 'Not Connected');
+    const isSocialConnected = isSocialPageConnected;
+    const followers = fbPage?.fanCount ?? 0;
+    const pageName = fbPage?.name ?? 'Not Connected';
 
     const layer2: Layer2BusinessState = {
       crm: {
-        isConnected: hasRealContacts || isRasAli,
+        isConnected: hasRealContacts,
         totalPipelineValue: {
           value: totalPipeline,
-          provenance: 'VERIFIED',
+          provenance: hasRealContacts ? 'VERIFIED' : 'UNVERIFIED',
           source: 'CRM Portfolio Ledger',
-          confidence: hasRealContacts || isRasAli ? 1.0 : 0.0,
+          confidence: hasRealContacts ? 1.0 : 0.0,
           lastVerifiedAt: timestamp,
         },
         activeCustomersCount: {
           value: activeCustCount,
-          provenance: 'VERIFIED',
+          provenance: hasRealContacts ? 'VERIFIED' : 'UNVERIFIED',
           source: 'Customer Directory',
-          confidence: 1.0,
+          confidence: hasRealContacts ? 1.0 : 0.0,
           lastVerifiedAt: timestamp,
         },
         prospectsCount: {
           value: prospectsCount,
-          provenance: 'VERIFIED',
+          provenance: hasRealContacts ? 'VERIFIED' : 'UNVERIFIED',
           source: 'Pipeline Leads',
-          confidence: 1.0,
+          confidence: hasRealContacts ? 1.0 : 0.0,
           lastVerifiedAt: timestamp,
         },
         recentDeals,
@@ -425,44 +397,44 @@ export class BusinessContextService {
         isConnected: isSocialConnected,
         connectedPageName: {
           value: pageName,
-          provenance: isSocialConnected ? 'VERIFIED' : 'USER_PROVIDED',
+          provenance: isSocialConnected ? 'VERIFIED' : 'UNVERIFIED',
           source: 'Meta Graph API',
           confidence: isSocialConnected ? 1.0 : 0.0,
           lastVerifiedAt: timestamp,
         },
         followersCount: {
           value: followers,
-          provenance: isSocialConnected ? 'VERIFIED' : 'USER_PROVIDED',
+          provenance: isSocialConnected ? 'VERIFIED' : 'UNVERIFIED',
           source: 'Meta Graph API',
           confidence: isSocialConnected ? 1.0 : 0.0,
           lastVerifiedAt: timestamp,
         },
         reachGrowthPct: {
-          value: isRasAli ? 38.4 : 0.0,
+          value: 0.0,
           provenance: 'VERIFIED',
           source: 'Social Analytics Engine',
-          confidence: isRasAli ? 0.98 : 0.0,
+          confidence: 0.0,
           lastVerifiedAt: timestamp,
         },
         engagementRatePct: {
-          value: isRasAli ? 4.8 : 0.0,
+          value: 0.0,
           provenance: 'INFERRED',
           source: 'Social Analytics Engine',
-          confidence: isRasAli ? 0.92 : 0.0,
+          confidence: 0.0,
           lastVerifiedAt: timestamp,
         },
         recentPostsCount: {
-          value: isRasAli ? 8 : 0,
+          value: 0,
           provenance: 'VERIFIED',
           source: 'Meta Graph API',
-          confidence: isRasAli ? 1.0 : 0.0,
+          confidence: 0.0,
           lastVerifiedAt: timestamp,
         },
         topPerformingType: {
-          value: isRasAli ? 'Short-Form Video Reel (2.3× higher reach)' : 'Static Post',
-          provenance: 'INFERRED',
+          value: 'Not analyzed yet',
+          provenance: 'UNVERIFIED',
           source: 'Mari Content Learning Engine',
-          confidence: isRasAli ? 0.91 : 0.5,
+          confidence: 0.0,
           lastVerifiedAt: timestamp,
         },
       },
@@ -482,14 +454,14 @@ export class BusinessContextService {
           lastVerifiedAt: timestamp,
         },
         slaUptimePct: {
-          value: isRasAli ? 99.8 : 100.0,
+          value: 100.0,
           provenance: 'VERIFIED',
           source: 'Infrastructure Telemetry',
-          confidence: 0.99,
+          confidence: 1.0,
           lastVerifiedAt: timestamp,
         },
         workflowsRunToday: {
-          value: isRasAli ? 28 : 0,
+          value: 0,
           provenance: 'VERIFIED',
           source: 'Workflow Execution Bus',
           confidence: 1.0,
@@ -505,31 +477,19 @@ export class BusinessContextService {
         primaryFocus: 'B2B Revenue & Audience Growth',
         autoApprovalAllowed: false,
       },
-      acceptedRecommendations: isRasAli ? [
-        { id: 'rec-1', title: 'Schedule weekly video reel on Wednesday 14:00', acceptedAt: '2026-08-20' },
-        { id: 'rec-2', title: 'Add follow-up SLA alert for proposals > 5 days', acceptedAt: '2026-08-22' },
-      ] : [],
-      rejectedRecommendations: isRasAli ? [
-        { id: 'rec-3', title: 'Auto-publish AI drafted posts without human review', rejectedAt: '2026-08-18', reason: 'Requires brand compliance check' },
-      ] : [],
-      strategicThemes: isRasAli ? [
-        'South African & Botswana B2B Enterprise expansion',
-        'Direct Meta Graph API live follower tracking',
-        'Customer proposal velocity optimization',
-      ] : ['Customer growth and pipeline execution'],
-      recentActions: isRasAli ? [
-        { id: 'act-1', action: 'Synced live Facebook Page follower telemetry (107 fans)', timestamp: '10 mins ago' },
-        { id: 'act-2', action: 'Evaluated monthly CRM revenue pipeline ($84,500)', timestamp: '25 mins ago' },
-        { id: 'act-3', action: 'Optimized short-form video engagement suggestions', timestamp: '1 hour ago' },
-      ] : [],
+      acceptedRecommendations: [],
+      rejectedRecommendations: [],
+      strategicThemes: hasVerifiedKnowledge ? ['Customer growth and pipeline execution'] : [],
+      recentActions: [],
     };
 
     // Credits usage
     const tier = (options?.localOverrides?.tier || 'COMMUNITY').toUpperCase();
+    const allocated = tier === 'COMMUNITY' ? 10000 : 100000;
     const credits: MariCreditsUsage = {
-      totalAllocated: tier === 'COMMUNITY' ? 10000 : 100000,
-      used: 1580,
-      remaining: tier === 'COMMUNITY' ? 8420 : 98420,
+      totalAllocated: allocated,
+      used: 0,
+      remaining: allocated,
       tier,
       planName: tier === 'COMMUNITY' ? 'Community Free Plan' : tier === 'STANDARD' ? 'Standard Plan' : 'Enterprise Unlimited',
     };
@@ -548,6 +508,8 @@ export class BusinessContextService {
       layer2,
       layer3,
       credits,
+      primarySource,
+      hasVerifiedKnowledge,
     };
 
     contextCache[orgId] = {
