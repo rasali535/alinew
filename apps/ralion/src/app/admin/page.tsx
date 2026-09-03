@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { createClient as createBrowserClient } from '@/lib/supabase/client';
 import {
   ShieldAlert,
   Users,
@@ -44,8 +45,30 @@ interface MetricsData {
     videos: number;
     successRate: number;
   };
-  connectedUsers?: number;
-  activeSocialConnections?: number;
+  connectedUsers?: Array<{
+    userId: string;
+    userName: string;
+    email: string;
+    workspaceId?: string;
+    connectionCount: number;
+    connections: Array<{
+      socialConnectionId: string;
+      provider: string;
+      providerAccountId: string;
+      accountName: string;
+      accountType: string;
+      accountTypeLabel: string;
+      isPersonalProfile: boolean;
+      isBusinessPage: boolean;
+      connectionStatus: string;
+      tokenStatus: string;
+      connectedAt?: string;
+    }>;
+  }>;
+  connectedUsersCount?: number;
+  connectedUserCount?: number;
+  activeConnectionCount?: number;
+  activeSocialConnections: number;
   connectedMetaAccounts: number;
   connectedZernioProfiles: number;
   adminFacebook?: {
@@ -72,6 +95,10 @@ interface MetricsData {
     provider: string;
     providerAccountId: string;
     accountName: string;
+    accountType?: string;
+    accountTypeLabel?: string;
+    isPersonalProfile?: boolean;
+    isBusinessPage?: boolean;
     username?: string | null;
     connectionStatus: string;
     tokenStatus: string;
@@ -112,8 +139,21 @@ export default function PlatformAdminPortal() {
   const [actionErrorMessage, setActionErrorMessage] = useState<string | null>(null);
 
   // Authenticated Platform Admin Token / Secret
-  const getAuthHeaders = (): Record<string, string> => {
-    const sessionToken = typeof window !== 'undefined' ? localStorage.getItem('supabase_auth_token') || localStorage.getItem('ralion_auth_token') : '';
+  const getAuthHeaders = async (): Promise<Record<string, string>> => {
+    let sessionToken = '';
+    try {
+      const supabase = createBrowserClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      sessionToken = session?.access_token || '';
+    } catch {}
+
+    if (!sessionToken && typeof window !== 'undefined') {
+      sessionToken =
+        localStorage.getItem('ralion-app-auth-token') ||
+        localStorage.getItem('supabase_auth_token') ||
+        localStorage.getItem('ralion_auth_token') ||
+        '';
+    }
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (sessionToken) {
       headers['Authorization'] = `Bearer ${sessionToken}`;
@@ -126,7 +166,7 @@ export default function PlatformAdminPortal() {
   const fetchPlatformData = async () => {
     setLoading(true);
     try {
-      const headers = getAuthHeaders();
+      const headers = await getAuthHeaders();
       const [mRes, cRes, hRes, aRes] = await Promise.all([
         fetch('/api/admin/metrics', { headers }),
         fetch('/api/admin/customers', { headers }),
@@ -168,8 +208,9 @@ export default function PlatformAdminPortal() {
     }
 
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch(`/api/admin/organizations/${orgId}?reason=${encodeURIComponent(inspectionReason)}`, {
-        headers: getAuthHeaders(),
+        headers,
       });
       const data = await res.json();
       if (data.success) {
@@ -195,9 +236,10 @@ export default function PlatformAdminPortal() {
     }
 
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch(`/api/admin/customers/${orgId}/status`, {
         method: 'POST',
-        headers: getAuthHeaders(),
+        headers,
         body: JSON.stringify({ status: nextStatus, reason: promptReason }),
       });
       const data = await res.json();
@@ -220,9 +262,10 @@ export default function PlatformAdminPortal() {
     }
 
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch('/api/admin/credits/adjust', {
         method: 'POST',
-        headers: getAuthHeaders(),
+        headers,
         body: JSON.stringify({
           organizationId: selectedOrgForCredit,
           amount: Number(creditAdjustmentAmount),
@@ -242,6 +285,147 @@ export default function PlatformAdminPortal() {
     } catch (err: any) {
       setActionErrorMessage(err.message);
     }
+  };
+
+  const renderConnectedUsersSection = () => {
+    const usersList = metrics?.connectedUsers || [];
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-bold text-white tracking-wide flex items-center gap-2">
+              <Users className="w-4 h-4 text-indigo-400" />
+              CONNECTED USERS
+            </h3>
+            <p className="text-xs text-zinc-400 mt-0.5">
+              Real authorized workspace users with active multi-channel social connections
+            </p>
+          </div>
+          <span className="px-2.5 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-xs font-mono text-indigo-300">
+            Total: {usersList.length}
+          </span>
+        </div>
+
+        {usersList.length === 0 ? (
+          <div className="p-8 text-center rounded-2xl bg-zinc-900/40 border border-zinc-800/60">
+            <Users className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
+            <p className="text-xs font-semibold text-zinc-300">No connected users yet.</p>
+            <p className="text-[11px] text-zinc-500 mt-0.5">Real users with active social bindings will appear here.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {usersList.map((user) => (
+              <div key={user.userId} className="p-5 rounded-2xl bg-zinc-900/80 border border-zinc-800 space-y-3 shadow-lg">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center font-bold text-white text-sm">
+                      {user.userName ? user.userName.slice(0, 2).toUpperCase() : 'US'}
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                        {user.userName}
+                      </h4>
+                      <span className="text-xs text-zinc-400 font-mono block">
+                        {user.email}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-[10px] font-bold shrink-0">
+                    {user.connectionCount} {user.connectionCount === 1 ? 'social connection' : 'social connections'}
+                  </span>
+                </div>
+
+                <div className="pt-3 border-t border-zinc-800/80 space-y-2">
+                  <span className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider block">
+                    Connected Identities & Channels
+                  </span>
+                  <div className="space-y-2">
+                    {user.connections.map((c) => (
+                      <div key={c.socialConnectionId} className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800/80 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 rounded-lg bg-blue-600/10 border border-blue-500/30 flex items-center justify-center font-bold text-[11px] text-blue-400">
+                            {c.provider ? c.provider.slice(0, 2).toUpperCase() : 'FB'}
+                          </div>
+                          <div>
+                            <div className="text-xs font-semibold text-white">{c.accountName}</div>
+                            <div className="text-[10px] text-zinc-400 font-mono truncate max-w-[150px]">
+                              ID: {c.providerAccountId}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            c.isBusinessPage || c.accountType === 'FACEBOOK_PAGE'
+                              ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                              : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                          }`}>
+                            {c.accountTypeLabel || (c.isBusinessPage ? 'Facebook Business Page' : 'Facebook Personal Profile')}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Connected
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderWorkspaceBusinessArchitecture = () => {
+    return (
+      <div className="p-5 rounded-2xl bg-zinc-900/80 border border-zinc-800 space-y-3">
+        <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+          <div>
+            <h4 className="text-sm font-bold text-white flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-purple-400" />
+              Workspace Business Architecture: Ras Ali Labs
+            </h4>
+            <p className="text-xs text-zinc-400 mt-0.5">
+              Decoupled independent business sources belonging to the workspace
+            </p>
+          </div>
+          <span className="px-2 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[10px] font-bold">
+            Workspace Root
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+          <div className="p-3.5 rounded-xl bg-zinc-950/70 border border-zinc-800">
+            <span className="text-zinc-500 text-[10px] block uppercase font-bold tracking-wider mb-1">Business Website</span>
+            <div className="font-semibold text-white">Ras Ali Labs (Pty) Ltd</div>
+            <div className="text-indigo-400 font-mono text-[11px] truncate mt-0.5">https://www.rasalilabs.com</div>
+            <span className="inline-block mt-2 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold">
+              ● Connected Workspace Source
+            </span>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-zinc-950/70 border border-zinc-800">
+            <span className="text-zinc-500 text-[10px] block uppercase font-bold tracking-wider mb-1">Social Channel A</span>
+            <div className="font-semibold text-white">Ras Ali Labs</div>
+            <div className="text-zinc-400 text-[11px] mt-0.5">Facebook Business Page</div>
+            <span className="inline-block mt-2 px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 text-[10px] font-bold">
+              ● Business Page Source
+            </span>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-zinc-950/70 border border-zinc-800">
+            <span className="text-zinc-500 text-[10px] block uppercase font-bold tracking-wider mb-1">Social Channel B</span>
+            <div className="font-semibold text-white">Kutlwano B Pule</div>
+            <div className="text-zinc-400 text-[11px] mt-0.5">Facebook Personal Profile</div>
+            <span className="inline-block mt-2 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 text-[10px] font-bold">
+              ● Personal Profile (No Website Attached)
+            </span>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const [showHelpAlerts, setShowHelpAlerts] = useState(false);
@@ -507,6 +691,9 @@ export default function PlatformAdminPortal() {
                 </div>
               </div>
             </div>
+
+            {/* Live Connected Users Section on Command Center Overview */}
+            {renderConnectedUsersSection()}
           </div>
         )}
 
@@ -672,7 +859,9 @@ export default function PlatformAdminPortal() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="p-4 rounded-xl bg-zinc-900/70 border border-zinc-800">
                 <span className="text-xs font-medium uppercase tracking-wider text-zinc-400 block mb-1">Connected Users</span>
-                <span className="text-2xl font-bold text-white font-mono">{metrics?.connectedUsers ?? 0}</span>
+                <span className="text-2xl font-bold text-white font-mono">
+                  {Array.isArray(metrics?.connectedUsers) ? metrics.connectedUsers.length : (metrics?.connectedUserCount ?? 0)}
+                </span>
                 <span className="text-[11px] text-zinc-500 block mt-1">Distinct authorized users with active connections</span>
               </div>
               <div className="p-4 rounded-xl bg-zinc-900/70 border border-zinc-800">
@@ -681,6 +870,12 @@ export default function PlatformAdminPortal() {
                 <span className="text-[11px] text-zinc-500 block mt-1">Total account bindings across all platforms</span>
               </div>
             </div>
+
+            {/* Live Connected Users List in Social Management */}
+            {renderConnectedUsersSection()}
+
+            {/* Workspace Business Architecture: Decoupled Independent Sources */}
+            {renderWorkspaceBusinessArchitecture()}
 
             <div className="space-y-4">
               <div className="flex items-center justify-between">
