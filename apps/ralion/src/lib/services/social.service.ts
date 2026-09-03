@@ -12,7 +12,9 @@ import { encryptToken, decryptToken } from '@ralion/integrations';
 function getServiceSupabase() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co',
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpZHNmaWhhZ3d0dGxtaGZ5bm1mIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjgyMzk0NSwiZXhwIjoyMDk4Mzk5OTQ1fQ.mpparRo7a5t5B7uOlWBxiRI7NDsVGfmxkPUEbxSYBfA',
     {
       auth: {
         persistSession: false,
@@ -61,28 +63,100 @@ export async function storeOAuthTokens(params: {
   userId: string; provider: string; accessToken: string; refreshToken?: string; expiresAt?: Date;
   accountHandle: string; accountLabel: string; followersCount?: number; avatarUrl?: string;
   pageId?: string; scopes?: string[]; extraMeta?: Record<string, any>;
+  workspaceId?: string; organizationId?: string; providerAccountId?: string;
 }) {
   const supabase = getServiceSupabase();
   const encryptedAccessToken = encryptToken(params.accessToken);
   const encryptedRefreshToken = params.refreshToken ? encryptToken(params.refreshToken) : null;
   const tokenExpiresAt = params.expiresAt?.toISOString() ?? null;
 
-  const { error } = await supabase.from('social_account_tokens').upsert({
-    user_id: params.userId, provider: params.provider,
-    encrypted_access_token: encryptedAccessToken,
-    encrypted_refresh_token: encryptedRefreshToken,
-    expires_at: tokenExpiresAt,
-    account_handle: params.accountHandle, account_label: params.accountLabel,
-    followers_count: params.followersCount ?? 0, avatar_url: params.avatarUrl ?? null,
-    page_id: params.pageId ?? null, scopes: params.scopes ?? [], extra_meta: params.extraMeta ?? {},
-    status: 'connected', connected_at: new Date().toISOString(),
-  }, { onConflict: 'user_id,provider' });
-  if (error) throw new Error(`[SocialService] Token store failed: ${error.message}`);
+  const resolvedAccountId =
+    params.providerAccountId ||
+    params.pageId ||
+    params.extraMeta?.providerAccountId ||
+    params.extraMeta?.channelId ||
+    params.extraMeta?.igUserId ||
+    params.extraMeta?.facebookUserId ||
+    params.accountHandle.replace(/^@/, '') ||
+    `${params.provider}_${Date.now()}`;
 
-  // If Meta provider (Facebook/Instagram), also synchronize with dedicated meta_connections table
+  // 1. Primary multi-account isolated persistence in social_connections
+  let connectionId: string | undefined;
+  try {
+    const { data: connData, error: connErr } = await supabase.from('social_connections').upsert({
+      user_id: params.userId,
+      organization_id: params.organizationId || null,
+      workspace_id: params.workspaceId || null,
+      provider: params.provider.toLowerCase(),
+      provider_account_id: resolvedAccountId,
+      account_name: params.accountLabel,
+      username: params.accountHandle.replace(/^@/, ''),
+      profile_image_url: params.avatarUrl || null,
+      account_type: params.pageId ? 'PAGE' : 'PERSONAL',
+      connection_status: 'CONNECTED',
+      token_status: 'TOKEN_VALID',
+      scopes: params.scopes || [],
+      capabilities: {},
+      metadata: {
+        ...(params.extraMeta || {}),
+        pageId: params.pageId,
+        avatarUrl: params.avatarUrl,
+        providerAccountId: resolvedAccountId,
+        encrypted_access_token: encryptedAccessToken,
+        encrypted_refresh_token: encryptedRefreshToken,
+        token_expires_at: tokenExpiresAt,
+      },
+      followers_count: params.followersCount ?? 0,
+      last_sync_at: new Date().toISOString(),
+      connected_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id,provider,provider_account_id' }).select('id').maybeSingle();
+
+    if (!connErr && connData?.id) {
+      connectionId = connData.id;
+
+      // 2. Vault isolated AES-256-GCM token in social_credentials (if provisioned)
+      try {
+        await supabase.from('social_credentials').upsert({
+          social_connection_id: connData.id,
+          encrypted_access_token: encryptedAccessToken,
+          encrypted_refresh_token: encryptedRefreshToken,
+          token_type: 'Bearer',
+          expires_at: tokenExpiresAt,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'social_connection_id' });
+      } catch {}
+    } else if (connErr) {
+      console.warn('[SocialService] connErr:', connErr.message);
+    }
+  } catch (dbErr: any) {
+    console.warn('[SocialService] social_connections multi-account upsert notice:', dbErr.message);
+  }
+
+  // 3. Keep backward-compatible social_account_tokens table updated
+  try {
+    await supabase.from('social_account_tokens').upsert({
+      user_id: params.userId, provider: params.provider,
+      encrypted_access_token: encryptedAccessToken,
+      encrypted_refresh_token: encryptedRefreshToken,
+      expires_at: tokenExpiresAt,
+      account_handle: params.accountHandle, account_label: params.accountLabel,
+      followers_count: params.followersCount ?? 0, avatar_url: params.avatarUrl ?? null,
+      page_id: params.pageId ?? null, scopes: params.scopes ?? [], extra_meta: {
+        ...(params.extraMeta ?? {}),
+        connectionId,
+        providerAccountId: resolvedAccountId,
+      },
+      status: 'connected', connected_at: new Date().toISOString(),
+    }, { onConflict: 'user_id,provider' });
+  } catch (tokErr: any) {
+    console.warn('[SocialService] social_account_tokens fallback notice:', tokErr.message);
+  }
+
+  // 4. If Meta provider (Facebook/Instagram), also synchronize with dedicated meta_connections table
   if (['facebook', 'instagram', 'meta', 'whatsapp'].includes(params.provider.toLowerCase())) {
     try {
-      const metaUserId = params.pageId || params.accountHandle.replace(/^@/, '') || params.userId;
+      const metaUserId = params.pageId || resolvedAccountId || params.userId;
       await supabase.from('meta_connections').upsert({
         user_id: params.userId,
         meta_user_id: metaUserId,
@@ -103,12 +177,115 @@ export async function storeOAuthTokens(params: {
       console.warn('[SocialService] meta_connections sync notice:', (metaErr as Error).message);
     }
   }
+
+  return { success: true, connectionId, providerAccountId: resolvedAccountId };
 }
 
-export async function loadOAuthTokens(userId: string, provider: string) {
+export async function loadOAuthTokens(userId: string, provider: string, connectionId?: string) {
   const supabase = getServiceSupabase();
+
+  if (connectionId) {
+    // 1. Check social_connections by ID
+    const { data: conn } = await supabase
+      .from('social_connections')
+      .select('*')
+      .eq('id', connectionId)
+      .maybeSingle();
+
+    if (conn && conn.connection_status !== 'DISCONNECTED') {
+      const encAccess = conn.metadata?.encrypted_access_token;
+      const encRefresh = conn.metadata?.encrypted_refresh_token;
+      if (encAccess) {
+        return {
+          accessToken: decryptToken(encAccess),
+          refreshToken: encRefresh ? decryptToken(encRefresh) : undefined,
+          expiresAt: conn.metadata?.token_expires_at ? new Date(conn.metadata.token_expires_at) : undefined,
+          record: {
+            id: conn.id,
+            provider: conn.provider || provider,
+            account_handle: conn.username ? `@${conn.username}` : `@${provider}`,
+            account_label: conn.account_name || provider,
+            followers_count: Number(conn.followers_count || 0),
+            avatar_url: conn.profile_image_url,
+            page_id: conn.provider_account_id,
+            scopes: conn.scopes || [],
+            status: 'connected',
+            connected_at: conn.connected_at,
+            last_synced_at: conn.last_sync_at,
+            extra_meta: conn.metadata || {},
+          } as SocialAccountRecord
+        };
+      }
+    }
+
+    // 2. Check social_credentials by connection ID
+    try {
+      const { data: creds } = await supabase
+        .from('social_credentials')
+        .select('*, social_connections(*)')
+        .eq('social_connection_id', connectionId)
+        .maybeSingle();
+
+      if (creds && creds.encrypted_access_token) {
+        const conn = creds.social_connections;
+        return {
+          accessToken: decryptToken(creds.encrypted_access_token),
+          refreshToken: creds.encrypted_refresh_token ? decryptToken(creds.encrypted_refresh_token) : undefined,
+          expiresAt: creds.expires_at ? new Date(creds.expires_at) : undefined,
+          record: {
+            id: creds.social_connection_id,
+            provider: conn?.provider || provider,
+            account_handle: conn?.username ? `@${conn.username}` : `@${provider}`,
+            account_label: conn?.account_name || provider,
+            followers_count: Number(conn?.followers_count || 0),
+            avatar_url: conn?.profile_image_url,
+            page_id: conn?.provider_account_id,
+            scopes: conn?.scopes || [],
+            status: 'connected',
+            connected_at: conn?.connected_at,
+            last_synced_at: conn?.last_sync_at,
+            extra_meta: conn?.metadata || {},
+          } as SocialAccountRecord
+        };
+      }
+    } catch {}
+  }
+
+  // Fallback to social_connections by user and provider
+  try {
+    const { data: conn } = await supabase
+      .from('social_connections')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('provider', provider.toLowerCase())
+      .neq('connection_status', 'DISCONNECTED')
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (conn && conn.metadata?.encrypted_access_token) {
+      return {
+        accessToken: decryptToken(conn.metadata.encrypted_access_token),
+        refreshToken: conn.metadata.encrypted_refresh_token ? decryptToken(conn.metadata.encrypted_refresh_token) : undefined,
+        expiresAt: conn.metadata.token_expires_at ? new Date(conn.metadata.token_expires_at) : undefined,
+        record: {
+          id: conn.id,
+          provider: conn.provider,
+          account_handle: conn.username ? `@${conn.username}` : `@${provider}`,
+          account_label: conn.account_name,
+          followers_count: Number(conn.followers_count || 0),
+          avatar_url: conn.profile_image_url,
+          page_id: conn.provider_account_id,
+          scopes: conn.scopes || [],
+          status: 'connected',
+          extra_meta: conn.metadata || {},
+        } as SocialAccountRecord
+      };
+    }
+  } catch {}
+
   const { data, error } = await supabase.from('social_account_tokens').select('*')
-    .eq('user_id', userId).eq('provider', provider).single();
+    .eq('user_id', userId).eq('provider', provider).maybeSingle();
   if (error || !data) return null;
   return {
     accessToken: decryptToken(data.encrypted_access_token),
@@ -127,29 +304,26 @@ export async function loadOAuthTokens(userId: string, provider: string) {
 export async function loadAllUserAccounts(userId: string): Promise<SocialAccountRecord[]> {
   const supabase = getServiceSupabase();
   const accounts: SocialAccountRecord[] = [];
+  const seenConnectionKeys = new Set<string>();
 
-  try {
-    const { data: legacyAccounts } = await supabase
-      .from('social_accounts_safe')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('status', 'connected');
-    if (legacyAccounts) accounts.push(...(legacyAccounts as SocialAccountRecord[]));
-  } catch {}
-
+  // 1. Primary: load from unified social_connections
   try {
     const { data: unifiedAccounts } = await supabase
       .from('social_connections')
       .select('*')
       .eq('user_id', userId)
-      .eq('connection_status', 'CONNECTED');
-    if (unifiedAccounts) {
+      .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected', 'active']);
+
+    if (Array.isArray(unifiedAccounts)) {
       unifiedAccounts.forEach((u: any) => {
-        if (!accounts.some(a => a.provider.toLowerCase() === u.provider.toLowerCase())) {
+        const uniqueKey = u.id || `${u.provider}_${u.provider_account_id}`;
+        if (!seenConnectionKeys.has(uniqueKey)) {
+          seenConnectionKeys.add(uniqueKey);
           accounts.push({
+            id: u.id,
             provider: u.provider,
-            account_handle: u.username ? `@${u.username}` : `@${u.account_name.toLowerCase().replace(/\s+/g, '_')}`,
-            account_label: u.account_name,
+            account_handle: u.username ? (u.username.startsWith('@') ? u.username : `@${u.username}`) : `@${u.provider}`,
+            account_label: u.account_name || u.provider,
             followers_count: Number(u.followers_count || 0),
             avatar_url: u.profile_image_url,
             page_id: u.provider_account_id,
@@ -157,8 +331,32 @@ export async function loadAllUserAccounts(userId: string): Promise<SocialAccount
             connected_at: u.connected_at,
             last_synced_at: u.last_sync_at,
             scopes: u.scopes || [],
-            extra_meta: u.metadata || {},
+            extra_meta: {
+              ...(u.metadata || {}),
+              connectionId: u.id,
+              providerAccountId: u.provider_account_id,
+            },
           } as any);
+        }
+      });
+    }
+  } catch (err: any) {
+    console.warn('[SocialService] social_connections load notice:', err.message);
+  }
+
+  // 2. Secondary: load legacy accounts if not already captured
+  try {
+    const { data: legacyAccounts } = await supabase
+      .from('social_accounts_safe')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('status', 'connected');
+    if (Array.isArray(legacyAccounts)) {
+      legacyAccounts.forEach((leg: any) => {
+        const legKey = leg.id || `${leg.provider}_${leg.account_handle}`;
+        if (!seenConnectionKeys.has(legKey)) {
+          seenConnectionKeys.add(legKey);
+          accounts.push(leg as SocialAccountRecord);
         }
       });
     }
@@ -167,9 +365,35 @@ export async function loadAllUserAccounts(userId: string): Promise<SocialAccount
   return accounts;
 }
 
-export async function deleteOAuthToken(userId: string, provider: string) {
+export async function deleteOAuthToken(userId: string, provider: string, connectionId?: string) {
   const supabase = getServiceSupabase();
-  await supabase.from('social_account_tokens').delete().eq('user_id', userId).eq('provider', provider);
+
+  if (connectionId) {
+    try {
+      await supabase.from('social_credentials').delete().eq('social_connection_id', connectionId);
+    } catch {}
+
+    const { data: conn } = await supabase.from('social_connections').select('metadata').eq('id', connectionId).maybeSingle();
+    const sanitizedMeta = { ...(conn?.metadata || {}) };
+    delete sanitizedMeta.encrypted_access_token;
+    delete sanitizedMeta.encrypted_refresh_token;
+
+    await supabase.from('social_connections').update({
+      metadata: sanitizedMeta,
+      connection_status: 'DISCONNECTED',
+      token_status: 'TOKEN_REVOKED',
+      disconnected_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq('id', connectionId);
+  } else {
+    await supabase.from('social_account_tokens').delete().eq('user_id', userId).eq('provider', provider);
+    await supabase.from('social_connections').update({
+      connection_status: 'DISCONNECTED',
+      token_status: 'TOKEN_REVOKED',
+      disconnected_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq('user_id', userId).eq('provider', provider.toLowerCase());
+  }
 
   if (['facebook', 'instagram', 'meta', 'whatsapp'].includes(provider.toLowerCase())) {
     await supabase.from('meta_connections').update({
@@ -181,14 +405,20 @@ export async function deleteOAuthToken(userId: string, provider: string) {
   }
 }
 
-export async function markTokenExpired(userId: string, provider: string) {
+export async function markTokenExpired(userId: string, provider: string, connectionId?: string) {
   const supabase = getServiceSupabase();
+  if (connectionId) {
+    await supabase.from('social_connections').update({ token_status: 'TOKEN_EXPIRED', connection_status: 'RECONNECT_REQUIRED' }).eq('id', connectionId);
+  }
   await supabase.from('social_account_tokens').update({ status: 'expired' })
     .eq('user_id', userId).eq('provider', provider);
 }
 
-export async function updateLastSynced(userId: string, provider: string) {
+export async function updateLastSynced(userId: string, provider: string, connectionId?: string) {
   const supabase = getServiceSupabase();
+  if (connectionId) {
+    await supabase.from('social_connections').update({ last_sync_at: new Date().toISOString() }).eq('id', connectionId);
+  }
   await supabase.from('social_account_tokens').update({ last_synced_at: new Date().toISOString() })
     .eq('user_id', userId).eq('provider', provider);
 }
@@ -222,7 +452,14 @@ export const linkedinAdapter = {
     const r = await fetch('https://api.linkedin.com/v2/userinfo', { headers: { Authorization: `Bearer ${accessToken}` } });
     const p = r.ok ? await r.json() : {};
     const name = p.name || p.given_name || 'LinkedIn User';
-    return { handle: `@${name.toLowerCase().replace(/\s+/g, '_')}`, name, avatar: p.picture, followersCount: 0 };
+    return {
+      id: p.sub || '',
+      sub: p.sub,
+      handle: `@${name.toLowerCase().replace(/\s+/g, '_')}`,
+      name,
+      avatar: p.picture,
+      followersCount: 0
+    };
   },
 
   async publishPost(accessToken: string, content: string): Promise<PublishResult> {

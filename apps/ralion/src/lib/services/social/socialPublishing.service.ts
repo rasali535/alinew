@@ -161,18 +161,14 @@ export class SocialPublishingService {
     }
 
     // 4. Validate explicit socialConnectionId if provided
+    let explicitConnection: any = null;
     if (params.socialConnectionId) {
-      const explicitConn = (connections || []).find((c) => c.id === params.socialConnectionId);
-      if (!explicitConn) {
+      explicitConnection = (connections || []).find((c) => c.id === params.socialConnectionId);
+      if (!explicitConnection) {
         const connSecurityError = new Error(`[SocialPublishing] Access denied: Connection ${params.socialConnectionId} does not belong to this workspace/user.`);
         (connSecurityError as any).statusCode = 403;
         throw connSecurityError;
       }
-    }
-
-    const connMap = new Map<SocialPlatformType, any>();
-    for (const c of connections || []) {
-      connMap.set(c.provider as SocialPlatformType, c);
     }
 
     const platformResults: Partial<Record<SocialPlatformType, PublishResponse>> = {};
@@ -181,7 +177,25 @@ export class SocialPublishingService {
 
     // 5. Parallel Dispatch with Provider Routing
     const publishPromises = params.platforms.map(async (platform) => {
-      const conn = connMap.get(platform);
+      // Prioritize explicit connection ID, then page ID match, then platform match
+      let conn = explicitConnection && (explicitConnection.provider === platform || params.platforms.length === 1)
+        ? explicitConnection
+        : undefined;
+
+      if (!conn && params.pageId) {
+        conn = (connections || []).find(
+          (c) =>
+            c.provider === platform &&
+            (c.provider_account_id === params.pageId ||
+              c.page_id === params.pageId ||
+              c.metadata?.pageId === params.pageId)
+        );
+      }
+
+      if (!conn) {
+        conn = (connections || []).find((c) => c.provider === platform);
+      }
+
       if (!conn) {
         platformResults[platform] = {
           success: false,

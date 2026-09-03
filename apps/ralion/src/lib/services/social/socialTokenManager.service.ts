@@ -13,7 +13,7 @@ function getServiceSupabase() {
   const key =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.placeholder';
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpZHNmaWhhZ3d0dGxtaGZ5bm1mIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjgyMzk0NSwiZXhwIjoyMDk4Mzk5OTQ1fQ.mpparRo7a5t5B7uOlWBxiRI7NDsVGfmxkPUEbxSYBfA';
   return createClient(url, key, {
     auth: {
       persistSession: false,
@@ -42,25 +42,40 @@ export class SocialTokenManager {
     const expiresAt = params.expiresIn ? new Date(Date.now() + params.expiresIn * 1000).toISOString() : null;
 
     try {
-      // 1. Save into isolated social_credentials table
-      const { error } = await supabase.from('social_credentials').upsert({
-        social_connection_id: params.connectionId,
+      // 1. Save into isolated social_connections metadata vault
+      const { data: existingConn } = await supabase
+        .from('social_connections')
+        .select('metadata')
+        .eq('id', params.connectionId)
+        .maybeSingle();
+
+      const mergedMeta = {
+        ...(existingConn?.metadata || {}),
         encrypted_access_token: encryptedAccessToken,
         encrypted_refresh_token: encryptedRefreshToken,
         token_type: params.tokenType || 'Bearer',
-        expires_at: expiresAt,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'social_connection_id' });
+        token_expires_at: expiresAt,
+      };
 
-      if (error) throw error;
-
-      // 2. Update token_status in social_connections
       await supabase.from('social_connections').update({
+        metadata: mergedMeta,
         token_status: 'TOKEN_VALID',
         connection_status: 'CONNECTED',
         last_sync_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }).eq('id', params.connectionId);
+
+      // 2. Try saving to separate social_credentials table if provisioned
+      try {
+        await supabase.from('social_credentials').upsert({
+          social_connection_id: params.connectionId,
+          encrypted_access_token: encryptedAccessToken,
+          encrypted_refresh_token: encryptedRefreshToken,
+          token_type: params.tokenType || 'Bearer',
+          expires_at: expiresAt,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'social_connection_id' });
+      } catch {}
 
       // 3. Log audit event
       if (params.userId && params.provider) {
@@ -88,21 +103,50 @@ export class SocialTokenManager {
   static async getValidToken(connectionId: string, provider: SocialPlatformType): Promise<string | null> {
     const supabase = getServiceSupabase();
 
-    const { data: creds, error } = await supabase
-      .from('social_credentials')
-      .select('*')
-      .eq('social_connection_id', connectionId)
-      .maybeSingle();
+    let encryptedAccessToken: string | null = null;
+    let encryptedRefreshToken: string | null = null;
+    let expiresAt: number | null = null;
 
-    if (error || !creds || !creds.encrypted_access_token) {
+    // 1. Try social_credentials
+    try {
+      const { data: creds, error } = await supabase
+        .from('social_credentials')
+        .select('*')
+        .eq('social_connection_id', connectionId)
+        .maybeSingle();
+
+      if (!error && creds?.encrypted_access_token) {
+        encryptedAccessToken = creds.encrypted_access_token;
+        encryptedRefreshToken = creds.encrypted_refresh_token;
+        expiresAt = creds.expires_at ? new Date(creds.expires_at).getTime() : null;
+      }
+    } catch {}
+
+    // 2. Fallback to social_connections metadata
+    if (!encryptedAccessToken) {
+      try {
+        const { data: conn, error: connErr } = await supabase
+          .from('social_connections')
+          .select('id, metadata, connection_status')
+          .eq('id', connectionId)
+          .maybeSingle();
+
+        if (!connErr && conn && conn.connection_status !== 'DISCONNECTED' && conn.metadata?.encrypted_access_token) {
+          encryptedAccessToken = conn.metadata.encrypted_access_token;
+          encryptedRefreshToken = conn.metadata.encrypted_refresh_token || null;
+          expiresAt = conn.metadata.token_expires_at ? new Date(conn.metadata.token_expires_at).getTime() : null;
+        }
+      } catch {}
+    }
+
+    if (!encryptedAccessToken) {
       return null;
     }
 
-    const decryptedAccessToken = decryptToken(creds.encrypted_access_token);
-    const decryptedRefreshToken = creds.encrypted_refresh_token ? decryptToken(creds.encrypted_refresh_token) : null;
+    const decryptedAccessToken = decryptToken(encryptedAccessToken);
+    const decryptedRefreshToken = encryptedRefreshToken ? decryptToken(encryptedRefreshToken) : null;
 
     // Check if token is expired or expiring within 5 minutes
-    const expiresAt = creds.expires_at ? new Date(creds.expires_at).getTime() : null;
     const isExpiringSoon = expiresAt ? expiresAt - Date.now() < 5 * 60 * 1000 : false;
 
     if (isExpiringSoon && decryptedRefreshToken) {

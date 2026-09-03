@@ -81,11 +81,12 @@ export async function GET(
     let accessToken = '';
     let refreshToken: string | undefined;
     let expiresAt: Date | undefined;
-    let profile: { handle: string; name: string; avatar?: string; followersCount: number; channelId?: string; pageId?: string } = {
+    let profile: { handle: string; name: string; avatar?: string; followersCount: number; channelId?: string; pageId?: string; sub?: string; id?: string } = {
       handle: '', name: '', followersCount: 0
     };
     let accountLabel = provider.charAt(0).toUpperCase() + provider.slice(1);
     let pageId: string | undefined;
+    let providerAccountId: string | undefined;
     let extraMeta: Record<string, any> = {};
 
     switch (provider) {
@@ -95,6 +96,7 @@ export async function GET(
         expiresAt = new Date(Date.now() + tokens.expiresIn * 1000);
         const p = await linkedinAdapter.getProfile(accessToken);
         profile = p;
+        providerAccountId = p.sub || p.id || undefined;
         accountLabel = 'LinkedIn Organization';
         break;
       }
@@ -119,6 +121,7 @@ export async function GET(
 
           const firstPage = pages[0];
           pageId = firstPage.id;
+          providerAccountId = firstPage.id;
           profile = {
             handle: `@${firstPage.name.toLowerCase().replace(/\s+/g, '_')}`,
             name: firstPage.name,
@@ -140,6 +143,7 @@ export async function GET(
             userProfile = await metaAdapter.getUserProfile(accessToken);
           } catch {}
 
+          providerAccountId = userProfile?.id;
           profile = {
             handle: userProfile?.name ? `@${userProfile.name.toLowerCase().replace(/\s+/g, '_')}` : '@facebook_user',
             name: userProfile?.name || 'Facebook User',
@@ -166,6 +170,7 @@ export async function GET(
           const igAccount = await metaAdapter.getInstagramAccount(firstPage.id, firstPage.accessToken);
           if (igAccount) {
             pageId = igAccount.id;
+            providerAccountId = igAccount.id;
             profile = { handle: `@${igAccount.username}`, name: igAccount.username, avatar: igAccount.avatar, followersCount: igAccount.followers };
             extraMeta = { pageAccessToken: firstPage.accessToken, pageId: firstPage.id, igUserId: igAccount.id };
           } else {
@@ -186,6 +191,7 @@ export async function GET(
         expiresAt = new Date(Date.now() + tokens.expiresIn * 1000);
         const p = await xAdapter.getProfile(accessToken);
         profile = p;
+        providerAccountId = p.handle?.replace(/^@/, '');
         accountLabel = 'X (formerly Twitter)';
         break;
       }
@@ -199,6 +205,7 @@ export async function GET(
         expiresAt = new Date(Date.now() + tokens.expiresIn * 1000);
         const p = await tiktokAdapter.getProfile(accessToken);
         profile = p;
+        providerAccountId = p.handle?.replace(/^@/, '');
         accountLabel = 'TikTok Business Studio';
         break;
       }
@@ -211,6 +218,7 @@ export async function GET(
         const p = await youtubeAdapter.getProfile(accessToken);
         profile = p;
         if (p.channelId) extraMeta.channelId = p.channelId;
+        providerAccountId = p.channelId || p.handle?.replace(/^@/, '');
         accountLabel = provider === 'youtube' ? 'YouTube Content Studio' : 'Google Business Profile';
         break;
       }
@@ -218,10 +226,13 @@ export async function GET(
         return NextResponse.redirect(`${growthRedirect}?oauth_error=unsupported_provider&provider=${provider}`);
     }
 
-    // Store real encrypted tokens in Supabase
-    await storeOAuthTokens({
+    // Store real encrypted tokens in Supabase with tenant + multi-account isolation
+    const storeResult = await storeOAuthTokens({
       userId,
+      workspaceId: verified.workspaceId || verified.organizationId,
+      organizationId,
       provider,
+      providerAccountId,
       accessToken,
       refreshToken,
       expiresAt,
@@ -236,15 +247,20 @@ export async function GET(
 
     // Clear the PKCE verifier cookie
     const stageQuery = intent === 'page_connection' ? '&stage=2&page_connected=true' : '&stage=1&profile_connected=true';
-    const finalRedirectUrl = `${growthRedirect}?connected=${provider}&handle=${encodeURIComponent(profile.handle)}${stageQuery}`;
-    console.log(`[OAuth Callback Success] Redirecting to ${finalRedirectUrl} | user=${userId} | org=${organizationId} | handle=${profile.handle}`);
+    const connectionQuery = storeResult.connectionId ? `&connection_id=${encodeURIComponent(storeResult.connectionId)}` : '';
+    const finalRedirectUrl = `${growthRedirect}?connected=${provider}&handle=${encodeURIComponent(profile.handle)}${connectionQuery}${stageQuery}`;
+    console.log(`[OAuth Callback Success] Redirecting | provider=${provider} | user=${userId} | org=${organizationId} | connectionId=${storeResult.connectionId || 'created'}`);
     const redirectResponse = NextResponse.redirect(finalRedirectUrl);
     redirectResponse.cookies.set(`oauth_verifier_${provider}`, '', { maxAge: 0, path: '/' });
 
     return redirectResponse;
   } catch (error: any) {
     const rawMsg = error?.message || 'oauth_failed';
-    const sanitizedError = rawMsg.replace(/([a-f0-9]{24,})/gi, '[REDACTED_SECRET]');
+    const sanitizedError = rawMsg
+      .replace(/([a-f0-9]{24,})/gi, '[REDACTED]')
+      .replace(/(AQL[a-zA-Z0-9_-]{20,})/gi, '[REDACTED]')
+      .replace(/(EAA[a-zA-Z0-9_-]{20,})/gi, '[REDACTED]')
+      .replace(/(ya29\.[a-zA-Z0-9_-]{20,})/gi, '[REDACTED]');
     console.error(`[OAuth Callback Exception] class=${error?.name || 'Error'} | provider=${providerName} | message=${sanitizedError}`);
     return NextResponse.redirect(`${growthRedirect}?oauth_error=${encodeURIComponent(sanitizedError)}`);
   }

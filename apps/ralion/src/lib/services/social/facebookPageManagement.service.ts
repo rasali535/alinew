@@ -17,7 +17,10 @@ import { FacebookCommentsService } from './facebookComments.service';
 
 function getServiceSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co';
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.placeholder';
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpZHNmaWhhZ3d0dGxtaGZ5bm1mIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjgyMzk0NSwiZXhwIjoyMDk4Mzk5OTQ1fQ.mpparRo7a5t5B7uOlWBxiRI7NDsVGfmxkPUEbxSYBfA';
   return createClient(url, key, {
     auth: {
       persistSession: false,
@@ -281,7 +284,7 @@ export class FacebookPageManagementService {
       const followers = Number(c.followers_count) || Number(c.metadata?.followers_count) || Number(c.metadata?.followers) || Number(c.metadata?.fan_count) || Number(c.metadata?.fanCount) || 0;
       return {
         id: c.id,
-        pageId: c.provider_account_id || c.metadata?.pageId || c.id,
+        pageId: c.metadata?.pageId || c.provider_account_id || c.id,
         name: c.account_name || c.metadata?.pageName || 'Facebook Page',
         username: c.username || c.metadata?.pageUsername || '@facebook_page',
         avatarUrl: c.profile_image_url || c.metadata?.avatarUrl || null,

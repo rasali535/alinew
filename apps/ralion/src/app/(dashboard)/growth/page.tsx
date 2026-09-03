@@ -189,6 +189,7 @@ function GrowthPageContent() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [generatedGallery, setGeneratedGallery] = useState<GeneratedContentItem[]>(initialGeneratedContent);
   const [connectedAccounts, setConnectedAccounts] = useState<SocialAccount[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
   const [isSyncing, setIsSyncing] = useState<string | null>(null); // provider being synced
   const [oauthAlert, setOauthAlert] = useState<{
@@ -642,7 +643,7 @@ Rules:
       try {
         const { data: conns, error: connErr } = await supabase
           .from('social_connections')
-          .select('id, provider, account_name, username, profile_image_url, followers_count, scopes, connection_status, token_status, updated_at')
+          .select('id, provider, account_name, username, profile_image_url, followers_count, scopes, connection_status, token_status, provider_account_id, updated_at')
           .eq('user_id', user.id);
 
         if (!connErr && Array.isArray(conns)) {
@@ -651,8 +652,9 @@ Rules:
             if (statusStr === 'CONNECTED' || statusStr === 'ACTIVE' || c.connection_status === 'connected') {
               const prov = (c.platform || c.provider || '').toLowerCase();
               const fCount = Number(c.followers_count) || Number(c.metadata?.followers_count) || Number(c.metadata?.followers) || Number(c.metadata?.fan_count) || 0;
-              accountsMap[prov] = {
-                id: c.id || `acc-${prov}`,
+              const accKey = c.id || `acc-${prov}-${c.provider_account_id || c.username || Date.now()}`;
+              accountsMap[accKey] = {
+                id: c.id || accKey,
                 provider: prov,
                 label: c.account_name || prov,
                 handle: c.username ? (c.username.startsWith('@') ? c.username : `@${c.username}`) : `@${prov}`,
@@ -661,6 +663,7 @@ Rules:
                 scopes: c.scopes || [],
                 avatarUrl: c.profile_image_url,
                 followers: fCount > 0 ? fCount.toLocaleString() : '0',
+                providerAccountId: c.provider_account_id,
               };
             }
           });
@@ -678,17 +681,19 @@ Rules:
             data.connections.forEach((c: any) => {
               const prov = (c.provider || c.platform || '').toLowerCase();
               const fCount = Number(c.followers_count) || Number(c.metadata?.followers_count) || Number(c.metadata?.followers) || Number(c.metadata?.fan_count) || 0;
-              if (!accountsMap[prov]) {
-                accountsMap[prov] = {
-                  id: c.id || `acc-${prov}`,
+              const accKey = c.id || `acc-${prov}-${c.provider_account_id || c.username || Date.now()}`;
+              if (!accountsMap[accKey]) {
+                accountsMap[accKey] = {
+                  id: c.id || accKey,
                   provider: prov,
                   label: c.account_name || prov,
-                  handle: c.username || `@${prov}`,
+                  handle: c.username ? (c.username.startsWith('@') ? c.username : `@${c.username}`) : `@${prov}`,
                   connectedAt: c.last_sync_at ? new Date(c.last_sync_at).toLocaleDateString() : 'Connected',
                   status: 'connected',
                   scopes: c.scopes || [],
-                  avatarUrl: c.profile_image_url,
+                  avatarUrl: c.profile_image_url || c.avatar_url,
                   followers: fCount > 0 ? fCount.toLocaleString() : '0',
+                  providerAccountId: c.provider_account_id,
                 };
               }
             });
@@ -704,6 +709,11 @@ Rules:
       // User-scoped localStorage cache
       try {
         localStorage.setItem(`ralion_social_accounts_${user.id}`, JSON.stringify(accountList));
+        if (accountList.length > 0) {
+          const savedSelected = localStorage.getItem(`ralion_selected_social_account_${user.id}`);
+          const validSelected = accountList.find(a => a.id === savedSelected);
+          setSelectedAccountId(validSelected ? validSelected.id : accountList[0].id);
+        }
       } catch {}
 
       return accountList;
@@ -1268,6 +1278,7 @@ Rules:
   useEffect(() => {
     const connected = searchParams.get('connected');
     const handle = searchParams.get('handle');
+    const connectionIdParam = searchParams.get('connection_id');
     const oauthError = searchParams.get('oauth_error');
     const stage = searchParams.get('stage');
     const facebookParam = searchParams.get('facebook');
@@ -1287,6 +1298,9 @@ Rules:
     }
 
     if (connected) {
+      if (connectionIdParam) {
+        setSelectedAccountId(connectionIdParam);
+      }
       if (connected === 'facebook' && (stage === '1' || facebookParam === 'account_connected')) {
         setOauthAlert({
           type: 'success',
@@ -1307,7 +1321,12 @@ Rules:
       router.replace('/ralion/growth', { scroll: false });
       setTimeout(() => setOauthAlert(null), 8000);
     } else if (oauthError) {
-      setOauthAlert({ type: 'error', message: `❌ Connection notice: ${decodeURIComponent(oauthError)}` });
+      const sanitized = decodeURIComponent(oauthError)
+        .replace(/([a-f0-9]{24,})/gi, '[REDACTED]')
+        .replace(/(AQL[a-zA-Z0-9_-]{20,})/gi, '[REDACTED]')
+        .replace(/(EAA[a-zA-Z0-9_-]{20,})/gi, '[REDACTED]')
+        .replace(/(ya29\.[a-zA-Z0-9_-]{20,})/gi, '[REDACTED]');
+      setOauthAlert({ type: 'error', message: `❌ Connection notice: ${sanitized}` });
       router.replace('/ralion/growth', { scroll: false });
       setTimeout(() => setOauthAlert(null), 12000);
     }
@@ -1322,8 +1341,9 @@ Rules:
     setIsConnecting(true);
     try {
       const handle = manualAccountHandle.startsWith('@') ? manualAccountHandle : `@${manualAccountHandle}`;
+      const newAccId = `acc-${selectedConnectPlatform}-${Date.now()}`;
       const newAcc: SocialAccount = {
-        id: `acc-${selectedConnectPlatform}-${Date.now()}`,
+        id: newAccId,
         provider: selectedConnectPlatform,
         label: platformConfig[selectedConnectPlatform]?.label || selectedConnectPlatform,
         handle: handle,
@@ -1333,38 +1353,34 @@ Rules:
         followers: '1.2k',
       };
 
-      // 1. Save to Supabase
+      // 1. Save to Supabase with isolated connection ID
       try {
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          await supabase.from('social_account_tokens').upsert({
+          await supabase.from('social_connections').upsert({
             user_id: user.id,
             provider: selectedConnectPlatform,
-            access_token: manualAccessToken || 'active_token',
-            account_label: newAcc.label,
-            account_handle: newAcc.handle,
+            provider_account_id: handle.replace(/^@/, ''),
+            account_name: newAcc.label,
+            username: handle.replace(/^@/, ''),
+            account_type: 'PERSONAL',
+            connection_status: 'CONNECTED',
+            token_status: 'TOKEN_VALID',
             followers_count: 1200,
-            status: 'connected',
+            connected_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-          }, { onConflict: 'user_id,provider' });
+          }, { onConflict: 'user_id,provider,provider_account_id' });
         }
       } catch (e) {
         console.warn('[Growth] Manual Supabase save note:', e);
       }
 
-      // 2. Cache in localStorage
-      try {
-        const existing = JSON.parse(localStorage.getItem('ralion_connected_social_accounts') || '[]');
-        const updated = existing.filter((a: any) => a.provider !== selectedConnectPlatform);
-        updated.push(newAcc);
-        localStorage.setItem('ralion_connected_social_accounts', JSON.stringify(updated));
-      } catch {}
-
       setConnectedAccounts(prev => {
-        const filtered = prev.filter(a => a.provider !== selectedConnectPlatform);
+        const filtered = prev.filter(a => a.id !== newAccId);
         return [...filtered, newAcc];
       });
+      setSelectedAccountId(newAccId);
 
       setIsConnectModalOpen(false);
       setManualAccountHandle('');
@@ -1419,46 +1435,71 @@ Rules:
     }
   };
 
-  // ── Disconnect account (remove from Supabase) ─────────────────────────────
-  const handleDisconnectAccount = async (providerKey: string) => {
+  // ── Disconnect account (isolated by connection ID) ────────────────────────
+  const handleDisconnectAccount = async (targetIdOrProvider: string, providerHint?: string) => {
     try {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
+      const targetAccount = connectedAccounts.find(a => a.id === targetIdOrProvider);
+      const isConnectionId = targetIdOrProvider.includes('-') || (targetAccount && targetAccount.id === targetIdOrProvider);
+      const providerKey = targetAccount?.provider || providerHint || targetIdOrProvider;
+
       if (user) {
-        await supabase
-          .from('social_account_tokens')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('provider', providerKey);
+        if (isConnectionId) {
+          await supabase.from('social_credentials').delete().eq('social_connection_id', targetIdOrProvider);
+          await supabase.from('social_connections').update({
+            connection_status: 'DISCONNECTED',
+            token_status: 'TOKEN_REVOKED',
+            disconnected_at: new Date().toISOString()
+          }).eq('id', targetIdOrProvider);
+        } else {
+          await supabase.from('social_account_tokens').delete().eq('user_id', user.id).eq('provider', providerKey);
+        }
       }
-      // Also try API route if available
+
+      // API route disconnect
       try {
-        await fetch(getRalionApiUrl(`/api/oauth/${providerKey}/disconnect/`), { method: 'DELETE', credentials: 'include' });
-      } catch {
-        // Silently continue
+        await authFetch('/api/social/connections', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'disconnect',
+            connectionId: isConnectionId ? targetIdOrProvider : undefined,
+            provider: providerKey,
+            userId: user?.id
+          })
+        });
+      } catch {}
+
+      if (user) {
+        try {
+          const userStorageKey = `ralion_social_accounts_${user.id}`;
+          const stored = JSON.parse(localStorage.getItem(userStorageKey) || '[]');
+          const filtered = stored.filter((a: any) => a.id !== targetIdOrProvider && (isConnectionId ? true : a.provider !== providerKey));
+          localStorage.setItem(userStorageKey, JSON.stringify(filtered));
+        } catch {}
       }
+
+      setConnectedAccounts(prev => prev.filter(a => a.id !== targetIdOrProvider && (isConnectionId ? true : a.provider !== providerKey)));
+      if (selectedAccountId === targetIdOrProvider) {
+        const remaining = connectedAccounts.filter(a => a.id !== targetIdOrProvider);
+        setSelectedAccountId(remaining[0]?.id || null);
+      }
+
+      if (providerKey === 'facebook') {
+        setAvailableFacebookPages([]);
+        setFacebookPagePosts([]);
+        setFacebookEntitlement(prev => ({ ...prev, current: 0, remaining: prev.limit }));
+      }
+
+      setOauthAlert({
+        type: 'info',
+        message: `✅ Disconnected ${targetAccount?.label || providerKey} account.`
+      });
+      setTimeout(() => setOauthAlert(null), 4000);
     } catch (e) {
       console.warn('[Growth] Disconnect error:', e);
     }
-
-    try {
-      const stored = JSON.parse(localStorage.getItem('ralion_connected_social_accounts') || '[]');
-      const filtered = stored.filter((a: any) => a.provider !== providerKey);
-      localStorage.setItem('ralion_connected_social_accounts', JSON.stringify(filtered));
-    } catch {}
-
-    if (providerKey === 'facebook') {
-      setAvailableFacebookPages([]);
-      setFacebookPagePosts([]);
-      setFacebookEntitlement(prev => ({ ...prev, current: 0, remaining: prev.limit }));
-    }
-
-    setConnectedAccounts(prev => prev.filter(a => a.provider !== providerKey));
-    setOauthAlert({
-      type: 'info',
-      message: `✅ Disconnected ${providerKey.charAt(0).toUpperCase() + providerKey.slice(1)} account.`
-    });
-    setTimeout(() => setOauthAlert(null), 4000);
   };
 
   // ── Sync analytics from real platform APIs ────────────────────────────────
@@ -1799,18 +1840,23 @@ Rules:
 
     setPublishingPostId(postId);
     try {
+      const targetPlatform = post.platform || 'facebook';
+      const targetConn =
+        (selectedAccountId && connectedAccounts.find(a => a.id === selectedAccountId && (a.provider === targetPlatform || !targetPlatform))) ||
+        connectedAccounts.find(a => a.id === selectedAccountId) ||
+        connectedAccounts.find(a => a.provider === targetPlatform) ||
+        connectedAccounts[0];
       const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
-      const activeConn = connectedAccounts.find(a => a.provider === 'facebook');
 
       const payload = {
         title: post.title,
         body: `${post.body}\n\n${post.hashtags?.join(' ') || ''}`.trim(),
-        platforms: ['facebook'],
+        platforms: [targetPlatform],
         mediaUrls: post.mediaUrl ? [post.mediaUrl] : undefined,
         mediaTypes: post.mediaType ? [post.mediaType] : undefined,
-        authorName: activeFbPage?.name || activeConn?.label || 'Facebook Page',
-        socialConnectionId: activeFbPage?.id || activeConn?.id || undefined,
-        pageId: activeFbPage?.pageId || undefined,
+        authorName: targetConn?.label || activeFbPage?.name || 'Social Account',
+        socialConnectionId: targetConn?.id || (targetPlatform === 'facebook' ? activeFbPage?.id : undefined),
+        pageId: targetPlatform === 'facebook' ? (activeFbPage?.pageId || undefined) : undefined,
       };
 
       const res = await authFetch('/api/social/publish', {
@@ -3089,6 +3135,118 @@ Rules:
       {/* ==================================== */}
       {activeTab === 'ACCOUNTS' && (
         <div className="flex flex-col gap-6">
+          {/* Multi-Account Overview & Selector Bar */}
+          <div className="p-5 rounded-3xl bg-zinc-900/90 border border-zinc-800 shadow-xl flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-zinc-800 pb-3">
+              <div>
+                <h3 className="text-sm font-black text-white flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-emerald-400" /> Connected Social Identities ({connectedAccounts.length})
+                </h3>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Manage multiple clients, pages, and channels with isolated credentials and independent publishing targets.
+                </p>
+              </div>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setIsConnectModalOpen(true)}
+                className="gap-1.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700"
+              >
+                <Plus className="w-3.5 h-3.5" /> Connect Another Account
+              </Button>
+            </div>
+
+            {/* Account Selector Cards Grid */}
+            {connectedAccounts.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {connectedAccounts.map((acc) => {
+                  const isSelected = selectedAccountId === acc.id || (!selectedAccountId && connectedAccounts[0]?.id === acc.id);
+                  const isFb = acc.provider === 'facebook';
+                  return (
+                    <div
+                      key={acc.id}
+                      onClick={() => {
+                        setSelectedAccountId(acc.id);
+                        try {
+                          const supabase = createClient();
+                          supabase.auth.getUser().then(({ data }) => {
+                            if (data?.user) {
+                              localStorage.setItem(`ralion_selected_social_account_${data.user.id}`, acc.id);
+                            }
+                          });
+                        } catch {}
+                      }}
+                      className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between gap-3 ${
+                        isSelected
+                          ? 'bg-indigo-950/40 border-indigo-500/60 shadow-lg shadow-indigo-600/10'
+                          : 'bg-zinc-950/60 border-zinc-800/80 hover:border-zinc-700'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center font-bold text-sm text-indigo-300">
+                            {acc.provider.slice(0, 2).toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <h4 className="text-xs font-bold text-white truncate max-w-[150px]">{acc.label}</h4>
+                              {isSelected && (
+                                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="Active Account" />
+                              )}
+                            </div>
+                            <p className="text-[11px] text-zinc-400 font-mono">{acc.handle}</p>
+                          </div>
+                        </div>
+                        <Badge variant={acc.status === 'connected' ? 'success' : 'warning'} className="text-[10px] px-2 py-0.5">
+                          {acc.provider.toUpperCase()}
+                        </Badge>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] text-zinc-400 border-t border-zinc-800/60 pt-2">
+                        <span>{acc.followers || '0'} followers</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setNewPost(prev => ({
+                                ...prev,
+                                platform: acc.provider as any,
+                                title: `${acc.label} Update`,
+                                body: `Update from ${acc.label}`,
+                              }));
+                              setIsCreateOpen(true);
+                            }}
+                            className="text-indigo-400 hover:text-indigo-300 font-semibold"
+                          >
+                            Create Post
+                          </button>
+                          <span>•</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm(`Disconnect ${acc.label} (${acc.handle})?`)) {
+                                handleDisconnectAccount(acc.id, acc.provider);
+                              }
+                            }}
+                            className="text-red-400 hover:text-red-300"
+                          >
+                            Disconnect
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-4 text-xs text-zinc-500">
+                No social accounts connected yet. Click above to connect Facebook, LinkedIn, X, TikTok, or YouTube.
+              </div>
+            )}
+          </div>
+
           {facebookPageStatus === 'PAGE_ACCESS_PENDING' || (fbConn && availableFacebookPages.length === 0 && !activeFbPage) ? (
             <div className="p-6 rounded-3xl bg-gradient-to-br from-zinc-900/90 via-zinc-950 to-zinc-900 border border-amber-500/30 shadow-2xl flex flex-col gap-5">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-4">
@@ -3137,7 +3295,7 @@ Rules:
                 </div>
               </div>
             </div>
-          ) : (!fbConn && availableFacebookPages.length === 0) ? (
+          ) : (!fbConn && availableFacebookPages.length === 0 && connectedAccounts.length === 0) ? (
             /* Clean Empty State for Unconnected Tenants */
             <div className="p-8 rounded-3xl bg-gradient-to-br from-indigo-950/40 via-zinc-900 to-zinc-950 border border-zinc-800 shadow-2xl flex flex-col items-center text-center gap-6 py-16">
               <div className="w-20 h-20 rounded-3xl bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center font-black text-3xl text-indigo-400 shadow-2xl shadow-indigo-600/30">
@@ -3149,13 +3307,10 @@ Rules:
                     No Social Accounts Connected
                   </Badge>
                 </div>
-                <h2 className="text-2xl font-black text-white tracking-tight">Connect Your Facebook Page</h2>
+                <h2 className="text-2xl font-black text-white tracking-tight">Connect Your Social Channels</h2>
                 <p className="text-xs text-zinc-400 mt-2 leading-relaxed">
-                  Link your Facebook Business Page to publish updates, schedule multi-format posts, manage Messenger inbox conversations, and activate Mari AI audience growth analytics for your workspace.
+                  Link Facebook, LinkedIn, X, TikTok, or YouTube to publish updates, schedule multi-format posts, manage conversations, and activate Mari AI audience growth analytics.
                 </p>
-                <div className="text-[11px] text-zinc-500 font-mono mt-3">
-                  Available on your plan: <strong className="text-emerald-400">0 of {facebookEntitlement.limit} Facebook Pages used</strong>
-                </div>
               </div>
 
               <div className="flex flex-wrap items-center justify-center gap-3">
@@ -3165,61 +3320,60 @@ Rules:
                   onClick={() => setIsConnectModalOpen(true)}
                   className="gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 font-bold text-xs shadow-lg shadow-indigo-600/30"
                 >
-                  <Plus className="w-4 h-4" /> Connect Facebook Page
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleOpenPageSelection}
-                  className="gap-2 px-5 py-2.5 text-xs border-zinc-700 text-zinc-300 hover:text-white"
-                >
-                  <Layers className="w-4 h-4 text-indigo-400" /> Manage / Select Page
+                  <Plus className="w-4 h-4" /> Connect Social Account
                 </Button>
               </div>
             </div>
           ) : (
-            /* Facebook Page Management Master Workspace */
+            /* Selected Facebook Page Management Master Workspace */
             <div className="p-6 rounded-3xl bg-gradient-to-br from-indigo-950/50 via-zinc-900 to-zinc-950 border border-indigo-500/30 shadow-2xl flex flex-col gap-6">
               {/* Header / Hero */}
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-5 border-b border-zinc-800 pb-5">
                 <div className="flex items-center gap-4">
                   <div className="w-16 h-16 rounded-2xl bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center font-black text-2xl text-indigo-400 shadow-xl">
-                    fb
+                    {(connectedAccounts.find(a => a.id === selectedAccountId)?.provider || 'fb').slice(0, 2).toUpperCase()}
                   </div>
                   <div>
                     <div className="flex items-center gap-2.5">
-                      <h2 className="text-xl font-black text-white tracking-tight">{activeFbPage?.name || fbConn?.label || 'Facebook Page'}</h2>
+                      <h2 className="text-xl font-black text-white tracking-tight">
+                        {connectedAccounts.find(a => a.id === selectedAccountId)?.label || activeFbPage?.name || fbConn?.label || 'Social Account'}
+                      </h2>
                       <Badge variant="success" className="text-xs px-2.5 py-0.5 font-bold">
                         🟢 Connected
                       </Badge>
                     </div>
-                    <p className="text-xs text-indigo-300/80 font-mono mt-0.5">{activeFbPage?.username || fbConn?.handle || '@facebook'} • Facebook Page</p>
+                    <p className="text-xs text-indigo-300/80 font-mono mt-0.5">
+                      {connectedAccounts.find(a => a.id === selectedAccountId)?.handle || activeFbPage?.username || fbConn?.handle || '@account'} • {connectedAccounts.find(a => a.id === selectedAccountId)?.provider?.toUpperCase() || 'Facebook'}
+                    </p>
                     <div className="flex items-center gap-3 text-xs text-zinc-400 mt-2">
-                      <span className="font-semibold text-white">{fbFollowersCount > 0 ? fbFollowersCount.toLocaleString() : '0'} followers</span>
+                      <span className="font-semibold text-white">{connectedAccounts.find(a => a.id === selectedAccountId)?.followers || fbFollowersCount || '0'} followers</span>
                       <span>•</span>
-                      <span className="text-emerald-400 font-medium">1 of {facebookEntitlement.limit} Facebook Pages used</span>
+                      <span className="text-emerald-400 font-medium">{connectedAccounts.length} Connected Identities</span>
                     </div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2.5 w-full md:w-auto">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={handleOpenPageSelection}
-                    className="flex-1 md:flex-initial gap-1.5 text-xs border-indigo-500/40 text-indigo-200 hover:bg-indigo-950/60"
-                  >
-                    <Layers className="w-3.5 h-3.5 text-indigo-400" /> Manage Page
-                  </Button>
+                  {fbConn && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handleOpenPageSelection}
+                      className="flex-1 md:flex-initial gap-1.5 text-xs border-indigo-500/40 text-indigo-200 hover:bg-indigo-950/60"
+                    >
+                      <Layers className="w-3.5 h-3.5 text-indigo-400" /> Manage Facebook Page
+                    </Button>
+                  )}
                   <Button 
                     variant="primary" 
                     size="sm" 
                     onClick={() => {
+                      const activeAcc = connectedAccounts.find(a => a.id === selectedAccountId) || connectedAccounts[0];
                       setNewPost({
-                        title: `${activeFbPage?.name || fbConn?.label || 'Social'} Update`,
-                        body: 'Ralion OS Social Infrastructure is officially live with verified Meta Facebook Page integration.',
-                        platform: 'facebook',
-                        hashtags: `#${(activeFbPage?.name || fbConn?.label || 'RalionOS').replace(/\s+/g, '')} #Growth`,
+                        title: `${activeAcc?.label || 'Social'} Update`,
+                        body: 'Ralion OS Social Infrastructure is officially live with verified multi-channel integration.',
+                        platform: (activeAcc?.provider as any) || 'facebook',
+                        hashtags: `#${(activeAcc?.label || 'RalionOS').replace(/\s+/g, '')} #Growth`,
                         scheduledAt: '',
                       });
                       setIsCreateOpen(true);
@@ -3231,7 +3385,12 @@ Rules:
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    onClick={() => handleDisconnectAccount('facebook')}
+                    onClick={() => {
+                      const activeAcc = connectedAccounts.find(a => a.id === selectedAccountId) || connectedAccounts[0];
+                      if (activeAcc) {
+                        handleDisconnectAccount(activeAcc.id, activeAcc.provider);
+                      }
+                    }}
                     className="text-xs text-red-400 border-red-900/40 hover:bg-red-950/60"
                   >
                     Disconnect
@@ -5610,19 +5769,24 @@ Rules:
 
                 setIsConnecting(true);
 
+                const targetPlatform = newPost.platform || 'facebook';
+                const targetConn =
+                  (selectedAccountId && connectedAccounts.find(a => a.id === selectedAccountId && (a.provider === targetPlatform || !targetPlatform))) ||
+                  connectedAccounts.find(a => a.id === selectedAccountId) ||
+                  connectedAccounts.find(a => a.provider === targetPlatform) ||
+                  connectedAccounts[0];
                 const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
-                const activeConn = connectedAccounts.find(a => a.provider === 'facebook');
 
                 const payload = {
                   title: topic || 'Social Post',
                   body: `${contentBody}\n\n${newPost.hashtags}`.trim(),
-                  platforms: ['facebook'],
+                  platforms: [targetPlatform],
                   mediaUrls: newPost.mediaUrl ? [newPost.mediaUrl] : undefined,
                   mediaTypes: newPost.mediaType ? [newPost.mediaType] : undefined,
                   scheduledFor: newPost.scheduledAt || undefined,
-                  authorName: activeFbPage?.name || activeConn?.label || 'Facebook Page',
-                  socialConnectionId: activeFbPage?.id || activeConn?.id || undefined,
-                  pageId: activeFbPage?.pageId || undefined,
+                  authorName: targetConn?.label || activeFbPage?.name || 'Social Account',
+                  socialConnectionId: targetConn?.id || (targetPlatform === 'facebook' ? activeFbPage?.id : undefined),
+                  pageId: targetPlatform === 'facebook' ? (activeFbPage?.pageId || undefined) : undefined,
                 };
 
                 try {
