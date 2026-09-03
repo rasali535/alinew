@@ -30,7 +30,7 @@ export async function GET(
       const supabase = getServiceSupabase();
       const { data: conn } = await supabase
         .from('social_connections')
-        .select('provider_account_id, zernio_account_id, metadata')
+        .select('provider_account_id, zernio_account_id, account_type, metadata')
         .eq('provider', 'facebook')
         .or(`workspace_id.eq.${context.workspace.id},user_id.eq.${context.user.id}`)
         .maybeSingle();
@@ -44,6 +44,22 @@ export async function GET(
 
       if (!pageMatched) {
         return forbiddenResponse(request, 'You do not have access to this Facebook Page');
+      }
+
+      const { getSocialConnectionCapabilities } = require('@ralion/integrations');
+      if (conn && getSocialConnectionCapabilities(conn).isPersonalProfile) {
+        return corsJsonResponse({
+          success: true,
+          analytics: {
+            pageId,
+            pageName: 'Personal Facebook Profile',
+            followers: 0,
+            engagementRate: 0,
+            analyticsAvailable: false,
+            reason: 'facebook_personal_profile',
+            message: 'Facebook Page analytics unavailable for personal profiles.',
+          }
+        }, undefined, request);
       }
     }
 

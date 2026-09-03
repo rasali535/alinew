@@ -22,6 +22,7 @@ async function inspect() {
     console.log('ID:', c.id);
     console.log('Provider:', c.provider);
     console.log('Account Name:', c.account_name);
+    console.log('Account Type:', c.account_type);
     console.log('Provider Account ID:', c.provider_account_id);
     console.log('Infrastructure Provider:', c.infrastructure_provider);
     console.log('Zernio Profile ID:', c.zernio_profile_id);

@@ -341,12 +341,9 @@ function generateLocalStrategicResponse(
   const orgName = context?.layer1?.companyName?.value || profile?.companyName?.value || wk?.title || context?.organizationName || '';
   const isRasAli = orgName === 'Ras Ali Labs' || orgId === 'ras-ali-labs' || orgId === 'org-rasalilabs-demo' || orgId.includes('rasali');
 
-  const pageName = context?.layer2?.social?.connectedPageName?.value || (isRasAli ? 'Ras Ali Labs Official' : '');
-  const isSocialConnected = Boolean(
-    (context?.layer2?.social?.isConnected && pageName && pageName !== 'Not Connected') ||
-    (pageName && pageName !== 'Not Connected' && pageName !== '') ||
-    (isRasAli && pageName)
-  );
+  const isPersonalProfile = Boolean(context?.isPersonalSocialProfile);
+  const isSocialConnected = Boolean(!isPersonalProfile && context?.layer2?.social?.isConnected);
+  const pageName = isSocialConnected ? (context?.layer2?.social?.connectedPageName?.value || '') : '';
 
   const hasProducts = Boolean(
     (context?.layer1?.productsAndServices?.value && context.layer1.productsAndServices.value.length > 0) ||
@@ -490,11 +487,20 @@ function generateLocalStrategicResponse(
       ? productsList.map(p => `• **${p.name}** (${p.category})`).join('\n')
       : `• **${orgName} Core Solutions** (${industry})\n• **Automated Workflows**\n• **Customer Support & Inquiries**`;
 
-    const sourceCitations = (websiteUrl && websiteUrl !== 'Not configured')
-      ? `Based on your website (${websiteUrl})${isSocialConnected ? ` and connected Facebook channel (**${pageName}**)` : ''}, here is what I understand about **${orgName}**:`
-      : (isSocialConnected
-        ? `Based on your connected Facebook channel (**${pageName}**) and verified business telemetry, here is what I understand about **${orgName}**:`
-        : `Based on your verified business profile, here is what I understand about **${orgName}**:`);
+    let sourceCitations = '';
+    if (websiteUrl && websiteUrl !== 'Not configured') {
+      if (isSocialConnected) {
+        sourceCitations = `Based on your website (${websiteUrl}) and connected Facebook Business Page (**${pageName}**), here is what I understand about **${orgName}**:`;
+      } else if (isPersonalProfile) {
+        sourceCitations = `I've learned your verified business information from your website (${websiteUrl}). Your connected Facebook account is a personal profile, so Facebook Page business insights are not available yet. Here is what I understand about **${orgName}**:`;
+      } else {
+        sourceCitations = `Based on your website (${websiteUrl}), here is what I understand about **${orgName}**:`;
+      }
+    } else if (isSocialConnected) {
+      sourceCitations = `Based on your connected Facebook Business Page (**${pageName}**) and verified business telemetry, here is what I understand about **${orgName}**:`;
+    } else {
+      sourceCitations = `Based on your verified business profile, here is what I understand about **${orgName}**:`;
+    }
 
     responseText = `### Your Business: ${orgName}\n\n` +
       `${sourceCitations}\n\n` +
@@ -535,9 +541,17 @@ function generateLocalStrategicResponse(
         `**Mari Recommendation**:\n` +
         `I recommend creating another short-form commercial Reel targeting ${targetMarket} to capitalize on your current +${reachGrowth}% audience momentum.\n\n` +
         `[Create Reel] | [Create Visual] | [Open Growth Studio]`;
+    } else if (isPersonalProfile) {
+      responseText = `Your connected Facebook account is a personal profile, not a Facebook Business Page.\n\n` +
+        `• **Profile Status:** Personal Profile Connected\n` +
+        `• **Facebook Page Insights:** Unavailable for personal profiles\n\n` +
+        `Personal Facebook profiles do not provide the Page posts, follower analytics, or public business reach metrics used by Ralion.\n\n` +
+        `**Next Step**:\n` +
+        `Connect your official Facebook Business Page in Growth Studio to unlock Facebook Page posts, audience telemetry, and business intelligence.\n\n` +
+        `[Connect Facebook Page] | [Open Growth Studio]`;
     } else {
       responseText = `Social channels are not currently connected for ${orgName}. You can connect your Facebook Page or Instagram in Growth Studio to enrich Mari with live audience reach and engagement telemetry.\n\n` +
-        `[Connect Facebook] | [Open Growth Studio]`;
+        `[Connect Facebook Page] | [Open Growth Studio]`;
     }
   }
   // 6. Growth & Focus Queries: "How can we grow this business?" / "Where to focus"

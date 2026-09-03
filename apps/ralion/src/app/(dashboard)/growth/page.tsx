@@ -2131,15 +2131,30 @@ Rules:
   const activeCampaignsCount = campaigns.filter(c => c.status === 'active').length;
 
   const activeAcc = connectedAccounts.find(a => a.id === selectedAccountId) || connectedAccounts[0];
+  const activeAccAny = activeAcc as any;
   const fbConn = (activeAcc && activeAcc.provider === 'facebook') ? activeAcc : connectedAccounts.find(a => a.provider === 'facebook');
   const isSelectedFacebook = activeAcc?.provider === 'facebook';
-  const activeFbPage = isSelectedFacebook 
+  const isPersonalFacebookProfile = Boolean(
+    isSelectedFacebook && (
+      activeAccAny?.accountType === 'FACEBOOK_PERSONAL_PROFILE' ||
+      activeAccAny?.account_type === 'PERSONAL' ||
+      activeAccAny?.category === 'USER_PROFILE' ||
+      activeAccAny?.isPersonalProfile === true ||
+      activeAcc?.label?.includes('Personal') ||
+      activeAcc?.label?.includes('Profile')
+    )
+  );
+  const isFacebookPage = Boolean(isSelectedFacebook && !isPersonalFacebookProfile);
+
+  const activeFbPage = isFacebookPage 
     ? (availableFacebookPages.find(p => p.pageId === activeAcc?.providerAccountId || p.id === activeAcc?.id) || null)
     : null;
   const currentAccountName = activeAcc?.label || activeFbPage?.name || 'Social Account';
   const currentAccountHandle = activeAcc?.handle || activeFbPage?.username || '';
   const currentAccountId = activeAcc?.providerAccountId || activeFbPage?.pageId || activeAcc?.id || '';
-  const fbFollowersCount = Number(activeFbPage?.followersCount) || (activeAcc?.followers ? Number(String(activeAcc.followers).replace(/,/g, '')) : 0);
+  const fbFollowersCount = isFacebookPage 
+    ? (Number(activeFbPage?.followersCount) || (activeAcc?.followers ? Number(String(activeAcc.followers).replace(/,/g, '')) : 0))
+    : 0;
 
   // Dynamic Spline Series & Timeframe Bucketed Computation
   const { splineChartSeries, dynamicDateLabels } = React.useMemo(() => {
@@ -2400,7 +2415,15 @@ Rules:
                       </span>
                     )}
                   </h2>
-                  {activeAcc?.status === 'connected' ? (
+                  {isPersonalFacebookProfile ? (
+                    <Badge variant="warning" className="text-[10px] font-bold py-0.5 px-2 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Facebook Personal Profile
+                    </Badge>
+                  ) : isFacebookPage ? (
+                    <Badge variant="success" className="text-[10px] font-bold py-0.5 px-2 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Facebook Page
+                    </Badge>
+                  ) : activeAcc?.status === 'connected' ? (
                     <Badge variant="success" className="text-[10px] font-bold py-0.5 px-2 flex items-center gap-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Connected
                     </Badge>
@@ -3607,6 +3630,31 @@ Rules:
                 {(() => {
                   const activeConnId = selectedAccountId ?? connectedAccounts[0]?.id ?? '';
                   const activePosts = connectionPosts[activeConnId] ?? (activeAcc?.provider === 'facebook' ? facebookPagePosts : []);
+
+                  if (isPersonalFacebookProfile) {
+                    return (
+                      <div className="p-8 rounded-2xl bg-zinc-950/60 border border-zinc-800/80 text-center flex flex-col items-center gap-3">
+                        <div className="p-3 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                          <Share2 className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-white">No Facebook Page posts available</h4>
+                          <p className="text-xs text-zinc-400 mt-1 max-w-md">
+                            This is a personal Facebook profile. Personal profiles do not provide the Facebook Page posts, feeds, or publishing capabilities used by Ralion.
+                          </p>
+                        </div>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => setIsConnectModalOpen(true)}
+                          className="mt-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold text-xs"
+                        >
+                          Connect a Facebook Page
+                        </Button>
+                      </div>
+                    );
+                  }
+
                   return activePosts.length === 0 ? (
                     <div className="p-8 rounded-2xl bg-zinc-950/60 border border-zinc-800/80 text-center flex flex-col items-center gap-2">
                       <Share2 className="w-8 h-8 text-zinc-600" />
@@ -3641,7 +3689,27 @@ Rules:
             )}
 
             {/* Sub-Tab 3: 30-DAY GROWTH ANALYTICS */}
-            {pageWorkspaceTab === 'ANALYTICS' && (
+            {pageWorkspaceTab === 'ANALYTICS' && isPersonalFacebookProfile ? (
+              <div className="p-8 rounded-2xl bg-zinc-950/60 border border-zinc-800/80 text-center flex flex-col items-center gap-3">
+                <div className="p-3 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                  <Activity className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white">Facebook Page analytics unavailable for personal profiles</h4>
+                  <p className="text-xs text-zinc-400 mt-1 max-w-md">
+                    Meta Graph API analytics require a connected Facebook Business Page. Personal profiles do not have Page reach, impressions, or engagement metrics.
+                  </p>
+                </div>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setIsConnectModalOpen(true)}
+                  className="mt-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold text-xs"
+                >
+                  Connect a Facebook Page
+                </Button>
+              </div>
+            ) : pageWorkspaceTab === 'ANALYTICS' && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800">
                   <p className="text-xs text-zinc-400 font-semibold">Total Reach (30d)</p>

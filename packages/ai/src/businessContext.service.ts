@@ -97,6 +97,8 @@ export interface BusinessContext {
   credits: MariCreditsUsage;
   primarySource?: string;
   hasVerifiedKnowledge?: boolean;
+  personalProfileNotice?: string;
+  isPersonalSocialProfile?: boolean;
 }
 
 export interface TenantProfileOverride {
@@ -196,13 +198,36 @@ export class BusinessContextService {
                 name: fb.accountName || fb.name || fb.pageName || fb.handle || 'Facebook Page',
                 fanCount: fb.followers || fb.followersCount || fb.fanCount || 0,
                 id: fb.id || fb.accountId || 'fb_page_1',
+                accountType: fb.accountType || fb.account_type,
+                isPersonalProfile: fb.isPersonalProfile || fb.accountType === 'FACEBOOK_PERSONAL_PROFILE' || fb.account_type === 'PERSONAL',
+                metadata: fb.metadata,
               };
             }
           }
         }
       } catch {}
     }
-    const isSocialPageConnected = Boolean(fbPage && fbPage.name && fbPage.name !== 'Not Connected');
+
+    const isPersonalFb = Boolean(
+      fbPage?.accountType === 'FACEBOOK_PERSONAL_PROFILE' ||
+      fbPage?.account_type === 'PERSONAL' ||
+      fbPage?.isPersonalProfile === true ||
+      fbPage?.category === 'USER_PROFILE' ||
+      (fbPage?.metadata && (fbPage.metadata.provider_account_type === 'FACEBOOK_PERSONAL_PROFILE' || (!fbPage.metadata.pageId && fbPage.metadata.facebookUserId))) ||
+      fbPage?.name === 'Personal Facebook Profile' ||
+      fbPage?.name === 'Facebook Profile (Connected)'
+    );
+
+    const isSocialPageConnected = Boolean(
+      !isPersonalFb &&
+      fbPage &&
+      fbPage.name &&
+      fbPage.name !== 'Not Connected'
+    );
+
+    const personalProfileNotice = isPersonalFb
+      ? "Your connected Facebook account is a personal profile. Facebook Page business posts, followers, and analytics are not available yet. Connect a Facebook Page to unlock Page-level business intelligence."
+      : undefined;
 
     const isWkValid = Boolean(
       websiteKnowledge && (
@@ -333,6 +358,7 @@ export class BusinessContextService {
       knowledgeSources: [
         ...(isWkValid ? [{ id: 'k-web', title: `Website Knowledge (${websiteKnowledge?.websiteUrl})`, category: 'WEBSITE', updatedAt: websiteKnowledge?.lastSuccessfulSync || timestamp, status: 'VERIFIED' as const }] : []),
         ...(isSocialPageConnected ? [{ id: 'k-soc', title: `Facebook Page (${fbPage?.name})`, category: 'SOCIAL', updatedAt: timestamp, status: 'CONNECTED' as const }] : []),
+        ...(isPersonalFb ? [{ id: 'k-soc-personal', title: `Facebook Personal Profile (${fbPage?.name || 'Personal Profile'}) — Business Page Not Connected`, category: 'SOCIAL', updatedAt: timestamp, status: 'PENDING' as const }] : []),
         ...(hasRealContacts ? [{ id: 'k-crm', title: 'Live CRM Ledger', category: 'CRM', updatedAt: timestamp, status: 'CONNECTED' as const }] : []),
         ...(hasRealTasks ? [{ id: 'k-tasks', title: 'Operational Tasks', category: 'OPERATIONS', updatedAt: timestamp, status: 'CONNECTED' as const }] : []),
       ],
@@ -364,8 +390,8 @@ export class BusinessContextService {
       : 0;
 
     const isSocialConnected = isSocialPageConnected;
-    const followers = fbPage?.fanCount ?? 0;
-    const pageName = fbPage?.name ?? 'Not Connected';
+    const followers = isSocialPageConnected ? (Number(fbPage?.fanCount) || 0) : 0;
+    const pageName = isSocialPageConnected ? (fbPage?.name || 'Facebook Page') : (isPersonalFb ? 'Personal Profile (Business Page Not Connected)' : 'Not Connected');
 
     const layer2: Layer2BusinessState = {
       crm: {
@@ -510,6 +536,8 @@ export class BusinessContextService {
       credits,
       primarySource,
       hasVerifiedKnowledge,
+      personalProfileNotice,
+      isPersonalSocialProfile: isPersonalFb,
     };
 
     contextCache[orgId] = {
@@ -544,6 +572,8 @@ export class BusinessContextService {
 
     const socialSection = l2.social.isConnected
       ? `- Facebook Page: "${l2.social.connectedPageName?.value}" | ${l2.social.followersCount?.value} followers | Reach Growth: +${l2.social.reachGrowthPct?.value}% | Top Content: ${l2.social.topPerformingType?.value}`
+      : context.isPersonalSocialProfile
+      ? `- Social Accounts: A personal Facebook profile is connected, but NO Facebook Business Page is connected. Do NOT claim Facebook Page posts, followers, or performance analytics. If asked about Facebook performance, explain that the connected account is a personal profile and recommend connecting a Facebook Page.`
       : `- Social Accounts: Not connected.`;
 
     return `=== AUTHORITATIVE BUSINESS KNOWLEDGE (Organization: ${l1.companyName.value}) ===

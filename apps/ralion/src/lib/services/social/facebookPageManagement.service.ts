@@ -484,7 +484,7 @@ export class FacebookPageManagementService {
       // Explicit: fetch the exact connection the caller requested
       const { data: explicitConn } = await supabase
         .from('social_connections')
-        .select('id, zernio_profile_id, zernio_account_id, provider_account_id, workspace_id, user_id, metadata, followers_count')
+        .select('id, zernio_profile_id, zernio_account_id, provider_account_id, workspace_id, user_id, account_type, metadata, followers_count')
         .eq('id', params.socialConnectionId)
         .eq('connection_status', 'CONNECTED')
         .maybeSingle();
@@ -493,7 +493,7 @@ export class FacebookPageManagementService {
       // Fallback: find the first Facebook connection for this workspace/user (legacy behaviour)
       let connQuery = supabase
         .from('social_connections')
-        .select('id, zernio_profile_id, zernio_account_id, provider_account_id, workspace_id, user_id, metadata, followers_count')
+        .select('id, zernio_profile_id, zernio_account_id, provider_account_id, workspace_id, user_id, account_type, metadata, followers_count')
         .eq('provider', 'facebook')
         .eq('connection_status', 'CONNECTED');
 
@@ -510,6 +510,13 @@ export class FacebookPageManagementService {
     }
 
     if (!conn) {
+      return [];
+    }
+
+    // Do not attempt to query or emulate Page posts for a personal profile
+    const { getSocialConnectionCapabilities } = require('@ralion/integrations');
+    const caps = getSocialConnectionCapabilities(conn);
+    if (caps.isPersonalProfile || !caps.canReadPosts) {
       return [];
     }
 
@@ -763,7 +770,7 @@ export class FacebookPageManagementService {
     if (params.socialConnectionId) {
       const { data: explicitConn } = await supabase
         .from('social_connections')
-        .select('id, zernio_profile_id, zernio_account_id, provider_account_id, account_name, followers_count, metadata')
+        .select('id, zernio_profile_id, zernio_account_id, provider_account_id, account_name, account_type, followers_count, metadata')
         .eq('id', params.socialConnectionId)
         .eq('connection_status', 'CONNECTED')
         .maybeSingle();
@@ -771,7 +778,7 @@ export class FacebookPageManagementService {
     } else {
       let connQuery = supabase
         .from('social_connections')
-        .select('id, zernio_profile_id, zernio_account_id, provider_account_id, account_name, followers_count, metadata')
+        .select('id, zernio_profile_id, zernio_account_id, provider_account_id, account_name, account_type, followers_count, metadata')
         .eq('provider', 'facebook')
         .eq('connection_status', 'CONNECTED');
 
@@ -806,6 +813,28 @@ export class FacebookPageManagementService {
       return {
         pageId: params.pageId || 'none',
         pageName: 'No Connected Page',
+        followers: 0,
+        followerGrowth30d: 0,
+        followerGrowthPercentage: 0,
+        totalPosts30d: 0,
+        engagementRate: 0,
+        totalReach30d: 0,
+        totalImpressions30d: 0,
+        totalLikes30d: 0,
+        totalComments30d: 0,
+        totalShares30d: 0,
+        topContentType: 'text',
+        lastSyncedAt: new Date().toISOString(),
+      };
+    }
+
+    // Guard personal profiles: do not attempt to query or fabricate Page analytics
+    const { getSocialConnectionCapabilities } = require('@ralion/integrations');
+    const caps = getSocialConnectionCapabilities(conn);
+    if (caps.isPersonalProfile || !caps.canReadPageAnalytics) {
+      return {
+        pageId: params.pageId || conn.provider_account_id || 'none',
+        pageName: conn.account_name || 'Personal Facebook Profile',
         followers: 0,
         followerGrowth30d: 0,
         followerGrowthPercentage: 0,

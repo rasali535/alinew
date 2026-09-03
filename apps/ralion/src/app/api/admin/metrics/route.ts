@@ -74,28 +74,32 @@ export async function GET(request: NextRequest) {
         const activeConns = fbConns.filter(c => c.connection_status === 'CONNECTED');
         connectedMetaCount = activeConns.length;
         connectedUsersCount = new Set(activeConns.map(c => c.user_id || c.workspace_id).filter(Boolean)).size;
-        allConnections = fbConns.map(c => ({
-          id: c.id,
-          connectionId: c.id,
-          provider: c.provider,
-          providerAccountId: c.provider_account_id || c.metadata?.pageId || c.id,
-          accountName: c.account_name || c.metadata?.pageName || c.metadata?.name || 'Social Account',
-          username: c.username || c.metadata?.pageUsername || null,
-          connectionStatus: c.connection_status || 'CONNECTED',
-          tokenStatus: c.token_status || 'TOKEN_VALID',
-          followersCount: Number(c.followers_count || c.metadata?.followers_count || 0),
-          organizationId: c.organization_id || c.workspace_id || 'ras-ali-labs',
-          workspaceId: c.workspace_id,
-          userId: c.user_id,
-          infrastructureProvider: c.infrastructure_provider || 'native',
-          connectedAt: c.connected_at || c.created_at,
-          capabilities: c.capabilities || c.metadata?.capabilities || {
-            canPublish: true,
-            canSchedule: true,
-            canReadAnalytics: true,
-          },
-          metadata: c.metadata || {},
-        }));
+        const { getSocialConnectionCapabilities } = require('@ralion/integrations');
+        allConnections = fbConns.map(c => {
+          const caps = getSocialConnectionCapabilities(c);
+          return {
+            id: c.id,
+            connectionId: c.id,
+            provider: c.provider,
+            providerAccountId: c.provider_account_id || c.metadata?.pageId || c.id,
+            accountName: c.account_name || c.metadata?.pageName || c.metadata?.name || 'Social Account',
+            accountType: caps.classification,
+            accountTypeLabel: caps.accountTypeLabel,
+            isPersonalProfile: caps.isPersonalProfile,
+            isBusinessPage: caps.isBusinessPage,
+            username: c.username || c.metadata?.pageUsername || null,
+            connectionStatus: c.connection_status || 'CONNECTED',
+            tokenStatus: c.token_status || 'TOKEN_VALID',
+            followersCount: Number(c.followers_count || c.metadata?.followers_count || 0),
+            organizationId: c.organization_id || c.workspace_id || 'ras-ali-labs',
+            workspaceId: c.workspace_id,
+            userId: c.user_id,
+            infrastructureProvider: c.infrastructure_provider || 'native',
+            connectedAt: c.connected_at || c.created_at,
+            capabilities: caps,
+            metadata: c.metadata || {},
+          };
+        });
 
         const masterFb = fbConns.find(c => c.provider === 'facebook' && (c.metadata?.pageId === '477334159265235' || c.account_name === 'Ras Ali Labs')) || fbConns.find(c => c.provider === 'facebook');
         if (masterFb) {

@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     // 1. Validate the connection belongs to this workspace/user (tenant boundary)
     const { data: conn } = await supabase
       .from('social_connections')
-      .select('id, provider, provider_account_id, workspace_id, user_id, zernio_profile_id, zernio_account_id, metadata, connection_status')
+      .select('id, provider, provider_account_id, workspace_id, user_id, account_type, zernio_profile_id, zernio_account_id, metadata, connection_status')
       .eq('id', socialConnectionId)
       .or(`workspace_id.eq.${context.workspace.id},user_id.eq.${context.user.id}`)
       .maybeSingle();
@@ -51,10 +51,33 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const { getSocialConnectionCapabilities } = require('@ralion/integrations');
+    const caps = getSocialConnectionCapabilities(conn);
+
+    // 2. Personal Facebook profile: posts are explicitly unavailable (do not emulate a page)
+    if (caps.classification === 'FACEBOOK_PERSONAL_PROFILE') {
+      return corsJsonResponse(
+        {
+          success: true,
+          socialConnectionId,
+          provider: conn.provider,
+          accountType: 'FACEBOOK_PERSONAL_PROFILE',
+          accountTypeLabel: 'Personal Profile',
+          posts: [],
+          total: 0,
+          dataAvailable: false,
+          reason: 'facebook_personal_profile',
+          message: 'This is a personal Facebook profile. Personal profiles do not provide Facebook Page posts or analytics.',
+        },
+        undefined,
+        request
+      );
+    }
+
     const provider = conn.provider as string;
     const limit = parseInt(searchParams.get('limit') || '50', 10);
 
-    // 2. Facebook: delegate to full service (Zernio + Graph API + DB)
+    // 3. Facebook Business Page: delegate to full service (Zernio + Graph API + DB)
     if (provider === 'facebook') {
       const posts = await FacebookPageManagementService.getPagePosts({
         organizationId: context.workspace.id,

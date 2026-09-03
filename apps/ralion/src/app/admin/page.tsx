@@ -731,14 +731,21 @@ export default function PlatformAdminPortal() {
                             {prov.slice(0, 2).toUpperCase()}
                           </div>
                           <div>
-                            <div className="font-bold text-sm text-white flex items-center gap-2">
+                            <div className="font-bold text-sm text-white flex flex-wrap items-center gap-2">
                               {conn.accountName || 'Social Account'}
                               <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold">
                                 {conn.connectionStatus || 'CONNECTED'}
                               </span>
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                conn.accountType === 'FACEBOOK_PAGE' || conn.isBusinessPage
+                                  ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                  : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                              }`}>
+                                Type: {conn.accountTypeLabel || (conn.accountType === 'FACEBOOK_PAGE' ? 'Business Page' : 'Personal Profile')}
+                              </span>
                             </div>
                             <div className="text-xs text-zinc-400 font-mono">
-                              {conn.provider?.toUpperCase()} · {conn.username ? `@${conn.username}` : ''}
+                              {conn.provider?.toUpperCase()} · {conn.username ? `@${conn.username} · ` : ''}{conn.accountTypeLabel || (conn.accountType === 'FACEBOOK_PAGE' ? 'Business Page' : 'Personal Profile')}
                             </div>
                           </div>
                         </div>

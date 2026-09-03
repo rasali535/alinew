@@ -14,5 +14,6 @@ export * from './social/adapters/LinkedInProvider';
 export * from './social/adapters/XProvider';
 export * from './social/adapters/ZernioProvider';
 export * from './social/services/ZernioSocialService';
+export * from './social/capabilities';
 export * from './billing/paypal.service';
 

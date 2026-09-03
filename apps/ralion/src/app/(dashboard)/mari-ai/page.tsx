@@ -44,7 +44,8 @@ import {
   BookOpen, 
   ArrowUpRight,
   Smartphone,
-  BarChart3
+  BarChart3,
+  Globe
 } from 'lucide-react';
 import { 
   BusinessContextService, 
@@ -1345,6 +1346,103 @@ export default function MariAiPage() {
                 ))}
               </div>
             )}
+          </Card>
+
+          {/* Business Sources Status Panel */}
+          <Card className="bg-zinc-900/90 border-zinc-800 shadow-xl p-5">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800 mb-4">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Globe className="w-4 h-4 text-purple-400" />
+                Business Sources Status
+              </h3>
+              <Badge variant="purple" className="text-[10px] font-mono">
+                Attributed Source: {businessContext?.primarySource || 'Unverified'}
+              </Badge>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Source 1: Website */}
+              <div className="p-4 rounded-xl bg-zinc-950/80 border border-zinc-800/80 flex flex-col justify-between gap-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Globe className="w-3.5 h-3.5 text-indigo-400" /> Website
+                    </span>
+                    <p className="text-[11px] text-zinc-400 mt-1 font-mono">
+                      {businessContext?.layer1.websiteKnowledge?.value?.websiteUrl || 'Not configured'}
+                    </p>
+                  </div>
+                  {(businessContext?.layer1.websiteKnowledge?.value?.status === 'INGESTED' || businessContext?.layer1.websiteKnowledge?.value?.provenance === 'VERIFIED') ? (
+                    <Badge variant="success" className="text-[10px] font-bold">
+                      ● Connected
+                    </Badge>
+                  ) : (
+                    <Badge variant="default" className="text-[10px]">
+                      Not Connected
+                    </Badge>
+                  )}
+                </div>
+                <div className="text-[10px] text-zinc-500 border-t border-zinc-900 pt-2 flex items-center justify-between">
+                  <span>Last learned: {businessContext?.layer1.websiteKnowledge?.value?.lastSuccessfulSync ? new Date(businessContext.layer1.websiteKnowledge.value.lastSuccessfulSync).toLocaleDateString() : 'Active'}</span>
+                  <span className="text-emerald-400">Verified Business Source</span>
+                </div>
+              </div>
+
+              {/* Source 2: Facebook */}
+              <div className="p-4 rounded-xl bg-zinc-950/80 border border-zinc-800/80 flex flex-col justify-between gap-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Share2 className="w-3.5 h-3.5 text-blue-400" /> Facebook
+                    </span>
+                    <p className="text-[11px] text-zinc-400 mt-1 font-mono">
+                      {businessContext?.layer2.social.isConnected 
+                        ? businessContext.layer2.social.connectedPageName?.value 
+                        : (businessContext?.isPersonalSocialProfile ? 'Personal Profile Connected' : 'Not Connected')}
+                    </p>
+                  </div>
+                  {businessContext?.layer2.social.isConnected ? (
+                    <Badge variant="success" className="text-[10px] font-bold">
+                      ● Connected (Page)
+                    </Badge>
+                  ) : businessContext?.isPersonalSocialProfile ? (
+                    <Badge variant="warning" className="text-[10px] font-bold">
+                      ● Personal Profile
+                    </Badge>
+                  ) : (
+                    <Badge variant="default" className="text-[10px]">
+                      Not Connected
+                    </Badge>
+                  )}
+                </div>
+
+                {businessContext?.isPersonalSocialProfile ? (
+                  <div className="border-t border-zinc-900 pt-2 space-y-2">
+                    <div className="text-[11px] text-amber-400/90 font-medium">
+                      Business Page: Not connected (Page posts & analytics unavailable)
+                    </div>
+                    <Link href="/growth">
+                      <Button variant="primary" size="sm" className="w-full text-xs bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold">
+                        Connect Facebook Page
+                      </Button>
+                    </Link>
+                  </div>
+                ) : businessContext?.layer2.social.isConnected ? (
+                  <div className="text-[10px] text-zinc-500 border-t border-zinc-900 pt-2 flex items-center justify-between">
+                    <span>Followers: {businessContext.layer2.social.followersCount?.value || 0} fans</span>
+                    <span className="text-emerald-400">Verified Social Source</span>
+                  </div>
+                ) : (
+                  <div className="border-t border-zinc-900 pt-2">
+                    <Link href="/growth">
+                      <Button variant="outline" size="sm" className="w-full text-xs border-zinc-700 text-zinc-300">
+                        Connect Facebook Page
+                      </Button>
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </div>
           </Card>
 
           {/* 3-Layer Knowledge Model Sources Overview */}
