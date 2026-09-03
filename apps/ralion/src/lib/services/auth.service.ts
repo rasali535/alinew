@@ -267,10 +267,13 @@ export class AuthService {
 
     const scopes = customScopes || defaultScopes[targetProvider] || 'email,profile';
 
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://rasalilabs.com';
+    const callbackTarget = `${origin}/ralion/api/oauth/${provider}/callback`;
+
     const { data, error } = await this.supabase.auth.signInWithOAuth({
       provider: targetProvider as any,
       options: {
-        redirectTo: isDesktop ? 'ralion://oauth-callback' : `${window.location.origin}/ralion/growth`,
+        redirectTo: isDesktop ? 'ralion://oauth-callback' : callbackTarget,
         scopes,
         skipBrowserRedirect: isDesktop,
       },

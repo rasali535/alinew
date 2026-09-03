@@ -1275,14 +1275,31 @@ Rules:
     };
   }, [loadConnectedAccounts]);
 
-  // ── Handle redirect back from OAuth callback (?connected=provider) ────────
+  // ── Handle redirect back from OAuth callback (?connected=provider or ?code=) ────────
   useEffect(() => {
+    const codeParam = searchParams.get('code');
+    const stateParam = searchParams.get('state');
     const connected = searchParams.get('connected');
     const handle = searchParams.get('handle');
     const connectionIdParam = searchParams.get('connection_id');
     const oauthError = searchParams.get('oauth_error');
     const stage = searchParams.get('stage');
     const facebookParam = searchParams.get('facebook');
+
+    // Intercept raw OAuth code if redirected directly to /growth, cleaning the URL immediately to stop glitch loop
+    if (codeParam) {
+      if (typeof window !== 'undefined') {
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+      setOauthAlert({
+        type: 'info',
+        message: 'Completing social media connection...',
+      });
+      const targetProvider = searchParams.get('provider') || 'facebook';
+      const callbackEndpoint = getRalionApiUrl(`/api/oauth/${targetProvider}/callback?code=${encodeURIComponent(codeParam)}${stateParam ? `&state=${encodeURIComponent(stateParam)}` : ''}`);
+      window.location.href = callbackEndpoint;
+      return;
+    }
 
     if (facebookParam === 'page_permission_pending' || oauthError === 'meta_permission_unavailable') {
       setFacebookPageStatus('PAGE_ACCESS_PENDING');
@@ -1293,7 +1310,9 @@ Rules:
         onRetry: () => handleConnectSocialAccount('facebook', 'page_connection'),
       });
       loadConnectedAccounts();
-      router.replace('/ralion/growth', { scroll: false });
+      if (typeof window !== 'undefined') {
+        window.history.replaceState({}, '', window.location.pathname);
+      }
       setTimeout(() => setOauthAlert(null), 12000);
       return;
     }
@@ -1318,8 +1337,10 @@ Rules:
       }
       loadConnectedAccounts();
       fetchFacebookPages();
-      // Clean URL
-      router.replace('/ralion/growth', { scroll: false });
+      // Clean URL in place without triggering double-basePath or re-render loops
+      if (typeof window !== 'undefined') {
+        window.history.replaceState({}, '', window.location.pathname);
+      }
       setTimeout(() => setOauthAlert(null), 8000);
     } else if (oauthError) {
       const sanitized = decodeURIComponent(oauthError)
@@ -1328,7 +1349,9 @@ Rules:
         .replace(/(EAA[a-zA-Z0-9_-]{20,})/gi, '[REDACTED]')
         .replace(/(ya29\.[a-zA-Z0-9_-]{20,})/gi, '[REDACTED]');
       setOauthAlert({ type: 'error', message: `❌ Connection notice: ${sanitized}` });
-      router.replace('/ralion/growth', { scroll: false });
+      if (typeof window !== 'undefined') {
+        window.history.replaceState({}, '', window.location.pathname);
+      }
       setTimeout(() => setOauthAlert(null), 12000);
     }
   }, [searchParams]);
@@ -1398,33 +1421,23 @@ Rules:
   const handleConnectSocialAccount = async (providerKey: string, intent: 'login' | 'page_connection' = 'login') => {
     setIsConnecting(true);
     try {
-      // Check if custom OAuth endpoint is available and returns JSON
-      try {
-        const session = await AuthService.getSession();
-        const headers: Record<string, string> = {};
-        if (session?.access_token) {
-          headers['Authorization'] = `Bearer ${session.access_token}`;
-        }
+      const res = await fetchRalionApi(`/api/oauth/${providerKey}/connect?intent=${intent}`);
+      if (res.ok && res.data?.authorizationUrl) {
+        setIsConnectModalOpen(false);
+        window.location.href = res.data.authorizationUrl;
+        return;
+      }
 
-        const res = await fetch(getRalionApiUrl(`/api/oauth/${providerKey}/connect?intent=${intent}`), {
-          credentials: 'include',
-          headers,
-        });
-        const contentType = res.headers.get('content-type') || '';
-        if (res.ok && contentType.includes('application/json')) {
-          const data = await res.json();
-          if (data.success && data.authorizationUrl) {
-            setIsConnectModalOpen(false);
-            window.location.href = data.authorizationUrl;
-            return;
-          } else if (data.error) {
-            alert(`Connection note: ${data.error}`);
-            setIsConnecting(false);
-            return;
-          }
-        }
-      } catch {
-        // Fallback to Supabase OAuth
+      if (res.data?.error) {
+        alert(`Connection notice: ${res.data.error}`);
+        setIsConnecting(false);
+        return;
+      }
+
+      if (res.status === 401) {
+        alert('Authentication required: Please log in or refresh your session to connect social accounts.');
+        setIsConnecting(false);
+        return;
       }
 
       // Supabase Social OAuth Provider fallback
