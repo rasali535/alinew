@@ -437,15 +437,40 @@ export const linkedinAdapter = {
     return `https://www.linkedin.com/oauth/v2/authorization?${params}`;
   },
 
-  async exchangeCode(code: string): Promise<{ accessToken: string; expiresIn: number }> {
-    const res = await fetch('https://www.linkedin.com/oauth/v2/accessToken', {
-      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ grant_type: 'authorization_code', code,
-        redirect_uri: this.redirectUri(), client_id: this.clientId(), client_secret: this.clientSecret() }),
-    });
-    if (!res.ok) throw new Error(`LinkedIn token exchange failed: ${await res.text()}`);
-    const data = await res.json();
-    return { accessToken: data.access_token, expiresIn: data.expires_in };
+  async exchangeCode(code: string, customRedirectUri?: string): Promise<{ accessToken: string; expiresIn: number }> {
+    const candidateUris = customRedirectUri 
+      ? [customRedirectUri, this.redirectUri()]
+      : [
+          this.redirectUri(),
+          getOAuthRedirectUri('linkedin'),
+          'https://rasalilabs.com/ralion/api/oauth/linkedin/callback',
+          'https://rasalilabs.com/ralion/growth'
+        ];
+
+    let lastError = '';
+    for (const rUri of candidateUris) {
+      try {
+        const res = await fetch('https://www.linkedin.com/oauth/v2/accessToken', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            grant_type: 'authorization_code',
+            code,
+            redirect_uri: rUri,
+            client_id: this.clientId(),
+            client_secret: this.clientSecret()
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          return { accessToken: data.access_token, expiresIn: data.expires_in };
+        }
+        lastError = await res.text();
+      } catch (err: any) {
+        lastError = err.message;
+      }
+    }
+    throw new Error(`LinkedIn token exchange failed: ${lastError}`);
   },
 
   async getProfile(accessToken: string) {

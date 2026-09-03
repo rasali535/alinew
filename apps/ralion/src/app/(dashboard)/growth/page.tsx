@@ -1286,17 +1286,62 @@ Rules:
     const stage = searchParams.get('stage');
     const facebookParam = searchParams.get('facebook');
 
-    // Intercept raw OAuth code if redirected directly to /growth, cleaning the URL immediately to stop glitch loop
+    // Intercept raw OAuth code if redirected directly to /growth, resolving provider accurately
     if (codeParam) {
+      // 1. Check explicit provider query param
+      let targetProvider = searchParams.get('provider');
+
+      // 2. Extract provider from CSRF state token (<base64url-payload>.<signature>)
+      if (!targetProvider && stateParam) {
+        try {
+          const payloadPart = stateParam.split('.')[0];
+          const decodedStr = atob(payloadPart.replace(/-/g, '+').replace(/_/g, '/'));
+          const payload = JSON.parse(decodedStr);
+          if (payload?.provider) {
+            targetProvider = payload.provider.toLowerCase();
+          }
+        } catch (e) {
+          console.warn('[Growth] Could not decode provider from state:', e);
+        }
+      }
+
+      // 3. Check localStorage for the provider user just clicked to connect
+      if (!targetProvider && typeof window !== 'undefined') {
+        const lastAttempted = localStorage.getItem('ralion_last_oauth_connect_provider');
+        if (lastAttempted) {
+          targetProvider = lastAttempted.toLowerCase();
+        }
+      }
+
+      // 4. Fallback to authorization code heuristics
+      if (!targetProvider) {
+        if (codeParam.startsWith('AQL') || codeParam.startsWith('AQU')) {
+          targetProvider = 'linkedin';
+        } else if (codeParam.startsWith('4/')) {
+          targetProvider = 'youtube';
+        } else {
+          targetProvider = 'facebook';
+        }
+      }
+
+      // Normalize provider aliases
+      if (targetProvider === 'linkedin_oidc') targetProvider = 'linkedin';
+      if (targetProvider === 'twitter') targetProvider = 'x';
+      if (targetProvider === 'google') targetProvider = 'youtube';
+
+      // Clean the URL in place so browser back/refresh does not re-trigger
       if (typeof window !== 'undefined') {
         window.history.replaceState({}, '', window.location.pathname);
       }
+
       setOauthAlert({
         type: 'info',
-        message: 'Completing social media connection...',
+        message: `Connecting ${targetProvider.toUpperCase()} account...`,
       });
-      const targetProvider = searchParams.get('provider') || 'facebook';
-      const callbackEndpoint = getRalionApiUrl(`/api/oauth/${targetProvider}/callback?code=${encodeURIComponent(codeParam)}${stateParam ? `&state=${encodeURIComponent(stateParam)}` : ''}`);
+
+      const callbackEndpoint = getRalionApiUrl(
+        `/api/oauth/${targetProvider}/callback?code=${encodeURIComponent(codeParam)}${stateParam ? `&state=${encodeURIComponent(stateParam)}` : ''}`
+      );
       window.location.href = callbackEndpoint;
       return;
     }
@@ -1421,6 +1466,9 @@ Rules:
   const handleConnectSocialAccount = async (providerKey: string, intent: 'login' | 'page_connection' = 'login') => {
     setIsConnecting(true);
     try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('ralion_last_oauth_connect_provider', providerKey);
+      }
       const res = await fetchRalionApi(`/api/oauth/${providerKey}/connect?intent=${intent}`);
       if (res.ok && res.data?.authorizationUrl) {
         setIsConnectModalOpen(false);
@@ -1860,7 +1908,9 @@ Rules:
         connectedAccounts.find(a => a.id === selectedAccountId) ||
         connectedAccounts.find(a => a.provider === targetPlatform) ||
         connectedAccounts[0];
-      const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
+      const activeFbPage = availableFacebookPages.find(p => p.pageId === targetConn?.providerAccountId || p.id === targetConn?.id || p.pageId === targetConn?.id)
+        || availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') 
+        || availableFacebookPages[0];
 
       const payload = {
         title: post.title,
@@ -2045,9 +2095,12 @@ Rules:
   const scheduledCount = dateFilteredPosts.filter(p => p.status === 'scheduled').length;
   const activeCampaignsCount = campaigns.filter(c => c.status === 'active').length;
 
-  const fbConn = connectedAccounts.find(a => a.provider === 'facebook');
-  const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
-  const fbFollowersCount = Number(activeFbPage?.followersCount) || (fbConn?.followers ? Number(fbConn.followers.replace(/,/g, '')) : 0);
+  const activeAcc = connectedAccounts.find(a => a.id === selectedAccountId) || connectedAccounts[0];
+  const fbConn = (activeAcc && activeAcc.provider === 'facebook') ? activeAcc : connectedAccounts.find(a => a.provider === 'facebook');
+  const activeFbPage = availableFacebookPages.find(p => p.pageId === activeAcc?.providerAccountId || p.id === activeAcc?.id || p.pageId === activeAcc?.id)
+    || availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') 
+    || availableFacebookPages[0];
+  const fbFollowersCount = Number(activeFbPage?.followersCount) || (activeAcc?.followers ? Number(String(activeAcc.followers).replace(/,/g, '')) : (fbConn?.followers ? Number(String(fbConn.followers).replace(/,/g, '')) : 0));
 
   // Dynamic Spline Series & Timeframe Bucketed Computation
   const { splineChartSeries, dynamicDateLabels } = React.useMemo(() => {
@@ -3345,30 +3398,30 @@ Rules:
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-5 border-b border-zinc-800 pb-5">
                 <div className="flex items-center gap-4">
                   <div className="w-16 h-16 rounded-2xl bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center font-black text-2xl text-indigo-400 shadow-xl">
-                    {(connectedAccounts.find(a => a.id === selectedAccountId)?.provider || 'fb').slice(0, 2).toUpperCase()}
+                    {(activeAcc?.provider || 'fb').slice(0, 2).toUpperCase()}
                   </div>
                   <div>
                     <div className="flex items-center gap-2.5">
                       <h2 className="text-xl font-black text-white tracking-tight">
-                        {connectedAccounts.find(a => a.id === selectedAccountId)?.label || activeFbPage?.name || fbConn?.label || 'Social Account'}
+                        {activeAcc?.label || (activeAcc?.provider === 'facebook' ? activeFbPage?.name : null) || 'Social Account'}
                       </h2>
                       <Badge variant="success" className="text-xs px-2.5 py-0.5 font-bold">
                         🟢 Connected
                       </Badge>
                     </div>
                     <p className="text-xs text-indigo-300/80 font-mono mt-0.5">
-                      {connectedAccounts.find(a => a.id === selectedAccountId)?.handle || activeFbPage?.username || fbConn?.handle || '@account'} • {connectedAccounts.find(a => a.id === selectedAccountId)?.provider?.toUpperCase() || 'Facebook'}
+                      {activeAcc?.handle || (activeAcc?.provider === 'facebook' ? activeFbPage?.username : null) || '@account'} • {activeAcc?.provider?.toUpperCase() || 'Facebook'}
                     </p>
                     <div className="flex items-center gap-3 text-xs text-zinc-400 mt-2">
-                      <span className="font-semibold text-white">{connectedAccounts.find(a => a.id === selectedAccountId)?.followers || fbFollowersCount || '0'} followers</span>
+                      <span className="font-semibold text-white">{activeAcc?.followers || fbFollowersCount || '0'} followers</span>
                       <span>•</span>
-                      <span className="text-emerald-400 font-medium">{connectedAccounts.length} Connected Identities</span>
+                      <span className="text-emerald-400 font-medium">{connectedAccounts.length} Connected {connectedAccounts.length === 1 ? 'Identity' : 'Identities'}</span>
                     </div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2.5 w-full md:w-auto">
-                  {fbConn && (
+                  {(activeAcc?.provider === 'facebook' && fbConn) && (
                     <Button 
                       variant="outline" 
                       size="sm" 
@@ -3447,7 +3500,9 @@ Rules:
                     <div className="p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800">
                       <p className="text-[11px] text-zinc-400 uppercase font-semibold">Total Audience</p>
                       <p className="text-2xl font-black text-white mt-1">{fbFollowersCount > 0 ? fbFollowersCount.toLocaleString() : '0'}</p>
-                      <p className="text-[10px] text-emerald-400 mt-0.5">🟢 Active Meta Page</p>
+                      <p className="text-[10px] text-emerald-400 mt-0.5">
+                        {activeAcc?.provider === 'facebook' ? '🟢 Active Meta Page' : `🟢 Active ${activeAcc?.provider?.toUpperCase() || 'Social'} Channel`}
+                      </p>
                     </div>
                     <div className="p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800">
                       <p className="text-[11px] text-zinc-400 uppercase font-semibold">30-Day Growth</p>
@@ -3502,32 +3557,42 @@ Rules:
               <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
-                    Published & Synced Facebook Posts
+                    {activeAcc?.provider === 'facebook' ? 'Published & Synced Facebook Posts' : `Published & Synced ${activeAcc?.provider?.toUpperCase() || 'Channel'} Posts`}
                   </span>
-                  <span className="text-[11px] text-zinc-500 font-mono">Real Graph API Feed</span>
+                  <span className="text-[11px] text-zinc-500 font-mono">
+                    {activeAcc?.provider === 'facebook' ? 'Real Graph API Feed' : `${activeAcc?.label || 'Social'} Feed`}
+                  </span>
                 </div>
 
-                {facebookPagePosts.map((post) => (
-                  <div key={post.id} className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 flex flex-col md:flex-row items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <Badge variant="purple" className="text-[9px] font-mono">
-                          {post.source === 'RALION' ? 'Published via Ralion' : 'Published on Facebook'}
-                        </Badge>
-                        <span className="text-[10px] text-zinc-500 font-mono">{post.publishedAt}</span>
-                      </div>
-                      <h4 className="text-sm font-bold text-white">{post.title}</h4>
-                      <p className="text-xs text-zinc-300 mt-1 leading-relaxed">{post.body}</p>
-                      
-                      <div className="flex items-center gap-4 mt-3 pt-3 border-t border-zinc-900 text-[11px] text-zinc-400">
-                        <span>❤️ <strong>{post.engagement?.likes || 0}</strong> likes</span>
-                        <span>💬 <strong>{post.engagement?.comments || 0}</strong> comments</span>
-                        <span>↗ <strong>{post.engagement?.shares || 0}</strong> shares</span>
-                        <span>👁️ <strong className="text-emerald-400">{post.engagement?.reach || 0}</strong> reach</span>
+                {(activeAcc?.provider === 'facebook' ? facebookPagePosts : dateFilteredPosts.filter(p => p.platform === activeAcc?.provider)).length === 0 ? (
+                  <div className="p-8 rounded-2xl bg-zinc-950/60 border border-zinc-800/80 text-center flex flex-col items-center gap-2">
+                    <Share2 className="w-8 h-8 text-zinc-600" />
+                    <p className="text-xs font-semibold text-zinc-300">No published posts yet for {activeAcc?.label || 'this account'}</p>
+                    <p className="text-[11px] text-zinc-500">Create a post above to publish directly to {activeAcc?.provider?.toUpperCase() || 'your account'}.</p>
+                  </div>
+                ) : (
+                  (activeAcc?.provider === 'facebook' ? facebookPagePosts : dateFilteredPosts.filter(p => p.platform === activeAcc?.provider)).map((post: any) => (
+                    <div key={post.id} className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 flex flex-col md:flex-row items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <Badge variant="purple" className="text-[9px] font-mono">
+                            {post.source === 'RALION' ? 'Published via Ralion' : `Published on ${activeAcc?.provider?.toUpperCase() || 'Social'}`}
+                          </Badge>
+                          <span className="text-[10px] text-zinc-500 font-mono">{post.publishedAt || post.scheduledAt || 'Recent'}</span>
+                        </div>
+                        <h4 className="text-sm font-bold text-white">{post.title}</h4>
+                        <p className="text-xs text-zinc-300 mt-1 leading-relaxed">{post.body}</p>
+                        
+                        <div className="flex items-center gap-4 mt-3 pt-3 border-t border-zinc-900 text-[11px] text-zinc-400">
+                          <span>❤️ <strong>{post.engagement?.likes || 0}</strong> likes</span>
+                          <span>💬 <strong>{post.engagement?.comments || 0}</strong> comments</span>
+                          <span>↗ <strong>{post.engagement?.shares || 0}</strong> shares</span>
+                          <span>👁️ <strong className="text-emerald-400">{post.engagement?.reach || 0}</strong> reach</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             )}
 
@@ -5789,7 +5854,9 @@ Rules:
                   connectedAccounts.find(a => a.id === selectedAccountId) ||
                   connectedAccounts.find(a => a.provider === targetPlatform) ||
                   connectedAccounts[0];
-                const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
+                const activeFbPage = availableFacebookPages.find(p => p.pageId === targetConn?.providerAccountId || p.id === targetConn?.id || p.pageId === targetConn?.id)
+                  || availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') 
+                  || availableFacebookPages[0];
 
                 const payload = {
                   title: topic || 'Social Post',
