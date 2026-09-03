@@ -10,12 +10,21 @@ Options -Indexes +FollowSymLinks
   RewriteEngine On
   RewriteBase /
 
-  # 1. Reverse Proxy API routes to dynamic backend on Render
-  RewriteCond %{REQUEST_URI} ^/ralion/api/(.*)$ [NC]
-  RewriteRule ^ralion/api/(.*)$ https://ralion-dynamic-backend.onrender.com/api/$1 [P,L]
+  # 1. Forward OAuth callbacks and dynamic API routes directly to Render backend
+  RewriteCond %{REQUEST_URI} ^/ralion/api/oauth/(.*)$ [NC]
+  RewriteRule ^ralion/api/oauth/(.*)$ https://ralion-dynamic-backend.onrender.com/ralion/api/oauth/$1 [R=307,L,QSA]
 
-  RewriteCond %{REQUEST_URI} ^/api/(.*)$ [NC]
-  RewriteRule ^api/(.*)$ https://ralion-dynamic-backend.onrender.com/api/$1 [P,L]
+  RewriteCond %{REQUEST_URI} ^/api/oauth/(.*)$ [NC]
+  RewriteRule ^api/oauth/(.*)$ https://ralion-dynamic-backend.onrender.com/ralion/api/oauth/$1 [R=307,L,QSA]
+
+  # Reverse proxy general API requests if mod_proxy is present
+  <IfModule mod_proxy.c>
+    RewriteCond %{REQUEST_URI} ^/ralion/api/(.*)$ [NC]
+    RewriteRule ^ralion/api/(.*)$ https://ralion-dynamic-backend.onrender.com/ralion/api/$1 [P,L]
+
+    RewriteCond %{REQUEST_URI} ^/api/(.*)$ [NC]
+    RewriteRule ^api/(.*)$ https://ralion-dynamic-backend.onrender.com/ralion/api/$1 [P,L]
+  </IfModule>
 
   # 2. Do NOT rewrite static assets (JS, CSS, images, fonts, binaries, maps) to index.html
   RewriteCond %{REQUEST_URI} !^/ralion/api/ [NC]

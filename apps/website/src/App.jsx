@@ -50,11 +50,23 @@ import AuthModal from './components/auth/AuthModal';
 
 import Checkout from './pages/Checkout';
 
-// Helper component to force hard reload for static Next.js apps
+// Helper component to force hard reload for static Next.js apps or forward API calls to Render dynamic backend
 const ExternalRedirect = ({ to }) => {
   const location = useLocation();
   useEffect(() => {
+    // If an API request (e.g. OAuth callback) lands on the static frontend host, forward it to the dynamic backend
+    if (location.pathname.startsWith('/ralion/api/') || location.pathname.startsWith('/api/')) {
+      const backendUrl = 'https://ralion-dynamic-backend.onrender.com';
+      const cleanPath = location.pathname.startsWith('/ralion/') ? location.pathname : `/ralion${location.pathname}`;
+      window.location.href = `${backendUrl}${cleanPath}${location.search}`;
+      return;
+    }
+
     const basePath = to || location.pathname;
+    // Prevent infinite reload loop if already at target path
+    if (window.location.pathname === basePath && !to) {
+      return;
+    }
     window.location.href = `${basePath}${location.search}`;
   }, [to, location]);
   return null;
