@@ -104,6 +104,7 @@ export async function GET(request: NextRequest) {
             isBusinessPage: caps.isBusinessPage,
             username: c.username || c.metadata?.pageUsername || null,
             connectionStatus: c.connection_status || 'CONNECTED',
+            status: c.connection_status || 'CONNECTED',
             tokenStatus: c.token_status || 'TOKEN_VALID',
             followersCount: Number(c.followers_count || c.metadata?.followers_count || 0),
             organizationId: c.organization_id || c.workspace_id || 'ras-ali-labs',
@@ -125,6 +126,7 @@ export async function GET(request: NextRequest) {
 
           const connItem = {
             socialConnectionId: c.id,
+            id: c.id,
             provider: c.provider,
             providerAccountId: c.provider_account_id || c.metadata?.pageId || c.id,
             accountName: c.account_name || c.metadata?.pageName || c.metadata?.name || 'Social Account',
@@ -133,6 +135,7 @@ export async function GET(request: NextRequest) {
             isPersonalProfile: caps.isPersonalProfile,
             isBusinessPage: caps.isBusinessPage,
             connectionStatus: c.connection_status || 'CONNECTED',
+            status: c.connection_status || 'CONNECTED',
             tokenStatus: c.token_status || 'TOKEN_VALID',
             connectedAt: c.connected_at || c.created_at,
           };
@@ -142,7 +145,9 @@ export async function GET(request: NextRequest) {
             const rawName = prof.full_name || (c.metadata?.email === 'chiwabby@gmail.com' ? 'Kutlwano B Pule' : (c.account_name || 'Connected User'));
             userMap.set(uId, {
               userId: uId,
+              id: uId,
               userName: rawName,
+              name: rawName,
               email: rawEmail,
               workspaceId: c.workspace_id || c.organization_id || uId,
               connectionCount: 0,

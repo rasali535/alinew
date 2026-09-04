@@ -24,6 +24,7 @@ const ALLOWED_HEADERS = [
   'Cache-Control',
   'x-user-id',
   'x-organization-id',
+  'x-admin-key',
   'cookie',
 ].join(', ');
 

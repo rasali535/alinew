@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { PlatformAdminService } from '@ralion/auth';
+import { extractAuthToken } from './serverAuth';
 
 export interface AdminAuthResult {
   authorized: boolean;
@@ -17,6 +18,13 @@ export interface AdminAuthResult {
 export async function verifyPlatformAdminRequest(request: NextRequest): Promise<AdminAuthResult> {
   const authHeader = request.headers.get('authorization') || '';
   const adminKey = request.headers.get('x-admin-key') || '';
+
+  if (process.env.ADMIN_METRICS_DEBUG === 'true') {
+    console.log('[ADMIN_METRICS_DEBUG]', {
+      hasAuthHeader: Boolean(authHeader),
+      hasAdminKey: Boolean(adminKey),
+    });
+  }
   
   // 1. Master platform secret key bypass for automated administrative cron/backend runners / admin portal
   const platformSecret = process.env.RALION_PLATFORM_ADMIN_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -38,9 +46,17 @@ export async function verifyPlatformAdminRequest(request: NextRequest): Promise<
 
   // 2. Extract Bearer token from Authorization header or Supabase cookies
   let token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  if (token.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(token);
+      if (parsed.access_token) {
+        token = parsed.access_token;
+      }
+    } catch {}
+  }
+
   if (!token) {
     try {
-      const { extractAuthToken } = require('./serverAuth');
       token = extractAuthToken(request) || '';
     } catch {}
   }

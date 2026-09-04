@@ -25,7 +25,7 @@ export function getServiceSupabase() {
   });
 }
 
-import { corsJsonResponse } from '@/lib/cors';
+import { corsJsonResponse } from '../cors';
 
 export interface RalionUserProfile {
   id: string;

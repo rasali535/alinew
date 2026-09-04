@@ -137,6 +137,7 @@ export default function PlatformAdminPortal() {
   const [creditAdjustmentReason, setCreditAdjustmentReason] = useState('');
   const [actionSuccessMessage, setActionSuccessMessage] = useState<string | null>(null);
   const [actionErrorMessage, setActionErrorMessage] = useState<string | null>(null);
+  const [platformError, setPlatformError] = useState<string | null>(null);
 
   // Authenticated Platform Admin Token / Secret
   const getAuthHeaders = async (): Promise<Record<string, string>> => {
@@ -148,11 +149,23 @@ export default function PlatformAdminPortal() {
     } catch {}
 
     if (!sessionToken && typeof window !== 'undefined') {
-      sessionToken =
+      const stored =
         localStorage.getItem('ralion-app-auth-token') ||
         localStorage.getItem('supabase_auth_token') ||
         localStorage.getItem('ralion_auth_token') ||
         '';
+      if (stored) {
+        if (stored.startsWith('{')) {
+          try {
+            const parsed = JSON.parse(stored);
+            sessionToken = parsed.access_token || parsed[0] || '';
+          } catch {
+            sessionToken = stored;
+          }
+        } else {
+          sessionToken = stored;
+        }
+      }
     }
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (sessionToken) {
@@ -165,33 +178,57 @@ export default function PlatformAdminPortal() {
 
   const fetchPlatformData = async () => {
     setLoading(true);
+    setPlatformError(null);
     try {
       const headers = await getAuthHeaders();
-      const [mRes, cRes, hRes, aRes] = await Promise.all([
+      const results = await Promise.allSettled([
         fetch('/api/admin/metrics', { headers }),
         fetch('/api/admin/customers', { headers }),
         fetch('/api/admin/system/health', { headers }),
         fetch('/api/admin/audit-logs', { headers }),
       ]);
 
-      if (mRes.ok) {
-        const mData = await mRes.json();
-        setMetrics(mData.data);
+      const [mSettled, cSettled, hSettled, aSettled] = results;
+
+      if (mSettled.status === 'fulfilled') {
+        const mRes = mSettled.value;
+        if (mRes.ok) {
+          const mData = await mRes.json();
+          if (mData.success && mData.data) {
+            setMetrics(mData.data);
+          } else {
+            setPlatformError(mData.error || 'Unable to parse metrics response.');
+          }
+        } else {
+          const errText = await mRes.text().catch(() => '');
+          let errMsg = `Unable to load Command Center data (HTTP ${mRes.status})`;
+          try {
+            const parsed = JSON.parse(errText);
+            if (parsed.error) errMsg = parsed.error;
+          } catch {}
+          setPlatformError(errMsg);
+        }
+      } else {
+        setPlatformError('Network error: Unable to reach /api/admin/metrics.');
       }
-      if (cRes.ok) {
-        const cData = await cRes.json();
+
+      if (cSettled.status === 'fulfilled' && cSettled.value.ok) {
+        const cData = await cSettled.value.json().catch(() => ({}));
         setCustomers(cData.data || []);
       }
-      if (hRes.ok) {
-        const hData = await hRes.json();
+
+      if (hSettled.status === 'fulfilled' && hSettled.value.ok) {
+        const hData = await hSettled.value.json().catch(() => ({}));
         setSystemHealth(hData.data?.services || []);
       }
-      if (aRes.ok) {
-        const aData = await aRes.json();
+
+      if (aSettled.status === 'fulfilled' && aSettled.value.ok) {
+        const aData = await aSettled.value.json().catch(() => ({}));
         setAuditLogs(aData.data || []);
       }
     } catch (err: any) {
       console.error('Failed to load admin data:', err);
+      setPlatformError(err?.message || 'Unable to load Command Center data.');
     } finally {
       setLoading(false);
     }
@@ -199,6 +236,18 @@ export default function PlatformAdminPortal() {
 
   useEffect(() => {
     fetchPlatformData();
+
+    try {
+      const supabase = createBrowserClient();
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        if (session) {
+          fetchPlatformData();
+        }
+      });
+      return () => {
+        subscription.unsubscribe();
+      };
+    } catch {}
   }, []);
 
   const handleInspectOrg = async (orgId: string) => {
@@ -289,6 +338,7 @@ export default function PlatformAdminPortal() {
 
   const renderConnectedUsersSection = () => {
     const usersList = metrics?.connectedUsers || [];
+
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -301,77 +351,134 @@ export default function PlatformAdminPortal() {
               Real authorized workspace users with active multi-channel social connections
             </p>
           </div>
-          <span className="px-2.5 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-xs font-mono text-indigo-300">
-            Total: {usersList.length}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-xs font-mono text-indigo-300">
+              Total: {loading && !metrics ? '...' : (metrics?.connectedUsers?.length ?? metrics?.connectedUserCount ?? 0)}
+            </span>
+            <button
+              onClick={fetchPlatformData}
+              disabled={loading}
+              className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition"
+              title="Refresh users"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
         </div>
 
-        {usersList.length === 0 ? (
+        {/* LOADING STATE */}
+        {loading && !metrics && (
+          <div className="p-8 text-center rounded-2xl bg-zinc-900/40 border border-zinc-800/60 space-y-2">
+            <RefreshCw className="w-6 h-6 text-indigo-400 animate-spin mx-auto" />
+            <p className="text-xs font-semibold text-zinc-300">Loading connected users...</p>
+            <p className="text-[11px] text-zinc-500">Querying live tenant social bindings and profile telemetry</p>
+          </div>
+        )}
+
+        {/* ERROR STATE */}
+        {!loading && platformError && !metrics && (
+          <div className="p-6 rounded-2xl bg-red-950/30 border border-red-500/40 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
+              <div>
+                <p className="text-xs font-bold text-red-300">Unable to load connected users</p>
+                <p className="text-[11px] text-zinc-400 mt-0.5">{platformError}</p>
+              </div>
+            </div>
+            <button
+              onClick={fetchPlatformData}
+              className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition flex items-center gap-1.5"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* EMPTY STATE */}
+        {!loading && !platformError && usersList.length === 0 && (
           <div className="p-8 text-center rounded-2xl bg-zinc-900/40 border border-zinc-800/60">
             <Users className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
             <p className="text-xs font-semibold text-zinc-300">No connected users yet.</p>
             <p className="text-[11px] text-zinc-500 mt-0.5">Real users with active social bindings will appear here.</p>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {usersList.map((user) => (
-              <div key={user.userId} className="p-5 rounded-2xl bg-zinc-900/80 border border-zinc-800 space-y-3 shadow-lg">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center font-bold text-white text-sm">
-                      {user.userName ? user.userName.slice(0, 2).toUpperCase() : 'US'}
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                        {user.userName}
-                      </h4>
-                      <span className="text-xs text-zinc-400 font-mono block">
-                        {user.email}
-                      </span>
-                    </div>
-                  </div>
-                  <span className="px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-[10px] font-bold shrink-0">
-                    {user.connectionCount} {user.connectionCount === 1 ? 'social connection' : 'social connections'}
-                  </span>
-                </div>
+        )}
 
-                <div className="pt-3 border-t border-zinc-800/80 space-y-2">
-                  <span className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider block">
-                    Connected Identities & Channels
-                  </span>
-                  <div className="space-y-2">
-                    {user.connections.map((c) => (
-                      <div key={c.socialConnectionId} className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800/80 flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-lg bg-blue-600/10 border border-blue-500/30 flex items-center justify-center font-bold text-[11px] text-blue-400">
-                            {c.provider ? c.provider.slice(0, 2).toUpperCase() : 'FB'}
-                          </div>
-                          <div>
-                            <div className="text-xs font-semibold text-white">{c.accountName}</div>
-                            <div className="text-[10px] text-zinc-400 font-mono truncate max-w-[150px]">
-                              ID: {c.providerAccountId}
+        {/* SUCCESS STATE */}
+        {usersList.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {usersList.map((user) => {
+              const displayName = user.userName || (user as any).name || user.email || 'Connected User';
+              const displayEmail = user.email || 'user@customer.ralion.io';
+              const initial = displayName.slice(0, 2).toUpperCase();
+
+              return (
+                <div key={user.userId || (user as any).id} className="p-5 rounded-2xl bg-zinc-900/80 border border-zinc-800 space-y-3 shadow-lg">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center font-bold text-white text-sm">
+                        {initial}
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                          {displayName}
+                        </h4>
+                        <span className="text-xs text-zinc-400 font-mono block">
+                          {displayEmail}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-[10px] font-bold shrink-0">
+                      {user.connectionCount} {user.connectionCount === 1 ? 'social connection' : 'social connections'}
+                    </span>
+                  </div>
+
+                  <div className="pt-3 border-t border-zinc-800/80 space-y-2">
+                    <span className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider block">
+                      Connected Identities & Channels
+                    </span>
+                    <div className="space-y-2">
+                      {(user.connections || []).map((c) => {
+                        const prov = (c.provider || 'social').toLowerCase();
+                        const isPage = Boolean(c.isBusinessPage || c.accountType === 'FACEBOOK_PAGE');
+                        const typeBadgeText = c.accountTypeLabel || (isPage ? 'Facebook Business Page' : 'Facebook Personal Profile');
+                        const accName = c.accountName || 'Social Account';
+                        const pId = c.providerAccountId || (c as any).id || 'N/A';
+
+                        return (
+                          <div key={c.socialConnectionId || (c as any).id} className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800/80 flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-7 h-7 rounded-lg bg-blue-600/10 border border-blue-500/30 flex items-center justify-center font-bold text-[11px] text-blue-400">
+                                {prov.slice(0, 2).toUpperCase()}
+                              </div>
+                              <div>
+                                <div className="text-xs font-semibold text-white">{accName}</div>
+                                <div className="text-[10px] text-zinc-400 font-mono truncate max-w-[150px]">
+                                  ID: {pId}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                isPage
+                                  ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                  : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                              }`}>
+                                {typeBadgeText}
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Connected
+                              </span>
                             </div>
                           </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            c.isBusinessPage || c.accountType === 'FACEBOOK_PAGE'
-                              ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                              : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                          }`}>
-                            {c.accountTypeLabel || (c.isBusinessPage ? 'Facebook Business Page' : 'Facebook Personal Profile')}
-                          </span>
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Connected
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -561,6 +668,27 @@ export default function PlatformAdminPortal() {
         </div>
       </header>
 
+      {/* Global Command Center Error Banner */}
+      {platformError && (
+        <div className="mx-6 mt-4 p-4 bg-red-950/60 border border-red-500/50 text-red-200 rounded-xl text-xs flex items-center justify-between gap-4 shadow-lg shadow-red-950/40">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
+            <div>
+              <div className="font-bold text-red-200 text-sm">Unable to load Command Center data</div>
+              <div className="text-zinc-300 mt-0.5">{platformError}</div>
+            </div>
+          </div>
+          <button
+            onClick={fetchPlatformData}
+            disabled={loading}
+            className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold transition flex items-center gap-2 shrink-0 shadow"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Action Notifications */}
       {actionSuccessMessage && (
         <div className="mx-6 mt-4 p-3.5 bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 rounded-xl text-xs flex items-center justify-between">
@@ -623,7 +751,9 @@ export default function PlatformAdminPortal() {
                   <span className="text-xs font-medium uppercase tracking-wider">Total Customers</span>
                   <Building2 className="w-4 h-4 text-indigo-400" />
                 </div>
-                <div className="text-3xl font-bold text-white tracking-tight">{metrics?.totalCustomers ?? 0}</div>
+                <div className="text-3xl font-bold text-white tracking-tight">
+                  {loading && !metrics ? '...' : (metrics?.totalCustomers ?? 0)}
+                </div>
                 <div className="mt-2 text-xs text-zinc-400 flex items-center gap-1.5">
                   <span className="text-emerald-400 font-semibold">{metrics?.activeCustomers ?? 0} Active</span>
                   <span>·</span>
@@ -636,7 +766,9 @@ export default function PlatformAdminPortal() {
                   <span className="text-xs font-medium uppercase tracking-wider">Estimated MRR</span>
                   <TrendingUp className="w-4 h-4 text-emerald-400" />
                 </div>
-                <div className="text-3xl font-bold text-white tracking-tight">${metrics?.estimatedMRR ?? 0}</div>
+                <div className="text-3xl font-bold text-white tracking-tight">
+                  {loading && !metrics ? '...' : `$${metrics?.estimatedMRR ?? 0}`}
+                </div>
                 <div className="mt-2 text-xs text-zinc-400">
                   Active Commercial SaaS Tiers
                 </div>
@@ -647,7 +779,9 @@ export default function PlatformAdminPortal() {
                   <span className="text-xs font-medium uppercase tracking-wider">Credits Issued / Consumed</span>
                   <Coins className="w-4 h-4 text-amber-400" />
                 </div>
-                <div className="text-3xl font-bold text-white tracking-tight">{metrics?.totalCreditsIssued ?? 0}</div>
+                <div className="text-3xl font-bold text-white tracking-tight">
+                  {loading && !metrics ? '...' : (metrics?.totalCreditsIssued ?? 0)}
+                </div>
                 <div className="mt-2 text-xs text-zinc-400 flex items-center gap-1.5">
                   <span className="text-amber-400 font-semibold">{metrics?.totalCreditsConsumed ?? 0} Consumed</span>
                 </div>
@@ -658,7 +792,9 @@ export default function PlatformAdminPortal() {
                   <span className="text-xs font-medium uppercase tracking-wider">Creative Studio Assets</span>
                   <Sparkles className="w-4 h-4 text-purple-400" />
                 </div>
-                <div className="text-3xl font-bold text-white tracking-tight">{metrics?.creativeGenerations?.total ?? 0}</div>
+                <div className="text-3xl font-bold text-white tracking-tight">
+                  {loading && !metrics ? '...' : (metrics?.creativeGenerations?.total ?? 0)}
+                </div>
                 <div className="mt-2 text-xs text-zinc-400 flex items-center gap-1.5">
                   <span className="text-purple-400">{metrics?.creativeGenerations?.images ?? 0} Images</span>
                   <span>·</span>
@@ -860,13 +996,15 @@ export default function PlatformAdminPortal() {
               <div className="p-4 rounded-xl bg-zinc-900/70 border border-zinc-800">
                 <span className="text-xs font-medium uppercase tracking-wider text-zinc-400 block mb-1">Connected Users</span>
                 <span className="text-2xl font-bold text-white font-mono">
-                  {Array.isArray(metrics?.connectedUsers) ? metrics.connectedUsers.length : (metrics?.connectedUserCount ?? 0)}
+                  {loading && !metrics ? '...' : (Array.isArray(metrics?.connectedUsers) ? metrics.connectedUsers.length : (metrics?.connectedUserCount ?? 0))}
                 </span>
                 <span className="text-[11px] text-zinc-500 block mt-1">Distinct authorized users with active connections</span>
               </div>
               <div className="p-4 rounded-xl bg-zinc-900/70 border border-zinc-800">
                 <span className="text-xs font-medium uppercase tracking-wider text-zinc-400 block mb-1">Active Social Connections</span>
-                <span className="text-2xl font-bold text-white font-mono">{(metrics?.allConnections || (metrics?.adminFacebook ? [metrics.adminFacebook] : [])).length}</span>
+                <span className="text-2xl font-bold text-white font-mono">
+                  {loading && !metrics ? '...' : (metrics?.activeConnectionCount ?? (metrics?.allConnections || (metrics?.adminFacebook ? [metrics.adminFacebook] : [])).length ?? 0)}
+                </span>
                 <span className="text-[11px] text-zinc-500 block mt-1">Total account bindings across all platforms</span>
               </div>
             </div>
