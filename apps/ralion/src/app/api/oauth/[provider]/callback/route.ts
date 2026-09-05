@@ -105,59 +105,67 @@ export async function GET(
         accessToken = tokens.accessToken;
         expiresAt = new Date(Date.now() + tokens.expiresIn * 1000);
 
-        if (intent === 'page_connection') {
-          // Stage 2: Discover and connect managed Facebook Page
-          let pages: any[] = [];
-          try {
-            pages = await metaAdapter.getPages(accessToken);
-          } catch (pageErr: any) {
-            console.warn('[OAuth Callback] Page discovery note:', pageErr.message);
+        // 1. Verify token App ID and granted scopes via Meta debug_token
+        try {
+          const appId = metaAdapter.clientId();
+          const appSecret = metaAdapter.clientSecret();
+          const debugRes = await fetch(`https://graph.facebook.com/v19.0/debug_token?input_token=${accessToken}&access_token=${appId}|${appSecret}`);
+          if (debugRes.ok) {
+            const debugData = await debugRes.json();
+            const tokenAppId = debugData?.data?.app_id;
+            const tokenScopes = debugData?.data?.scopes || [];
+            console.log(`[OAuth Facebook] Token verified | App ID: ${tokenAppId} (Expected: ${appId}) | Granted Scopes: [${tokenScopes.join(', ')}]`);
+            if (tokenAppId && String(tokenAppId) !== String(appId)) {
+              console.warn(`[OAuth Facebook] Warning: Token App ID (${tokenAppId}) does not match configured App ID (${appId})`);
+            }
           }
-
-          if (!pages || pages.length === 0) {
-            // Permission or app availability failure on Page scopes
-            return NextResponse.redirect(`${growthRedirect}?facebook=page_permission_pending&oauth_error=meta_permission_unavailable&provider=facebook&stage=2`);
-          }
-
-          const firstPage = pages[0];
-          pageId = firstPage.id;
-          providerAccountId = firstPage.id;
-          profile = {
-            handle: `@${firstPage.name.toLowerCase().replace(/\s+/g, '_')}`,
-            name: firstPage.name,
-            avatar: firstPage.avatar,
-            followersCount: firstPage.followers || 0,
-            pageId: firstPage.id,
-          };
-          extraMeta = {
-            pageAccessToken: firstPage.accessToken,
-            pages,
-            stage: 2,
-            organizationId,
-          };
-          accountLabel = 'Facebook Business Page';
-        } else {
-          // Stage 1: Basic Facebook Login / Profile Link
-          let userProfile: any = null;
-          try {
-            userProfile = await metaAdapter.getUserProfile(accessToken);
-          } catch {}
-
-          providerAccountId = userProfile?.id;
-          profile = {
-            handle: userProfile?.name ? `@${userProfile.name.toLowerCase().replace(/\s+/g, '_')}` : '@facebook_user',
-            name: userProfile?.name || 'Facebook User',
-            avatar: userProfile?.picture?.data?.url,
-            followersCount: 0,
-          };
-          extraMeta = {
-            stage: 1,
-            facebookUserId: userProfile?.id,
-            email: userProfile?.email,
-            organizationId,
-          };
-          accountLabel = 'Facebook Profile (Connected)';
+        } catch (debugErr: any) {
+          console.warn('[OAuth Facebook] debug_token inspection notice:', debugErr.message);
         }
+
+        // 2. Query /me/accounts to discover all manageable Pages
+        let pages: any[] = [];
+        try {
+          pages = await metaAdapter.getPages(accessToken);
+          const safePageSummaries = pages.map((p: any) => ({ id: p.id, name: p.name, username: p.username, category: p.category }));
+          console.log(`[OAuth Facebook] /me/accounts discovered ${pages.length} manageable Pages:`, JSON.stringify(safePageSummaries, null, 2));
+        } catch (pageErr: any) {
+          console.warn('[OAuth Facebook] Page discovery error:', pageErr.message);
+        }
+
+        // 3. Fetch authenticated Facebook user profile
+        let userProfile: any = null;
+        try {
+          userProfile = await metaAdapter.getUserProfile(accessToken);
+        } catch {}
+
+        providerAccountId = userProfile?.id || `fb_user_${Date.now()}`;
+        profile = {
+          handle: userProfile?.name ? `@${userProfile.name.toLowerCase().replace(/\s+/g, '_')}` : '@facebook_user',
+          name: userProfile?.name || 'Facebook User',
+          avatar: userProfile?.picture?.data?.url,
+          followersCount: 0,
+        };
+
+        // 4. Do not auto-bind Ras Ali Labs or pages[0]. Persist as user profile with discovered pages for explicit selection
+        extraMeta = {
+          stage: 1,
+          is_page: false,
+          facebookUserId: userProfile?.id,
+          email: userProfile?.email,
+          organizationId,
+          discovered_pages: pages.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            username: p.username,
+            category: p.category,
+            avatar: p.avatar,
+            followers: p.followers,
+          })),
+          page_selection_required: pages.length > 0,
+        };
+
+        accountLabel = `Facebook Profile (${userProfile?.name || 'Connected'})`;
         break;
       }
       case 'instagram': {

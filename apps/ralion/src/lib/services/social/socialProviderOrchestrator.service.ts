@@ -151,7 +151,7 @@ export class SocialProviderOrchestrator {
 
     const priorityOrder = this.getPriorityOrder(params.platform, params.capability);
     const zernioConfigured = ZernioSocialService.isConfigured();
-    const metaConfigured = Boolean(process.env.FACEBOOK_APP_ID || process.env.META_APP_ID || process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '1558897076250918');
+    const metaConfigured = Boolean(process.env.FACEBOOK_APP_ID || process.env.META_APP_ID || process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '1759273775121373');
 
     for (let i = 0; i < priorityOrder.length; i++) {
       const candidate = priorityOrder[i];

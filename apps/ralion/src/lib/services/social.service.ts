@@ -519,8 +519,8 @@ function getOAuthRedirectUri(provider: string): string {
 
 // Meta (Facebook/Instagram) Adapter
 export const metaAdapter = {
-  clientId: () => process.env.FACEBOOK_APP_ID || process.env.META_APP_ID || process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '1558897076250918',
-  clientSecret: () => process.env.FACEBOOK_APP_SECRET || process.env.META_APP_SECRET || '',
+  clientId: () => process.env.FACEBOOK_APP_ID || process.env.META_APP_ID || process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || '1759273775121373',
+  clientSecret: () => process.env.FACEBOOK_APP_SECRET || process.env.META_APP_SECRET || '44402f5d49f3be40102e2f11039499fe',
   redirectUri: (provider: string) => getOAuthRedirectUri(provider),
   scopes: {
     stage1_login: ['public_profile', 'email'],
@@ -530,7 +530,10 @@ export const metaAdapter = {
   },
 
   getAuthUrl(state: string, provider: string = 'facebook', intent: 'login' | 'page_connection' = 'page_connection'): string {
-    const baseScopes = this.scopes.facebook;
+    const customScopes = process.env.META_OAUTH_SCOPES;
+    const baseScopes = customScopes
+      ? customScopes.split(',').map(s => s.trim())
+      : (intent === 'login' ? this.scopes.stage1_login : this.scopes.facebook);
     const redirectUri = this.redirectUri(provider);
     const params = new URLSearchParams({
       client_id: this.clientId(),
@@ -550,38 +553,54 @@ export const metaAdapter = {
   },
 
   async exchangeCode(code: string, provider: string = 'facebook', customRedirectUri?: string): Promise<{ accessToken: string; expiresIn: number }> {
-    const redirectUri = customRedirectUri || this.redirectUri(provider);
-    console.log(`[OAuth Diagnostic] Starting Meta code exchange | provider=${provider} | redirect_uri=${redirectUri}`);
-    const params = new URLSearchParams({
-      client_id: this.clientId(),
-      client_secret: this.clientSecret(),
-      redirect_uri: redirectUri,
-      code
-    });
-    const res = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?${params}`);
-    console.log(`[OAuth Diagnostic] Meta token exchange HTTP status: ${res.status} ${res.statusText}`);
-    if (!res.ok) {
-      const errText = await res.text();
-      let sanitized = 'Meta token exchange failed';
+    const candidateUris = Array.from(new Set([
+      customRedirectUri,
+      this.redirectUri(provider),
+      `https://rasalilabs.com/ralion/api/oauth/${provider}/callback`,
+      `https://www.rasalilabs.com/ralion/api/oauth/${provider}/callback`,
+      `https://rasalilabs.com/api/oauth/${provider}/callback`,
+      `https://www.rasalilabs.com/api/oauth/${provider}/callback`,
+    ].filter(Boolean) as string[]));
+
+    let lastError: any = null;
+    for (const redirectUri of candidateUris) {
       try {
-        const parsed = JSON.parse(errText);
-        sanitized = parsed.error?.message || errText;
-      } catch {}
-      console.error(`[OAuth Diagnostic] Meta code exchange error (${res.status}): ${sanitized}`);
-      throw new Error(`Meta token exchange failed (${res.status}): ${sanitized}`);
-    }
-    const data = await res.json();
-    console.log(`[OAuth Diagnostic] Meta code exchange finished successfully | hasAccessToken=${Boolean(data.access_token)}`);
-    try {
-      const longRes = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${this.clientId()}&client_secret=${this.clientSecret()}&fb_exchange_token=${data.access_token}`);
-      if (longRes.ok) {
-        const longData = await longRes.json();
-        return { accessToken: longData.access_token || data.access_token, expiresIn: longData.expires_in || 5183944 };
+        console.log(`[OAuth Diagnostic] Trying Meta code exchange with redirect_uri: ${redirectUri}`);
+        const params = new URLSearchParams({
+          client_id: this.clientId(),
+          client_secret: this.clientSecret(),
+          redirect_uri: redirectUri,
+          code
+        });
+        const res = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?${params}`);
+        if (res.ok) {
+          const data = await res.json();
+          console.log(`[OAuth Diagnostic] Meta code exchange succeeded with redirect_uri: ${redirectUri}`);
+          try {
+            const longRes = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${this.clientId()}&client_secret=${this.clientSecret()}&fb_exchange_token=${data.access_token}`);
+            if (longRes.ok) {
+              const longData = await longRes.json();
+              return { accessToken: longData.access_token || data.access_token, expiresIn: longData.expires_in || 5183944 };
+            }
+          } catch (longErr: any) {
+            console.warn('[OAuth Diagnostic] Long-lived token notice:', longErr.message);
+          }
+          return { accessToken: data.access_token, expiresIn: data.expires_in || 5183944 };
+        }
+
+        const errText = await res.text();
+        let sanitized = errText;
+        try {
+          const parsed = JSON.parse(errText);
+          sanitized = parsed.error?.message || errText;
+        } catch {}
+        console.warn(`[OAuth Diagnostic] Code exchange attempt with ${redirectUri} failed (${res.status}): ${sanitized}`);
+        lastError = new Error(`Meta token exchange failed (${res.status}): ${sanitized}`);
+      } catch (err: any) {
+        lastError = err;
       }
-    } catch (longErr: any) {
-      console.warn('[OAuth Diagnostic] Long-lived token exchange notice:', longErr.message);
     }
-    return { accessToken: data.access_token, expiresIn: data.expires_in || 5183944 };
+    throw lastError || new Error('Meta token exchange failed on all candidate redirect URIs');
   },
 
   async getPages(userAccessToken: string) {

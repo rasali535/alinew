@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "meta-devtools": {
+      "serverUrl": "https://mcp.facebook.com/devtools"
+    },
+    "meta-ads": {
+      "serverUrl": "https://mcp.facebook.com/ads"
+    }
+  }
+}

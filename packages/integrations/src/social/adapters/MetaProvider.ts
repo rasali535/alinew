@@ -34,7 +34,7 @@ export class MetaProvider extends SocialProvider {
   ];
 
   private getAppId(): string {
-    return process.env.FACEBOOK_APP_ID || process.env.META_APP_ID || '1558897076250918';
+    return process.env.FACEBOOK_APP_ID || process.env.META_APP_ID || '1759273775121373';
   }
 
   private getAppSecret(): string {
