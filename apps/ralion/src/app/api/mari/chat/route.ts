@@ -84,6 +84,39 @@ export async function POST(request: NextRequest) {
           .filter((m: ChatHistoryTurn) => m.text.length > 0)
       : [];
 
+    // Auto-resolve active Facebook Page from database if not supplied in localOverrides
+    let localOverrides = body.localOverrides || {};
+    if (!localOverrides.fbPage) {
+      try {
+        const { FacebookPageManagementService } = await import('../../../../lib/services/social/facebookPageManagement.service');
+        const activePage = await FacebookPageManagementService.getActivePage({
+          organizationId: orgId,
+          workspaceId: workspaceId || orgId,
+          userId: authenticatedUserId,
+        });
+        if (activePage) {
+          localOverrides = {
+            ...localOverrides,
+            fbPage: {
+              id: activePage.id,
+              pageId: activePage.pageId,
+              name: activePage.name,
+              username: activePage.username,
+              category: activePage.category,
+              fanCount: activePage.followersCount,
+              about: activePage.about || activePage.description,
+              description: activePage.description || activePage.about,
+              website: activePage.website,
+              contactInfo: activePage.contactInfo,
+              status: activePage.status,
+            },
+          };
+        }
+      } catch (fbErr: any) {
+        console.warn('[Mari Chat API] Facebook page auto-resolution note:', fbErr?.message);
+      }
+    }
+
     // Process query through Authoritative Mari Universal Core
     const result = await MariUniversalCore.processQuery({
       prompt: query.trim(),
@@ -93,7 +126,7 @@ export async function POST(request: NextRequest) {
       companyName,
       activeScreen: body.activeScreen,
       conversationHistory,
-      localOverrides: body.localOverrides,
+      localOverrides,
       requestId,
     });
 

@@ -7,6 +7,7 @@ export type MariActionType =
   | 'NAVIGATE';
 
 export interface MariActionPayload {
+  id?: string;
   type: MariActionType;
   title?: string;
   label?: string;

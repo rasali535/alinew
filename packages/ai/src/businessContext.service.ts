@@ -49,12 +49,23 @@ export interface Layer2BusinessState {
   };
   social: {
     isConnected: boolean;
+    hasSelectedPage?: boolean;
+    isPersonalProfile?: boolean;
     connectedPageName?: ProvenanceItem<string>;
+    pageId?: ProvenanceItem<string>;
+    pageUsername?: ProvenanceItem<string>;
+    pageCategory?: ProvenanceItem<string>;
+    pageAbout?: ProvenanceItem<string>;
+    pageWebsite?: ProvenanceItem<string>;
     followersCount?: ProvenanceItem<number>;
     reachGrowthPct?: ProvenanceItem<number>;
     engagementRatePct?: ProvenanceItem<number>;
     recentPostsCount?: ProvenanceItem<number>;
     topPerformingType?: ProvenanceItem<string>;
+    contactInfo?: {
+      phone?: string;
+      singleLineAddress?: string;
+    };
   };
   operations: {
     pendingTasksCount: ProvenanceItem<number>;
@@ -418,11 +429,48 @@ export class BusinessContextService {
       },
       social: {
         isConnected: isSocialConnected,
+        hasSelectedPage: isSocialPageConnected,
+        isPersonalProfile: isPersonalFb,
         connectedPageName: {
           value: pageName,
           provenance: isSocialConnected ? 'VERIFIED' : 'UNVERIFIED',
           source: 'Meta Graph API',
           confidence: isSocialConnected ? 1.0 : 0.0,
+          lastVerifiedAt: timestamp,
+        },
+        pageId: {
+          value: fbPage?.pageId || fbPage?.id || '',
+          provenance: isSocialConnected ? 'VERIFIED' : 'UNVERIFIED',
+          source: 'Meta Graph API',
+          confidence: isSocialConnected ? 1.0 : 0.0,
+          lastVerifiedAt: timestamp,
+        },
+        pageUsername: {
+          value: fbPage?.username || '',
+          provenance: isSocialConnected && fbPage?.username ? 'VERIFIED' : 'UNVERIFIED',
+          source: 'Meta Graph API',
+          confidence: isSocialConnected && fbPage?.username ? 1.0 : 0.0,
+          lastVerifiedAt: timestamp,
+        },
+        pageCategory: {
+          value: fbPage?.category || '',
+          provenance: isSocialConnected && fbPage?.category ? 'VERIFIED' : 'UNVERIFIED',
+          source: 'Meta Graph API',
+          confidence: isSocialConnected && fbPage?.category ? 1.0 : 0.0,
+          lastVerifiedAt: timestamp,
+        },
+        pageAbout: {
+          value: fbPage?.about || fbPage?.description || '',
+          provenance: isSocialConnected && (fbPage?.about || fbPage?.description) ? 'VERIFIED' : 'UNVERIFIED',
+          source: 'Meta Graph API',
+          confidence: isSocialConnected && (fbPage?.about || fbPage?.description) ? 1.0 : 0.0,
+          lastVerifiedAt: timestamp,
+        },
+        pageWebsite: {
+          value: fbPage?.website || '',
+          provenance: isSocialConnected && fbPage?.website ? 'VERIFIED' : 'UNVERIFIED',
+          source: 'Meta Graph API',
+          confidence: isSocialConnected && fbPage?.website ? 1.0 : 0.0,
           lastVerifiedAt: timestamp,
         },
         followersCount: {
@@ -447,10 +495,10 @@ export class BusinessContextService {
           lastVerifiedAt: timestamp,
         },
         recentPostsCount: {
-          value: 0,
-          provenance: 'VERIFIED',
+          value: Number(fbPage?.recentPostsCount || 0),
+          provenance: isSocialConnected ? 'VERIFIED' : 'UNVERIFIED',
           source: 'Meta Graph API',
-          confidence: 0.0,
+          confidence: isSocialConnected ? 1.0 : 0.0,
           lastVerifiedAt: timestamp,
         },
         topPerformingType: {
@@ -459,6 +507,10 @@ export class BusinessContextService {
           source: 'Mari Content Learning Engine',
           confidence: 0.0,
           lastVerifiedAt: timestamp,
+        },
+        contactInfo: {
+          phone: fbPage?.phone,
+          singleLineAddress: fbPage?.singleLineAddress,
         },
       },
       operations: {

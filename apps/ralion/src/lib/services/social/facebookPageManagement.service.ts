@@ -45,6 +45,10 @@ export interface FacebookPageDescriptor {
     canManagePosts: boolean;
     canManageMessages: boolean;
   };
+  about?: string;
+  description?: string;
+  website?: string;
+  contactInfo?: string;
   zernioProfileId?: string;
   zernioAccountId?: string;
   connectedAt?: string;
@@ -217,6 +221,10 @@ export class FacebookPageManagementService {
         canManagePosts: true,
         canManageMessages: true,
       },
+      about: conn.metadata?.about || conn.metadata?.description || undefined,
+      description: conn.metadata?.description || conn.metadata?.about || undefined,
+      website: conn.metadata?.website || conn.metadata?.websiteUrl || undefined,
+      contactInfo: conn.metadata?.contactInfo || conn.metadata?.phone || conn.metadata?.email || undefined,
       zernioProfileId: conn.zernio_profile_id,
       zernioAccountId: conn.zernio_account_id,
       connectedAt: conn.connected_at || conn.created_at,
