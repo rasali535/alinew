@@ -257,25 +257,7 @@ export class FacebookPageManagementService {
       return { pages: [], entitlement, hasConnectedProfile: false };
     }
 
-    let existingConnections = (await connQuery).data || [];
-
-    if (existingConnections.length === 0 && (params.workspaceId || params.userId)) {
-      try {
-        const synced = await SocialProviderRouter.syncAccountsFromZernio({
-          userId: params.userId || params.workspaceId || '',
-          workspaceId: params.workspaceId,
-          organizationId: params.organizationId,
-        });
-        if (synced && synced.length > 0) {
-          const { data: refreshed } = await connQuery;
-          if (refreshed && refreshed.length > 0) {
-            existingConnections = refreshed;
-          }
-        }
-      } catch (syncErr: any) {
-        console.warn('[FacebookPageManagement] Auto-sync on discovery notice:', syncErr.message);
-      }
-    }
+    const existingConnections = (await connQuery).data || [];
 
     if (!existingConnections || existingConnections.length === 0) {
       return { pages: [], entitlement, hasConnectedProfile: false };

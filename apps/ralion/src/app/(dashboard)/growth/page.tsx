@@ -1161,77 +1161,6 @@ Rules:
 
     initializeGrowth();
 
-    // Auto-capture and store provider OAuth tokens returned by Supabase Auth (deduplicated)
-    const supabase = createClient();
-    let isSyncingTokens = false;
-
-    const syncSessionTokens = async (session: any) => {
-      if (!session?.user || isSyncingTokens) return;
-      isSyncingTokens = true;
-
-      try {
-        const identities = session.user.identities || [];
-        const accountsToCache: SocialAccount[] = [];
-
-        for (const identity of identities) {
-          if (identity.provider && identity.provider !== 'email') {
-            const provKey = identity.provider === 'linkedin_oidc' ? 'linkedin' : (identity.provider === 'twitter' ? 'x' : identity.provider.toLowerCase());
-            const idData = identity.identity_data || session.user.user_metadata || {};
-            const handle = idData.user_name ? `@${idData.user_name}` : (idData.email ? `@${idData.email.split('@')[0]}` : (session.user.user_metadata?.full_name ? `@${session.user.user_metadata.full_name.toLowerCase().replace(/\s+/g, '_')}` : `@${provKey}_account`));
-            
-            const accObj: SocialAccount = {
-              id: `acc-${provKey}`,
-              provider: provKey,
-              label: idData.full_name || idData.name || provKey,
-              handle: handle,
-              connectedAt: 'Connected',
-              status: 'connected',
-              scopes: ['public_profile', 'email'],
-              avatarUrl: idData.avatar_url || idData.picture || session.user.user_metadata?.avatar_url || null,
-              followers: 'Active',
-            };
-            accountsToCache.push(accObj);
-
-            await supabase.from('social_account_tokens').upsert({
-              user_id: session.user.id,
-              provider: provKey,
-              access_token: session.provider_token || 'active_oauth_token',
-              refresh_token: session.provider_refresh_token || null,
-              account_label: accObj.label,
-              account_handle: accObj.handle,
-              avatar_url: accObj.avatarUrl,
-              followers_count: 0,
-              status: 'connected',
-              updated_at: new Date().toISOString(),
-            }, { onConflict: 'user_id,provider' });
-          }
-        }
-
-        if (accountsToCache.length > 0) {
-          try {
-            const cacheKey = `ralion_social_accounts_${session.user.id}`;
-            const stored = JSON.parse(localStorage.getItem(cacheKey) || '[]');
-            const merged = [...stored.filter((s: any) => !accountsToCache.some(c => c.provider === s.provider)), ...accountsToCache];
-            localStorage.setItem(cacheKey, JSON.stringify(merged));
-          } catch {}
-        }
-      } catch (err) {
-        console.warn('[Growth] Auto-store provider token notice:', err);
-      } finally {
-        isSyncingTokens = false;
-      }
-    };
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session && isMounted) syncSessionTokens(session);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session && isMounted) {
-        syncSessionTokens(session);
-      }
-    });
-
     // Check if returning with OAuth tokens in URL hash or params
     if (typeof window !== 'undefined') {
       const hash = window.location.hash;
@@ -1248,7 +1177,6 @@ Rules:
 
     return () => {
       isMounted = false;
-      subscription.unsubscribe();
     };
   }, [loadConnectedAccounts, fetchPostsForConnection, fetchFacebookPages, selectedAccountId]);
 
