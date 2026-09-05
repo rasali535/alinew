@@ -30,10 +30,10 @@ export const FloatingMariAi: React.FC = () => {
     setIsProcessing(true);
 
     try {
-      let activeOrgId = 'org_default';
+      let activeOrgId: string | undefined = undefined;
       try {
         const stored = typeof window !== 'undefined' ? localStorage.getItem('ralion_active_org_id') : null;
-        if (stored) activeOrgId = stored;
+        if (stored && stored !== 'org_default' && stored !== 'default') activeOrgId = stored;
       } catch {}
 
       const apiUrl = getRalionApiUrl('/api/mari/chat');

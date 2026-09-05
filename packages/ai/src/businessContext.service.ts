@@ -147,6 +147,7 @@ export class BusinessContextService {
       activeScreen?: { route: string; label: string; entityId?: string };
       forceRefresh?: boolean;
       isTestExecution?: boolean;
+      companyName?: string;
       localOverrides?: {
         contacts?: any[];
         tasks?: any[];
@@ -169,7 +170,7 @@ export class BusinessContextService {
     }
 
     const timestamp = new Date().toISOString();
-    const isRasAli = orgId === 'ras-ali-labs';
+    const isRasAli = orgId === 'ras-ali-labs' || orgId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf';
     const isTest = Boolean(options?.isTestExecution || orgId.startsWith('test-') || orgId.includes('test'));
     const registeredProfile = tenantProfileRegistry.get(orgId);
     
@@ -240,19 +241,22 @@ export class BusinessContextService {
     );
 
     const hasVerifiedKnowledge = Boolean(
+      options?.companyName ||
       registeredProfile?.companyName ||
       knowledgeProfile?.isVerified ||
       isWkValid ||
       isSocialPageConnected
     );
 
-    // Resolve Organization Name (Prioritize Registered Profile -> Knowledge Profile -> Facebook Page -> Website Title)
-    let orgName = registeredProfile?.companyName || knowledgeProfile?.companyName?.value || (isSocialPageConnected ? fbPage.name : '') || websiteKnowledge?.title || '';
+    // Resolve Organization Name (Prioritize Options -> Registered Profile -> Knowledge Profile -> Facebook Page -> Website Title)
+    let orgName = options?.companyName || registeredProfile?.companyName || knowledgeProfile?.companyName?.value || (isSocialPageConnected ? fbPage.name : '') || websiteKnowledge?.title || '';
     if (!orgName) {
       if (isTest) {
         orgName = 'Test Organization';
-      } else {
+      } else if (orgId && orgId !== 'org_default' && orgId !== 'default' && orgId !== 'default-org') {
         orgName = orgId.replace(/^org[-_]/, '').replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'My Business';
+      } else {
+        orgName = 'Unverified Organization';
       }
     }
 

@@ -58,6 +58,11 @@ export interface RalionSessionContext {
   profile: RalionUserProfile;
   workspace: RalionWorkspace;
   membership: RalionWorkspaceMembership;
+  organization: {
+    id: string;
+    name: string;
+    tier?: string;
+  };
 }
 
 export function authRequiredResponse(request: NextRequest) {
@@ -234,16 +239,26 @@ export async function getCurrentRalionContext(
     }
   }
 
-  const workspaceName =
-    authUser.user_metadata?.org_name ||
-    `${profile.fullName}'s Workspace`;
+  const workspaceName = `${profile.fullName}'s Workspace`;
+
+  const companyName =
+    authUser.user_metadata?.org_name?.trim() ||
+    (authUser.email?.endsWith('@rasalilabs.com') ? 'Ras Ali Labs' : '') ||
+    workspaceName;
+
+  const orgId =
+    authUser.user_metadata?.organizationId ||
+    authUser.user_metadata?.organization_id ||
+    (authUser.email?.endsWith('@rasalilabs.com') ? 'ras-ali-labs' : '') ||
+    (authUser.user_metadata?.org_name ? authUser.user_metadata.org_name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') : '') ||
+    targetWorkspaceId;
 
   const workspace: RalionWorkspace = {
     id: targetWorkspaceId,
-    name: workspaceName,
+    name: companyName,
     slug: `ws-${authUser.id.slice(0, 8)}`,
     owner_id: authUser.id,
-    organization_id: targetWorkspaceId,
+    organization_id: orgId,
   };
 
   const membership: RalionWorkspaceMembership = {
@@ -257,6 +272,8 @@ export async function getCurrentRalionContext(
     userId: authUser.id,
     userEmail: authUser.email ? authUser.email.replace(/(?<=.).(?=.*@)/g, '*') : 'hidden',
     workspaceId: workspace.id,
+    organizationId: orgId,
+    companyName,
     role: membership.role,
   });
 
@@ -269,5 +286,10 @@ export async function getCurrentRalionContext(
     profile,
     workspace,
     membership,
+    organization: {
+      id: orgId,
+      name: companyName,
+      tier: authUser.user_metadata?.tier || 'STANDARD',
+    },
   };
 }

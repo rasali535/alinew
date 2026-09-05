@@ -27,14 +27,58 @@ export async function POST(request: NextRequest) {
     const serverCtx = await getCurrentRalionContext(request, { requireAuth: false });
     const body = await request.json().catch(() => ({}));
     const query = body.query || body.message || body.prompt;
-    const orgId =
+
+    if (!query || typeof query !== 'string' || !query.trim()) {
+      return corsJsonResponse({ success: false, error: 'Query prompt is required' }, { status: 400 }, request);
+    }
+
+    const rawOrgId =
       body.organizationId ||
-      serverCtx?.workspace.id ||
-      serverCtx?.user.id ||
       request.headers.get('x-organization-id') ||
-      request.headers.get('x-workspace-id') ||
-      'ras-ali-labs';
-    const userId = body.userId || serverCtx?.user.id || 'anonymous';
+      request.headers.get('x-workspace-id');
+
+    let orgId = '';
+    let companyName = '';
+    let workspaceId = '';
+    const authenticatedUserId = serverCtx?.user.id || body.userId || 'anonymous';
+
+    if (serverCtx) {
+      orgId = (rawOrgId && rawOrgId !== 'org_default' && rawOrgId !== 'default' && rawOrgId !== 'default-org')
+        ? rawOrgId
+        : (serverCtx.organization?.id || serverCtx.workspace.organization_id || serverCtx.workspace.id || serverCtx.user.id);
+      companyName = serverCtx.organization?.name || serverCtx.workspace.name;
+      workspaceId = serverCtx.workspace.id;
+    } else {
+      orgId = (rawOrgId && rawOrgId !== 'org_default' && rawOrgId !== 'default' && rawOrgId !== 'default-org')
+        ? rawOrgId
+        : 'ras-ali-labs';
+      companyName = body.companyName || '';
+      workspaceId = orgId;
+    }
+
+    // Resolve structured Business Knowledge Profile
+    const { BusinessKnowledgeProfileService } = await import('@ralion/ai');
+    const knowledgeProfile = BusinessKnowledgeProfileService.getProfile(orgId);
+    if (knowledgeProfile?.companyName?.value) {
+      companyName = knowledgeProfile.companyName.value;
+    } else if (!companyName && (orgId === 'ras-ali-labs' || orgId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf')) {
+      companyName = 'Ras Ali Labs';
+    }
+
+    // Explicit telemetry logging of resolved context before Gemini receives prompt
+    console.log(JSON.stringify({
+      level: 'INFO',
+      type: 'TENANT_RESOLUTION',
+      authenticatedUserId,
+      organizationId: orgId,
+      workspaceId: workspaceId || orgId,
+      tenantKey: orgId,
+      companyName: companyName || orgId,
+      businessKnowledgeProfileId: knowledgeProfile?.organizationId || null,
+      businessKnowledgeSource: knowledgeProfile ? 'BusinessKnowledgeProfile' : 'TenantProfile',
+    }));
+
+    const userId = authenticatedUserId;
     const activeScreen = body.activeScreen;
     const requestId = body.requestId || `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
@@ -48,17 +92,18 @@ export async function POST(request: NextRequest) {
             text: String(m.text).trim(),
           }))
           .filter((m: ChatHistoryMessage) => m.text.length > 0)
+          .map(m => ({
+            role: m.role,
+            text: m.text,
+          }))
       : [];
-
-    if (!query || typeof query !== 'string' || !query.trim()) {
-      return corsJsonResponse({ success: false, error: 'Query prompt is required' }, { status: 400 }, request);
-    }
 
     const cleanQuery = query.trim();
     const detectedIntent = detectSemanticIntent(cleanQuery);
 
-    // 1. Resolve organization business context
+    // 1. Resolve organization business context with authoritative tenant details
     const context = await BusinessContextService.assembleContext(orgId, {
+      companyName,
       activeScreen,
       localOverrides: body.localOverrides,
     });

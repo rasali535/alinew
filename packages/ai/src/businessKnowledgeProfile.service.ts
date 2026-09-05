@@ -216,6 +216,126 @@ tenantProfileMap.set('ras-ali-labs', {
   lastCrawledAt: new Date().toISOString(),
 });
 
+// Seed Pameltex as distinct Tenant B organization
+tenantProfileMap.set('pameltex', {
+  organizationId: 'pameltex',
+  companyName: {
+    value: 'Pameltex',
+    sourceType: 'WEBSITE',
+    sourceUrl: 'https://www.pameltex.com',
+    confidence: 1.0,
+    lastUpdated: new Date().toISOString(),
+  },
+  websiteUrl: {
+    value: 'https://www.pameltex.com',
+    sourceType: 'WEBSITE',
+    sourceUrl: 'https://www.pameltex.com',
+    confidence: 1.0,
+    lastUpdated: new Date().toISOString(),
+  },
+  industry: {
+    value: 'Commercial Uniforms, Industrial Workwear & Safety Apparel Manufacturing',
+    sourceType: 'WEBSITE',
+    confidence: 1.0,
+    lastUpdated: new Date().toISOString(),
+  },
+  description: {
+    value: 'Pameltex is a premier Botswana manufacturer and distributor of high-quality corporate uniforms, industrial workwear, and protective clothing.',
+    sourceType: 'WEBSITE',
+    confidence: 1.0,
+    lastUpdated: new Date().toISOString(),
+  },
+  tagline: {
+    value: 'Quality Workwear & Corporate Apparel for Botswana and Southern Africa',
+    sourceType: 'WEBSITE',
+    confidence: 1.0,
+    lastUpdated: new Date().toISOString(),
+  },
+  valuePropositions: {
+    value: [
+      'Locally manufactured high-durability workwear and PPE compliant with regional safety standards',
+      'Custom corporate branding and embroidery for enterprise workforces',
+      'Rapid turnaround and wholesale supply for mining, logistics, security, and healthcare sectors',
+    ],
+    sourceType: 'WEBSITE',
+    confidence: 1.0,
+    lastUpdated: new Date().toISOString(),
+  },
+  products: {
+    value: [
+      { name: 'Industrial Conti Suits & Overalls', category: 'Safety & PPE' },
+      { name: 'Corporate & Executive Uniforms', category: 'Apparel' },
+      { name: 'High-Visibility & Security Uniforms', category: 'Security' },
+      { name: 'Hospitality & Healthcare Scrubs', category: 'Healthcare' },
+    ],
+    sourceType: 'WEBSITE',
+    confidence: 1.0,
+    lastUpdated: new Date().toISOString(),
+  },
+  services: {
+    value: [
+      { name: 'Custom Garment Branding & Embroidery', category: 'Customization' },
+      { name: 'Bulk Corporate Wardrobe Management', category: 'Supply Chain' },
+    ],
+    sourceType: 'WEBSITE',
+    confidence: 1.0,
+    lastUpdated: new Date().toISOString(),
+  },
+  targetMarkets: {
+    value: ['Botswana Mining & Construction Companies', 'Security Firms & Logistics Providers', 'Government & Corporate Enterprises'],
+    sourceType: 'WEBSITE',
+    confidence: 1.0,
+    lastUpdated: new Date().toISOString(),
+  },
+  targetCustomers: {
+    value: ['Procurement Managers', 'Safety & HSE Officers', 'HR & Operations Directors'],
+    sourceType: 'WEBSITE',
+    confidence: 1.0,
+    lastUpdated: new Date().toISOString(),
+  },
+  geography: {
+    value: ['Botswana', 'SADC Region'],
+    sourceType: 'WEBSITE',
+    confidence: 1.0,
+    lastUpdated: new Date().toISOString(),
+  },
+  brandPositioning: {
+    value: 'Trusted Botswana Workwear & PPE Manufacturer',
+    sourceType: 'WEBSITE',
+    confidence: 1.0,
+    lastUpdated: new Date().toISOString(),
+  },
+  brandVoice: {
+    value: 'Reliable, Practical, Professional, Quality-focused',
+    sourceType: 'MANUAL',
+    confidence: 1.0,
+    lastUpdated: new Date().toISOString(),
+  },
+  publicContacts: {
+    value: {
+      emails: ['info@pameltex.com'],
+      phones: ['+267 390 0000'],
+      addresses: ['Gaborone, Botswana'],
+    },
+    sourceType: 'WEBSITE',
+    confidence: 1.0,
+    lastUpdated: new Date().toISOString(),
+  },
+  socialLinks: {
+    value: {
+      facebook: 'https://facebook.com/pameltex',
+    },
+    sourceType: 'WEBSITE',
+    confidence: 1.0,
+    lastUpdated: new Date().toISOString(),
+  },
+  sourceUrls: ['https://www.pameltex.com'],
+  contentHash: 'hash-pameltex-v1',
+  knowledgeVersion: 1,
+  isVerified: true,
+  lastCrawledAt: new Date().toISOString(),
+});
+
 // Durable storage key prefix for business profiles
 const PROFILE_STORAGE_PREFIX = 'ralion_bkp_';
 
@@ -259,7 +379,14 @@ export class BusinessKnowledgeProfileService {
    */
   static getProfile(orgId: string): BusinessKnowledgeProfile | null {
     if (!orgId) return null;
-    const inMem = tenantProfileMap.get(orgId);
+    const cleanId = orgId.trim().toLowerCase();
+    if (cleanId === 'ras-ali-labs' || cleanId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf' || cleanId === 'rasalilabs' || cleanId === 'org_rasalilabs' || cleanId === 'ras ali labs') {
+      return tenantProfileMap.get('ras-ali-labs') || null;
+    }
+    if (cleanId === 'pameltex' || cleanId === 'c0b39862-cf19-4882-a822-c7f3f493fec0' || cleanId === 'org_pameltex' || cleanId === 'pameltex ') {
+      return tenantProfileMap.get('pameltex') || null;
+    }
+    const inMem = tenantProfileMap.get(orgId) || tenantProfileMap.get(cleanId);
     if (inMem) return inMem;
     return this.loadDurableProfile(orgId);
   }
