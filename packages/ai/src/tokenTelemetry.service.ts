@@ -21,6 +21,17 @@ export interface TokenUsageRecord {
   timestamp: string;
 }
 
+export interface MariTokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+export function estimateTokenCount(text: string): number {
+  if (!text) return 0;
+  return Math.max(1, Math.ceil(text.trim().length / 4));
+}
+
 export class MariTokenTelemetryService {
   private static records = new Map<string, TokenUsageRecord[]>();
   private static recordedRequestIds = new Set<string>();

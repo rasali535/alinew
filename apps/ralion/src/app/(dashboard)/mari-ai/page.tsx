@@ -122,7 +122,7 @@ export default function MariAiPage() {
   const [websiteSyncSuccess, setWebsiteSyncSuccess] = useState<string | null>(null);
   const [websiteInputUrl, setWebsiteInputUrl] = useState('');
 
-  const activeOrgId = organization?.id || organization?.slug || 'org-demo';
+  const activeOrgId = organization?.id || organization?.slug || (user as any)?.id || (user as any)?.userId || 'unconfigured-tenant';
 
   // Load Business Context, Growth Profile, and Briefing on Mount
   const loadGrowthIntelligence = async (forceRefresh = false) => {
@@ -437,7 +437,11 @@ export default function MariAiPage() {
         }
 
         const ragSearch = mariKnowledgeManager.searchKnowledgeBase(cleanQuery);
-        const ruleResponse = processMariQuery(cleanQuery, activeCtx || businessContext);
+        const ruleResponse = await processMariQuery({
+          prompt: cleanQuery,
+          organizationId: activeOrgId,
+          companyName: businessContext?.layer1?.companyName?.value,
+        });
         const historyPayload = [...messages, userMsg].map(m => ({
           role: (m.sender === 'USER' ? 'user' : 'model') as 'user' | 'model',
           text: m.text,

@@ -18,21 +18,21 @@ export const FloatingMariAi: React.FC = () => {
     'Summarize activity'
   ];
 
-  const handleSend = (text: string) => {
+  const handleSend = async (text: string) => {
     if (!text.trim()) return;
 
     setMessages(prev => [...prev, { sender: 'USER', text }]);
     setInput('');
 
-    setTimeout(() => {
-      if (text.toLowerCase().includes('business performance') || text.toLowerCase().includes('performance')) {
-        const perfSummary = `Business Performance Summary\n\nCustomers:\n+18%\n\nTasks completed:\n92%\n\nRevenue:\n+12%\n\nRecommendation:\nFocus on following up with 5 inactive customers.`;
-        setMessages(prev => [...prev, { sender: 'MARI', text: perfSummary }]);
-      } else {
-        const res = processMariQuery(text);
-        setMessages(prev => [...prev, { sender: 'MARI', text: res.answer }]);
-      }
-    }, 400);
+    try {
+      const res = await processMariQuery({
+        prompt: text,
+        organizationId: 'admin',
+      });
+      setMessages(prev => [...prev, { sender: 'MARI', text: res.answer }]);
+    } catch {
+      setMessages(prev => [...prev, { sender: 'MARI', text: 'I am ready to assist your business operations. How can I help?' }]);
+    }
   };
 
   return (

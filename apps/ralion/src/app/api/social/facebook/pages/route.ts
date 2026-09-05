@@ -33,6 +33,9 @@ export async function GET(request: NextRequest) {
       success: true,
       pages: result.pages,
       entitlement: result.entitlement,
+      selectedPageId: result.selectedPageId,
+      hasConnectedProfile: result.hasConnectedProfile,
+      profileName: result.profileName,
     };
     tenantCache.set(cacheKey, payload, 60);
 
@@ -61,6 +64,7 @@ export async function POST(request: NextRequest) {
 
     const cacheKey = buildTenantCacheKey(context.user.id, context.workspace.id, 'facebook_pages', 'list');
     tenantCache.invalidate(cacheKey);
+    tenantCache.invalidate(buildTenantCacheKey(context.user.id, context.workspace.id, 'mari_growth', 'plan'));
 
     const result = await FacebookPageManagementService.connectPage({
       organizationId: context.workspace.id,
@@ -72,6 +76,10 @@ export async function POST(request: NextRequest) {
 
     return corsJsonResponse({
       success: true,
+      selectedPage: {
+        pageId: body.pageId,
+        pageName: result.destination?.page_name || body.pageData?.name || 'Facebook Page',
+      },
       destination: result.destination,
       entitlement: result.entitlement,
     }, undefined, request);

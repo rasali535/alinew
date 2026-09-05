@@ -60,10 +60,9 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 1. Live customer tenant discovery across all stores (Supabase profiles, social bindings, BKP profiles, subscriptions)
+    // 1. Live customer tenant discovery strictly from canonical Supabase user profiles (excluding platform admin)
     const customerOrgIds = new Set<string>();
 
-    // From Supabase registered user profiles (exclude platform admin)
     registeredProfiles.forEach(p => {
       if (
         p.id &&
@@ -72,35 +71,6 @@ export async function GET(request: NextRequest) {
         p.email !== 'admin@rasalilabs.com'
       ) {
         customerOrgIds.add(p.id);
-      }
-    });
-
-    // From Supabase social connections (exclude platform admin)
-    fbConns.forEach(c => {
-      const org = c.organization_id || c.workspace_id;
-      if (
-        org &&
-        org !== 'ras-ali-labs' &&
-        org !== '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf' &&
-        c.user_id !== '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf'
-      ) {
-        customerOrgIds.add(org);
-      }
-    });
-
-    // From in-memory / durable knowledge profiles (exclude ras-ali-labs)
-    const allProfiles = BusinessKnowledgeProfileService.listProfiles();
-    allProfiles.forEach(p => {
-      if (p.organizationId && p.organizationId !== 'ras-ali-labs' && p.organizationId !== '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf') {
-        customerOrgIds.add(p.organizationId);
-      }
-    });
-
-    // From billing subscriptions (exclude ras-ali-labs)
-    const subs = BillingDatabaseService.listSubscriptions();
-    subs.forEach(s => {
-      if (s.organizationId && s.organizationId !== 'ras-ali-labs' && s.organizationId !== '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf') {
-        customerOrgIds.add(s.organizationId);
       }
     });
 

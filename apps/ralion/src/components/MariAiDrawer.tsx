@@ -6,6 +6,8 @@ import { processMariQuery, generateMarketingCampaign } from '@ralion/ai';
 import { Button, Badge } from '@ralion/ui';
 import { MariMarkdownMessage } from './MariMarkdownMessage';
 
+import { getRalionApiUrl } from '@/lib/api-config';
+
 export interface MariAiDrawerProps {
   isOpen: boolean;
   onClose: () => void;
@@ -20,7 +22,7 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
   const [messages, setMessages] = useState<Array<{ sender: 'USER' | 'MARI'; text: string; actions?: any[]; tokens?: { totalTokens?: number } }>>([
     {
       sender: 'MARI',
-      text: "Hello! I am Mari AI, your enterprise business assistant by Ras Ali Labs. Ask me anything about your revenue, tasks, active deals, or tell me to generate marketing content!"
+      text: "Hello! I am Mari AI, your sovereign AI Business Growth Partner. Ask me anything about your growth strategy, market positioning, revenue, or tell me to generate marketing content!"
     }
   ]);
   const [inputQuery, setInputQuery] = useState('');
@@ -29,50 +31,66 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
   if (!isOpen) return null;
 
   const handleSend = () => {
-    if (!inputQuery.trim()) return;
+    if (!inputQuery.trim() || isProcessing) return;
 
-    const userText = inputQuery;
-    setMessages(prev => [...prev, { sender: 'USER', text: userText }]);
+    const userText = inputQuery.trim();
+    const newHistory = [...messages, { sender: 'USER' as const, text: userText }];
+    setMessages(newHistory);
     setInputQuery('');
     setIsProcessing(true);
 
     const fetchResponse = async () => {
       try {
-        const { callMariAiApi, processMariQuery, BusinessContextService } = await import('@ralion/ai');
-        let context = null;
+        let activeOrgId: string | undefined = undefined;
         try {
-          context = await BusinessContextService.assembleContext();
+          const stored = typeof window !== 'undefined' ? localStorage.getItem('ralion_active_org_id') : null;
+          if (stored && stored !== 'org_default' && stored !== 'default') activeOrgId = stored;
         } catch {}
 
-        // Let's try the real API first
-        const apiResponse = await callMariAiApi(userText, undefined, context || undefined);
-        
-        if (apiResponse) {
-          const respText = typeof apiResponse === 'string' ? apiResponse : apiResponse.text;
-          const tokens = (typeof apiResponse === 'object' && apiResponse.tokens) ? apiResponse.tokens : undefined;
+        const apiUrl = getRalionApiUrl('/api/mari/chat');
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: userText,
+            organizationId: activeOrgId,
+            activeScreen: { route: '/mari-ai', label: 'Mari Business Drawer' },
+            messages: newHistory.map(m => ({
+              role: m.sender === 'USER' ? 'user' : 'model',
+              text: m.text,
+            })),
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const respText = data.answer || data.text || "I've reviewed your business intelligence.";
           setMessages(prev => [
             ...prev,
             {
               sender: 'MARI',
               text: respText,
-              actions: [],
-              tokens,
+              actions: data.actionsSuggested || [],
+              tokens: data.usage ? { totalTokens: data.usage.totalTokens } : undefined,
             }
           ]);
         } else {
-          // Fallback to local rules
-          const response = processMariQuery(userText);
           setMessages(prev => [
             ...prev,
             {
               sender: 'MARI',
-              text: response.answer,
-              actions: response.suggestedActions
+              text: "I am ready to assist with your growth strategy, campaign planning, and business analysis.",
             }
           ]);
         }
       } catch (err) {
-        setMessages(prev => [...prev, { sender: 'MARI', text: "I'm having trouble connecting to my neural core right now." }]);
+        setMessages(prev => [
+          ...prev,
+          {
+            sender: 'MARI',
+            text: "I'm having trouble connecting to my neural reasoning core right now. Please check your network connection.",
+          }
+        ]);
       } finally {
         setIsProcessing(false);
       }

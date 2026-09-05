@@ -65,6 +65,7 @@ export interface MariGrowthPlanDay {
 
 export interface MariGrowthPlanResult {
   title: string;
+  pageName: string;
   objective: string;
   durationDays: number;
   days: MariGrowthPlanDay[];
@@ -153,7 +154,7 @@ export class MariFacebookGrowthService {
             impact: 'HIGH',
             actionLabel: 'Create Post',
             actionType: 'CREATE_CONTENT',
-            suggestedPrompt: 'Create a product demonstration reel highlighting AI automation.',
+            suggestedPrompt: `Create a product demonstration reel highlighting ${params.context.pageName} solutions.`,
           },
           {
             id: 'ins_2',
@@ -164,6 +165,16 @@ export class MariFacebookGrowthService {
             impact: 'HIGH',
             actionLabel: 'Generate 7-Day Plan',
             actionType: 'CREATE_PLAN',
+          },
+          {
+            id: 'ins_3',
+            type: 'TIMING_INSIGHT',
+            title: 'Peak Audience Attention Window',
+            summary: 'Audience engagement peaks during midweek afternoon windows between 14:00 and 16:30 SAST.',
+            evidence: `Historical interaction density on ${params.context.pageName} peaks at 15:30 CAT.`,
+            impact: 'MEDIUM',
+            actionLabel: 'Schedule for Peak Window',
+            actionType: 'SCHEDULE_POST',
           },
         ]
       : [
@@ -205,92 +216,96 @@ export class MariFacebookGrowthService {
     userId: string;
     focusObjective?: string;
   }): Promise<MariGrowthPlanResult> {
+    const brandName = params.context.pageName || 'Your Business';
+    const tagSlug = brandName.replace(/[^a-zA-Z0-9]/g, '');
+
     const days: MariGrowthPlanDay[] = [
       {
         dayNumber: 1,
         dayName: 'Monday',
         recommendedTime: '09:30 SAST',
         contentType: 'Educational Article',
-        topic: 'Enterprise AI Strategy: Automating Regional Trade Workflows',
-        goal: 'Thought leadership & B2B bookmarking',
-        suggestedCaption: 'How modern logistics and trade enterprises across SADC are reducing border clearance times with AI automation. #RalionOS #EnterpriseAI #TradeTech',
+        topic: `Industry Leadership: Modern Operational Excellence for ${brandName}`,
+        goal: 'Thought leadership & client bookmarking',
+        suggestedCaption: `How modern leaders are scaling operational excellence with automated intelligence. #${tagSlug} #Leadership #Innovation`,
         callToAction: 'Read the full guide on our portal.',
-        hashtags: ['#RalionOS', '#EnterpriseAI', '#TradeTech', '#SouthernAfrica'],
+        hashtags: [`#${tagSlug}`, '#EnterpriseOS', '#Leadership', '#Innovation'],
       },
       {
         dayNumber: 2,
         dayName: 'Tuesday',
-        recommendedTime: '11:00 SAST',
+        recommendedTime: '15:30 SAST',
         contentType: 'Video Reel',
-        topic: '15-Second Behind the Scenes: Real-time Multi-Model AI Routing',
-        goal: 'Viral short-form engagement & video shares',
-        suggestedCaption: 'Witness milliseconds latency in action. How Ralion routes mission-critical queries between Gemini and Claude dynamically. #TechBotswana #AIInfrastructure',
-        callToAction: 'Watch full video reel.',
-        hashtags: ['#TechInnovation', '#RalionAI', '#RealTimeAI'],
+        topic: `Inside Look: Workflow Automation in Action at ${brandName}`,
+        goal: 'Direct product engagement & video views',
+        suggestedCaption: `See how our unified architecture cuts manual processing time by up to 60%. #${tagSlug} #Automation #Efficiency`,
+        callToAction: 'Drop a comment or DM us to schedule a tailored walkthrough.',
+        hashtags: [`#${tagSlug}`, '#Automation', '#TechNews', '#BusinessGrowth'],
       },
       {
         dayNumber: 3,
         dayName: 'Wednesday',
-        recommendedTime: '14:00 SAST',
+        recommendedTime: '11:00 SAST',
         contentType: 'Graphic Poster',
-        topic: 'Infographic: 5 Ways to Cut Customer Response Times by 70%',
-        goal: 'Saves, shares, and lead inquiries',
-        suggestedCaption: 'Speed wins deals. Learn the five automation workflows high-growth companies deploy to respond to customer inquiries in under 60 seconds.',
-        callToAction: 'Download the infographic checklist.',
-        hashtags: ['#BusinessGrowth', '#CustomerSuccess', '#Automation'],
+        topic: `Client Impact: Measurable ROI Delivered by ${brandName}`,
+        goal: 'Social proof and credibility',
+        suggestedCaption: `Real results delivered with certified precision across Southern Africa. #${tagSlug} #ClientSuccess #Trust`,
+        callToAction: 'Explore our case studies today.',
+        hashtags: [`#${tagSlug}`, '#ClientSuccess', '#ProvenResults', '#Enterprise'],
       },
       {
         dayNumber: 4,
         dayName: 'Thursday',
-        recommendedTime: '10:00 SAST',
+        recommendedTime: '16:00 SAST',
         contentType: 'Product Feature',
-        topic: 'Spotlight on Ralion Social Hub: Multi-Platform Scheduling Live',
-        goal: 'Direct software trial registrations',
-        suggestedCaption: 'Manage Facebook Pages, Instagram, and LinkedIn seamlessly from one unified enterprise command center. Discover Ralion Growth Studio.',
-        callToAction: 'Book an executive demonstration.',
-        hashtags: ['#RalionGrowth', '#SocialMediaOS', '#SaaS'],
+        topic: `Core Capability: Automated Growth Intelligence for ${brandName}`,
+        goal: 'Feature discovery and lead capture',
+        suggestedCaption: `Discover why regional enterprises rely on our intelligent growth engine. #${tagSlug} #AI #EnterpriseGrowth`,
+        callToAction: 'Request your demo link in our bio.',
+        hashtags: [`#${tagSlug}`, '#GrowthEngine', '#AI', '#Enterprise'],
       },
       {
         dayNumber: 5,
         dayName: 'Friday',
-        recommendedTime: '15:30 SAST',
+        recommendedTime: '14:30 SAST',
         contentType: 'Video Reel',
-        topic: 'Weekly Innovation Recap: Top 3 Milestones from Ras Ali Labs',
-        goal: 'Community rapport & executive transparency',
-        suggestedCaption: 'Wrapping up another breakthrough week in Gaborone! Here are the 3 major updates shipped to Ralion OS this week. #BuildingInPublic',
-        callToAction: 'Drop your thoughts in the comments.',
-        hashtags: ['#FridayRecap', '#RasAliLabs', '#TechEcosystem'],
+        topic: `Weekly Highlights: Key Milestones from ${brandName}`,
+        goal: 'Brand affinity and community connection',
+        suggestedCaption: `Wrapping up an impactful week of innovation and customer success. #${tagSlug} #FridayHighlights #Community`,
+        callToAction: 'What was your biggest win this week? Let us know below!',
+        hashtags: [`#${tagSlug}`, '#FridayHighlights', '#Innovation', '#Community'],
       },
       {
         dayNumber: 6,
         dayName: 'Saturday',
-        recommendedTime: '12:00 SAST',
-        contentType: 'Educational Article',
-        topic: 'Weekend Long-Read: The Future of Sovereign Cloud & AI in Africa',
-        goal: 'High-value executive reads & discussion',
-        suggestedCaption: 'Why local data governance and high-performance computing infrastructure are the bedrock of Africa’s digital transformation.',
-        callToAction: 'Share with fellow technology leaders.',
-        hashtags: ['#AfricanTech', '#SovereignCloud', '#Leadership'],
+        recommendedTime: '10:00 SAST',
+        contentType: 'Graphic Poster',
+        topic: `Weekend Wisdom: Strategic Foundations for Scaling ${brandName}`,
+        goal: 'Engagement and weekend bookmarking',
+        suggestedCaption: `Sustainable scale is built on clear operating models and reliable execution. #${tagSlug} #Strategy #Scale`,
+        callToAction: 'Save this post for your Monday strategy sync.',
+        hashtags: [`#${tagSlug}`, '#Strategy', '#Scale', '#Vision'],
       },
       {
         dayNumber: 7,
         dayName: 'Sunday',
         recommendedTime: '18:00 SAST',
-        contentType: 'Graphic Poster',
-        topic: 'Week-Ahead Strategic Mindset & Executive Quote',
-        goal: 'Brand warmth and engagement',
-        suggestedCaption: '"The best way to predict the future of enterprise software is to build it with precision and purpose." — Ras Ali Labs Team',
-        callToAction: 'Ready for Monday? Let’s build.',
-        hashtags: ['#MondayMotivation', '#Leadership', '#RasAliLabs'],
+        contentType: 'Educational Article',
+        topic: `Looking Ahead: The Week Ahead in High-Growth Operations with ${brandName}`,
+        goal: 'Preparation and high-intent engagement',
+        suggestedCaption: `Setting priorities for maximum operational impact this upcoming week. #${tagSlug} #WeekAhead #Focus`,
+        callToAction: 'Get in touch to align on next week\'s deliverables.',
+        hashtags: [`#${tagSlug}`, '#WeekAhead', '#Focus', '#GrowthMindset'],
       },
     ];
 
     const result: MariGrowthPlanResult = {
-      title: '7-Day High-Impact Facebook Page Acceleration Strategy',
-      objective: params.focusObjective || 'Compounding organic audience reach and qualified B2B inquiries',
+      title: `7-Day Growth Plan: ${brandName}`,
+      pageName: brandName,
+      objective: params.focusObjective || 'Audience Engagement & Commercial Inquiries',
       durationDays: 7,
       days,
-      expectedImpact: '+25% reach growth, +18% engagement velocity over the 7-day cycle.',
+      expectedImpact: '+18% Organic Reach Velocity & High-Intent Commercial Inquiries',
       generatedAt: new Date().toISOString(),
     };
 
@@ -319,10 +334,11 @@ export class MariFacebookGrowthService {
     userId: string;
   }): Promise<{ answer: string; recommendedAction?: string; suggestedPrompt?: string }> {
     const p = params.prompt.toLowerCase();
+    const brandName = params.context.pageName || 'Your Business';
 
     if (p.includes('performing') || p.includes('performance') || p.includes('health') || p.includes('status')) {
       return {
-        answer: `Your Facebook Page **${params.context.pageName}** has **${params.context.followers} followers** with an engagement rate of **${params.context.engagementRate}%** (above the 3.5% industry average). Over the past 30 days, your reach grew by **${params.context.followerGrowthPercentage}%**, driven predominantly by short-form video reels.`,
+        answer: `Your Facebook Page **${brandName}** has **${params.context.followers} followers** with an engagement rate of **${params.context.engagementRate}%** (benchmark standard is 3.5%). Over the past 30 days, your reach grew by **${params.context.followerGrowthPercentage}%**, driven predominantly by short-form video reels.`,
         recommendedAction: 'View Full Insights',
       };
     }
@@ -331,21 +347,22 @@ export class MariFacebookGrowthService {
       return {
         answer: `Based on your highest-performing historical content, I recommend posting a **Video Reel** demonstrating a specific customer workflow. The optimal time for your audience is **Tuesday or Thursday morning between 09:30 and 11:00 SAST**.`,
         recommendedAction: 'Open Content Composer',
-        suggestedPrompt: 'Create a 15-second product demonstration reel highlighting AI automation.',
+        suggestedPrompt: `Create a 15-second product demonstration reel highlighting ${brandName} solutions.`,
       };
     }
 
     if (p.includes('plan') || p.includes('7-day') || p.includes('growth')) {
       return {
-        answer: `I have structured a comprehensive 7-Day Growth Plan for **${params.context.pageName}**, balancing educational carousels, behind-the-scenes video reels, and product highlight infographics.`,
+        answer: `I have structured a comprehensive 7-Day Growth Plan for **${brandName}**, balancing educational carousels, behind-the-scenes video reels, and product highlight infographics.`,
         recommendedAction: 'Generate 7-Day Plan',
       };
     }
 
     return {
-      answer: `Analyzing **${params.context.pageName}**: To maximize organic distribution, I suggest maintaining 3–4 posts per week and capitalizing on video formats which currently deliver 62% of your total engagement.`,
+      answer: `Analyzing **${brandName}**: To maximize organic distribution, I suggest maintaining 3–4 posts per week and capitalizing on video formats which currently deliver 62% of your total engagement.`,
       recommendedAction: 'Create Content',
-      suggestedPrompt: 'Draft an executive announcement post introducing Ralion Platform 2.4.',
+      suggestedPrompt: `Draft an executive announcement post introducing new capabilities for ${brandName}.`,
     };
   }
 }
+

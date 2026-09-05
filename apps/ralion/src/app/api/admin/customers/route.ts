@@ -76,82 +76,105 @@ export async function GET(request: NextRequest) {
   const profiles = BusinessKnowledgeProfileService.listProfiles();
   const subs = BillingDatabaseService.listSubscriptions();
 
-  const orgIdSet = new Set<string>();
-
-  // 1. Ingest customer organizations from registered user profiles in Supabase (excluding platform admin)
-  registeredProfiles.forEach(p => {
-    if (
+  // Canonical customer tenants derive strictly from registered user profiles in Supabase (excluding platform admin)
+  const canonicalCustomers = registeredProfiles.filter(p => {
+    return (
       p.id &&
       p.id !== '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf' &&
       p.email !== 'ali@rasalilabs.com' &&
       p.email !== 'admin@rasalilabs.com'
-    ) {
-      orgIdSet.add(p.id);
-    }
+    );
   });
 
-  // 2. Ingest customer organizations from social connections (excluding platform admin)
-  socialConns.forEach(c => {
-    const org = c.organization_id || c.workspace_id;
-    if (
-      org &&
-      org !== 'ras-ali-labs' &&
-      org !== '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf' &&
-      c.user_id !== '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf'
-    ) {
-      orgIdSet.add(org);
-    }
-  });
+  // Alias lookup map for secondary stores that may use slug names instead of user UUID
+  const aliasMap: Record<string, string[]> = {
+    'c0b39862-cf19-4882-a822-c7f3f493fec0': ['pameltex', 'Pameltex', 'org-demo', 'c0b39862-cf19-4882-a822-c7f3f493fec0'],
+  };
 
-  // 3. Ingest customer organizations from Knowledge Profiles & Subscriptions
-  profiles.forEach(p => {
-    if (p.organizationId && p.organizationId !== 'ras-ali-labs' && p.organizationId !== '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf') {
-      orgIdSet.add(p.organizationId);
-    }
-  });
-  subs.forEach(s => {
-    if (s.organizationId && s.organizationId !== 'ras-ali-labs' && s.organizationId !== '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf') {
-      orgIdSet.add(s.organizationId);
-    }
-  });
-
-  const customers: CustomerSummaryItem[] = Array.from(orgIdSet).map(orgId => {
+  const customers: CustomerSummaryItem[] = canonicalCustomers.map(registeredUser => {
+    const orgId = registeredUser.id;
     const isSuspended = PlatformAdminService.isTenantSuspended(orgId);
-    const p = profiles.find(prof => prof.organizationId === orgId);
-    const registeredUser = registeredProfiles.find(r => r.id === orgId);
-    const matchedSocial = socialConns.find(c => (c.organization_id === orgId || c.workspace_id === orgId || c.user_id === orgId));
+    const aliases = aliasMap[orgId] || [orgId];
+
+    // Find BKP profile by orgId or aliases
+    const p = profiles.find(prof => prof.organizationId === orgId || aliases.includes(prof.organizationId));
+
+    // Find social connection by user_id, workspace_id, or organization_id
+    const matchedSocial = socialConns.find(c => 
+      c.user_id === orgId || 
+      c.workspace_id === orgId || 
+      c.organization_id === orgId ||
+      aliases.includes(c.organization_id) ||
+      aliases.includes(c.workspace_id)
+    );
 
     let plan = 'COMMUNITY';
     let subStatus = 'ACTIVE';
     try {
-      const sub = BillingDatabaseService.getSubscription(orgId);
-      plan = sub.planId;
-      subStatus = sub.status;
+      const sub = subs.find(s => s.organizationId === orgId || aliases.includes(s.organizationId)) || BillingDatabaseService.getSubscription(orgId);
+      if (sub) {
+        plan = sub.planId;
+        subStatus = sub.status;
+      }
     } catch {}
 
     let balance = 0;
     let consumed = 0;
     try {
-      const wallet = TenantCreditsService.getOrCreateWallet(orgId);
+      // Check wallet for orgId and aliases
+      let wallet = null;
+      for (const a of aliases) {
+        try {
+          const w = TenantCreditsService.getOrCreateWallet(a);
+          if (w && (w.balance > 0 || w.lifetimeConsumed > 0)) {
+            wallet = w;
+            break;
+          }
+        } catch {}
+      }
+      if (!wallet) {
+        wallet = TenantCreditsService.getOrCreateWallet(orgId);
+      }
       balance = wallet.balance;
       consumed = wallet.lifetimeConsumed;
     } catch {}
 
-    const assets = CreativeAssetService.listAssets(orgId);
+    // Find creative assets
+    let assets = CreativeAssetService.listAssets(orgId);
+    if (assets.length === 0) {
+      for (const a of aliases) {
+        const aliasAssets = CreativeAssetService.listAssets(a);
+        if (aliasAssets.length > 0) {
+          assets = aliasAssets;
+          break;
+        }
+      }
+    }
 
     // Resolve human-readable name & email
     const resolvedName =
       (p && ((typeof (p as any).companyName === 'string' ? (p as any).companyName : (p as any).companyName?.value))) ||
-      registeredUser?.full_name ||
-      (matchedSocial?.metadata?.email === 'chiwabby@gmail.com' ? 'Kutlwano B Pule' : matchedSocial?.account_name) ||
+      registeredUser.full_name ||
+      (registeredUser.email === 'chiwabby@gmail.com' ? 'Kutlwano B Pule' : null) ||
+      (registeredUser.email === 'info@pameltex.com' ? 'Pameltex' : null) ||
+      (matchedSocial?.account_name) ||
       orgId;
 
     const resolvedEmail =
-      registeredUser?.email ||
+      registeredUser.email ||
       matchedSocial?.metadata?.email ||
       `${orgId}@customer.ralion.io`;
 
-    const createdAt = registeredUser?.created_at || (p as any)?.companyName?.lastUpdated || new Date().toISOString();
+    const createdAt = registeredUser.created_at || (p as any)?.companyName?.lastUpdated || new Date().toISOString();
+
+    // Check meta & zernio status across orgId and aliases
+    let metaStatus: 'CONNECTED' | 'DISCONNECTED' = socialMap[orgId]?.meta || 'DISCONNECTED';
+    let zernioStatus: 'CONNECTED' | 'DISCONNECTED' = socialMap[orgId]?.zernio || 'DISCONNECTED';
+
+    for (const a of aliases) {
+      if (socialMap[a]?.meta === 'CONNECTED') metaStatus = 'CONNECTED';
+      if (socialMap[a]?.zernio === 'CONNECTED') zernioStatus = 'CONNECTED';
+    }
 
     return {
       id: orgId,
@@ -165,8 +188,8 @@ export async function GET(request: NextRequest) {
       createdAt,
       lastActive: createdAt,
       websiteIngestionStatus: p?.websiteUrl?.value ? 'VERIFIED' : 'NONE',
-      metaStatus: socialMap[orgId]?.meta || 'DISCONNECTED',
-      zernioStatus: socialMap[orgId]?.zernio || 'DISCONNECTED',
+      metaStatus,
+      zernioStatus,
       mariStatus: 'ACTIVE',
       creativeCount: assets.length,
       socialPostCount: 0,

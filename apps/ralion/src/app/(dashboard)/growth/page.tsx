@@ -2965,63 +2965,127 @@ Rules:
               </Card>
 
               {/* Mari AI Live Strategic Suggestions Widget */}
-              <Card className="p-6 border-indigo-500/30 bg-gradient-to-b from-indigo-950/40 via-zinc-900 to-zinc-900 shadow-2xl">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-7 h-7 rounded-lg bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400">
-                    <Sparkles className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-black text-white">Mari AI Growth Suggestions</h3>
-                    <p className="text-[10px] text-zinc-400">Real-time SADC trade & AI growth angles</p>
-                  </div>
-                </div>
+              {(() => {
+                const fbConn = connectedAccounts.find(a => a.provider === 'facebook' && a.status === 'connected');
+                const selectedFbPage = availableFacebookPages.find(p => p.status === 'CONNECTED' || p.isCurrentDestination);
+                const hasPageConnected = Boolean(selectedFbPage || (fbConn && ((fbConn as any).accountType === 'BUSINESS' || (fbConn as any).metadata?.is_page === true)));
+                const pageDisplayName = selectedFbPage?.name || fbConn?.label || businessKnowledge?.businessName || 'Your Business';
 
-                <div className="flex flex-col gap-3">
-                  <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800">
-                    <div className="text-[10px] uppercase font-bold text-zinc-400 flex items-center gap-1">
-                      <Flame className="w-3 h-3 text-amber-400" /> Trending Regional Hashtags
-                    </div>
-                    <div className="text-xs font-mono text-indigo-300 mt-1">
-                      #RasAliLabs #RalionOS #SADCTradeTech #EnterpriseAI
-                    </div>
-                  </div>
+                return (
+                  <Card className="p-6 border-indigo-500/30 bg-gradient-to-b from-indigo-950/40 via-zinc-900 to-zinc-900 shadow-2xl">
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400">
+                          <Sparkles className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-black text-white">Mari AI Growth Suggestions</h3>
+                          <p className="text-[10px] text-zinc-400">
+                            {hasPageConnected ? `Real-time intelligence for ${pageDisplayName}` : 'Audience growth & engagement suggestions'}
+                          </p>
+                        </div>
+                      </div>
 
-                  <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800">
-                    <div className="text-[10px] uppercase font-bold text-zinc-400 flex items-center gap-1">
-                      <Zap className="w-3 h-3 text-emerald-400" /> Best Time to Post Today
+                      {hasPageConnected && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleOpenPageSelection}
+                          className="text-[10px] py-1 px-2.5 border-indigo-500/30 text-indigo-300 hover:bg-indigo-950/50"
+                        >
+                          Change Page
+                        </Button>
+                      )}
                     </div>
-                    <div className="text-xs text-zinc-200 mt-1 font-sans">
-                      Today at <strong className="text-white">03:30 PM CAT</strong> (+34% expected engagement spike for B2B executives).
-                    </div>
-                  </div>
 
-                  <div className="p-3 rounded-xl bg-zinc-950 border border-indigo-500/30">
-                    <div className="text-[10px] uppercase font-bold text-indigo-400 flex items-center gap-1">
-                      <Compass className="w-3 h-3 text-indigo-400" /> Blue Ocean Opportunity
+                    {/* Banner when Facebook profile is connected but no page is selected */}
+                    {fbConn && !hasPageConnected && (
+                      <div className="mb-3 p-3.5 rounded-xl bg-amber-950/40 border border-amber-500/40 flex flex-col gap-2">
+                        <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
+                          <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                          <span>Facebook connected — select a Page to unlock live social intelligence</span>
+                        </div>
+                        <p className="text-[11px] text-zinc-300 leading-relaxed">
+                          Your personal Facebook account is linked, but Mari AI needs your managed Facebook Page to analyze engagement, followers, and optimal posting times.
+                        </p>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={handleOpenPageSelection}
+                          className="w-full mt-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs"
+                        >
+                          Select Facebook Page →
+                        </Button>
+                      </div>
+                    )}
+
+                    {!fbConn && (
+                      <div className="mb-3 p-3 rounded-xl bg-indigo-950/30 border border-indigo-500/30 flex items-center justify-between gap-2">
+                        <div className="text-[11px] text-zinc-300">
+                          Connect Facebook Page for live audience calibration
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedConnectPlatform('facebook');
+                            setIsConnectModalOpen(true);
+                          }}
+                          className="text-[10px] py-1 px-2 text-indigo-300 border-indigo-500/40"
+                        >
+                          Connect
+                        </Button>
+                      </div>
+                    )}
+
+                    <div className="flex flex-col gap-3">
+                      <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800">
+                        <div className="text-[10px] uppercase font-bold text-zinc-400 flex items-center gap-1">
+                          <Flame className="w-3 h-3 text-amber-400" /> Trending Regional Hashtags
+                        </div>
+                        <div className="text-xs font-mono text-indigo-300 mt-1">
+                          #{pageDisplayName.replace(/\s+/g, '')} #EnterpriseGrowth #SADCTradeTech #BusinessIntelligence
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800">
+                        <div className="text-[10px] uppercase font-bold text-zinc-400 flex items-center gap-1">
+                          <Zap className="w-3 h-3 text-emerald-400" /> Best Time to Post Today
+                        </div>
+                        <div className="text-xs text-zinc-200 mt-1 font-sans">
+                          Today at <strong className="text-white">03:30 PM CAT</strong> (+34% expected engagement spike for business audiences).
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-zinc-950 border border-indigo-500/30">
+                        <div className="text-[10px] uppercase font-bold text-indigo-400 flex items-center gap-1">
+                          <Compass className="w-3 h-3 text-indigo-400" /> High-Impact Strategic Opportunity
+                        </div>
+                        <div className="text-xs text-zinc-300 mt-1">
+                          {pageDisplayName} Commercial Leadership Spotlight (<span className="text-amber-400 font-bold">89% Engagement Potential</span>)
+                        </div>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => {
+                            setNewPost({
+                              title: `${pageDisplayName} Strategic Growth Update`,
+                              body: `Delivering dependable solutions and strategic value for ${pageDisplayName}. Discover how our dedicated operational standards empower customer success...`,
+                              platform: 'facebook',
+                              hashtags: `#${pageDisplayName.replace(/\s+/g, '')} #EnterpriseOS #Innovation #Growth`,
+                              scheduledAt: '',
+                            });
+                            setIsCreateOpen(true);
+                          }}
+                          className="w-full mt-2.5 text-xs bg-indigo-600 hover:bg-indigo-700 font-bold"
+                        >
+                          Deploy Strategy in Composer →
+                        </Button>
+                      </div>
                     </div>
-                    <div className="text-xs text-zinc-300 mt-1">
-                      Cross-Border Logistics Automation with Sovereign AI (<span className="text-amber-400 font-bold">89% Viral Potential</span>)
-                    </div>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => {
-                        setNewPost({
-                          title: 'Cross-Border Logistics Automation: The Future of SADC Trade',
-                          body: 'How AI and sovereign cloud infrastructure are cutting border transit times across Southern Africa by 40%...',
-                          platform: 'facebook',
-                          hashtags: '#RalionOS #RasAliLabs #SADCTradeTech #EnterpriseAI',
-                          scheduledAt: '',
-                        });
-                        setIsCreateOpen(true);
-                      }}
-                      className="w-full mt-2.5 text-xs bg-indigo-600 hover:bg-indigo-700 font-bold"
-                    >
-                      Deploy Strategy in Composer →
-                    </Button>
-                  </div>
-                </div>
-              </Card>
+                  </Card>
+                );
+              })()}
 
               {/* Monthly Campaign Goals & Circular Progress Rings (Data Spot Style) */}
               <Card className="p-6 border-zinc-800 bg-zinc-900/80 shadow-2xl">
@@ -6535,10 +6599,10 @@ Rules:
               <div className="w-12 h-12 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
                 <Globe className="w-6 h-6" />
               </div>
-              <div className="max-w-xs">
-                <h4 className="text-sm font-bold text-white">No Facebook Pages Discovered</h4>
-                <p className="text-xs text-zinc-400 mt-1">
-                  Authenticate your Facebook account to link and manage your business pages in this workspace.
+              <div className="max-w-sm">
+                <h4 className="text-sm font-bold text-white">No Manageable Facebook Pages Found</h4>
+                <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
+                  Facebook is connected, but no manageable Pages were found for this account. To allow Ralion OS to manage your business Page, reconnect and grant <strong>Page Management Permissions</strong>.
                 </p>
               </div>
               <Button
@@ -6546,15 +6610,15 @@ Rules:
                 size="sm"
                 onClick={() => {
                   setIsPageSelectionModalOpen(false);
-                  handleConnectSocialAccount('facebook');
+                  handleConnectSocialAccount('facebook', 'page_connection');
                 }}
                 disabled={isConnecting}
-                className="gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 font-bold text-xs shadow-lg shadow-indigo-600/30"
+                className="gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 font-bold text-xs shadow-lg shadow-indigo-600/30 text-white"
               >
-                <Plus className="w-4 h-4" /> {isConnecting ? 'Connecting...' : 'Authenticate & Link Facebook'}
+                <Plus className="w-4 h-4" /> {isConnecting ? 'Connecting...' : 'Reconnect Facebook with Page Permissions'}
               </Button>
-              <div className="p-3 rounded-xl bg-amber-950/20 border border-amber-500/20 text-[11px] text-amber-300 text-left max-w-sm">
-                💡 <strong>Meta Permission Notice:</strong> Ensure you are logged into Facebook with an account that has Admin or Editor access to the target Facebook Page. If testing in Development mode, ensure your Facebook account is added to the Meta Developer app.
+              <div className="p-3.5 rounded-xl bg-amber-950/20 border border-amber-500/30 text-[11px] text-amber-300 text-left max-w-md leading-relaxed">
+                💡 <strong>Meta Permission Notice:</strong> Ensure you are logged into Facebook with an account that has <strong>Admin or Editor</strong> access to the target Facebook Page, and ensure you accept the <em>pages_show_list</em> and <em>pages_manage_posts</em> permissions during login.
               </div>
             </div>
           ) : (

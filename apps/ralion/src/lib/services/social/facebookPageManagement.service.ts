@@ -169,14 +169,76 @@ export class FacebookPageManagementService {
   }
 
   /**
-   * Discover all available Facebook Pages through authorized Zernio / Meta infrastructure
+   * Authoritatively resolve the currently active selected Facebook Page for a tenant context.
+   */
+  static async getActivePage(params: {
+    organizationId?: string;
+    workspaceId?: string;
+    userId?: string;
+  }): Promise<FacebookPageDescriptor | null> {
+    const supabase = getServiceSupabase();
+    let connQuery = supabase
+      .from('social_connections')
+      .select('*')
+      .eq('provider', 'facebook')
+      .eq('connection_status', 'CONNECTED');
+
+    if (params.workspaceId && params.workspaceId !== 'default' && params.workspaceId !== 'default-org') {
+      connQuery = connQuery.or(`workspace_id.eq.${params.workspaceId},user_id.eq.${params.userId || params.workspaceId}`);
+    } else if (params.userId && params.userId !== 'default-user') {
+      connQuery = connQuery.eq('user_id', params.userId);
+    } else {
+      return null;
+    }
+
+    const { data: conn } = await connQuery.maybeSingle();
+    if (!conn) return null;
+
+    const isPage = Boolean(conn.metadata?.is_page === true || conn.account_type === 'BUSINESS' || conn.metadata?.provider_account_type === 'FACEBOOK_PAGE');
+    if (!isPage) {
+      return null;
+    }
+
+    const followers = Number(conn.followers_count) || Number(conn.metadata?.followers_count) || Number(conn.metadata?.followers) || 0;
+    const pageId = conn.metadata?.pageId || conn.provider_account_id || conn.id;
+
+    return {
+      id: conn.id,
+      pageId,
+      name: conn.account_name || conn.metadata?.pageName || 'Facebook Page',
+      username: conn.username || conn.metadata?.pageUsername || `@${(conn.account_name || 'page').toLowerCase().replace(/\s+/g, '_')}`,
+      avatarUrl: conn.profile_image_url || conn.metadata?.avatarUrl || null,
+      category: conn.metadata?.category || 'Business',
+      followersCount: followers,
+      status: 'CONNECTED',
+      capabilities: {
+        canPublish: true,
+        canReadAnalytics: true,
+        canManagePosts: true,
+        canManageMessages: true,
+      },
+      zernioProfileId: conn.zernio_profile_id,
+      zernioAccountId: conn.zernio_account_id,
+      connectedAt: conn.connected_at || conn.created_at,
+      isCurrentDestination: true,
+    };
+  }
+
+  /**
+   * Discover all available Facebook Pages through authorized Zernio / Meta Graph API infrastructure.
    */
   static async discoverAvailablePages(params: {
     organizationId?: string;
     workspaceId?: string;
     userId?: string;
     profileId?: string;
-  }): Promise<{ pages: FacebookPageDescriptor[]; entitlement: EntitlementStatus }> {
+  }): Promise<{
+    pages: FacebookPageDescriptor[];
+    entitlement: EntitlementStatus;
+    selectedPageId?: string;
+    hasConnectedProfile: boolean;
+    profileName?: string;
+  }> {
     const supabase = getServiceSupabase();
     const entitlement = await this.getOrganizationEntitlement(params.organizationId || params.workspaceId, params.userId);
 
@@ -192,8 +254,7 @@ export class FacebookPageManagementService {
     } else if (params.userId && params.userId !== 'default-user') {
       connQuery = connQuery.eq('user_id', params.userId);
     } else {
-      // If neither workspaceId nor userId is specified, return empty (no tenant leakage)
-      return { pages: [], entitlement };
+      return { pages: [], entitlement, hasConnectedProfile: false };
     }
 
     let existingConnections = (await connQuery).data || [];
@@ -217,91 +278,149 @@ export class FacebookPageManagementService {
     }
 
     if (!existingConnections || existingConnections.length === 0) {
-      return { pages: [], entitlement };
+      return { pages: [], entitlement, hasConnectedProfile: false };
     }
 
-    // Pull real live follower count from Meta Graph API / Zernio
-    for (const c of existingConnections) {
-      let liveFollowers = 0;
-      const targetPageId = c.provider_account_id || c.metadata?.pageId;
+    const primaryConn = existingConnections[0];
+    const hasConnectedProfile = true;
+    const profileName = primaryConn.account_name || primaryConn.username || 'Facebook User';
+    const activeSelectedPageId = primaryConn.metadata?.pageId || (primaryConn.account_type === 'BUSINESS' ? primaryConn.provider_account_id : undefined);
 
-      // 1. Try direct Meta Graph API with decrypted token
-      let fbToken: string | null = null;
-      if (params.userId) {
-        try {
-          const cred = await MetaCredentialService.getValidToken(params.userId, 'facebook');
-          if (cred?.accessToken && !cred.isExpired) {
-            fbToken = cred.accessToken;
-          }
-        } catch {}
-      }
-      if (!fbToken && c.id) {
-        try {
-          fbToken = await SocialTokenManager.getValidToken(c.id, 'facebook');
-        } catch {}
-      }
+    const discoveredPagesMap = new Map<string, FacebookPageDescriptor>();
 
-      if (fbToken && targetPageId) {
-        try {
-          const res = await fetch(`https://graph.facebook.com/v19.0/${targetPageId}?fields=followers_count,fan_count,name,picture&access_token=${encodeURIComponent(fbToken)}`);
-          if (res.ok) {
-            const fbData = await res.json();
-            const count = Number(fbData.followers_count ?? fbData.fan_count ?? 0);
-            if (count > 0) {
-              liveFollowers = count;
-            }
-          }
-        } catch (mErr: any) {
-          console.warn('[FacebookPageManagement] Live Meta Graph followers fetch note:', mErr.message);
+    // 1. Check direct Meta Graph API /me/accounts with user decrypted access token
+    let fbToken: string | null = null;
+    if (params.userId) {
+      try {
+        const cred = await MetaCredentialService.getValidToken(params.userId, 'facebook');
+        if (cred?.accessToken && !cred.isExpired) {
+          fbToken = cred.accessToken;
         }
-      }
+      } catch {}
+    }
+    if (!fbToken && primaryConn.metadata?.encrypted_access_token) {
+      try {
+        const { decryptToken } = require('@ralion/integrations');
+        fbToken = decryptToken(primaryConn.metadata.encrypted_access_token);
+      } catch {}
+    }
+    if (!fbToken && primaryConn.id) {
+      try {
+        fbToken = await SocialTokenManager.getValidToken(primaryConn.id, 'facebook');
+      } catch {}
+    }
 
-      // 2. Try Zernio Accounts API
-      if (!liveFollowers && c.zernio_profile_id) {
+    if (fbToken) {
+      try {
+        const res = await fetch(`https://graph.facebook.com/v19.0/me/accounts?fields=id,name,username,category,access_token,tasks,picture,followers_count,fan_count&access_token=${encodeURIComponent(fbToken)}`);
+        if (res.ok) {
+          const data = await res.json();
+          const graphPages = data.data || [];
+          for (const p of graphPages) {
+            const pageId = String(p.id);
+            const isSelected = activeSelectedPageId === pageId || (primaryConn.account_type === 'BUSINESS' && primaryConn.provider_account_id === pageId);
+            discoveredPagesMap.set(pageId, {
+              id: `fb_page_${pageId}`,
+              pageId,
+              name: p.name,
+              username: p.username || `@${p.name.toLowerCase().replace(/\s+/g, '_')}`,
+              avatarUrl: p.picture?.data?.url || null,
+              category: p.category || 'Business',
+              followersCount: Number(p.followers_count ?? p.fan_count ?? 0),
+              status: isSelected ? 'CONNECTED' : 'AVAILABLE',
+              capabilities: {
+                canPublish: true,
+                canReadAnalytics: true,
+                canManagePosts: true,
+                canManageMessages: true,
+              },
+              connectedAt: isSelected ? primaryConn.connected_at : undefined,
+              isCurrentDestination: isSelected,
+            });
+          }
+        }
+      } catch (graphErr: any) {
+        console.warn('[FacebookPageManagement] Graph API /me/accounts discovery note:', graphErr.message);
+      }
+    }
+
+    // 2. Check Zernio infrastructure accounts
+    for (const c of existingConnections) {
+      if (c.zernio_profile_id) {
         try {
           const zAccs = await ZernioSocialService.getAccounts(c.zernio_profile_id);
-          const matched = zAccs.find((a: any) => a.id === c.zernio_account_id || a.id === c.provider_account_id);
-          if (matched && Number(matched.followersCount || 0) > 0) {
-            liveFollowers = Number(matched.followersCount);
+          for (const a of zAccs || []) {
+            if (a.platform === 'facebook') {
+              const pageId = String((a as any).providerAccountId || a.id || (a as any).pageId);
+              const isSelected = activeSelectedPageId === pageId || c.zernio_account_id === a.id || (c.account_type === 'BUSINESS' && c.provider_account_id === pageId);
+              
+              if (!discoveredPagesMap.has(pageId)) {
+                discoveredPagesMap.set(pageId, {
+                  id: c.id || `zernio_${a.id}`,
+                  pageId,
+                  name: (a as any).displayName || (a as any).name || (a as any).accountName || 'Facebook Page',
+                  username: a.username || `@${((a as any).displayName || (a as any).name || 'page').toLowerCase().replace(/\s+/g, '_')}`,
+                  avatarUrl: (a as any).profilePictureUrl || (a as any).avatarUrl || null,
+                  category: 'Business',
+                  followersCount: Number((a as any).followersCount || (a as any).followers || 0),
+                  status: isSelected ? 'CONNECTED' : 'AVAILABLE',
+                  capabilities: {
+                    canPublish: true,
+                    canReadAnalytics: true,
+                    canManagePosts: true,
+                    canManageMessages: true,
+                  },
+                  zernioProfileId: c.zernio_profile_id,
+                  zernioAccountId: a.id,
+                  connectedAt: isSelected ? c.connected_at : undefined,
+                  isCurrentDestination: isSelected,
+                });
+              }
+            }
           }
-        } catch (e: any) {
-          console.warn('[FacebookPageManagement] Live Zernio followers query notice:', e.message);
+        } catch (zErr: any) {
+          console.warn('[FacebookPageManagement] Zernio accounts query note:', zErr.message);
         }
-      }
-
-      if (liveFollowers > 0) {
-        c.followers_count = liveFollowers;
-        try {
-          await supabase.from('social_connections').update({
-            followers_count: liveFollowers,
-            updated_at: new Date().toISOString(),
-          }).eq('id', c.id);
-        } catch {}
       }
     }
 
-    const pages: FacebookPageDescriptor[] = existingConnections.map((c) => {
-      const followers = Number(c.followers_count) || Number(c.metadata?.followers_count) || Number(c.metadata?.followers) || Number(c.metadata?.fan_count) || Number(c.metadata?.fanCount) || 0;
-      return {
-        id: c.id,
-        pageId: c.metadata?.pageId || c.provider_account_id || c.id,
-        name: c.account_name || c.metadata?.pageName || 'Facebook Page',
-        username: c.username || c.metadata?.pageUsername || '@facebook_page',
-        avatarUrl: c.profile_image_url || c.metadata?.avatarUrl || null,
-        category: c.metadata?.category || 'Business',
-        followersCount: followers,
-        status: 'CONNECTED',
-        capabilities: {
-          canPublish: true,
-          canReadAnalytics: true,
-          canManagePosts: true,
-          canManageMessages: true,
-        },
-        isCurrentDestination: true,
-      };
-    });
+    // 3. If primary connection is already a designated BUSINESS Facebook Page
+    if (primaryConn.account_type === 'BUSINESS' && primaryConn.metadata?.is_page) {
+      const pageId = primaryConn.metadata?.pageId || primaryConn.provider_account_id || primaryConn.id;
+      if (!discoveredPagesMap.has(pageId)) {
+        discoveredPagesMap.set(pageId, {
+          id: primaryConn.id,
+          pageId,
+          name: primaryConn.account_name || primaryConn.metadata?.pageName || 'Facebook Page',
+          username: primaryConn.username || primaryConn.metadata?.pageUsername || '@facebook_page',
+          avatarUrl: primaryConn.profile_image_url || primaryConn.metadata?.avatarUrl || null,
+          category: primaryConn.metadata?.category || 'Business',
+          followersCount: Number(primaryConn.followers_count || 0),
+          status: 'CONNECTED',
+          capabilities: {
+            canPublish: true,
+            canReadAnalytics: true,
+            canManagePosts: true,
+            canManageMessages: true,
+          },
+          zernioProfileId: primaryConn.zernio_profile_id,
+          zernioAccountId: primaryConn.zernio_account_id,
+          connectedAt: primaryConn.connected_at,
+          isCurrentDestination: true,
+        });
+      }
+    }
 
-    return { pages, entitlement };
+    const pages = Array.from(discoveredPagesMap.values());
+    const selectedPage = pages.find(p => p.isCurrentDestination || p.status === 'CONNECTED');
+
+    return {
+      pages,
+      entitlement,
+      selectedPageId: selectedPage?.pageId,
+      hasConnectedProfile,
+      profileName,
+    };
   }
 
   /**
@@ -394,19 +513,50 @@ export class FacebookPageManagementService {
       destination = destinationPayload;
     }
 
-    // 4. Update the primary social_connections entry
+    // 4. Update the primary social_connections entry to authoritatively bind the selected Page
     try {
-      await supabase
+      let connQuery = supabase
         .from('social_connections')
-        .update({
-          account_name: params.pageData.name || 'Facebook Page',
-          username: params.pageData.username || null,
-          profile_image_url: params.pageData.avatarUrl || null,
-          followers_count: params.pageData.followersCount || 0,
-          updated_at: new Date().toISOString(),
-        })
+        .select('*')
         .eq('provider', 'facebook')
-        .eq('provider_account_id', params.pageId);
+        .eq('connection_status', 'CONNECTED');
+
+      if (params.workspaceId && params.workspaceId !== 'default' && params.workspaceId !== 'default-org') {
+        connQuery = connQuery.or(`workspace_id.eq.${params.workspaceId},user_id.eq.${params.userId || params.workspaceId}`);
+      } else {
+        connQuery = connQuery.eq('user_id', params.userId);
+      }
+
+      const { data: existingConn } = await connQuery.maybeSingle();
+
+      if (existingConn) {
+        const updatedMeta = {
+          ...(existingConn.metadata || {}),
+          is_page: true,
+          pageId: params.pageId,
+          pageName: params.pageData.name || 'Facebook Page',
+          pageUsername: params.pageData.username || null,
+          category: params.pageData.category || 'Business',
+          avatarUrl: params.pageData.avatarUrl || null,
+          provider_account_type: 'FACEBOOK_PAGE',
+          selected_at: new Date().toISOString(),
+          zernioAccountId: params.pageData.zernioAccountId || existingConn.metadata?.zernioAccountId,
+        };
+
+        await supabase
+          .from('social_connections')
+          .update({
+            account_name: params.pageData.name || 'Facebook Page',
+            provider_account_id: params.pageId,
+            username: params.pageData.username || null,
+            profile_image_url: params.pageData.avatarUrl || null,
+            followers_count: params.pageData.followersCount || 0,
+            account_type: 'BUSINESS',
+            metadata: updatedMeta,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingConn.id);
+      }
     } catch (connUpdateErr: any) {
       console.warn('[FacebookPageManagement] Connection update note:', connUpdateErr.message);
     }

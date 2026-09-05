@@ -6,9 +6,6 @@ import { getCurrentRalionContext, authRequiredResponse, forbiddenResponse, getSe
 
 export const dynamic = 'force-dynamic';
 
-export async function generateStaticParams() {
-  return [{ pageId: '477334159265235' }, { pageId: 'default' }];
-}
 
 export async function OPTIONS(request: NextRequest) {
   return handleCorsPreflight(request);

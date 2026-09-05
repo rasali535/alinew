@@ -1,4 +1,13 @@
-export * from './mariChat';
+export {
+  type SelectedModelInfo,
+  type MariApiResult,
+  type ChatHistoryMessage,
+  type MariExecutionTelemetry,
+  selectBestAimlModel,
+  getAvailableGeminiKeys,
+  callMariAiApi,
+  detectSemanticIntent,
+} from './mariChat';
 export * from './ragEngine';
 export * from './contentStudio';
 export * from './mariActions';
@@ -22,3 +31,4 @@ export * from './creativeComposition.service';
 export * from './visualSemanticEvaluator.service';
 export * from './storage';
 export * from './tokenTelemetry.service';
+export * from './mariUniversalCore';

@@ -525,14 +525,12 @@ export const metaAdapter = {
   scopes: {
     stage1_login: ['public_profile', 'email'],
     stage2_pages: ['pages_show_list', 'pages_read_engagement', 'pages_manage_posts', 'pages_manage_metadata'],
-    facebook: ['public_profile', 'email'],
-    instagram: ['public_profile', 'email']
+    facebook: ['public_profile', 'email', 'pages_show_list', 'pages_read_engagement', 'pages_manage_posts', 'pages_manage_metadata'],
+    instagram: ['public_profile', 'email', 'pages_show_list', 'pages_read_engagement', 'pages_manage_posts', 'pages_manage_metadata', 'instagram_basic']
   },
 
-  getAuthUrl(state: string, provider: string = 'facebook', intent: 'login' | 'page_connection' = 'login'): string {
-    const baseScopes = intent === 'page_connection'
-      ? [...this.scopes.stage1_login, ...this.scopes.stage2_pages]
-      : this.scopes.stage1_login;
+  getAuthUrl(state: string, provider: string = 'facebook', intent: 'login' | 'page_connection' = 'page_connection'): string {
+    const baseScopes = this.scopes.facebook;
     const redirectUri = this.redirectUri(provider);
     const params = new URLSearchParams({
       client_id: this.clientId(),
@@ -540,7 +538,7 @@ export const metaAdapter = {
       state,
       scope: baseScopes.join(','),
       response_type: 'code',
-      ...(intent === 'page_connection' ? { auth_type: 'rerequest' } : {})
+      auth_type: 'rerequest'
     });
     return `https://www.facebook.com/v19.0/dialog/oauth?${params}`;
   },
@@ -587,10 +585,19 @@ export const metaAdapter = {
   },
 
   async getPages(userAccessToken: string) {
-    const res = await fetch(`https://graph.facebook.com/v19.0/me/accounts?fields=id,name,access_token,followers_count,picture&access_token=${userAccessToken}`);
+    const res = await fetch(`https://graph.facebook.com/v19.0/me/accounts?fields=id,name,username,category,access_token,tasks,picture,followers_count,fan_count&access_token=${userAccessToken}`);
     if (!res.ok) return [];
     const data = await res.json();
-    return (data.data || []).map((p: any) => ({ id: p.id, name: p.name, accessToken: p.access_token, followers: p.followers_count || 0, avatar: p.picture?.data?.url }));
+    return (data.data || []).map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      username: p.username || `@${p.name.toLowerCase().replace(/\s+/g, '_')}`,
+      category: p.category || 'Business',
+      accessToken: p.access_token,
+      followers: p.followers_count ?? p.fan_count ?? 0,
+      avatar: p.picture?.data?.url,
+      tasks: p.tasks || [],
+    }));
   },
 
   async getInstagramAccount(pageId: string, pageAccessToken: string) {

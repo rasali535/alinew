@@ -27,7 +27,7 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
 
   if (!isOpen) return null;
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!inputQuery.trim()) return;
 
     const userText = inputQuery;
@@ -35,8 +35,11 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
     setInputQuery('');
     setIsProcessing(true);
 
-    setTimeout(() => {
-      const response = processMariQuery(userText);
+    try {
+      const response = await processMariQuery({
+        prompt: userText,
+        organizationId: 'admin',
+      });
       setMessages(prev => [
         ...prev,
         {
@@ -45,8 +48,17 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
           actions: response.suggestedActions
         }
       ]);
+    } catch (err) {
+      setMessages(prev => [
+        ...prev,
+        {
+          sender: 'MARI',
+          text: 'I encountered an issue processing your query. Please try again.',
+        }
+      ]);
+    } finally {
       setIsProcessing(false);
-    }, 600);
+    }
   };
 
   return (
