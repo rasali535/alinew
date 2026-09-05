@@ -413,7 +413,7 @@ export class BusinessKnowledgeProfileService {
     const version = (existing?.knowledgeVersion || 0) + 1;
 
     const companyName = options?.overrideName || crawled.title || orgId;
-    const industry = options?.overrideIndustry || 'Commercial Enterprise';
+    const industry = options?.overrideIndustry || crawled.industry || 'Unspecified Industry';
 
     const profile: BusinessKnowledgeProfile = {
       organizationId: orgId,
@@ -447,7 +447,7 @@ export class BusinessKnowledgeProfileService {
         lastUpdated: timestamp,
       },
       tagline: {
-        value: crawled.headings[0] || `${companyName} — Commercial Solutions`,
+        value: crawled.headings[0] || `${companyName}`,
         sourceType: 'WEBSITE',
         sourceUrl: crawled.normalizedUrl,
         confidence: 0.85,
@@ -456,7 +456,7 @@ export class BusinessKnowledgeProfileService {
       valuePropositions: {
         value: crawled.headings.slice(1, 4).length > 0
           ? crawled.headings.slice(1, 4)
-          : [`Specialized ${industry} services delivered with quality and reliability.`],
+          : [`${companyName} verified web solutions and services.`],
         sourceType: 'WEBSITE',
         sourceUrl: crawled.normalizedUrl,
         confidence: 0.9,
@@ -477,41 +477,42 @@ export class BusinessKnowledgeProfileService {
         lastUpdated: timestamp,
       },
       targetMarkets: {
-        value: crawled.targetMarkets,
+        value: crawled.targetMarkets.length > 0 ? crawled.targetMarkets : ['Direct Clients & Regional Markets'],
         sourceType: 'WEBSITE',
         sourceUrl: crawled.normalizedUrl,
         confidence: 0.85,
         lastUpdated: timestamp,
       },
       targetCustomers: {
-        value: ['B2B Clients', 'Commercial Enterprises', 'Direct Consumers'],
+        value: ['Enterprise & Commercial Clients'],
         sourceType: 'WEBSITE',
         sourceUrl: crawled.normalizedUrl,
         confidence: 0.8,
         lastUpdated: timestamp,
       },
       geography: {
-        value: ['National & Regional Markets'],
+        value: ['Regional Market'],
         sourceType: 'WEBSITE',
         sourceUrl: crawled.normalizedUrl,
         confidence: 0.8,
         lastUpdated: timestamp,
       },
       brandPositioning: {
-        value: `${companyName} trusted commercial provider in ${industry}`,
+        value: `${companyName} Verified Web Presence`,
+        sourceType: 'WEBSITE',
+        sourceUrl: crawled.normalizedUrl,
+        confidence: 0.9,
+        lastUpdated: timestamp,
+      },
+      brandVoice: {
+        value: 'Professional, Informative, Customer-Centric',
         sourceType: 'WEBSITE',
         sourceUrl: crawled.normalizedUrl,
         confidence: 0.85,
         lastUpdated: timestamp,
       },
-      brandVoice: {
-        value: 'Professional, Trustworthy, Customer-Focused',
-        sourceType: 'MANUAL',
-        confidence: 0.9,
-        lastUpdated: timestamp,
-      },
       publicContacts: {
-        value: crawled.contactInfo,
+        value: crawled.contacts,
         sourceType: 'WEBSITE',
         sourceUrl: crawled.normalizedUrl,
         confidence: 0.95,
@@ -521,11 +522,11 @@ export class BusinessKnowledgeProfileService {
         value: crawled.socialLinks,
         sourceType: 'WEBSITE',
         sourceUrl: crawled.normalizedUrl,
-        confidence: 0.9,
+        confidence: 0.95,
         lastUpdated: timestamp,
       },
       sourceUrls: [crawled.normalizedUrl],
-      contentHash: crawled.contentHash,
+      contentHash: `hash-${orgId}-${version}`,
       knowledgeVersion: version,
       isVerified: true,
       lastCrawledAt: timestamp,
@@ -536,7 +537,8 @@ export class BusinessKnowledgeProfileService {
   }
 
   /**
-   * Enriches an existing tenant profile with Facebook Page intelligence without overwriting website facts.
+   * Enriches an existing tenant profile with Facebook Page intelligence without overwriting canonical business identity.
+   * Invariant: Facebook is an attached context source, NOT a business identity authority.
    */
   static enrichWithFacebook(
     orgId: string,
@@ -555,52 +557,52 @@ export class BusinessKnowledgeProfileService {
     let profile = this.getProfile(orgId);
 
     if (!profile) {
-      // Create base profile if none existed
+      // Create minimal base profile without fabricating false company identity
       profile = {
         organizationId: orgId,
         companyName: {
-          value: facebookData.pageName,
-          sourceType: 'FACEBOOK',
-          confidence: 0.95,
+          value: orgId.startsWith('org-') ? orgId.replace(/^org-/, '').replace(/[-_]/g, ' ') : orgId,
+          sourceType: 'OTHER',
+          confidence: 0.5,
           lastUpdated: timestamp,
         },
         websiteUrl: {
           value: facebookData.website || 'Not configured',
           sourceType: facebookData.website ? 'FACEBOOK' : 'OTHER',
-          confidence: 0.9,
+          confidence: 0.8,
           lastUpdated: timestamp,
         },
         industry: {
-          value: facebookData.category || 'Commercial Enterprise',
+          value: facebookData.category || 'Unspecified Industry',
           sourceType: 'FACEBOOK',
-          confidence: 0.9,
+          confidence: 0.7,
           lastUpdated: timestamp,
         },
         description: {
-          value: facebookData.about || `${facebookData.pageName} Facebook Business Page`,
+          value: facebookData.about || `Connected Facebook Page: ${facebookData.pageName}`,
           sourceType: 'FACEBOOK',
-          confidence: 0.9,
+          confidence: 0.8,
           lastUpdated: timestamp,
         },
         tagline: {
-          value: facebookData.about || facebookData.pageName,
+          value: facebookData.about || '',
           sourceType: 'FACEBOOK',
-          confidence: 0.85,
+          confidence: 0.7,
           lastUpdated: timestamp,
         },
         valuePropositions: {
-          value: [`Verified Facebook Page: ${facebookData.pageName}`],
+          value: [],
           sourceType: 'FACEBOOK',
-          confidence: 0.9,
+          confidence: 0.5,
           lastUpdated: timestamp,
         },
         products: { value: [], sourceType: 'FACEBOOK', confidence: 0.5, lastUpdated: timestamp },
         services: { value: [], sourceType: 'FACEBOOK', confidence: 0.5, lastUpdated: timestamp },
-        targetMarkets: { value: ['Social Audience & Local Clients'], sourceType: 'FACEBOOK', confidence: 0.8, lastUpdated: timestamp },
-        targetCustomers: { value: ['Community & Social Followers'], sourceType: 'FACEBOOK', confidence: 0.8, lastUpdated: timestamp },
-        geography: { value: [facebookData.singleLineAddress || 'Regional Market'], sourceType: 'FACEBOOK', confidence: 0.85, lastUpdated: timestamp },
-        brandPositioning: { value: `${facebookData.pageName} Social Brand Presence`, sourceType: 'FACEBOOK', confidence: 0.85, lastUpdated: timestamp },
-        brandVoice: { value: 'Engaging, Community-Centric', sourceType: 'FACEBOOK', confidence: 0.85, lastUpdated: timestamp },
+        targetMarkets: { value: [], sourceType: 'FACEBOOK', confidence: 0.5, lastUpdated: timestamp },
+        targetCustomers: { value: [], sourceType: 'FACEBOOK', confidence: 0.5, lastUpdated: timestamp },
+        geography: { value: facebookData.singleLineAddress ? [facebookData.singleLineAddress] : [], sourceType: 'FACEBOOK', confidence: 0.8, lastUpdated: timestamp },
+        brandPositioning: { value: `${facebookData.pageName} Social Brand Presence`, sourceType: 'FACEBOOK', confidence: 0.8, lastUpdated: timestamp },
+        brandVoice: { value: 'Professional, Engaging', sourceType: 'FACEBOOK', confidence: 0.8, lastUpdated: timestamp },
         publicContacts: {
           value: {
             emails: [],
@@ -608,7 +610,7 @@ export class BusinessKnowledgeProfileService {
             addresses: facebookData.singleLineAddress ? [facebookData.singleLineAddress] : [],
           },
           sourceType: 'FACEBOOK',
-          confidence: 0.9,
+          confidence: 0.8,
           lastUpdated: timestamp,
         },
         socialLinks: {
@@ -620,10 +622,11 @@ export class BusinessKnowledgeProfileService {
         sourceUrls: [`https://facebook.com/${facebookData.pageId}`],
         contentHash: `hash-fb-${Date.now().toString(36)}`,
         knowledgeVersion: 1,
-        isVerified: true,
+        isVerified: false,
       };
     } else {
-      // Enrich existing profile with Facebook social link and contacts
+      // Enrich existing profile ONLY with social links, contact details, and attached info
+      // NEVER overwrite companyName, industry, products, or value propositions with Facebook data!
       profile.socialLinks = {
         value: {
           ...profile.socialLinks.value,

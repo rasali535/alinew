@@ -33,7 +33,6 @@ export async function POST(request: NextRequest) {
       request.headers.get('x-workspace-id');
 
     let orgId = '';
-    let companyName = '';
     let workspaceId = '';
     const authenticatedUserId = serverCtx?.user.id || body.userId || 'anonymous';
 
@@ -41,23 +40,22 @@ export async function POST(request: NextRequest) {
       orgId = (rawOrgId && rawOrgId !== 'org_default' && rawOrgId !== 'default' && rawOrgId !== 'default-org')
         ? rawOrgId
         : (serverCtx.organization?.id || serverCtx.workspace.organization_id || serverCtx.workspace.id || serverCtx.user.id);
-      companyName = serverCtx.organization?.name || serverCtx.workspace.name;
       workspaceId = serverCtx.workspace.id;
     } else {
       orgId = (rawOrgId && rawOrgId !== 'org_default' && rawOrgId !== 'default' && rawOrgId !== 'default-org')
         ? rawOrgId
-        : 'ras-ali-labs';
-      companyName = body.companyName || '';
+        : 'unconfigured-tenant';
       workspaceId = orgId;
     }
 
-    // Resolve structured Business Knowledge Profile
-    const knowledgeProfile = BusinessKnowledgeProfileService.getProfile(orgId);
-    if (knowledgeProfile?.companyName?.value) {
-      companyName = knowledgeProfile.companyName.value;
-    } else if (!companyName && (orgId === 'ras-ali-labs' || orgId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf')) {
-      companyName = 'Ras Ali Labs';
-    }
+    // Resolve structured Canonical Business Identity
+    const { BusinessIdentityResolver } = await import('@ralion/ai');
+    const resolvedIdentity = BusinessIdentityResolver.resolveIdentity(orgId, {
+      workspaceId,
+      sessionCompanyName: body.companyName || serverCtx?.organization?.name || serverCtx?.workspace.name,
+    });
+
+    const companyName = resolvedIdentity.companyName;
 
     // Explicit telemetry logging of resolved context before reasoning
     console.log(JSON.stringify({
@@ -67,9 +65,9 @@ export async function POST(request: NextRequest) {
       organizationId: orgId,
       workspaceId: workspaceId || orgId,
       tenantKey: orgId,
-      companyName: companyName || orgId,
-      businessKnowledgeProfileId: knowledgeProfile?.organizationId || null,
-      businessKnowledgeSource: knowledgeProfile ? 'BusinessKnowledgeProfile' : 'TenantProfile',
+      companyName: companyName || 'Unconfigured',
+      isVerified: resolvedIdentity.isVerified,
+      businessKnowledgeSource: resolvedIdentity.source,
     }));
 
     const requestId = body.requestId || `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;

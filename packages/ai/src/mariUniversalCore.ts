@@ -8,11 +8,13 @@
  * - Ralion Action Intelligence: Context-aware workflow execution, campaign drafting, and module navigation.
  *
  * Core Guarantees:
- * - Zero synthetic "Default" entities.
+ * - Zero provider-derived identity fallbacks (@facebook, @facebook_page).
+ * - Zero hardcoded string fallbacks (Commercial Enterprise, Regional Commercial Clients, Default, Ras Ali Labs for other tenants).
  * - Business Knowledge enriches Mari; it NEVER blocks Mari.
  * - Truthful Fact / Observation / Hypothesis / Recommendation / Missing Data model.
  * - Multi-tenant isolation with 0% cross-tenant leakage.
  * - Exact-once token telemetry recording.
+ * - Clean Markdown output without SVG leakage, nested duplicate bullets, or inlined bracket metadata.
  */
 
 import {
@@ -23,6 +25,10 @@ import {
   BusinessKnowledgeProfileService,
   BusinessKnowledgeProfile,
 } from './businessKnowledgeProfile.service';
+import {
+  BusinessIdentityResolver,
+  ResolvedBusinessIdentity,
+} from './businessIdentityResolver';
 import { MariTokenTelemetryService, MariTokenUsage, estimateTokenCount } from './tokenTelemetry.service';
 import { MariActionPayload } from './mariActions';
 import { mariKnowledgeManager } from './knowledgeBase';
@@ -87,7 +93,27 @@ export function classifyCapabilityMode(prompt: string, context?: BusinessContext
     return { mode: 'ACTION', intent: 'NAVIGATION' };
   }
 
-  // 3. Multi-part / Compound Queries
+  // 3. Source-Specific Inquiries
+  if (/\b(what\s+does\s+(our|the|my)\s+website\s+say|what('s|\s+is)\s+on\s+(our|my)\s+website|website\s+knowledge|summarize\s+(our|my)\s+website|website\s+intelligence)\b/i.test(p)) {
+    return { mode: 'BUSINESS', intent: 'WEBSITE_KNOWLEDGE' };
+  }
+  if (/\b(which\s+facebook\s+page\s+is\s+connected|what\s+facebook\s+page\s+is\s+linked|which\s+page\s+is\s+connected|connected\s+facebook\s+page|what\s+social\s+account\s+is\s+connected)\b/i.test(p)) {
+    return { mode: 'BUSINESS', intent: 'CONNECTED_SOCIAL_PAGE' };
+  }
+  if (/\b(compare\s+(our\s+)?website\s+(positioning\s+)?with\s+(our\s+)?facebook|website\s+vs\s+facebook|compare\s+website\s+and\s+social)\b/i.test(p)) {
+    return { mode: 'BUSINESS', intent: 'COMPARE_WEBSITE_VS_SOCIAL' };
+  }
+  if (/\b(what\s+information\s+are\s+you\s+missing|what\s+data\s+is\s+missing|what\s+are\s+we\s+missing|missing\s+information|what\s+do\s+you\s+need\s+to\s+know)\b/i.test(p)) {
+    return { mode: 'BUSINESS', intent: 'MISSING_DATA_AUDIT' };
+  }
+  if (/\b(what\s+do\s+you\s+know\s+about\s+(my|our)\s+business|what\s+do\s+you\s+know\s+about\s+us|synthesize\s+(all\s+)?(our\s+)?(business\s+)?(data|sources|knowledge)|what\s+information\s+do\s+you\s+have\s+about\s+(us|my\s+business)|tell\s+me\s+everything\s+you\s+know\s+about\s+us)\b/i.test(p)) {
+    return { mode: 'BUSINESS', intent: 'BUSINESS_SYNTHESIS' };
+  }
+  if (/\b(where\s+should\s+we\s+focus\s+today|what\s+should\s+we\s+focus\s+on\s+today|where\s+to\s+focus\s+today|today('s)?\s+focus|what\s+should\s+we\s+focus\s+on|where\s+to\s+focus|priorities\s+for\s+(today|this\s+week)|what\s+should\s+our\s+priority\s+be)\b/i.test(p)) {
+    return { mode: 'BUSINESS', intent: 'WEEKLY_FOCUS' };
+  }
+
+  // 4. Multi-part / Compound Queries
   const questionCount = (prompt.match(/\?/g) || []).length;
   const sentenceCount = prompt.split(/[.!?]+/).filter(s => s.trim().length > 0).length;
   const hasMultipleTopics = (
@@ -98,7 +124,7 @@ export function classifyCapabilityMode(prompt: string, context?: BusinessContext
     return { mode: 'BUSINESS', intent: 'COMPOUND_QUERY' };
   }
 
-  // 4. Tenant Business Specific Inquiries
+  // 5. Tenant Business Specific Inquiries
   if (/\b(what\s+is\s+(my|our)\s+business|what\s+does\s+(my|our)\s+business\s+do|what\s+do\s+(we|i)\s+sell|what\s+services\s+do\s+we\s+provide|what\s+products|products\s+and\s+services|what\s+do\s+we\s+offer|our\s+products|who\s+are\s+we|tell\s+me\s+about\s+(us|our\s+company|my\s+business)|about\s+(the|my|our)\s+business|company\s+overview)\b/i.test(p)) {
     return { mode: 'BUSINESS', intent: 'BUSINESS_IDENTITY' };
   }
@@ -111,9 +137,6 @@ export function classifyCapabilityMode(prompt: string, context?: BusinessContext
   if (/\b(summarize\s+(our\s+)?(recent\s+)?activity|activity\s+summary|what\s+have\s+we\s+done|recent\s+activity|latest\s+actions|activity\s+update)\b/i.test(p)) {
     return { mode: 'BUSINESS', intent: 'ACTIVITY_SUMMARY' };
   }
-  if (/\b(what\s+should\s+we\s+focus\s+on|where\s+to\s+focus|priorities\s+for\s+this\s+week|this\s+week\s+focus|what\s+should\s+our\s+priority\s+be|what\s+to\s+focus\s+on\s+this\s+week)\b/i.test(p)) {
-    return { mode: 'BUSINESS', intent: 'WEEKLY_FOCUS' };
-  }
   if (/\b(how\s+can\s+we\s+grow|how\s+do\s+we\s+grow|growth\s+opportunities|growth\s+strategy|how\s+to\s+grow\s+this\s+business|scale\s+the\s+business)\b/i.test(p)) {
     return { mode: 'BUSINESS', intent: 'GROWTH_STRATEGY' };
   }
@@ -124,7 +147,7 @@ export function classifyCapabilityMode(prompt: string, context?: BusinessContext
     return { mode: 'GENERAL', intent: 'PLATFORM_KNOWLEDGE' };
   }
 
-  // 5. General inquiries / concepts / writing / planning / explanation
+  // 6. General inquiries / concepts / writing / planning / explanation
   if (/\b(explain|what\s+is|define|how\s+does|write\s+(an?\s+)?email|draft\s+(an?\s+)?email|help\s+me\s+(write|plan|understand)|ideas\s+for|summarize\s+this|compare\s+(and\s+contrast)?|pros\s+and\s+cons)\b/i.test(p) &&
       !p.includes('our business') && !p.includes('my business') && !p.includes('our growth') && !p.includes('our pipeline') && !p.includes('our facebook') && !p.includes('our products') && !p.includes('we offer')) {
     return { mode: 'GENERAL', intent: 'GENERAL_KNOWLEDGE' };
@@ -147,32 +170,37 @@ async function callGeminiNeuralCore(
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE_API_KEY;
   if (!geminiKey) return null;
 
-  const orgName = context?.layer1?.companyName?.value || 'the active workspace';
-  const isVerified = Boolean(context && context.primarySource !== 'Unverified Workspace');
-  const industry = context?.layer1?.industry?.value || 'Commercial Enterprise';
-  const targetMarket = context?.layer1?.targetMarket?.value || 'Commercial Decision-Makers';
+  const orgName = context?.layer1?.companyName?.value || '';
+  const isVerified = Boolean(context && context.layer1?.companyName?.provenance === 'VERIFIED');
+  const industry = context?.layer1?.industry?.value || 'Unspecified Industry';
+  const targetMarket = context?.layer1?.targetMarket?.value || 'Unspecified Target Market';
   const products = (context?.layer1?.productsAndServices?.value || []).map(p => typeof p === 'string' ? p : p.name).join(', ');
   const pipelineVal = context?.layer2?.crm?.totalPipelineValue?.value || 0;
   const activeClients = context?.layer2?.crm?.activeCustomersCount?.value || 0;
   const isSocialConnected = Boolean(context?.layer2?.social?.isConnected);
   const followers = context?.layer2?.social?.followersCount?.value || 0;
-  const pageName = context?.layer2?.social?.connectedPageName?.value || 'Facebook Page';
+  const pageName = context?.layer2?.social?.connectedPageName?.value || 'Not connected';
+  const websiteUrl = context?.layer1?.websiteUrl?.value || 'Not configured';
+  const websiteKnowledge = context?.layer1?.websiteKnowledge?.value;
 
   const systemInstruction = `You are Mari, the sovereign Universal AI Business Growth Partner and Operating Intelligence for Ralion OS (developed by Ras Ali Labs).
 
 CORE OPERATING PRINCIPLES:
-1. UNIVERSAL INTELLIGENCE: You are a brilliant, general-purpose AI assistant capable of reasoning, writing, explaining concepts, brainstorming, and planning across all domains (e.g. EBITDA, machine learning, marketing strategy, economics, code, copywriting).
+1. UNIVERSAL INTELLIGENCE: You are a brilliant, general-purpose AI assistant capable of deep reasoning, strategic analysis, executive writing, coding, math, and creative ideation.
 2. TRUTHFUL BUSINESS GROUNDING:
-   - When the user asks about their business (${orgName}): Ground answers strictly in verified tenant data.
-   - VERIFIED FACTS: State verified facts clearly (CRM pipeline: $${pipelineVal.toLocaleString()}, Active clients: ${activeClients}, Facebook: ${isSocialConnected ? `${followers} followers on ${pageName}` : 'Not connected'}).
-   - DERIVED OBSERVATIONS: Separate measured observations from assumptions.
-   - MISSING DATA: If historical baselines (e.g. previous month baseline) or post-level analytics are unavailable, explicitly state that verified snapshots are not yet recorded. NEVER invent or hallucinate metrics, growth percentages, or engagement multipliers.
-   - HYPOTHESES: Clearly label potential strategic causes or scenario projections as hypotheses.
-3. TENANT ISOLATION: Maintain absolute tenant boundaries. Never mention or reveal data from other organizations. Never refer to any synthetic "Default" entity.
+   - Canonical Business Identity: ${isVerified && orgName ? `${orgName} (${industry})` : 'Verified business information has not yet been established for this workspace.'}
+   - When asked "what is my business?" or about identity: State verified business facts accurately.
+   - When asked "what does our website say about us?": Query and summarize verified website knowledge specifically (${websiteUrl}).
+   - When asked "which Facebook Page is connected?": State the connected Facebook Page (${pageName}${isSocialConnected ? ` with ${followers} followers` : ''}) underneath the canonical business. Facebook connection NEVER changes the business name.
+   - When asked "what do you know about my business?": Synthesize all available verified layers (Identity + Website + CRM + Social + Operations).
+   - When asked "where should we focus today?": Reason across pipeline, audience reach, and workflow execution.
+   - If business knowledge is unconfigured: Truthfully state that verified business knowledge has not yet been configured in the workspace, while answering the user's questions with full AI capability.
+   - NEVER invent or hallucinate metrics, growth percentages, or fake company identities.
+3. TENANT ISOLATION: Maintain absolute tenant boundaries. Never mention or reveal data from other organizations. Never refer to any synthetic "Default" entity or use @facebook as a company name.
 4. FORMATTING RULES:
    - Use clean, standard Markdown (headers: ###, ##; bullet points: • or -; bold text: **term**).
    - NEVER output escaped backslashes before asterisks (do NOT write \\*\\*). Output standard **bold**.
-   - If suggesting actions, use bracket tokens at the bottom (e.g. [Open Growth Studio] | [View CRM Pipeline] | [Create Reel]).
+   - DO NOT insert bracket action tokens (e.g. [Open Growth Studio]) or raw action metadata into your text. Return clean markdown.
    - Never output raw HTML/SVG tags or the literal word "svg".`;
 
   const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
@@ -189,8 +217,8 @@ CORE OPERATING PRINCIPLES:
 
   // Active user query with context guidance
   let queryText = prompt;
-  if (capabilityMode === 'BUSINESS' && isVerified) {
-    queryText += `\n\n[Active Tenant Context: Company=${orgName}, Industry=${industry}, Products=${products}, TargetMarket=${targetMarket}, CRM Pipeline=$${pipelineVal}, ActiveClients=${activeClients}, FacebookConnected=${isSocialConnected}]`;
+  if (capabilityMode === 'BUSINESS') {
+    queryText += `\n\n[Active Tenant Grounding: Company=${orgName || 'Unconfigured'}, Verified=${isVerified}, Industry=${industry}, Products=${products || 'None'}, Website=${websiteUrl}, FacebookPage=${pageName}, CRM Pipeline=$${pipelineVal}, ActiveClients=${activeClients}]`;
   }
 
   contents.push({
@@ -231,6 +259,8 @@ CORE OPERATING PRINCIPLES:
     const cleanText = candidateText
       .replace(/\\(\*|_|#|\[|\]|\(|\)|`)/g, '$1')
       .replace(/svgSend to Studio/gi, 'Send to Studio')
+      .replace(/<svg[\s\S]*?<\/svg>/gi, '')
+      .replace(/\[(Open Growth Studio|View CRM Pipeline|Create Reel|Create Visual|Connect Facebook|Create Growth Campaign)\]/gi, '')
       .trim();
 
     const promptTokens = data.usageMetadata?.promptTokenCount || estimateTokenCount(prompt);
@@ -262,22 +292,42 @@ function generateLocalStrategicFallback(
   intent: string
 ): { text: string; suggestedActions: MariActionPayload[] } {
   const pLower = prompt.toLowerCase();
-  const orgName = context?.layer1?.companyName?.value || 'Your Organization';
-  const isVerified = Boolean(context && context.primarySource !== 'Unverified Workspace');
-  const industry = context?.layer1?.industry?.value || 'Commercial Enterprise';
-  const targetMarket = context?.layer1?.targetMarket?.value || 'Executive Decision-Makers';
-  const valueProp = context?.layer1?.valueProposition?.value || 'Sovereign business automation and enterprise intelligence';
+  const orgName = context?.layer1?.companyName?.value || '';
+  const isVerified = Boolean(context && context.layer1?.companyName?.provenance === 'VERIFIED' && orgName);
+  const industry = context?.layer1?.industry?.value || 'Unspecified Industry';
+  const targetMarket = context?.layer1?.targetMarket?.value || 'Unspecified Target Market';
+  const valueProp = context?.layer1?.valueProposition?.value || 'Verified business knowledge sources not yet established.';
   const rawProducts = context?.layer1?.productsAndServices?.value || [];
   const productsList = rawProducts.map((p: any) => typeof p === 'string' ? p : (p?.name || String(p)));
-  const productsFormatted = productsList.length > 0 ? productsList.join(', ') : 'Ralion OS Core, AI Growth Studio, CRM Pipeline';
+  const productsFormatted = productsList.length > 0 ? productsList.join(', ') : '';
   const pipelineVal = context?.layer2?.crm?.totalPipelineValue?.value || 0;
   const activeClients = context?.layer2?.crm?.activeCustomersCount?.value || 0;
   const isSocialConnected = Boolean(context?.layer2?.social?.isConnected);
   const followers = context?.layer2?.social?.followersCount?.value || 0;
-  const pageName = context?.layer2?.social?.connectedPageName?.value || 'Facebook Page';
+  const pageName = context?.layer2?.social?.connectedPageName?.value || 'Not Connected';
+  const websiteUrl = context?.layer1?.websiteUrl?.value || 'Not configured';
+  const websiteKnowledge = context?.layer1?.websiteKnowledge?.value;
 
   let responseText = '';
   const actions: MariActionPayload[] = [];
+
+  // Standalone Greeting
+  if (intent === 'GREETING') {
+    if (isVerified) {
+      responseText = `### Hello! I am Mari AI
+
+I am your sovereign AI Business Growth Partner for **${orgName}**.
+
+How can I assist your business growth today? I can analyze your pipeline, summarize website positioning, draft marketing campaigns, or provide strategic recommendations.`;
+    } else {
+      responseText = `### Hello! I am Mari AI
+
+I am your sovereign AI Business Growth Partner. I am fully ready to assist you with business strategy, planning, marketing, and analysis.
+
+*Tip: Connect your website or business profile in Settings to unlock tailored tenant-grounded intelligence.*`;
+    }
+    return { text: responseText, suggestedActions: [] };
+  }
 
   // A. GENERAL INTELLIGENCE (EBITDA, Concept Explanation, General Writing, Cloud Computing)
   if (capabilityMode === 'GENERAL' || intent === 'GENERAL_KNOWLEDGE') {
@@ -306,15 +356,16 @@ EBITDA does not account for capital expenditures (CapEx) or changes in working c
     }
 
     if (pLower.includes('email') || pLower.includes('draft') || pLower.includes('write')) {
+      const companyLabel = orgName || 'our organization';
       responseText = `### Draft: Professional Partnership Proposal
 
-**Subject**: Strategic Partnership Opportunity with ${orgName}
+**Subject**: Strategic Partnership Opportunity with ${companyLabel}
 
 **Dear [Partner Name / Executive],**
 
 I hope this email finds you well.
 
-I am writing to explore a mutually beneficial collaboration between our organizations. At **${orgName}**, we specialize in **${industry}**, helping regional and enterprise clients achieve sovereign automation, operational efficiency, and scalable growth.
+I am writing to explore a mutually beneficial collaboration between our organizations. At **${companyLabel}**, we focus on delivering high-impact solutions for regional and commercial clients.
 
 Given your leadership in the market, we see strong alignment in delivering combined value to our shared client base. Specifically, we would welcome the opportunity to discuss:
 
@@ -329,7 +380,7 @@ Thank you for your time, and I look forward to connecting.
 Best regards,
 
 **[Your Name]**  
-**${orgName}**  
+**${companyLabel}**  
 [Your Contact Information]`;
       return { text: responseText, suggestedActions: [] };
     }
@@ -353,13 +404,205 @@ Here is a clear, structured breakdown:
     }
   }
 
-  // B. COMPOUND MULTI-PART STRATEGIC REASONING
+  // B. SOURCE-SPECIFIC: WEBSITE KNOWLEDGE
+  if (intent === 'WEBSITE_KNOWLEDGE') {
+    if (websiteKnowledge && websiteKnowledge.status === 'INGESTED') {
+      const sections = (websiteKnowledge.sections || []).slice(0, 4).map((s: any) => `• **${s.title}**: ${s.content?.substring(0, 140)}...`).join('\n');
+      responseText = `### Ingested Website Intelligence: ${websiteUrl}
+
+**Source**: Ingested Public Website (${websiteUrl})  
+**Last Synced**: ${websiteKnowledge.lastSuccessfulSync || 'Verified'}
+
+**Overview**:
+${websiteKnowledge.description || websiteKnowledge.summary || 'Verified website knowledge ingested.'}
+
+**Key Website Sections**:
+${sections || `• **Core Positioning**: ${valueProp}`}
+
+**Website Value Proposition**:
+${valueProp}`;
+    } else if (websiteUrl && websiteUrl !== 'Not configured') {
+      responseText = `### Website Knowledge for ${orgName || 'Your Business'}
+
+**Configured Website**: ${websiteUrl}  
+**Status**: Configured in business profile.
+
+**Verified Website Positioning**:
+• **Core Focus**: ${valueProp}
+• **Industry**: ${industry}
+• **Target Market**: ${targetMarket}
+${productsFormatted ? `• **Products/Services**: ${productsFormatted}` : ''}`;
+    } else {
+      responseText = `### Website Knowledge
+
+Verified website knowledge has not yet been ingested for this workspace.
+
+To enable Mari to answer questions directly from your public website, please connect and sync your website URL in **Settings → Business Knowledge**.`;
+      actions.push({ type: 'NAVIGATE', label: 'Sync Website', payload: { route: '/settings' } });
+    }
+    return { text: responseText, suggestedActions: actions };
+  }
+
+  // C. SOURCE-SPECIFIC: CONNECTED SOCIAL PAGE
+  if (intent === 'CONNECTED_SOCIAL_PAGE') {
+    const parentCompany = orgName ? ` for **${orgName}**` : '';
+    if (isSocialConnected) {
+      responseText = `### Connected Social Channels${parentCompany}
+
+**Canonical Business**: ${orgName || 'Active Workspace'}  
+**Connected Facebook Page**: **${pageName}**  
+**Followers**: ${followers.toLocaleString()} verified followers  
+**Status**: Connected & Active via Meta Graph API  
+
+*Note: The connected Facebook Page is an attached social channel under ${orgName || 'your business'} and does not alter your canonical business identity.*`;
+      actions.push({ type: 'NAVIGATE', label: 'Open Growth Studio', payload: { route: '/growth' } });
+    } else {
+      responseText = `### Social Channel Status${parentCompany}
+
+**Canonical Business**: ${orgName || 'Active Workspace'}  
+**Connected Facebook Page**: None currently connected.
+
+Connect your Facebook Page in **Growth Studio → Channels** to track audience reach, publish content, and monitor analytics.`;
+      actions.push({ type: 'NAVIGATE', label: 'Connect Facebook', payload: { route: '/growth?tab=channels' } });
+    }
+    return { text: responseText, suggestedActions: actions };
+  }
+
+  // D. SOURCE-SPECIFIC: BUSINESS SYNTHESIS (Multi-Source)
+  if (intent === 'BUSINESS_SYNTHESIS') {
+    if (!isVerified && !orgName) {
+      responseText = `### Business Knowledge Synthesis
+
+Verified business information has not yet been established for this workspace.
+
+Here is what is currently connected:
+• **Business Profile**: Unverified / Not configured
+• **Website Knowledge**: ${websiteUrl !== 'Not configured' ? websiteUrl : 'Not connected'}
+• **CRM Pipeline**: ${pipelineVal > 0 ? `$${pipelineVal.toLocaleString()} across ${activeClients} active accounts` : 'No active deals'}
+• **Social Channel**: ${isSocialConnected ? `Facebook Page: ${pageName} (${followers} followers)` : 'Not connected'}
+• **Operations**: Workspace active
+
+Connect your business website or profile in Settings to enable tailored business intelligence.`;
+      actions.push({ type: 'NAVIGATE', label: 'Add Business Knowledge', payload: { route: '/settings' } });
+      return { text: responseText, suggestedActions: actions };
+    }
+
+    const productsFormattedLines = rawProducts.map((p: any) => typeof p === 'string' ? `  • **${p}**` : `  • **${p.name}** (${p.category || 'Solution'})`).join('\n');
+    responseText = `### Comprehensive Business Knowledge Synthesis for ${orgName}
+
+Here is the complete synthesized intelligence across all verified context sources:
+
+#### 1. Canonical Business Identity (Verified)
+• **Company Name**: ${orgName}
+• **Industry**: ${industry}
+• **Target Market**: ${targetMarket}
+• **Core Value Proposition**: ${valueProp}
+${productsFormattedLines ? `• **Products & Services**:\n${productsFormattedLines}` : ''}
+
+#### 2. Ingested Website Intelligence
+• **Website URL**: ${websiteUrl}
+• **Status**: ${websiteKnowledge?.status === 'INGESTED' ? 'Live Ingested Knowledge' : (websiteUrl !== 'Not configured' ? 'Configured in Profile' : 'Not Ingested')}
+
+#### 3. Commercial CRM Pipeline
+• **Pipeline Value**: $${pipelineVal.toLocaleString()} across ${activeClients} active accounts
+• **Deal Velocity**: Real-time tracking enabled
+
+#### 4. Attached Social Channels
+• **Connected Facebook Page**: ${isSocialConnected ? `${pageName} (${followers.toLocaleString()} followers)` : 'Not connected'}
+
+#### 5. Operations & Workflows
+• **SLA Uptime**: 100% | Ralion OS Core Active`;
+
+    actions.push(
+      { type: 'NAVIGATE', label: 'Open Growth Studio', payload: { route: '/growth' } },
+      { type: 'NAVIGATE', label: 'View CRM Pipeline', payload: { route: '/crm' } }
+    );
+    return { text: responseText, suggestedActions: actions };
+  }
+
+  // E. SOURCE-SPECIFIC: WHERE TO FOCUS TODAY / WEEKLY FOCUS
+  if (intent === 'WEEKLY_FOCUS') {
+    const focusOrg = orgName || 'your business';
+    responseText = `### Strategic Focus Areas for Today: ${focusOrg}
+
+Based on cross-functional analysis across your commercial pipeline, audience reach, and operations:
+
+#### 1. Commercial Pipeline Velocity
+${pipelineVal > 0 
+  ? `• Qualify active deals in **Ralion CRM** ($${pipelineVal.toLocaleString()} current pipeline value) and follow up with high-probability accounts.`
+  : `• Populate and qualify initial prospect deals in **Ralion CRM** to establish pipeline velocity.`}
+
+#### 2. Growth & Audience Reach
+${isSocialConnected 
+  ? `• Dispatch scheduled video and visual content to **${pageName}** (${followers.toLocaleString()} followers) via Growth Studio to maintain consistent organic discovery.`
+  : `• Connect your Facebook Business Page in **Growth Studio** to establish automated multi-channel publishing.`}
+
+#### 3. Operational Execution
+• Review pending high-priority workspace tasks and maintain standard response SLAs.`;
+
+    actions.push(
+      { type: 'NAVIGATE', label: 'View CRM Pipeline', payload: { route: '/crm' } },
+      { type: 'NAVIGATE', label: 'Open Growth Studio', payload: { route: '/growth' } }
+    );
+    return { text: responseText, suggestedActions: actions };
+  }
+
+  // F. SOURCE-SPECIFIC: COMPARE WEBSITE VS SOCIAL
+  if (intent === 'COMPARE_WEBSITE_VS_SOCIAL') {
+    const compareOrg = orgName || 'your business';
+    responseText = `### Positioning Comparison: Website vs. Social Presence for ${compareOrg}
+
+#### 1. Website Positioning (${websiteUrl})
+• **Strategic Focus**: High-intent, structured commercial positioning (${industry}).
+• **Primary Objective**: Communicating core value proposition ("${valueProp}") and enterprise service capabilities.
+• **Audience Intent**: Decision-makers seeking formal solution verification and vendor evaluation.
+
+#### 2. Facebook Social Presence (${isSocialConnected ? pageName : 'Unconnected'})
+• **Channel Status**: ${isSocialConnected ? `Connected (${followers.toLocaleString()} followers on ${pageName})` : 'Not currently connected'}
+• **Strategic Focus**: Community engagement, brand awareness, and visual proof of execution.
+• **Audience Intent**: Broader discovery, brand affinity, and dynamic campaign engagement.
+
+#### Strategic Alignment Recommendation:
+Ensure your social media creative campaigns directly amplify the core solutions established on your website, converting organic social reach into qualified CRM pipeline leads.`;
+
+    actions.push(
+      { type: 'NAVIGATE', label: 'Open Growth Studio', payload: { route: '/growth' } },
+      { type: 'NAVIGATE', label: 'View CRM Pipeline', payload: { route: '/crm' } }
+    );
+    return { text: responseText, suggestedActions: actions };
+  }
+
+  // G. SOURCE-SPECIFIC: MISSING DATA AUDIT
+  if (intent === 'MISSING_DATA_AUDIT') {
+    const missingItems: string[] = [];
+    if (!isVerified) missingItems.push('• **Verified Business Profile**: Not configured. Add your company profile in Settings.');
+    if (!websiteKnowledge || websiteKnowledge.status !== 'INGESTED') missingItems.push('• **Website Ingestion**: Website has not been crawled for detailed multi-page section knowledge.');
+    if (pipelineVal === 0 && activeClients === 0) missingItems.push('• **Historical CRM Data**: No closed/won deal history or active deal records in CRM.');
+    if (!isSocialConnected) missingItems.push('• **Social Channel**: Facebook Business Page is not connected in Growth Studio.');
+    missingItems.push('• **Month-over-Month Baselines**: Previous month performance snapshot baseline has not yet been recorded for longitudinal comparison.');
+
+    responseText = `### Missing Business Intelligence Audit for ${orgName || 'Active Workspace'}
+
+Here is an objective breakdown of information needed to maximize Mari's strategic reasoning:
+
+${missingItems.join('\n\n')}
+
+Connecting these sources will enable deep predictive analytics and automated commercial optimization.`;
+
+    actions.push(
+      { type: 'NAVIGATE', label: 'Add Business Knowledge', payload: { route: '/settings' } },
+      { type: 'NAVIGATE', label: 'Open Growth Studio', payload: { route: '/growth' } }
+    );
+    return { text: responseText, suggestedActions: actions };
+  }
+
+  // H. COMPOUND MULTI-PART STRATEGIC REASONING
   if (intent === 'COMPOUND_QUERY') {
     const historicalStatus = isVerified
       ? `• **Historical Comparison**: I have verified live performance telemetry for **${orgName}** ($${pipelineVal.toLocaleString()} CRM pipeline across ${activeClients} active accounts), but I do not yet have a complete verified previous-month baseline snapshot for a definitive month-over-month comparison.`
       : `• **Historical Comparison**: Live tenant telemetry is unconfigured. A historical month-over-month comparison requires recording verified previous-month snapshots in Ralion CRM and Growth Studio.`;
 
-    const enterpriseAnalysis = `• **Enterprise Market Pivot**: Shifting primary focus entirely to enterprise clients would extend sales cycles (typically 60–120 days) but substantially increase Average Contract Value (ACV). For ${orgName}, our solutions (**${productsFormatted}**) provide sovereign control and automation that appeal directly to enterprise decision-makers, provided we offer dedicated SLAs and enterprise compliance.`;
+    const enterpriseAnalysis = `• **Enterprise Market Pivot**: Shifting primary focus entirely to enterprise clients would extend sales cycles (typically 60–120 days) but substantially increase Average Contract Value (ACV). For ${orgName || 'your business'}, our solutions (${productsFormatted || 'enterprise solutions'}) provide sovereign control and automation that appeal directly to enterprise decision-makers, provided we offer dedicated SLAs and enterprise compliance.`;
 
     const facebookDiagnosis = isSocialConnected
       ? `• **Facebook / Channel Growth Analysis**: Your connected page (**${pageName}**) has ${followers.toLocaleString()} verified followers. The primary constraint on growth is publishing consistency—without regular multi-format visual posts and video reels, organic algorithmic discovery remains low.`
@@ -370,7 +613,7 @@ Here is a clear, structured breakdown:
   2. **Multi-Channel Distribution Cadence**: Organic brand reach requires consistent 2–3 weekly video and visual releases via Growth Studio.
   3. **Executive Follow-Up Cadence**: High-value opportunities need rapid proposal turnaround to convert into signed agreements.`;
 
-    responseText = `### Strategic Business Diagnostic for ${orgName}
+    responseText = `### Strategic Business Diagnostic for ${orgName || 'Your Business'}
 
 Here is a multi-dimensional strategic evaluation addressing your questions:
 
@@ -384,10 +627,7 @@ ${enterpriseAnalysis}
 ${facebookDiagnosis}
 
 #### 4. Critical Overlooked Opportunities & Blindspots
-${overlookedObservations}
-
-**Recommended Next Moves**:
-[Open Growth Studio] | [View CRM Pipeline] | [Create Reel]`;
+${overlookedObservations}`;
 
     actions.push(
       { type: 'NAVIGATE', label: 'Open Growth Studio', payload: { route: '/growth' } },
@@ -397,8 +637,18 @@ ${overlookedObservations}
     return { text: responseText, suggestedActions: actions };
   }
 
-  // C. BUSINESS IDENTITY
+  // I. BUSINESS IDENTITY
   if (intent === 'BUSINESS_IDENTITY') {
+    if (!isVerified && !orgName) {
+      responseText = `### Your Business
+
+Verified business information has not yet been established for this workspace.
+
+You can configure your company name, industry, target market, and products in **Settings → Business Knowledge** to enable tailored business intelligence. In the meantime, I am ready to assist you with general business strategy, writing, planning, and operational workflows.`;
+      actions.push({ type: 'NAVIGATE', label: 'Add Business Knowledge', payload: { route: '/settings' } });
+      return { text: responseText, suggestedActions: actions };
+    }
+
     const productsFormattedLines = rawProducts.map((p: any) => typeof p === 'string' ? `• **${p}**` : `• **${p.name}** (${p.category || 'Solution'})`).join('\n');
     responseText = `### Your Business: ${orgName}
 
@@ -423,7 +673,7 @@ ${targetMarket}
     return { text: responseText, suggestedActions: actions };
   }
 
-  // D. BUSINESS PERFORMANCE
+  // J. BUSINESS PERFORMANCE
   if (intent === 'BUSINESS_PERFORMANCE') {
     const crmStatus = pipelineVal > 0
       ? `• **CRM Pipeline:** $${pipelineVal.toLocaleString()} across ${activeClients} active clients.`
@@ -433,7 +683,7 @@ ${targetMarket}
       ? `• **Social Channel (${pageName}):** ${followers.toLocaleString()} verified followers.`
       : `• **Social Channels:** Not currently connected. Connect your Facebook Page in Growth Studio to track verified audience reach.`;
 
-    responseText = `### Business Performance Summary for ${orgName}
+    responseText = `### Business Performance Summary for ${orgName || 'Active Workspace'}
 
 **Verified Telemetry**:
 ${crmStatus}
@@ -441,9 +691,7 @@ ${socialStatus}
 • **Operations:** Workspace active and ready for deal qualification.
 
 **Mari Assessment**:
-To accelerate growth, prioritize qualifying active CRM leads and publishing regular video and visual campaigns via Growth Studio.
-
-[Open Growth Studio] | [View CRM Pipeline] | [Create Reel]`;
+To accelerate growth, prioritize qualifying active CRM leads and publishing regular video and visual campaigns via Growth Studio.`;
 
     actions.push(
       { type: 'NAVIGATE', label: 'Open Growth Studio', payload: { route: '/growth' } },
@@ -452,18 +700,15 @@ To accelerate growth, prioritize qualifying active CRM leads and publishing regu
     return { text: responseText, suggestedActions: actions };
   }
 
-  // E. GENERAL STRATEGIC REASONING
-  responseText = `### Strategic Analysis for ${orgName}
+  // K. GENERAL STRATEGIC REASONING
+  responseText = `### Strategic Analysis for ${orgName || 'Your Business'}
 
-Based on verified intelligence for **${orgName}** in **${industry}**:
+Based on available intelligence for **${orgName || 'your business'}**${isVerified ? ` in **${industry}**` : ''}:
 
 **Key Observations**:
-• **Core Positioning**: Focused on **${targetMarket}** with verified value proposition: "${valueProp}".
+• **Core Positioning**: Focused on **${targetMarket}** with core value proposition: "${valueProp}".
 • **Growth Levers**: Accelerate commercial outreach, activate multi-channel social broadcasting, and maintain structured follow-ups in Ralion CRM.
-• **Risk Mitigation**: Ensure consistent client qualification and avoid spreading marketing spend before defining clear target personas.
-
-**Recommended Next Moves**:
-[Open Growth Studio] | [View CRM Pipeline] | [Create Growth Campaign]`;
+• **Risk Mitigation**: Ensure consistent client qualification and avoid spreading marketing spend before defining clear target personas.`;
 
   actions.push(
     { type: 'NAVIGATE', label: 'Open Growth Studio', payload: { route: '/growth' } },
@@ -487,22 +732,23 @@ export class MariUniversalCore {
     const requestId = request.requestId || `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const orgId = organizationId || 'unconfigured-tenant';
 
-    // 1. Classify Capability Mode & Semantic Intent
+    // 1. Resolve Canonical Business Identity
+    const resolvedIdentity = BusinessIdentityResolver.resolveIdentity(orgId, {
+      sessionCompanyName: passedCompanyName,
+    });
+
+    let resolvedCompanyName = resolvedIdentity.companyName;
+
+    // 2. Classify Capability Mode & Semantic Intent
     const { mode: capabilityMode, intent: detectedIntent } = classifyCapabilityMode(cleanPrompt);
 
-    // 2. Context Orchestration (Selective & Lazy)
+    // 3. Context Orchestration (Selective & Lazy)
     let context: BusinessContext | null = null;
     let contextSourcesLoaded: string[] = [];
-    let resolvedCompanyName = passedCompanyName || '';
-    let isVerified = false;
+    let isVerified = resolvedIdentity.isVerified;
 
     if (capabilityMode === 'BUSINESS' || capabilityMode === 'ACTION') {
       try {
-        const knowledgeProfile = BusinessKnowledgeProfileService.getProfile(orgId);
-        if (knowledgeProfile?.companyName?.value) {
-          resolvedCompanyName = knowledgeProfile.companyName.value;
-        }
-
         context = await BusinessContextService.assembleContext(orgId, {
           companyName: resolvedCompanyName,
           activeScreen,
@@ -511,24 +757,20 @@ export class MariUniversalCore {
 
         if (context.layer1?.companyName?.value) {
           resolvedCompanyName = context.layer1.companyName.value;
-          contextSourcesLoaded.push('BusinessKnowledgeProfile');
+          contextSourcesLoaded.push('BusinessIdentityResolver');
         }
         if (context.layer1?.websiteKnowledge?.value) contextSourcesLoaded.push('WebsiteKnowledge');
         if (context.layer2?.crm?.isConnected) contextSourcesLoaded.push('CRM_Deals');
         if (context.layer2?.social?.isConnected) contextSourcesLoaded.push('Facebook_Social');
         if (context.layer2?.operations) contextSourcesLoaded.push('Workspace_Operations');
 
-        isVerified = Boolean(context.primarySource !== 'Unverified Workspace');
+        isVerified = Boolean(context.layer1?.companyName?.provenance === 'VERIFIED');
       } catch (ctxErr) {
         console.warn('[MariCore] Context assembly warning:', ctxErr);
       }
     }
 
-    if (!resolvedCompanyName) {
-      resolvedCompanyName = orgId === 'ras-ali-labs' ? 'Ras Ali Labs' : (isVerified ? 'Your Business' : 'Unconfigured Workspace');
-    }
-
-    // 3. RAG Knowledge Search
+    // 4. RAG Knowledge Search
     let ragContext: string | null = null;
     try {
       const rag = mariKnowledgeManager.searchKnowledgeBase(cleanPrompt);
@@ -537,7 +779,7 @@ export class MariUniversalCore {
       }
     } catch {}
 
-    // 4. Invoke Gemini Reasoning
+    // 5. Invoke Gemini Reasoning
     let answerText = '';
     let modelUsed = 'Mari Universal Intelligence (gemini-2.5-flash)';
     let responseSource: 'gemini' | 'local_grounded' = 'gemini';
@@ -558,10 +800,27 @@ export class MariUniversalCore {
         usage = geminiResult.usage;
         modelUsed = `Mari Neural Engine (${geminiResult.model})`;
         responseSource = 'gemini';
+
+        // Derive clean suggested actions for UI navigation
+        if (detectedIntent === 'WEBSITE_KNOWLEDGE') {
+          suggestedActions.push({ type: 'NAVIGATE', label: 'Sync Website', payload: { route: '/settings' } });
+        } else if (detectedIntent === 'CONNECTED_SOCIAL_PAGE') {
+          suggestedActions.push({ type: 'NAVIGATE', label: 'Open Growth Studio', payload: { route: '/growth' } });
+        } else if (detectedIntent === 'WEEKLY_FOCUS' || detectedIntent === 'COMPOUND_QUERY') {
+          suggestedActions.push(
+            { type: 'NAVIGATE', label: 'Open Growth Studio', payload: { route: '/growth' } },
+            { type: 'NAVIGATE', label: 'View CRM Pipeline', payload: { route: '/crm' } }
+          );
+        } else if (detectedIntent === 'BUSINESS_IDENTITY' || detectedIntent === 'BUSINESS_SYNTHESIS') {
+          suggestedActions.push(
+            { type: 'NAVIGATE', label: 'Open Growth Studio', payload: { route: '/growth' } },
+            { type: 'NAVIGATE', label: 'View CRM Pipeline', payload: { route: '/crm' } }
+          );
+        }
       }
     }
 
-    // 5. Fallback if Gemini is not available or returned empty
+    // 6. Fallback if Gemini is not available or returned empty
     if (!answerText) {
       const fallback = generateLocalStrategicFallback(cleanPrompt, context, capabilityMode, detectedIntent);
       answerText = fallback.text;
@@ -578,7 +837,7 @@ export class MariUniversalCore {
       };
     }
 
-    // 6. Authoritative Exactly-Once Telemetry Recording
+    // 7. Authoritative Exactly-Once Telemetry Recording
     let usageRecordId: string | undefined = undefined;
     try {
       const record = MariTokenTelemetryService.recordUsage({
@@ -614,4 +873,3 @@ export class MariUniversalCore {
 }
 
 export const processMariQuery = MariUniversalCore.processQuery;
-

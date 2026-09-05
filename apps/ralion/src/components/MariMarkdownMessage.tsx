@@ -21,12 +21,15 @@ interface MariMarkdownMessageProps {
 }
 
 /**
- * Cleanly unescapes raw markdown escape sequences (e.g., `\*\*` -> `**`).
+ * Cleanly unescapes raw markdown escape sequences (e.g., `\*\*` -> `**`) and sanitizes SVG fragments.
  */
 function unescapeMarkdown(raw: string): string {
   if (!raw) return '';
   return raw
     .replace(/\\(\*|_|#|\[|\]|\(|\)|`|~|\\)/g, '$1')
+    .replace(/svgSend to Studio/gi, 'Send to Studio')
+    .replace(/<svg[\s\S]*?<\/svg>/gi, '')
+    .replace(/<svg[^>]*>[\s\S]*/gi, '')
     .trim();
 }
 
@@ -37,12 +40,14 @@ function unescapeMarkdown(raw: string): string {
 export function stripActionBracketsFromText(text: string): string {
   if (!text) return '';
   // Match bracketed button sequences at line starts, ends, or standalone
-  return text
+  let cleaned = text
     .replace(/(?:^|\n)\s*\[[A-Za-z0-9 &—–-]+\](?:\s*\|\s*\[[A-Za-z0-9 &—–-]+\])*\s*(?:\n|$)/g, '\n')
     .replace(/\[(Create Reel|Create Visual|Open Growth Studio|Connect Facebook|Connect Facebook Page|Generate Creative|View CRM Pipeline|Sync Website|Add Business Knowledge|Review Sales Pipeline|View Tasks Queue|Open Billing & Finance|Draft Prospect Follow-Ups|Create Growth Campaign)\]/gi, '')
     .replace(/\|\s*\|/g, '|')
     .replace(/^\s*\|\s*|\s*\|\s*$/gm, '')
+    .replace(/\n\s*\*\*(Recommended Next Moves|Recommended Actions|Next Steps)\*\*:\s*(?=\n|$)/gi, '')
     .trim();
+  return cleaned;
 }
 
 /**
@@ -332,11 +337,11 @@ function renderMarkdownParagraphs(content: string): React.ReactNode[] {
       continue;
     }
 
-    // Bullet list item: • or - or *
-    if (/^[•\-*]\s+/.test(line)) {
+    // Bullet list item: • or - or * (handles nested/repeated bullets like "- • Ask")
+    if (/^(?:[•\-*]\s*)+/.test(line)) {
       if (listType !== 'bullet') flushList();
       listType = 'bullet';
-      const itemText = line.replace(/^[•\-*]\s+/, '');
+      const itemText = line.replace(/^(?:[•\-*]\s*)+/, '').trim();
       currentList.push(
         <li key={`li-${blockKey++}`} className="flex items-start gap-2 text-zinc-200">
           <span className="text-purple-400 font-bold shrink-0 mt-0.5">•</span>

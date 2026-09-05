@@ -310,19 +310,23 @@ function GrowthPageContent() {
     setIsBrainstorming(true);
     try {
       const { callMariAiApi, BusinessContextService } = await import('@ralion/ai');
+      let activeOrgId = 'ras-ali-labs';
+      if (typeof window !== 'undefined') {
+        activeOrgId = localStorage.getItem('ralion_org_id') || localStorage.getItem('ralion_workspace_id') || 'ras-ali-labs';
+      }
       let context = null;
       try {
-        context = await BusinessContextService.assembleContext();
+        context = await BusinessContextService.assembleContext(activeOrgId);
       } catch {}
 
-      const orgName = context?.layer1?.companyName?.value || 'Ras Ali Labs';
-      const industry = context?.layer1?.industry?.value || 'Enterprise Software & Digital OS';
+      const orgName = context?.layer1?.companyName?.value || 'Your Business';
+      const industry = context?.layer1?.industry?.value || 'Commercial Solutions';
 
       const promptReq = `You are Mari AI, Creative Director for ${orgName} (${industry}).
 Generate 3 distinct, highly vivid visual photography/3D scene prompts for social media marketing.
 Rules:
 1. Do NOT write generic slogans or headline copy. Write vivid visual scene descriptions that an AI image model can paint (subjects, setting, lighting, objects, modern African enterprise atmosphere).
-2. The concepts must directly represent ${orgName}'s core business in enterprise software, business intelligence, and digital transformation.
+2. The concepts must directly represent ${orgName}'s core business and value proposition.
 3. Return ONLY a valid JSON array of 3 objects with keys: "title", "prompt", "style", "format".`;
 
       const res = await callMariAiApi(promptReq, undefined, context || undefined);

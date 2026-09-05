@@ -31,4 +31,5 @@ export * from './creativeComposition.service';
 export * from './visualSemanticEvaluator.service';
 export * from './storage';
 export * from './tokenTelemetry.service';
+export * from './businessIdentityResolver';
 export * from './mariUniversalCore';

@@ -230,6 +230,16 @@ export class BusinessContextService {
       ? "Your connected Facebook account is a personal profile. Facebook Page business posts, followers, and analytics are not available yet. Connect a Facebook Page to unlock Page-level business intelligence."
       : undefined;
 
+    // 1. Resolve Canonical Business Identity via authoritative BusinessIdentityResolver
+    const { BusinessIdentityResolver } = require('./businessIdentityResolver');
+    const resolvedIdentity = BusinessIdentityResolver.resolveIdentity(orgId, {
+      sessionCompanyName: options?.companyName,
+      sessionOrgName: registeredProfile?.companyName,
+    });
+
+    const orgName = resolvedIdentity.companyName;
+    const isIdentityVerified = resolvedIdentity.isVerified;
+
     const isWkValid = Boolean(
       websiteKnowledge && (
         websiteKnowledge.status === 'INGESTED' ||
@@ -241,59 +251,41 @@ export class BusinessContextService {
     );
 
     const hasVerifiedKnowledge = Boolean(
-      options?.companyName ||
-      registeredProfile?.companyName ||
-      knowledgeProfile?.isVerified ||
+      isIdentityVerified ||
       isWkValid ||
-      isSocialPageConnected
+      Boolean(registeredProfile?.companyName)
     );
 
-    // Resolve Organization Name (Prioritize Options -> Registered Profile -> Knowledge Profile -> Facebook Page -> Website Title)
-    let orgName = options?.companyName || registeredProfile?.companyName || knowledgeProfile?.companyName?.value || (isSocialPageConnected ? fbPage.name : '') || websiteKnowledge?.title || '';
-    if (!orgName) {
-      if (isTest) {
-        orgName = 'Test Organization';
-      } else if (orgId && orgId !== 'org_default' && orgId !== 'default' && orgId !== 'default-org') {
-        orgName = orgId.replace(/^org[-_]/, '').replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'My Business';
-      } else {
-        orgName = 'Unverified Organization';
-      }
-    }
-
-    const primarySource = (isSocialPageConnected && isWkValid)
-      ? 'Facebook + Website'
-      : isSocialPageConnected
-      ? 'Facebook'
-      : isWkValid
-      ? 'Website'
-      : 'Unverified Workspace';
+    const primarySource = isIdentityVerified
+      ? (isSocialPageConnected && isWkValid ? 'Business Profile + Website + Facebook' : (isWkValid ? 'Business Profile + Website' : 'Business Knowledge Profile'))
+      : (isWkValid ? 'Website Ingestion' : (isSocialPageConnected ? 'Facebook Social Attachment' : 'Unverified Workspace'));
 
     const contactsList = options?.localOverrides?.contacts || [];
     const hasRealContacts = contactsList.length > 0;
     const tasksList = options?.localOverrides?.tasks || [];
     const hasRealTasks = tasksList.length > 0;
 
-    // 1. Layer 1: Business Knowledge & Ingested Website (Truthful Learning Gate)
+    // 1. Layer 1: Canonical Business Knowledge & Ingested Website (Compositional)
     const layer1: Layer1BusinessKnowledge = {
       companyName: {
         value: orgName,
-        provenance: hasVerifiedKnowledge ? 'VERIFIED' : 'UNVERIFIED',
-        source: knowledgeProfile ? 'Business Knowledge Profile' : (registeredProfile ? 'Registered Profile' : (isSocialPageConnected ? 'Facebook Page' : 'Workspace Identity')),
-        confidence: hasVerifiedKnowledge ? 1.0 : 0.0,
+        provenance: isIdentityVerified ? 'VERIFIED' : (orgName ? 'USER_PROVIDED' : 'UNVERIFIED'),
+        source: resolvedIdentity.source,
+        confidence: isIdentityVerified ? 1.0 : (orgName ? 0.7 : 0.0),
         lastVerifiedAt: timestamp,
       },
       legalIdentity: {
-        value: registeredProfile?.companyName ? `${registeredProfile.companyName} Registered Entity` : (hasVerifiedKnowledge ? `${orgName} Commercial Entity` : 'Unverified Business'),
-        provenance: hasVerifiedKnowledge ? 'VERIFIED' : 'UNVERIFIED',
+        value: isIdentityVerified ? `${orgName} Registered Entity` : (orgName ? `${orgName} Commercial Entity` : 'Unverified Business'),
+        provenance: isIdentityVerified ? 'VERIFIED' : 'UNVERIFIED',
         source: 'Corporate Registration Record',
-        confidence: hasVerifiedKnowledge ? 1.0 : 0.0,
+        confidence: isIdentityVerified ? 1.0 : 0.0,
         lastVerifiedAt: timestamp,
       },
       websiteUrl: {
-        value: registeredProfile?.websiteUrl || knowledgeProfile?.websiteUrl?.value || websiteKnowledge?.websiteUrl || 'Not configured',
-        provenance: (websiteKnowledge || knowledgeProfile) ? 'VERIFIED' : 'UNVERIFIED',
-        source: isWkValid ? 'Website Ingestion' : 'Not configured',
-        confidence: isWkValid ? 1.0 : 0.0,
+        value: resolvedIdentity.websiteUrl !== 'Not configured' ? resolvedIdentity.websiteUrl : (websiteKnowledge?.websiteUrl || 'Not configured'),
+        provenance: (resolvedIdentity.websiteUrl !== 'Not configured' || isWkValid) ? 'VERIFIED' : 'UNVERIFIED',
+        source: isWkValid ? 'Website Ingestion' : (resolvedIdentity.websiteUrl !== 'Not configured' ? 'Business Profile' : 'Not configured'),
+        confidence: (resolvedIdentity.websiteUrl !== 'Not configured' || isWkValid) ? 1.0 : 0.0,
         lastVerifiedAt: timestamp,
       },
       websiteKnowledge: {
@@ -304,50 +296,50 @@ export class BusinessContextService {
         lastVerifiedAt: websiteKnowledge?.lastSuccessfulSync || timestamp,
       },
       tagline: {
-        value: registeredProfile?.tagline || knowledgeProfile?.tagline?.value || (hasVerifiedKnowledge ? `Empowering ${orgName}` : 'Not configured'),
+        value: registeredProfile?.tagline || resolvedIdentity.tagline || (isIdentityVerified ? `Empowering ${orgName}` : ''),
         provenance: hasVerifiedKnowledge ? 'VERIFIED' : 'UNVERIFIED',
         source: primarySource,
         confidence: hasVerifiedKnowledge ? 0.9 : 0.0,
         lastVerifiedAt: timestamp,
       },
       industry: {
-        value: registeredProfile?.industry || knowledgeProfile?.industry?.value || (hasVerifiedKnowledge ? 'Commercial Enterprise' : 'Unspecified'),
-        provenance: hasVerifiedKnowledge ? 'VERIFIED' : 'UNVERIFIED',
+        value: registeredProfile?.industry || resolvedIdentity.industry,
+        provenance: isIdentityVerified ? 'VERIFIED' : 'UNVERIFIED',
         source: primarySource,
-        confidence: hasVerifiedKnowledge ? 0.9 : 0.0,
+        confidence: isIdentityVerified ? 1.0 : 0.0,
         lastVerifiedAt: timestamp,
       },
       targetMarket: {
-        value: registeredProfile?.targetMarket || (knowledgeProfile?.targetMarkets?.value ? knowledgeProfile.targetMarkets.value.join(', ') : '') || (hasVerifiedKnowledge ? 'Regional Commercial Clients' : 'Unspecified'),
-        provenance: hasVerifiedKnowledge ? 'USER_PROVIDED' : 'UNVERIFIED',
+        value: registeredProfile?.targetMarket || resolvedIdentity.targetMarket,
+        provenance: isIdentityVerified ? 'VERIFIED' : 'UNVERIFIED',
         source: primarySource,
-        confidence: hasVerifiedKnowledge ? 0.85 : 0.0,
+        confidence: isIdentityVerified ? 0.95 : 0.0,
         lastVerifiedAt: timestamp,
       },
       brandVoice: {
-        value: registeredProfile?.brandVoice || knowledgeProfile?.brandVoice?.value || (hasVerifiedKnowledge ? 'Professional, Customer-Focused' : 'Professional, Neutral'),
-        provenance: hasVerifiedKnowledge ? 'USER_PROVIDED' : 'UNVERIFIED',
+        value: registeredProfile?.brandVoice || resolvedIdentity.brandVoice || 'Professional, Neutral',
+        provenance: isIdentityVerified ? 'VERIFIED' : 'UNVERIFIED',
         source: primarySource,
-        confidence: hasVerifiedKnowledge ? 0.9 : 0.2,
+        confidence: isIdentityVerified ? 0.95 : 0.2,
         lastVerifiedAt: timestamp,
       },
       valueProposition: {
-        value: registeredProfile?.valueProposition || (knowledgeProfile?.valuePropositions?.value ? knowledgeProfile.valuePropositions.value.join('; ') : '') || (hasVerifiedKnowledge ? `Commercial products and services for ${orgName}.` : 'No verified business knowledge sources connected yet.'),
-        provenance: hasVerifiedKnowledge ? 'VERIFIED' : 'UNVERIFIED',
+        value: registeredProfile?.valueProposition || resolvedIdentity.valueProposition,
+        provenance: isIdentityVerified ? 'VERIFIED' : 'UNVERIFIED',
         source: primarySource,
-        confidence: hasVerifiedKnowledge ? 0.9 : 0.0,
+        confidence: isIdentityVerified ? 1.0 : 0.0,
         lastVerifiedAt: timestamp,
       },
       productsAndServices: {
-        value: registeredProfile?.productsAndServices || knowledgeProfile?.products?.value || [],
-        provenance: hasVerifiedKnowledge && (registeredProfile?.productsAndServices || knowledgeProfile?.products?.value) ? 'VERIFIED' : 'UNVERIFIED',
+        value: registeredProfile?.productsAndServices || resolvedIdentity.productsAndServices || [],
+        provenance: (registeredProfile?.productsAndServices || resolvedIdentity.productsAndServices?.length > 0) ? 'VERIFIED' : 'UNVERIFIED',
         source: primarySource,
-        confidence: (registeredProfile?.productsAndServices || knowledgeProfile?.products?.value) ? 1.0 : 0.0,
+        confidence: (registeredProfile?.productsAndServices || resolvedIdentity.productsAndServices?.length > 0) ? 1.0 : 0.0,
         lastVerifiedAt: timestamp,
       },
       strategicGoals: {
         value: registeredProfile?.strategicGoals || [],
-        provenance: hasVerifiedKnowledge && registeredProfile?.strategicGoals ? 'USER_PROVIDED' : 'UNVERIFIED',
+        provenance: registeredProfile?.strategicGoals ? 'USER_PROVIDED' : 'UNVERIFIED',
         source: 'Executive Strategy',
         confidence: registeredProfile?.strategicGoals ? 0.9 : 0.0,
         lastVerifiedAt: timestamp,
@@ -360,6 +352,7 @@ export class BusinessContextService {
         lastVerifiedAt: timestamp,
       },
       knowledgeSources: [
+        ...(isIdentityVerified ? [{ id: 'k-identity', title: `Business Identity (${orgName})`, category: 'IDENTITY', updatedAt: timestamp, status: 'VERIFIED' as const }] : []),
         ...(isWkValid ? [{ id: 'k-web', title: `Website Knowledge (${websiteKnowledge?.websiteUrl})`, category: 'WEBSITE', updatedAt: websiteKnowledge?.lastSuccessfulSync || timestamp, status: 'VERIFIED' as const }] : []),
         ...(isSocialPageConnected ? [{ id: 'k-soc', title: `Facebook Page (${fbPage?.name})`, category: 'SOCIAL', updatedAt: timestamp, status: 'CONNECTED' as const }] : []),
         ...(isPersonalFb ? [{ id: 'k-soc-personal', title: `Facebook Personal Profile (${fbPage?.name || 'Personal Profile'}) — Business Page Not Connected`, category: 'SOCIAL', updatedAt: timestamp, status: 'PENDING' as const }] : []),
