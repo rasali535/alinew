@@ -18,45 +18,105 @@ const ALLOWED_HEADERS = [
   'Accept',
   'X-Requested-With',
   'apikey',
+  'x-api-key',
   'x-client-info',
   'Idempotency-Key',
   'Origin',
   'Cache-Control',
+  'Pragma',
   'x-user-id',
+  'x-workspace-id',
   'x-organization-id',
+  'x-tenant-id',
+  'x-tenant',
+  'x-workspace',
+  'x-org-id',
   'x-admin-key',
+  'x-session-id',
+  'x-request-id',
+  'baggage',
+  'sentry-trace',
   'cookie',
 ].join(', ');
 
-export function resolveAllowedOrigin(request?: NextRequest | Request): string {
+/**
+ * Checks if a given origin is allowed under the Ralion OS security policy.
+ */
+export function isOriginAllowed(origin: string | null | undefined): boolean {
+  if (!origin) return false;
+
+  if (ALLOWED_ORIGINS.has(origin)) {
+    return true;
+  }
+
+  // Subdomains of rasalilabs.com (e.g. app.rasalilabs.com, dev.rasalilabs.com)
+  if (/^https:\/\/([a-zA-Z0-9-]+\.)*rasalilabs\.com$/.test(origin)) {
+    return true;
+  }
+
+  // Render backend & preview hostnames
+  if (/^https:\/\/([a-zA-Z0-9-]+\.)*onrender\.com$/.test(origin)) {
+    return true;
+  }
+
+  // Local development hostnames on any port
+  if (/^https?:\/\/localhost(:\d+)?$/.test(origin) || /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)) {
+    return true;
+  }
+
+  return false;
+}
+
+export function resolveAllowedOrigin(request?: NextRequest | Request): string | null {
   let origin: string | null = null;
-  if (request) {
+  if (request && 'headers' in request && request.headers) {
     origin = request.headers.get('origin');
   }
 
   if (origin) {
-    if (ALLOWED_ORIGINS.has(origin) || /^https:\/\/([a-zA-Z0-9-]+\.)*rasalilabs\.com$/.test(origin)) {
+    if (isOriginAllowed(origin)) {
       return origin;
     }
+    // Blocked/unknown origin: return null so CORS headers are not granted
+    return null;
   }
 
+  // Default fallback for direct non-browser requests without Origin header
   return 'https://rasalilabs.com';
 }
 
 export function getCorsHeaders(request?: NextRequest | Request): Record<string, string> {
   const allowedOrigin = resolveAllowedOrigin(request);
 
-  return {
-    'Access-Control-Allow-Origin': allowedOrigin,
+  // If the browser sends Access-Control-Request-Headers in preflight, accommodate requested headers safely
+  let allowedHeaders = ALLOWED_HEADERS;
+  if (request && 'headers' in request && request.headers) {
+    const requestedHeaders = request.headers.get('access-control-request-headers');
+    if (requestedHeaders) {
+      const existingSet = new Set(ALLOWED_HEADERS.split(', ').map((h) => h.toLowerCase()));
+      const extra = requestedHeaders
+        .split(',')
+        .map((h) => h.trim())
+        .filter((h) => h && !existingSet.has(h.toLowerCase()));
+      if (extra.length > 0) {
+        allowedHeaders = `${ALLOWED_HEADERS}, ${extra.join(', ')}`;
+      }
+    }
+  }
+
+  const headers: Record<string, string> = {
     'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD',
-    'Access-Control-Allow-Headers': ALLOWED_HEADERS,
+    'Access-Control-Allow-Headers': allowedHeaders,
     'Access-Control-Allow-Credentials': 'true',
     'Access-Control-Max-Age': '86400',
-    // Required so caches store separate responses per Origin value.
-    // Without Vary: Origin a cached non-CORS response may be served to
-    // browser cross-origin requests, causing CORS failures.
-    'Vary': 'Origin',
+    'Vary': 'Origin, Access-Control-Request-Headers',
   };
+
+  if (allowedOrigin) {
+    headers['Access-Control-Allow-Origin'] = allowedOrigin;
+  }
+
+  return headers;
 }
 
 /**
@@ -100,3 +160,4 @@ export function handleCorsPreflight(request: NextRequest | Request): NextRespons
     headers: getCorsHeaders(request),
   });
 }
+

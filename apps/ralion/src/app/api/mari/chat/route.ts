@@ -5,7 +5,7 @@ import {
   ChatHistoryTurn,
   BusinessKnowledgeProfileService,
 } from '@ralion/ai';
-import { getCurrentRalionContext } from '@/lib/auth/serverAuth';
+import { getCurrentRalionContext } from '../../../../lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 

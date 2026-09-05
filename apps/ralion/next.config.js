@@ -35,9 +35,10 @@ const securityHeaders = [
 const corsApiHeaders = [
   { key: 'Access-Control-Allow-Origin', value: 'https://rasalilabs.com' },
   { key: 'Access-Control-Allow-Methods', value: 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD' },
-  { key: 'Access-Control-Allow-Headers', value: 'Content-Type, Authorization, Accept, X-Requested-With, apikey, x-client-info, Idempotency-Key, Origin, Cache-Control, x-user-id, x-organization-id, cookie' },
+  { key: 'Access-Control-Allow-Headers', value: 'Content-Type, Authorization, Accept, X-Requested-With, apikey, x-api-key, x-client-info, Idempotency-Key, Origin, Cache-Control, Pragma, x-user-id, x-workspace-id, x-organization-id, x-tenant-id, x-tenant, x-workspace, x-org-id, x-admin-key, x-session-id, x-request-id, baggage, sentry-trace, cookie' },
   { key: 'Access-Control-Allow-Credentials', value: 'true' },
   { key: 'Access-Control-Max-Age', value: '86400' },
+  { key: 'Vary', value: 'Origin, Access-Control-Request-Headers' },
 ];
 
 const nextConfig = {

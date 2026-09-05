@@ -141,7 +141,16 @@ export async function getCurrentRalionContext(
   request: NextRequest,
   options: { requireAuth?: boolean } = { requireAuth: true }
 ): Promise<RalionSessionContext | null> {
-  const supabase = getServiceSupabase();
+  let supabase: ReturnType<typeof getServiceSupabase> | null = null;
+  try {
+    supabase = getServiceSupabase();
+  } catch (e: any) {
+    if (options.requireAuth) {
+      throw e;
+    }
+    return null;
+  }
+
   const token = extractAuthToken(request);
   const headerUserId = request.headers.get('x-user-id');
   const headerWorkspaceId = request.headers.get('x-workspace-id') || request.headers.get('x-organization-id');

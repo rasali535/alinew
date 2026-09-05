@@ -28,12 +28,26 @@ if (isset($_GET['__proxy_path']) && !empty($_GET['__proxy_path'])) {
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $origin = $_SERVER['HTTP_ORIGIN'] ?? 'https://rasalilabs.com';
 
+// Allowed origin validation
+$allowedOrigin = 'https://rasalilabs.com';
+if (preg_match('/^https:\/\/(?:[a-zA-Z0-9-]+\.)*rasalilabs\.com$/', $origin) ||
+    preg_match('/^https:\/\/(?:[a-zA-Z0-9-]+\.)*onrender\.com$/', $origin) ||
+    preg_match('/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/', $origin)) {
+    $allowedOrigin = $origin;
+}
+
+$allowedHeaders = "Content-Type, Authorization, Accept, X-Requested-With, apikey, x-api-key, x-client-info, Idempotency-Key, Origin, Cache-Control, Pragma, x-user-id, x-workspace-id, x-organization-id, x-tenant-id, x-tenant, x-workspace, x-org-id, x-admin-key, x-session-id, x-request-id, baggage, sentry-trace, cookie";
+if (!empty($_SERVER['HTTP_ACCESS_CONTROL_REQUEST_HEADERS'])) {
+    $allowedHeaders .= ", " . $_SERVER['HTTP_ACCESS_CONTROL_REQUEST_HEADERS'];
+}
+
 if ($method === 'OPTIONS') {
-    header("Access-Control-Allow-Origin: $origin");
+    header("Access-Control-Allow-Origin: $allowedOrigin");
     header("Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
-    header("Access-Control-Allow-Headers: Content-Type, Authorization, Accept, X-Requested-With, apikey, x-client-info, Idempotency-Key, Origin, Cache-Control, x-user-id, x-organization-id, cookie");
+    header("Access-Control-Allow-Headers: $allowedHeaders");
     header("Access-Control-Allow-Credentials: true");
     header("Access-Control-Max-Age: 86400");
+    header("Vary: Origin, Access-Control-Request-Headers");
     http_response_code(204);
     exit;
 }

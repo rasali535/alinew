@@ -3,8 +3,10 @@ import type { NextRequest } from 'next/server';
 import { getCorsHeaders, handleCorsPreflight } from '@/lib/cors';
 
 export function middleware(request: NextRequest) {
-  // Apply CORS to all /api/ endpoints
-  if (request.nextUrl.pathname.startsWith('/api')) {
+  const pathname = request.nextUrl.pathname;
+
+  // Apply CORS to all /api/ and /ralion/api/ endpoints
+  if (pathname.startsWith('/api') || pathname.startsWith('/ralion/api')) {
     // Immediate response for Preflight OPTIONS requests (no auth check, no redirect)
     if (request.method === 'OPTIONS') {
       return handleCorsPreflight(request);
@@ -23,5 +25,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/api/:path*'],
+  matcher: ['/api/:path*', '/ralion/api/:path*'],
 };
