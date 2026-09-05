@@ -725,29 +725,28 @@ export class ZernioSocialService {
    * Send a direct message or reply to a recipient
    */
   static async sendInboxReply(
-    conversationIdOrAccountId: string,
-    recipientId: string,
-    message: string
+    conversationIdOrParams: string | { conversationId: string; message: string; accountId?: string; recipientId?: string },
+    legacyRecipientId?: string,
+    legacyMessage?: string,
+    legacyAccountId?: string
   ): Promise<any> {
-    try {
-      return await this.request<any>(
-        `inbox/conversations/${encodeURIComponent(conversationIdOrAccountId)}/messages`,
-        'POST',
-        {
-          recipientId,
-          message,
-        }
-      );
-    } catch (e: any) {
-      if (e.status === 404 || e.statusCode === 404) {
-        return await this.request<any>('inbox/messages', 'POST', {
-          conversationId: conversationIdOrAccountId,
-          recipientId,
-          message,
-        });
-      }
-      throw e;
-    }
+    const isObject = typeof conversationIdOrParams === 'object';
+    const conversationId = isObject ? conversationIdOrParams.conversationId : conversationIdOrParams;
+    const message = isObject ? conversationIdOrParams.message : legacyMessage || '';
+    const recipientId = isObject ? conversationIdOrParams.recipientId : legacyRecipientId;
+    const accountId = isObject ? conversationIdOrParams.accountId : legacyAccountId;
+
+    const payload: Record<string, any> = {
+      message,
+    };
+    if (accountId) payload.accountId = accountId;
+    if (recipientId) payload.recipientId = recipientId;
+
+    return await this.request<any>(
+      `inbox/conversations/${encodeURIComponent(conversationId)}/messages`,
+      'POST',
+      payload
+    );
   }
 
   // =====================================================================

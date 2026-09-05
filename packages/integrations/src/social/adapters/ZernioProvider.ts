@@ -364,15 +364,16 @@ export class ZernioProvider extends SocialProvider {
    */
   async sendMessage(accessToken: string, message: SocialMessagePayload): Promise<SocialMessageResult> {
     try {
-      const targetAccountId = message.accountId || (accessToken !== 'zernio_master' ? accessToken : message.conversationId);
-      const res = await ZernioSocialService.sendInboxReply(
-        targetAccountId,
-        message.recipientId,
-        message.messageText
-      );
+      const accountId = message.accountId || (accessToken !== 'zernio_master' ? accessToken : undefined) || '6a82df7277555aae018b92b4';
+      const res = await ZernioSocialService.sendInboxReply({
+        conversationId: message.conversationId,
+        message: message.messageText,
+        accountId,
+        recipientId: message.recipientId,
+      });
       return {
         success: true,
-        messageId: res.id || res.messageId || `zmsg_${Date.now()}`,
+        messageId: res?.data?.messageId || res?.messageId || res?.id || `zmsg_${Date.now()}`,
         status: 'SENT',
       };
     } catch (err: any) {
