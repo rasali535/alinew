@@ -26,16 +26,23 @@ export async function GET(request: NextRequest) {
 
   let registeredProfiles: any[] = [];
   let socialConns: any[] = [];
-  let socialMap: Record<string, { meta: 'CONNECTED' | 'DISCONNECTED'; zernio: 'CONNECTED' | 'DISCONNECTED' }> = {};
+  let socialDests: any[] = [];
+  let socialMap: Record<string, { 
+    meta: 'CONNECTED' | 'DISCONNECTED'; 
+    zernio: 'CONNECTED' | 'DISCONNECTED';
+    facebookPage?: string;
+    facebookFollowers?: number;
+  }> = {};
 
   if (supabaseUrl && serviceKey) {
     try {
       const supabase = createClient(supabaseUrl, serviceKey);
 
-      const [profsRes, connsRes, zRes] = await Promise.allSettled([
+      const [profsRes, connsRes, zRes, destsRes] = await Promise.allSettled([
         supabase.from('profiles').select('id, full_name, email, created_at'),
-        supabase.from('social_connections').select('organization_id, workspace_id, user_id, connection_status, provider, account_name, metadata'),
+        supabase.from('social_connections').select('organization_id, workspace_id, user_id, connection_status, provider, account_name, followers_count, metadata'),
         supabase.from('social_provider_profiles').select('organization_id, workspace_id, user_id, status, provider'),
+        supabase.from('social_destinations').select('organization_id, workspace_id, user_id, status, platform, page_name, followers_count'),
       ]);
 
       if (profsRes.status === 'fulfilled' && profsRes.value.data) {
@@ -44,28 +51,46 @@ export async function GET(request: NextRequest) {
       if (connsRes.status === 'fulfilled' && connsRes.value.data) {
         socialConns = connsRes.value.data;
         socialConns.forEach(c => {
-          const org = c.organization_id || c.workspace_id || c.user_id;
-          if (org) {
+          const ids = [c.organization_id, c.workspace_id, c.user_id].filter(Boolean);
+          ids.forEach(org => {
             if (!socialMap[org]) {
               socialMap[org] = { meta: 'DISCONNECTED', zernio: 'DISCONNECTED' };
             }
-            if (c.provider === 'facebook' && c.connection_status === 'CONNECTED') {
+            if (c.provider === 'facebook' && (c.connection_status === 'CONNECTED' || c.connection_status === 'ACTIVE' || c.connection_status === 'connected')) {
               socialMap[org].meta = 'CONNECTED';
+              socialMap[org].facebookPage = c.account_name || c.metadata?.pageName || c.metadata?.page_name || socialMap[org].facebookPage;
+              socialMap[org].facebookFollowers = Number(c.followers_count || c.metadata?.followers_count || c.metadata?.fanCount || socialMap[org].facebookFollowers || 0);
             }
-          }
+          });
+        });
+      }
+      if (destsRes.status === 'fulfilled' && destsRes.value.data) {
+        socialDests = destsRes.value.data;
+        socialDests.forEach(d => {
+          const ids = [d.organization_id, d.workspace_id, d.user_id].filter(Boolean);
+          ids.forEach(org => {
+            if (!socialMap[org]) {
+              socialMap[org] = { meta: 'DISCONNECTED', zernio: 'DISCONNECTED' };
+            }
+            if (d.platform === 'facebook' && (d.status === 'CONNECTED' || d.status === 'ACTIVE' || d.status === 'connected')) {
+              socialMap[org].meta = 'CONNECTED';
+              if (d.page_name) socialMap[org].facebookPage = d.page_name;
+              if (d.followers_count) socialMap[org].facebookFollowers = Number(d.followers_count);
+            }
+          });
         });
       }
       if (zRes.status === 'fulfilled' && zRes.value.data) {
         zRes.value.data.forEach((z: any) => {
-          const org = z.organization_id || z.workspace_id || z.user_id;
-          if (org) {
+          const ids = [z.organization_id, z.workspace_id, z.user_id].filter(Boolean);
+          ids.forEach(org => {
             if (!socialMap[org]) {
               socialMap[org] = { meta: 'DISCONNECTED', zernio: 'DISCONNECTED' };
             }
-            if (z.status === 'ACTIVE') {
+            if (z.status === 'ACTIVE' || z.status === 'CONNECTED') {
               socialMap[org].zernio = 'CONNECTED';
             }
-          }
+          });
         });
       }
     } catch (err: any) {
@@ -170,10 +195,14 @@ export async function GET(request: NextRequest) {
     // Check meta & zernio status across orgId and aliases
     let metaStatus: 'CONNECTED' | 'DISCONNECTED' = socialMap[orgId]?.meta || 'DISCONNECTED';
     let zernioStatus: 'CONNECTED' | 'DISCONNECTED' = socialMap[orgId]?.zernio || 'DISCONNECTED';
+    let facebookPage = socialMap[orgId]?.facebookPage;
+    let facebookFollowers = socialMap[orgId]?.facebookFollowers;
 
     for (const a of aliases) {
       if (socialMap[a]?.meta === 'CONNECTED') metaStatus = 'CONNECTED';
       if (socialMap[a]?.zernio === 'CONNECTED') zernioStatus = 'CONNECTED';
+      if (socialMap[a]?.facebookPage && !facebookPage) facebookPage = socialMap[a].facebookPage;
+      if (socialMap[a]?.facebookFollowers && !facebookFollowers) facebookFollowers = socialMap[a].facebookFollowers;
     }
 
     return {
@@ -190,6 +219,9 @@ export async function GET(request: NextRequest) {
       websiteIngestionStatus: p?.websiteUrl?.value ? 'VERIFIED' : 'NONE',
       metaStatus,
       zernioStatus,
+      facebookStatus: metaStatus,
+      facebookPage,
+      facebookFollowers,
       mariStatus: 'ACTIVE',
       creativeCount: assets.length,
       socialPostCount: 0,

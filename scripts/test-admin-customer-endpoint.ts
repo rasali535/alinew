@@ -15,6 +15,15 @@ async function test() {
   const data = await res.json();
   console.log('Total customers:', data.total);
   console.log('Customers list:');
-  console.table(data.data.map((c: any) => ({ id: c.id, name: c.name, email: c.ownerEmail, plan: c.plan })));
+  console.table(data.data.map((c: any) => ({
+    id: c.id,
+    name: c.name,
+    email: c.ownerEmail,
+    plan: c.plan,
+    metaStatus: c.metaStatus,
+    facebookStatus: c.facebookStatus,
+    facebookPage: c.facebookPage,
+    facebookFollowers: c.facebookFollowers,
+  })));
 }
 test().catch(console.error);

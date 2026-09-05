@@ -43,6 +43,9 @@ export interface CustomerSummaryItem {
   mariStatus: 'ACTIVE' | 'STANDBY';
   creativeCount: number;
   socialPostCount: number;
+  facebookPage?: string;
+  facebookFollowers?: number;
+  facebookStatus?: 'CONNECTED' | 'DISCONNECTED';
 }
 
 export interface SystemHealthMetric {

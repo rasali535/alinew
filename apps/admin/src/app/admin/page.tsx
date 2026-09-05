@@ -524,7 +524,7 @@ export default function PlatformAdminPortal() {
                       <th className="p-3.5">Plan</th>
                       <th className="p-3.5">Balance</th>
                       <th className="p-3.5">Website Ingestion</th>
-                      <th className="p-3.5">Social</th>
+                      <th className="p-3.5">Facebook & Social</th>
                       <th className="p-3.5">Status</th>
                       <th className="p-3.5 text-right">Actions</th>
                     </tr>
@@ -554,9 +554,29 @@ export default function PlatformAdminPortal() {
                             </span>
                           </td>
                           <td className="p-3.5">
-                            <span className={`text-[11px] ${c.metaStatus === 'CONNECTED' ? 'text-blue-400 font-medium' : 'text-zinc-500'}`}>
-                              FB: {c.metaStatus}
-                            </span>
+                            {c.metaStatus === 'CONNECTED' || c.facebookStatus === 'CONNECTED' ? (
+                              <div className="space-y-0.5">
+                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
+                                  Facebook Connected
+                                </span>
+                                {c.facebookPage && (
+                                  <div className="text-[11px] text-zinc-300 font-medium truncate max-w-[150px]" title={c.facebookPage}>
+                                    {c.facebookPage}
+                                  </div>
+                                )}
+                                {typeof c.facebookFollowers === 'number' && c.facebookFollowers > 0 && (
+                                  <div className="text-[10px] text-zinc-500">
+                                    {c.facebookFollowers.toLocaleString()} followers
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-800/80 text-zinc-400 border border-zinc-700/40">
+                                <span className="w-1.5 h-1.5 rounded-full bg-zinc-500"></span>
+                                Not Connected
+                              </span>
+                            )}
                           </td>
                           <td className="p-3.5">
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
@@ -613,7 +633,7 @@ export default function PlatformAdminPortal() {
                   <button onClick={() => setInspectedOrg(null)} className="text-zinc-400 hover:text-white text-xs font-semibold">Close Drawer</button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
                   <div className="p-3.5 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
                     <div className="text-zinc-400 font-semibold mb-1">Layer 1 Profile</div>
                     <div>Company: <span className="text-white font-medium">{inspectedOrg.profile?.companyName || 'Not Ingested'}</span></div>
@@ -626,6 +646,13 @@ export default function PlatformAdminPortal() {
                     <div>Plan: <span className="text-emerald-400 font-medium">{inspectedOrg.subscription?.planId || 'COMMUNITY'}</span></div>
                     <div>Balance: <span className="text-amber-400 font-bold">{inspectedOrg.wallet?.balance ?? 0}</span> credits</div>
                     <div>Total Consumed: <span className="text-zinc-300">{inspectedOrg.wallet?.totalConsumed ?? 0}</span></div>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
+                    <div className="text-zinc-400 font-semibold mb-1">Facebook & Social</div>
+                    <div>Status: <span className={inspectedOrg.metaStatus === 'CONNECTED' || inspectedOrg.facebookStatus === 'CONNECTED' ? 'text-blue-400 font-medium' : 'text-zinc-400'}>{inspectedOrg.metaStatus === 'CONNECTED' || inspectedOrg.facebookStatus === 'CONNECTED' ? 'Facebook Connected' : 'Not Connected'}</span></div>
+                    {inspectedOrg.facebookPage && <div>Page: <span className="text-white font-medium">{inspectedOrg.facebookPage}</span></div>}
+                    {typeof inspectedOrg.facebookFollowers === 'number' && inspectedOrg.facebookFollowers > 0 && <div>Audience: <span className="text-zinc-300">{inspectedOrg.facebookFollowers.toLocaleString()} followers</span></div>}
                   </div>
 
                   <div className="p-3.5 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
