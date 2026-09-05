@@ -413,7 +413,7 @@ export class BusinessKnowledgeProfileService {
     const version = (existing?.knowledgeVersion || 0) + 1;
 
     const companyName = options?.overrideName || crawled.title || orgId;
-    const industry = options?.overrideIndustry || crawled.industry || 'Unspecified Industry';
+    const industry = options?.overrideIndustry || 'Unspecified Industry';
 
     const profile: BusinessKnowledgeProfile = {
       organizationId: orgId,
@@ -512,7 +512,7 @@ export class BusinessKnowledgeProfileService {
         lastUpdated: timestamp,
       },
       publicContacts: {
-        value: crawled.contacts,
+        value: crawled.contactInfo,
         sourceType: 'WEBSITE',
         sourceUrl: crawled.normalizedUrl,
         confidence: 0.95,
