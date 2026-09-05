@@ -1012,7 +1012,7 @@ Rules:
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          connectionId: activeFbPage?.id || activeConn?.id || undefined,
+          connectionId: activeConn?.id || activeFbPage?.id || undefined,
           provider: 'facebook',
           conversationId: activeConversationId,
           recipientId: recipientId,
@@ -1020,8 +1020,13 @@ Rules:
         }),
       });
 
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || `Server responded with status ${res.status}`);
+      }
+
       const newMsg = {
-        id: `msg_${Date.now()}`,
+        id: data.result?.messageId || `msg_${Date.now()}`,
         direction: 'OUTBOUND',
         sender_name: activeFbPage?.name || 'Support',
         message_text: inboxReplyText.trim(),

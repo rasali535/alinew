@@ -181,25 +181,48 @@ export class SocialInboxService {
    * Send an outbound reply message to a conversation
    */
   static async sendReply(params: {
-    connectionId: string;
-    provider: SocialPlatformType;
+    connectionId?: string;
+    provider?: SocialPlatformType;
     conversationId: string;
     recipientId: string;
     messageText: string;
     userId: string;
+    workspaceId?: string;
+    organizationId?: string;
     senderName?: string;
   }) {
     const supabase = getServiceSupabase();
+    const provider = params.provider || 'facebook';
 
-    // Check connection infrastructure type
-    const { data: conn } = await supabase
-      .from('social_connections')
-      .select('id, infrastructure_provider, zernio_account_id')
-      .eq('id', params.connectionId)
-      .maybeSingle();
+    // 1. Authoritatively resolve tenant connection
+    let conn: any = null;
+
+    if (params.connectionId && !params.connectionId.startsWith('acc-') && !params.connectionId.startsWith('fb-page-')) {
+      const { data } = await supabase
+        .from('social_connections')
+        .select('*')
+        .eq('id', params.connectionId)
+        .maybeSingle();
+      conn = data;
+    }
+
+    if (!conn) {
+      // Find active connection for this tenant/workspace/user
+      const orgOrUser = params.workspaceId || params.organizationId || params.userId;
+      const { data } = await supabase
+        .from('social_connections')
+        .select('*')
+        .eq('provider', provider)
+        .eq('connection_status', 'CONNECTED')
+        .or(`workspace_id.eq.${orgOrUser},user_id.eq.${params.userId}`)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      conn = data;
+    }
 
     const isZernio = conn?.infrastructure_provider === 'zernio';
-    let result: any;
+    let result: any = null;
 
     if (isZernio) {
       const zernioProvider = SocialProviderRegistry.getZernioProvider();
@@ -207,14 +230,31 @@ export class SocialInboxService {
         conversationId: params.conversationId,
         recipientId: params.recipientId,
         messageText: params.messageText,
+        accountId: conn?.zernio_account_id,
       });
     } else {
-      const token = await SocialTokenManager.getValidToken(params.connectionId, params.provider);
-      if (!token) {
-        throw new Error(`[SocialInboxService] ${params.provider} authentication token expired. Please reconnect.`);
+      // Resolve valid token
+      let token = conn?.access_token;
+      if (!token && conn?.id) {
+        token = await SocialTokenManager.getValidToken(conn.id, provider);
       }
 
-      const adapter = SocialProviderRegistry.getProvider(params.provider, 'native');
+      if (!token) {
+        // Check social_account_tokens table
+        const { data: tokenRow } = await supabase
+          .from('social_account_tokens')
+          .select('access_token')
+          .eq('user_id', params.userId)
+          .eq('provider', provider)
+          .maybeSingle();
+        token = tokenRow?.access_token;
+      }
+
+      if (!token) {
+        throw new Error(`[SocialInboxService] ${provider} authentication token expired. Please reconnect.`);
+      }
+
+      const adapter = SocialProviderRegistry.getProvider(provider, 'native');
       result = await adapter.sendMessage(token, {
         conversationId: params.conversationId,
         recipientId: params.recipientId,
@@ -222,15 +262,16 @@ export class SocialInboxService {
       });
     }
 
-    if (!result.success) {
-      throw new Error(`[SocialInboxService] Message send failed: ${result.error || 'Unknown error'}`);
+    if (!result || !result.success) {
+      throw new Error(`[SocialInboxService] Message send failed: ${result?.error || 'Unknown provider error'}`);
     }
 
-    // Persist outbound message to inbox log — non-fatal if table not yet created
+    // 2. Persist outbound message to inbox log
+    const resolvedConnectionId = conn?.id || params.connectionId || `conn_${params.userId}`;
     try {
-      const { error: insertErr } = await supabase.from('social_inbox_messages').insert({
-        connection_id: params.connectionId,
-        provider: params.provider,
+      await supabase.from('social_inbox_messages').insert({
+        connection_id: resolvedConnectionId,
+        provider,
         conversation_id: params.conversationId,
         sender_id: params.userId,
         sender_name: params.senderName || 'Support Agent',
@@ -240,13 +281,15 @@ export class SocialInboxService {
         status: 'SENT',
         timestamp: new Date().toISOString(),
       });
-      if (insertErr) {
-        console.warn('[SocialInboxService] Inbox message log write notice:', insertErr.message);
-      }
     } catch (logErr: any) {
-      console.warn('[SocialInboxService] Inbox message log write skipped:', logErr.message);
+      console.warn('[SocialInboxService] Inbox message log write notice:', logErr.message);
     }
 
-    return result;
+    return {
+      success: true,
+      messageId: result.messageId || `msg_${Date.now()}`,
+      status: 'SENT',
+      conversationId: params.conversationId,
+    };
   }
 }

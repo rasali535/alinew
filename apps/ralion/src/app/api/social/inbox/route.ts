@@ -51,6 +51,8 @@ export async function POST(request: NextRequest) {
       recipientId,
       messageText,
       userId: context.user.id,
+      workspaceId: context.workspace.id,
+      organizationId: context.workspace.id,
     });
 
     return corsJsonResponse({

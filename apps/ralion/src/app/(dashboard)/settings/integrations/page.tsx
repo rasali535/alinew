@@ -31,9 +31,26 @@ import { getRalionApiUrl } from '@/lib/api-config';
 
 export default function IntegrationHubPage() {
   const [activeCategory, setActiveCategory] = useState<string>('ALL');
-  const [connectedProviders, setConnectedProviders] = useState<string[]>(['google', 'meta']);
+  const [connectedProviders, setConnectedProviders] = useState<string[]>([]);
   const [syncingProviders, setSyncingProviders] = useState<string[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<IntegrationServiceMeta | null>(null);
+
+  React.useEffect(() => {
+    // Load real connected providers
+    try {
+      fetch(getRalionApiUrl('/api/social/connections'))
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data && Array.isArray(data.connections)) {
+            const active = data.connections
+              .filter((c: any) => c.status === 'connected' || c.connection_status === 'CONNECTED')
+              .map((c: any) => c.provider === 'facebook' ? 'meta' : c.provider);
+            setConnectedProviders(Array.from(new Set(active)));
+          }
+        })
+        .catch(() => {});
+    } catch {}
+  }, []);
 
   // "Connect My Business" Wizard state
   const [isWizardOpen, setIsWizardOpen] = useState(false);
@@ -215,14 +232,19 @@ export default function IntegrationHubPage() {
       {/* Service Integration Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredServices.map(service => {
-          const isConnected = connectedProviders.includes(service.provider);
+          const isSupported = service.provider === 'meta' || service.provider === 'facebook';
+          const isConnected = isSupported && connectedProviders.includes(service.provider);
           const isSyncing = syncingProviders.includes(service.provider);
 
           return (
             <Card
               key={service.provider}
-              className={`flex flex-col justify-between p-5 border-zinc-800 bg-zinc-900/60 hover:border-blue-500/40 transition-all ${
-                isConnected ? 'border-blue-500/30 bg-blue-950/10' : ''
+              className={`flex flex-col justify-between p-5 border-zinc-800 bg-zinc-900/60 transition-all ${
+                isConnected
+                  ? 'border-blue-500/40 bg-blue-950/15'
+                  : isSupported
+                  ? 'hover:border-blue-500/40'
+                  : 'opacity-75 hover:border-zinc-700'
               }`}
             >
               <div>
@@ -239,19 +261,27 @@ export default function IntegrationHubPage() {
                     </div>
                   </div>
 
-                  <Badge variant={isConnected ? 'success' : 'default'} className="text-[10px] shrink-0">
-                    {isConnected ? (isSyncing ? 'Syncing...' : 'Connected') : 'Disconnected'}
-                  </Badge>
+                  {isSupported ? (
+                    <Badge variant={isConnected ? 'success' : 'default'} className="text-[10px] shrink-0">
+                      {isConnected ? (isSyncing ? 'Syncing...' : 'Connected') : 'Available'}
+                    </Badge>
+                  ) : (
+                    <Badge variant="purple" className="text-[9px] shrink-0 bg-purple-950/60 text-purple-300 border-purple-800/60 font-mono">
+                      Coming Soon
+                    </Badge>
+                  )}
                 </div>
 
                 <p className="text-[11px] text-zinc-400 leading-relaxed mb-4">{service.description}</p>
 
                 {/* Scope & Permissions List */}
                 <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800/80 mb-4 flex flex-col gap-1.5 text-[10px] text-zinc-400 font-mono">
-                  <span className="text-zinc-500 uppercase tracking-wider font-bold text-[9px]">Granted Scopes:</span>
+                  <span className="text-zinc-500 uppercase tracking-wider font-bold text-[9px]">
+                    {isSupported ? 'Granted Scopes:' : 'Planned Capabilities:'}
+                  </span>
                   {service.defaultScopes.slice(0, 2).map((sc, i) => (
                     <span key={i} className="flex items-center gap-1.5 text-zinc-300">
-                      <ShieldCheck className="w-3 h-3 text-blue-400 shrink-0" />
+                      <ShieldCheck className={`w-3 h-3 shrink-0 ${isSupported ? 'text-blue-400' : 'text-zinc-600'}`} />
                       {sc}
                     </span>
                   ))}
@@ -260,31 +290,42 @@ export default function IntegrationHubPage() {
 
               {/* Action Footer */}
               <div className="flex items-center justify-between pt-3 border-t border-zinc-800/80">
-                {isConnected ? (
-                  <>
-                    <button
-                      onClick={() => handleManualSync(service.provider)}
-                      disabled={isSyncing}
-                      className="flex items-center gap-1.5 text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors"
+                {isSupported ? (
+                  isConnected ? (
+                    <>
+                      <button
+                        onClick={() => handleManualSync(service.provider)}
+                        disabled={isSyncing}
+                        className="flex items-center gap-1.5 text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                        Sync Now
+                      </button>
+                      <button
+                        onClick={() => handleDisconnect(service.provider)}
+                        className="text-xs font-semibold text-red-400 hover:text-red-300 transition-colors"
+                      >
+                        Disconnect
+                      </button>
+                    </>
+                  ) : (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => handleConnectClick(service)}
+                      className="w-full justify-center bg-blue-600 hover:bg-blue-500 text-white font-bold transition-colors gap-1.5"
                     >
-                      <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                      Sync Now
-                    </button>
-                    <button
-                      onClick={() => handleDisconnect(service.provider)}
-                      className="text-xs font-semibold text-red-400 hover:text-red-300 transition-colors"
-                    >
-                      Disconnect
-                    </button>
-                  </>
+                      <ExternalLink className="w-3.5 h-3.5" /> Connect Facebook OAuth
+                    </Button>
+                  )
                 ) : (
                   <Button
-                    variant="primary"
+                    variant="secondary"
                     size="sm"
-                    onClick={() => handleConnectClick(service)}
-                    className="w-full justify-center bg-zinc-800 hover:bg-blue-600 text-white font-bold transition-colors gap-1.5"
+                    disabled
+                    className="w-full justify-center bg-zinc-800/50 text-zinc-500 border-zinc-800 cursor-not-allowed font-medium text-xs gap-1.5"
                   >
-                    <ExternalLink className="w-3.5 h-3.5" /> Connect Official OAuth
+                    Coming Soon
                   </Button>
                 )}
               </div>

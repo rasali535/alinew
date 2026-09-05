@@ -373,10 +373,11 @@ export default function MariAiPage() {
   const handleSendQuery = async (queryText: string) => {
     if (!queryText.trim() || isProcessing) return;
 
+    const cleanQuery = queryText.trim();
     const userMsg: ChatMessage = {
       id: `u-${Date.now()}`,
       sender: 'USER',
-      text: queryText.trim(),
+      text: cleanQuery,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
@@ -385,31 +386,78 @@ export default function MariAiPage() {
     setIsProcessing(true);
 
     try {
-      let activeCtx = businessContext;
-      if (!activeCtx || !activeCtx.layer1.websiteKnowledge?.value || !activeCtx.layer2.social?.isConnected) {
-        activeCtx = await BusinessContextService.assembleContext(activeOrgId, { forceRefresh: true });
-        setBusinessContext(activeCtx);
+      let answerText = '';
+      let suggestedActions: MariActionPayload[] = [];
+      let ragContext: string | undefined = undefined;
+      let tokens: any = undefined;
+      let modelUsed = 'Mari Enterprise Intelligence';
+
+      // 1. Primary: Server-side authenticated Mari Chat API
+      try {
+        const apiUrl = getRalionApiUrl('/api/mari/chat');
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-organization-id': activeOrgId,
+            'x-workspace-id': activeOrgId,
+          },
+          body: JSON.stringify({
+            query: cleanQuery,
+            organizationId: activeOrgId,
+            activeScreen: { route: '/mari-ai', label: 'Mari Business Growth Partner' },
+          }),
+        });
+
+        if (res.ok) {
+          const contentType = res.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            const data = await res.json();
+            if (data.success && data.answer) {
+              answerText = data.answer;
+              suggestedActions = data.actionsSuggested || [];
+              ragContext = data.ragContext || undefined;
+              tokens = data.usage;
+              modelUsed = data.modelUsed || 'Mari Enterprise Intelligence (gemini-2.5-flash)';
+            }
+          }
+        }
+      } catch (apiErr) {
+        console.warn('[Mari UI] Server API notice, trying local engine:', apiErr);
       }
 
-      const ragSearch = mariKnowledgeManager.searchKnowledgeBase(queryText);
-      const ruleResponse = processMariQuery(queryText);
-      const apiResult = await callMariAiApi(queryText, undefined, activeCtx || businessContext);
+      // 2. Secondary Fallback: In-browser AI engine if server is unreachable
+      if (!answerText) {
+        let activeCtx = businessContext;
+        if (!activeCtx || !activeCtx.layer1.websiteKnowledge?.value || !activeCtx.layer2.social?.isConnected) {
+          activeCtx = await BusinessContextService.assembleContext(activeOrgId, { forceRefresh: true });
+          setBusinessContext(activeCtx);
+        }
 
-      const answerText = apiResult?.text || ruleResponse.answer;
+        const ragSearch = mariKnowledgeManager.searchKnowledgeBase(cleanQuery);
+        const ruleResponse = processMariQuery(cleanQuery);
+        const apiResult = await callMariAiApi(cleanQuery, undefined, activeCtx || businessContext);
+
+        answerText = apiResult?.text || ruleResponse.answer;
+        suggestedActions = (ruleResponse.suggestedActions || []) as MariActionPayload[];
+        ragContext = ragSearch.includes('No matching') ? undefined : ragSearch;
+        tokens = apiResult?.tokens || apiResult?.usage || {
+          promptTokens: Math.ceil((cleanQuery.length + 40) / 4),
+          completionTokens: Math.ceil((answerText?.length || 50) / 4),
+          totalTokens: Math.ceil(((cleanQuery.length + 40) + (answerText?.length || 50)) / 4),
+        };
+        modelUsed = apiResult?.modelInfo ? `${apiResult.modelInfo.category} (${apiResult.modelInfo.model})` : 'Mari Growth Intelligence';
+      }
 
       const mariMsg: ChatMessage = {
         id: `mari-${Date.now()}`,
         sender: 'MARI',
-        text: answerText,
-        actionsSuggested: ruleResponse.suggestedActions as MariActionPayload[],
-        ragContext: ragSearch.includes('No matching') ? undefined : ragSearch,
+        text: answerText || "I've reviewed your business context and am ready to assist with growth strategy and campaign execution.",
+        actionsSuggested: suggestedActions,
+        ragContext,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        tokens: apiResult?.tokens || apiResult?.usage || {
-          promptTokens: Math.ceil((queryText.length + 40) / 4),
-          completionTokens: Math.ceil(answerText.length / 4),
-          totalTokens: Math.ceil((queryText.length + 40 + answerText.length) / 4),
-        },
-        modelUsed: apiResult?.modelInfo ? `${apiResult.modelInfo.category} (${apiResult.modelInfo.model})` : 'Mari Growth Intelligence',
+        tokens,
+        modelUsed,
       };
 
       setMessages(prev => [...prev, mariMsg]);
@@ -417,7 +465,7 @@ export default function MariAiPage() {
       const errorMsg: ChatMessage = {
         id: `mari-err-${Date.now()}`,
         sender: 'MARI',
-        text: `Mari encountered an unexpected connection notice: ${err.message || 'Please retry your query.'}`,
+        text: `Mari couldn't complete that request right now. Please retry. (${err.message || 'Connection error'})`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       setMessages(prev => [...prev, errorMsg]);

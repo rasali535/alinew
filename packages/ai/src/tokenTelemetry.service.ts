@@ -66,6 +66,40 @@ export class MariTokenTelemetryService {
     this.records.set(organizationId, list);
     this.recordedRequestIds.add(requestId);
 
+    // Durable persistence to security audit log (non-blocking)
+    if (typeof process !== 'undefined' && process.env) {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+
+      if (supabaseUrl && serviceKey) {
+        import('@supabase/supabase-js').then(({ createClient }) => {
+          const client = createClient(supabaseUrl, serviceKey, {
+            auth: { persistSession: false, autoRefreshToken: false },
+          });
+          Promise.resolve(client.from('security_audit_logs').insert({
+            event_type: 'MARI_PAGE_ANALYSIS',
+            event_category: 'MARI_AI',
+            success: true,
+            user_id: userId || null,
+            actor_user_id: userId || null,
+            resource_type: 'TENANT_WORKSPACE',
+            resource_id: organizationId,
+            metadata: {
+              requestId,
+              provider,
+              model,
+              inputTokens,
+              outputTokens,
+              totalTokens,
+              action: 'MARI_AI_QUERY',
+            },
+            timestamp: record.timestamp,
+            created_at: record.timestamp,
+          })).catch(() => {});
+        }).catch(() => {});
+      }
+    }
+
     return record;
   }
 
@@ -95,6 +129,39 @@ export class MariTokenTelemetryService {
       }),
       { totalPromptTokens: 0, totalCompletionTokens: 0, totalTokens: 0, requestCount: 0 }
     );
+  }
+
+  /**
+   * Authoritative count of Mari interactions for an organization.
+   */
+  static async getAuthoritativeUsageCount(organizationId: string): Promise<number> {
+    const memCount = (this.records.get(organizationId) || []).length;
+
+    if (typeof process !== 'undefined' && process.env) {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+
+      if (supabaseUrl && serviceKey) {
+        try {
+          const { createClient } = await import('@supabase/supabase-js');
+          const client = createClient(supabaseUrl, serviceKey, {
+            auth: { persistSession: false, autoRefreshToken: false },
+          });
+
+          const { count, error } = await client
+            .from('security_audit_logs')
+            .select('id', { count: 'exact', head: true })
+            .eq('event_category', 'MARI_AI')
+            .eq('resource_id', organizationId);
+
+          if (!error && typeof count === 'number' && count > 0) {
+            return Math.max(memCount, count);
+          }
+        } catch {}
+      }
+    }
+
+    return memCount;
   }
 
   /**

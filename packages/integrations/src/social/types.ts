@@ -114,6 +114,8 @@ export interface SocialMessagePayload {
   conversationId: string;
   recipientId: string;
   messageText: string;
+  accountId?: string;
+  pageId?: string;
   mediaUrl?: string;
   templateName?: string;
   templateLanguage?: string;

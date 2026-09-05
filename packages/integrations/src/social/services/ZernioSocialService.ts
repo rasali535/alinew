@@ -725,15 +725,29 @@ export class ZernioSocialService {
    * Send a direct message or reply to a recipient
    */
   static async sendInboxReply(
-    accountId: string,
+    conversationIdOrAccountId: string,
     recipientId: string,
     message: string
   ): Promise<any> {
-    return this.request<any>('inbox/reply', 'POST', {
-      accountId,
-      recipientId,
-      message,
-    });
+    try {
+      return await this.request<any>(
+        `inbox/conversations/${encodeURIComponent(conversationIdOrAccountId)}/messages`,
+        'POST',
+        {
+          recipientId,
+          message,
+        }
+      );
+    } catch (e: any) {
+      if (e.status === 404 || e.statusCode === 404) {
+        return await this.request<any>('inbox/messages', 'POST', {
+          conversationId: conversationIdOrAccountId,
+          recipientId,
+          message,
+        });
+      }
+      throw e;
+    }
   }
 
   // =====================================================================

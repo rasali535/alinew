@@ -97,12 +97,12 @@ function selectGeminiModel(prompt: string): GeminiModelSelection {
 
   // Deep reasoning / audit / complex analysis
   if (/\b(reason|audit|evaluate|diagnose|complex|strategy|forecast|plan|roadmap|formula|logic)\b/i.test(p)) {
-    return { model: 'gemini-2.5-pro', category: 'Mari Strategic Reasoning', reasoning: true };
+    return { model: 'gemini-2.5-flash', category: 'Mari Strategic Reasoning', reasoning: true };
   }
 
   // Creative writing / marketing / copywriting
   if (/\b(write|draft|email|copy|headline|marketing|blog|story|pitch|announcement|press release|campaign)\b/i.test(p)) {
-    return { model: 'gemini-flash-latest', category: 'Mari Creative Intelligence', reasoning: false };
+    return { model: 'gemini-2.5-flash', category: 'Mari Creative Intelligence', reasoning: false };
   }
 
   // General business / CRM / growth intelligence (default)
@@ -120,17 +120,23 @@ interface GeminiCallResult {
 async function callGeminiApi(
   prompt: string,
   systemPrompt: string,
-  modelName: string
+  modelName: string = 'gemini-2.5-flash'
 ): Promise<GeminiCallResult | null> {
   const fullPrompt = systemPrompt
     ? `${systemPrompt}\n\nUser Request: ${prompt}`
     : prompt;
 
-  for (const key of GEMINI_KEYS) {
-    if (!key || key.startsWith('AQ.')) continue; // Google AI Studio requires AIza... key format
+  const activeKeys = [
+    process.env.GEMINI_API_KEY,
+    process.env.NEXT_PUBLIC_GEMINI_API_KEY,
+    ...GEMINI_KEYS,
+  ].filter(Boolean) as string[];
+
+  for (const key of Array.from(new Set(activeKeys))) {
+    if (!key || key.trim().length === 0) continue;
     try {
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${key}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${key.trim()}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -138,7 +144,7 @@ async function callGeminiApi(
             contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
             generationConfig: { temperature: 0.7, maxOutputTokens: 1500 },
           }),
-          signal: AbortSignal.timeout(3500),
+          signal: AbortSignal.timeout(15000),
         }
       );
 
