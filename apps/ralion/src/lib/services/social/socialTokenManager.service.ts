@@ -65,19 +65,7 @@ export class SocialTokenManager {
         updated_at: new Date().toISOString(),
       }).eq('id', params.connectionId);
 
-      // 2. Try saving to separate social_credentials table if provisioned
-      try {
-        await supabase.from('social_credentials').upsert({
-          social_connection_id: params.connectionId,
-          encrypted_access_token: encryptedAccessToken,
-          encrypted_refresh_token: encryptedRefreshToken,
-          token_type: params.tokenType || 'Bearer',
-          expires_at: expiresAt,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'social_connection_id' });
-      } catch {}
-
-      // 3. Log audit event
+      // 2. Log audit event
       if (params.userId && params.provider) {
         await AuditLoggerService.log({
           eventType: 'META_TOKEN_CREATED',
@@ -106,21 +94,6 @@ export class SocialTokenManager {
     let encryptedAccessToken: string | null = null;
     let encryptedRefreshToken: string | null = null;
     let expiresAt: number | null = null;
-
-    // 1. Try social_credentials
-    try {
-      const { data: creds, error } = await supabase
-        .from('social_credentials')
-        .select('*')
-        .eq('social_connection_id', connectionId)
-        .maybeSingle();
-
-      if (!error && creds?.encrypted_access_token) {
-        encryptedAccessToken = creds.encrypted_access_token;
-        encryptedRefreshToken = creds.encrypted_refresh_token;
-        expiresAt = creds.expires_at ? new Date(creds.expires_at).getTime() : null;
-      }
-    } catch {}
 
     // 2. Fallback to social_connections metadata
     if (!encryptedAccessToken) {
@@ -193,10 +166,7 @@ export class SocialTokenManager {
 
     const supabase = getServiceSupabase();
 
-    // 1. Delete credentials from vault
-    await supabase.from('social_credentials').delete().eq('social_connection_id', connectionId);
-
-    // 2. Mark connection disconnected
+    // Mark connection disconnected
     await supabase.from('social_connections').update({
       connection_status: 'DISCONNECTED',
       token_status: 'TOKEN_REVOKED',

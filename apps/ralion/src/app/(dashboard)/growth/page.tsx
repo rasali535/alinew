@@ -1546,7 +1546,6 @@ Rules:
 
       if (user) {
         if (isConnectionId) {
-          await supabase.from('social_credentials').delete().eq('social_connection_id', targetIdOrProvider);
           await supabase.from('social_connections').update({
             connection_status: 'DISCONNECTED',
             token_status: 'TOKEN_REVOKED',

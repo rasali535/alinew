@@ -116,18 +116,6 @@ export async function storeOAuthTokens(params: {
 
     if (!connErr && connData?.id) {
       connectionId = connData.id;
-
-      // 2. Vault isolated AES-256-GCM token in social_credentials (if provisioned)
-      try {
-        await supabase.from('social_credentials').upsert({
-          social_connection_id: connData.id,
-          encrypted_access_token: encryptedAccessToken,
-          encrypted_refresh_token: encryptedRefreshToken,
-          token_type: 'Bearer',
-          expires_at: tokenExpiresAt,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'social_connection_id' });
-      } catch {}
     } else if (connErr) {
       console.warn('[SocialService] connErr:', connErr.message);
     }
@@ -220,37 +208,6 @@ export async function loadOAuthTokens(userId: string, provider: string, connecti
       }
     }
 
-    // 2. Check social_credentials by connection ID
-    try {
-      const { data: creds } = await supabase
-        .from('social_credentials')
-        .select('*, social_connections(*)')
-        .eq('social_connection_id', connectionId)
-        .maybeSingle();
-
-      if (creds && creds.encrypted_access_token) {
-        const conn = creds.social_connections;
-        return {
-          accessToken: decryptToken(creds.encrypted_access_token),
-          refreshToken: creds.encrypted_refresh_token ? decryptToken(creds.encrypted_refresh_token) : undefined,
-          expiresAt: creds.expires_at ? new Date(creds.expires_at) : undefined,
-          record: {
-            id: creds.social_connection_id,
-            provider: conn?.provider || provider,
-            account_handle: conn?.username ? `@${conn.username}` : `@${provider}`,
-            account_label: conn?.account_name || provider,
-            followers_count: Number(conn?.followers_count || 0),
-            avatar_url: conn?.profile_image_url,
-            page_id: conn?.provider_account_id,
-            scopes: conn?.scopes || [],
-            status: 'connected',
-            connected_at: conn?.connected_at,
-            last_synced_at: conn?.last_sync_at,
-            extra_meta: conn?.metadata || {},
-          } as SocialAccountRecord
-        };
-      }
-    } catch {}
   }
 
   // Fallback to social_connections by user and provider
@@ -371,10 +328,6 @@ export async function deleteOAuthToken(userId: string, provider: string, connect
   const supabase = getServiceSupabase();
 
   if (connectionId) {
-    try {
-      await supabase.from('social_credentials').delete().eq('social_connection_id', connectionId);
-    } catch {}
-
     const { data: conn } = await supabase.from('social_connections').select('metadata').eq('id', connectionId).maybeSingle();
     const sanitizedMeta = { ...(conn?.metadata || {}) };
     delete sanitizedMeta.encrypted_access_token;
