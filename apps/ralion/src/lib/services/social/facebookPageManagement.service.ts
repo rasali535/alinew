@@ -309,6 +309,22 @@ export class FacebookPageManagementService {
         fbToken = await SocialTokenManager.getValidToken(primaryConn.id, 'facebook');
       } catch {}
     }
+    if (!fbToken && params.userId) {
+      try {
+        const { data: sat } = await supabase
+          .from('social_account_tokens')
+          .select('encrypted_access_token, access_token')
+          .eq('user_id', params.userId)
+          .eq('provider', 'facebook')
+          .maybeSingle();
+        if (sat?.encrypted_access_token) {
+          const { decryptToken } = require('@ralion/integrations');
+          fbToken = decryptToken(sat.encrypted_access_token);
+        } else if (sat?.access_token && typeof sat.access_token === 'string' && sat.access_token.startsWith('EAA')) {
+          fbToken = sat.access_token;
+        }
+      } catch {}
+    }
 
     if (fbToken) {
       try {
@@ -336,6 +352,7 @@ export class FacebookPageManagementService {
               },
               connectedAt: isSelected ? primaryConn.connected_at : undefined,
               isCurrentDestination: isSelected,
+              ...(p.access_token ? { accessToken: p.access_token } : {}),
             });
           }
         }
@@ -539,6 +556,7 @@ export class FacebookPageManagementService {
           category: params.pageData.category || 'Business',
           avatarUrl: params.pageData.avatarUrl || null,
           provider_account_type: 'FACEBOOK_PAGE',
+          pageAccessToken: (params.pageData as any).accessToken || existingConn.metadata?.pageAccessToken,
           selected_at: new Date().toISOString(),
           zernioAccountId: params.pageData.zernioAccountId || existingConn.metadata?.zernioAccountId,
         };
@@ -556,6 +574,21 @@ export class FacebookPageManagementService {
             updated_at: new Date().toISOString(),
           })
           .eq('id', existingConn.id);
+
+        try {
+          await supabase
+            .from('social_account_tokens')
+            .update({
+              account_label: `Facebook Page (${params.pageData.name || 'Connected'})`,
+              account_handle: params.pageData.username || `@${(params.pageData.name || 'page').toLowerCase().replace(/\s+/g, '_')}`,
+              page_id: params.pageId,
+              avatar_url: params.pageData.avatarUrl || null,
+              followers_count: params.pageData.followersCount || 0,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('user_id', params.userId)
+            .eq('provider', 'facebook');
+        } catch {}
       }
     } catch (connUpdateErr: any) {
       console.warn('[FacebookPageManagement] Connection update note:', connUpdateErr.message);
@@ -749,8 +782,8 @@ export class FacebookPageManagementService {
 
     // 3. Query direct Meta Graph API posts feed (posts created directly on Facebook Page)
     const targetPageId = params.pageId || conn.provider_account_id || conn.metadata?.pageId;
-    let fbToken: string | null = null;
-    if (params.userId) {
+    let fbToken: string | null = conn.metadata?.pageAccessToken || null;
+    if (!fbToken && params.userId) {
       try {
         const cred = await MetaCredentialService.getValidToken(params.userId, 'facebook');
         if (cred?.accessToken && !cred.isExpired) {
@@ -761,6 +794,22 @@ export class FacebookPageManagementService {
     if (!fbToken && conn.id) {
       try {
         fbToken = await SocialTokenManager.getValidToken(conn.id, 'facebook');
+      } catch {}
+    }
+    if (!fbToken && params.userId) {
+      try {
+        const { data: sat } = await supabase
+          .from('social_account_tokens')
+          .select('encrypted_access_token, access_token')
+          .eq('user_id', params.userId)
+          .eq('provider', 'facebook')
+          .maybeSingle();
+        if (sat?.encrypted_access_token) {
+          const { decryptToken } = require('@ralion/integrations');
+          fbToken = decryptToken(sat.encrypted_access_token);
+        } else if (sat?.access_token && typeof sat.access_token === 'string' && sat.access_token.startsWith('EAA')) {
+          fbToken = sat.access_token;
+        }
       } catch {}
     }
 

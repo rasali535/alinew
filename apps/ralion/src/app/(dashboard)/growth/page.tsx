@@ -554,7 +554,13 @@ Rules:
 
       if (res.ok) {
         setOauthAlert({ type: 'success', message: `✅ Facebook Page connected: ${targetPage?.name || pageId}!` });
-        loadConnectedAccounts();
+        const accounts = await loadConnectedAccounts();
+        const fbAccount = accounts.find(a => a.provider === 'facebook');
+        if (fbAccount?.id) {
+          setSelectedAccountId(fbAccount.id);
+          fetchPostsForConnection(fbAccount.id);
+        }
+        await fetchFacebookPages();
         setIsPageSelectionModalOpen(false);
       }
     } catch (err: any) {
@@ -1230,10 +1236,13 @@ Rules:
     if (typeof window !== 'undefined') {
       const hash = window.location.hash;
       const search = window.location.search;
-      if (hash.includes('access_token=') || search.includes('code=')) {
+      if (hash.includes('access_token=') || search.includes('code=') || search.includes('connected=') || search.includes('profile_connected=')) {
         setTimeout(() => {
-          if (isMounted) loadConnectedAccounts();
-        }, 1200);
+          if (isMounted) {
+            loadConnectedAccounts();
+            fetchFacebookPages();
+          }
+        }, 800);
       }
     }
 
@@ -1242,6 +1251,40 @@ Rules:
       subscription.unsubscribe();
     };
   }, [loadConnectedAccounts, fetchPostsForConnection, fetchFacebookPages, selectedAccountId]);
+
+  // ── Auto-Detect OAuth Callback & Auto-Open Page Selection Modal ─────────
+  useEffect(() => {
+    if (!searchParams) return;
+    const connectedParam = searchParams.get('connected');
+    const profileConnected = searchParams.get('profile_connected');
+    const pageConnected = searchParams.get('page_connected');
+    const oauthError = searchParams.get('oauth_error');
+    const handle = searchParams.get('handle');
+
+    if (oauthError) {
+      setOauthAlert({
+        type: 'error',
+        message: `✕ OAuth Connection Notice: ${decodeURIComponent(oauthError)}`,
+      });
+      return;
+    }
+
+    if (connectedParam === 'facebook' || profileConnected === 'true') {
+      setOauthAlert({
+        type: 'success',
+        message: `✓ Facebook Profile connected (${handle ? decodeURIComponent(handle) : 'Authorized'})! Please choose your Facebook Page below.`,
+      });
+      setIsPageSelectionModalOpen(true);
+      fetchFacebookPages();
+      loadConnectedAccounts();
+    } else if (pageConnected === 'true') {
+      setOauthAlert({
+        type: 'success',
+        message: '✓ Facebook Page successfully connected and activated for Ralion Growth Studio!',
+      });
+      loadConnectedAccounts();
+    }
+  }, [searchParams, fetchFacebookPages, loadConnectedAccounts]);
 
   // ── Tab-Level Lazy Loading (Deffered Non-Critical Data) ───────────────────
   useEffect(() => {
