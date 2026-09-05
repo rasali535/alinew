@@ -331,9 +331,9 @@ export class FacebookPageManagementService {
         let nextPageUrl: string | null = `https://graph.facebook.com/v19.0/me/accounts?fields=id,name,username,category,access_token,tasks,picture,followers_count,fan_count&limit=100&access_token=${encodeURIComponent(fbToken)}`;
         
         while (nextPageUrl) {
-          const res = await fetch(nextPageUrl);
+          const res: Response = await fetch(nextPageUrl);
           if (!res.ok) break;
-          const data = await res.json();
+          const data: any = await res.json();
           const graphPages = data.data || [];
           for (const p of graphPages) {
             const pageId = String(p.id);
