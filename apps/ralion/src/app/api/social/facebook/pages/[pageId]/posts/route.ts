@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { FacebookPageManagementService } from '@/lib/services/social/facebookPageManagement.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 import { getCurrentRalionContext, authRequiredResponse, forbiddenResponse, getServiceSupabase } from '@/lib/auth/serverAuth';
+import { tenantCache, buildTenantCacheKey } from '@/lib/cache/tenantCache';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +25,12 @@ export async function GET(
     // 1. Enforce 401 Unauthorized for unauthenticated requests
     if (!context) {
       return authRequiredResponse(request);
+    }
+
+    const cacheKey = buildTenantCacheKey(context.user.id, context.workspace.id, 'facebook_page_posts', pageId);
+    const cached = tenantCache.get<any>(cacheKey);
+    if (cached) {
+      return corsJsonResponse(cached, undefined, request);
     }
 
     // 2. If a specific non-default pageId is requested, verify tenant ownership
@@ -55,12 +62,15 @@ export async function GET(
       pageId,
     });
 
-    return corsJsonResponse({
+    const respPayload = {
       success: true,
       pageId,
       posts,
       total: posts.length,
-    }, undefined, request);
+    };
+    tenantCache.set(cacheKey, respPayload, 60);
+
+    return corsJsonResponse(respPayload, undefined, request);
   } catch (err: any) {
     return corsJsonResponse(
       { success: false, error: err.message || 'Failed to retrieve Facebook posts' },

@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { FacebookPageManagementService } from '@/lib/services/social/facebookPageManagement.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 import { getCurrentRalionContext, authRequiredResponse } from '@/lib/auth/serverAuth';
+import { tenantCache, buildTenantCacheKey } from '@/lib/cache/tenantCache';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,17 +17,26 @@ export async function GET(request: NextRequest) {
       return authRequiredResponse(request);
     }
 
+    const cacheKey = buildTenantCacheKey(context.user.id, context.workspace.id, 'facebook_pages', 'list');
+    const cached = tenantCache.get<any>(cacheKey);
+    if (cached) {
+      return corsJsonResponse(cached, undefined, request);
+    }
+
     const result = await FacebookPageManagementService.discoverAvailablePages({
       organizationId: context.workspace.id,
       workspaceId: context.workspace.id,
       userId: context.user.id,
     });
 
-    return corsJsonResponse({
+    const payload = {
       success: true,
       pages: result.pages,
       entitlement: result.entitlement,
-    }, undefined, request);
+    };
+    tenantCache.set(cacheKey, payload, 60);
+
+    return corsJsonResponse(payload, undefined, request);
   } catch (err: any) {
     return corsJsonResponse(
       { success: false, error: err.message || 'Failed to discover Facebook Pages' },
@@ -48,6 +58,9 @@ export async function POST(request: NextRequest) {
     if (!body.pageId) {
       return corsJsonResponse({ success: false, error: 'pageId is required' }, { status: 400 }, request);
     }
+
+    const cacheKey = buildTenantCacheKey(context.user.id, context.workspace.id, 'facebook_pages', 'list');
+    tenantCache.invalidate(cacheKey);
 
     const result = await FacebookPageManagementService.connectPage({
       organizationId: context.workspace.id,

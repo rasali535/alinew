@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { FacebookPageManagementService } from '@/lib/services/social/facebookPageManagement.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 import { getCurrentRalionContext, authRequiredResponse, getServiceSupabase } from '@/lib/auth/serverAuth';
+import { tenantCache, buildTenantCacheKey } from '@/lib/cache/tenantCache';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,6 +31,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const limit = parseInt(searchParams.get('limit') || '50', 10);
+    const cacheKey = buildTenantCacheKey(context.user.id, context.workspace.id, 'posts_by_conn', `${socialConnectionId}:${limit}`);
+    const cached = tenantCache.get<any>(cacheKey);
+    if (cached) {
+      return corsJsonResponse(cached, undefined, request);
+    }
+
     const supabase = getServiceSupabase();
 
     // 1. Validate the connection belongs to this workspace/user (tenant boundary)
@@ -56,26 +64,23 @@ export async function GET(request: NextRequest) {
 
     // 2. Personal Facebook profile: posts are explicitly unavailable (do not emulate a page)
     if (caps.classification === 'FACEBOOK_PERSONAL_PROFILE') {
-      return corsJsonResponse(
-        {
-          success: true,
-          socialConnectionId,
-          provider: conn.provider,
-          accountType: 'FACEBOOK_PERSONAL_PROFILE',
-          accountTypeLabel: 'Personal Profile',
-          posts: [],
-          total: 0,
-          dataAvailable: false,
-          reason: 'facebook_personal_profile',
-          message: 'This is a personal Facebook profile. Personal profiles do not provide Facebook Page posts or analytics.',
-        },
-        undefined,
-        request
-      );
+      const respPayload = {
+        success: true,
+        socialConnectionId,
+        provider: conn.provider,
+        accountType: 'FACEBOOK_PERSONAL_PROFILE',
+        accountTypeLabel: 'Personal Profile',
+        posts: [],
+        total: 0,
+        dataAvailable: false,
+        reason: 'facebook_personal_profile',
+        message: 'This is a personal Facebook profile. Personal profiles do not provide Facebook Page posts or analytics.',
+      };
+      tenantCache.set(cacheKey, respPayload, 60);
+      return corsJsonResponse(respPayload, undefined, request);
     }
 
     const provider = conn.provider as string;
-    const limit = parseInt(searchParams.get('limit') || '50', 10);
 
     // 3. Facebook Business Page: delegate to full service (Zernio + Graph API + DB)
     if (provider === 'facebook') {
@@ -88,17 +93,16 @@ export async function GET(request: NextRequest) {
         limit,
       });
 
-      return corsJsonResponse(
-        {
-          success: true,
-          socialConnectionId,
-          provider,
-          posts,
-          total: posts.length,
-        },
-        undefined,
-        request
-      );
+      const respPayload = {
+        success: true,
+        socialConnectionId,
+        provider,
+        posts,
+        total: posts.length,
+      };
+      tenantCache.set(cacheKey, respPayload, 60);
+
+      return corsJsonResponse(respPayload, undefined, request);
     }
 
     // 3. Other providers: query social_posts strictly by social_connection_id

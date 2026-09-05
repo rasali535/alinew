@@ -192,6 +192,12 @@ function GrowthPageContent() {
   const [connectedAccounts, setConnectedAccounts] = useState<SocialAccount[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
+  const [isLoadingPosts, setIsLoadingPosts] = useState(false);
+  const [isLoadingPages, setIsLoadingPages] = useState(false);
+  const inFlightAccountsPromiseRef = React.useRef<Promise<SocialAccount[]> | null>(null);
+  const inFlightPostsPromiseRef = React.useRef<Record<string, Promise<any> | undefined>>({});
+  const isMountedRef = React.useRef(true);
+  const loadedTabsRef = React.useRef<Set<string>>(new Set());
   const [isSyncing, setIsSyncing] = useState<string | null>(null); // provider being synced
   const [oauthAlert, setOauthAlert] = useState<{
     type: 'success' | 'error' | 'info';
@@ -496,6 +502,7 @@ Rules:
 
   // Helper: Fetch Facebook Pages
   const fetchFacebookPages = useCallback(async () => {
+    setIsLoadingPages(true);
     try {
       const res = await authFetch('/api/social/facebook/pages');
       if (res.ok) {
@@ -512,6 +519,8 @@ Rules:
     } catch (e) {
       console.warn('[Growth] Page discovery fetch notice:', e);
       return [];
+    } finally {
+      setIsLoadingPages(false);
     }
   }, []);
 
@@ -629,66 +638,37 @@ Rules:
 
   // ── Load real connected accounts from Supabase with strict tenant isolation ─────────────
   const loadConnectedAccounts = useCallback(async (): Promise<SocialAccount[]> => {
-    setIsLoadingAccounts(true);
-    try {
-      const accountsMap: Record<string, SocialAccount> = {};
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      const user = session?.user;
+    if (inFlightAccountsPromiseRef.current) {
+      return inFlightAccountsPromiseRef.current;
+    }
 
-      if (!user) {
-        setConnectedAccounts([]);
-        setFacebookPagePosts([]);
-        setPostComments([]);
-        setInboxConversations([]);
-        setAvailableFacebookPages([]);
-        return [];
-      }
-
-      // 1. Direct query to Supabase social_connections scoped strictly to user.id
+    const task = (async () => {
+      setIsLoadingAccounts(true);
       try {
-        const { data: conns, error: connErr } = await supabase
-          .from('social_connections')
-          .select('id, provider, account_name, username, profile_image_url, followers_count, scopes, connection_status, token_status, provider_account_id, updated_at')
-          .eq('user_id', user.id);
+        const accountsMap: Record<string, SocialAccount> = {};
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        const user = session?.user;
 
-        if (!connErr && Array.isArray(conns)) {
-          conns.forEach((c: any) => {
-            const statusStr = (c.connection_status || '').toUpperCase();
-            if (statusStr === 'CONNECTED' || statusStr === 'ACTIVE' || c.connection_status === 'connected') {
-              const prov = (c.platform || c.provider || '').toLowerCase();
-              const fCount = Number(c.followers_count) || Number(c.metadata?.followers_count) || Number(c.metadata?.followers) || Number(c.metadata?.fan_count) || 0;
-              const accKey = c.id || `acc-${prov}-${c.provider_account_id || c.username || Date.now()}`;
-              accountsMap[accKey] = {
-                id: c.id || accKey,
-                provider: prov,
-                label: c.account_name || prov,
-                handle: c.username ? (c.username.startsWith('@') ? c.username : `@${c.username}`) : `@${prov}`,
-                connectedAt: c.updated_at ? new Date(c.updated_at).toLocaleDateString() : 'Connected',
-                status: 'connected',
-                scopes: c.scopes || [],
-                avatarUrl: c.profile_image_url,
-                followers: fCount > 0 ? fCount.toLocaleString() : '0',
-                providerAccountId: c.provider_account_id,
-              };
-            }
-          });
+        if (!user) {
+          setConnectedAccounts([]);
+          setFacebookPagePosts([]);
+          setPostComments([]);
+          setInboxConversations([]);
+          setAvailableFacebookPages([]);
+          return [];
         }
-      } catch (connDbErr) {
-        console.warn('[Growth] social_connections query skipped:', connDbErr);
-      }
 
-      // 2. Query dynamic backend connections endpoint with authenticated session token
-      try {
-        const res = await authFetch('/api/social/connections');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success && Array.isArray(data.connections)) {
-            data.connections.forEach((c: any) => {
-              const prov = (c.provider || c.platform || '').toLowerCase();
-              const fCount = Number(c.followers_count) || Number(c.metadata?.followers_count) || Number(c.metadata?.followers) || Number(c.metadata?.fan_count) || 0;
-              const accKey = c.id || `acc-${prov}-${c.provider_account_id || c.username || Date.now()}`;
-              if (!accountsMap[accKey]) {
+        // Query dynamic backend connections endpoint with authenticated session token
+        try {
+          const res = await authFetch('/api/social/connections');
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success && Array.isArray(data.connections)) {
+              data.connections.forEach((c: any) => {
+                const prov = (c.provider || c.platform || '').toLowerCase();
+                const fCount = Number(c.followers_count) || Number(c.metadata?.followers_count) || Number(c.metadata?.followers) || Number(c.metadata?.fan_count) || 0;
+                const accKey = c.id || `acc-${prov}-${c.provider_account_id || c.username || Date.now()}`;
                 accountsMap[accKey] = {
                   id: c.id || accKey,
                   provider: prov,
@@ -701,34 +681,38 @@ Rules:
                   followers: fCount > 0 ? fCount.toLocaleString() : '0',
                   providerAccountId: c.provider_account_id,
                 };
-              }
-            });
+              });
+            }
           }
+        } catch (backendConnErr) {
+          console.warn('[Growth] Dynamic backend connections query notice:', backendConnErr);
         }
-      } catch (backendConnErr) {
-        console.warn('[Growth] Dynamic backend connections query notice:', backendConnErr);
+
+        const accountList = Object.values(accountsMap);
+        setConnectedAccounts(accountList);
+
+        // User-scoped localStorage cache
+        try {
+          localStorage.setItem(`ralion_social_accounts_${user.id}`, JSON.stringify(accountList));
+          if (accountList.length > 0) {
+            const savedSelected = localStorage.getItem(`ralion_selected_social_account_${user.id}`);
+            const validSelected = accountList.find(a => a.id === savedSelected);
+            setSelectedAccountId(validSelected ? validSelected.id : accountList[0].id);
+          }
+        } catch {}
+
+        return accountList;
+      } catch (err) {
+        console.error('[Growth] Failed to load social accounts:', err);
+        return [];
+      } finally {
+        setIsLoadingAccounts(false);
+        inFlightAccountsPromiseRef.current = null;
       }
+    })();
 
-      const accountList = Object.values(accountsMap);
-      setConnectedAccounts(accountList);
-
-      // User-scoped localStorage cache
-      try {
-        localStorage.setItem(`ralion_social_accounts_${user.id}`, JSON.stringify(accountList));
-        if (accountList.length > 0) {
-          const savedSelected = localStorage.getItem(`ralion_selected_social_account_${user.id}`);
-          const validSelected = accountList.find(a => a.id === savedSelected);
-          setSelectedAccountId(validSelected ? validSelected.id : accountList[0].id);
-        }
-      } catch {}
-
-      return accountList;
-    } catch (err) {
-      console.error('[Growth] Failed to load social accounts:', err);
-      return [];
-    } finally {
-      setIsLoadingAccounts(false);
-    }
+    inFlightAccountsPromiseRef.current = task;
+    return task;
   }, []);
 
   // ── Load Posts for Selected Connection (Authoritative Account Isolation) ─
@@ -737,43 +721,60 @@ Rules:
    * Scoped strictly to socialConnectionId — never falls back to a default account.
    */
   const fetchPostsForConnection = useCallback(async (socialConnectionId: string) => {
-    if (!socialConnectionId) return;
-    try {
-      const res = await authFetch(`/api/social/posts/by-connection?socialConnectionId=${encodeURIComponent(socialConnectionId)}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.posts && Array.isArray(data.posts)) {
-          const provider = data.provider || 'facebook';
-
-          const livePosts: ContentPost[] = data.posts.map((p: any) => ({
-            id: p.id,
-            title: p.title || `${provider} Post`,
-            body: p.body || '',
-            platform: provider as any,
-            hashtags: p.hashtags || ['#RalionOS', '#Growth'],
-            status: p.status === 'published' ? 'published' : p.status === 'scheduled' ? 'scheduled' : 'draft',
-            publishedAt: p.publishedAt ? new Date(p.publishedAt).toLocaleString() : undefined,
-            rawPublishedAt: p.publishedAt || p.createdAt || p.published_at || p.created_time || p.scheduledFor || new Date().toISOString(),
-            scheduledAt: p.scheduledFor,
-            mediaUrl: p.mediaUrls?.[0],
-            mediaType: p.mediaType,
-            engagement: p.engagement || { likes: 0, shares: 0, reach: 0, comments: 0 },
-          }));
-
-          // Store in per-connection cache
-          setConnectionPosts(prev => ({ ...prev, [socialConnectionId]: data.posts }));
-
-          // For facebook accounts, also populate legacy facebookPagePosts state
-          if (provider === 'facebook') {
-            setFacebookPagePosts(data.posts);
-          }
-
-          setPosts(livePosts);
-        }
-      }
-    } catch (err) {
-      console.warn('[Growth] Posts fetch notice:', err);
+    if (!socialConnectionId) return [];
+    const inFlight = inFlightPostsPromiseRef.current[socialConnectionId];
+    if (inFlight) {
+      return inFlight;
     }
+
+    const task = (async () => {
+      setIsLoadingPosts(true);
+      try {
+        const res = await authFetch(`/api/social/posts/by-connection?socialConnectionId=${encodeURIComponent(socialConnectionId)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.posts && Array.isArray(data.posts)) {
+            const provider = data.provider || 'facebook';
+
+            const livePosts: ContentPost[] = data.posts.map((p: any) => ({
+              id: p.id,
+              title: p.title || `${provider} Post`,
+              body: p.body || '',
+              platform: provider as any,
+              hashtags: p.hashtags || ['#RalionOS', '#Growth'],
+              status: p.status === 'published' ? 'published' : p.status === 'scheduled' ? 'scheduled' : 'draft',
+              publishedAt: p.publishedAt ? new Date(p.publishedAt).toLocaleString() : undefined,
+              rawPublishedAt: p.publishedAt || p.createdAt || p.published_at || p.created_time || p.scheduledFor || new Date().toISOString(),
+              scheduledAt: p.scheduledFor,
+              mediaUrl: p.mediaUrls?.[0],
+              mediaType: p.mediaType,
+              engagement: p.engagement || { likes: 0, shares: 0, reach: 0, comments: 0 },
+            }));
+
+            // Store in per-connection cache
+            setConnectionPosts(prev => ({ ...prev, [socialConnectionId]: data.posts }));
+
+            // For facebook accounts, also populate legacy facebookPagePosts state
+            if (provider === 'facebook') {
+              setFacebookPagePosts(data.posts);
+            }
+
+            setPosts(livePosts);
+            return livePosts;
+          }
+        }
+        return [];
+      } catch (err) {
+        console.warn('[Growth] Posts fetch notice:', err);
+        return [];
+      } finally {
+        setIsLoadingPosts(false);
+        delete inFlightPostsPromiseRef.current[socialConnectionId];
+      }
+    })();
+
+    inFlightPostsPromiseRef.current[socialConnectionId] = task;
+    return task;
   }, []);
 
   // Backward-compatible wrapper for existing facebook callers
@@ -1111,10 +1112,12 @@ Rules:
     }
   }, [availableFacebookPages, selectedPageForConnect]);
 
+  // ── Growth Center Shell Initialization (Non-blocking & Concurrent) ──────
   useEffect(() => {
     let isMounted = true;
 
     const initializeGrowth = async () => {
+      // Step 1: Resolve authenticated accounts (cached/local available immediately)
       const accounts = await loadConnectedAccounts();
       if (!isMounted) return;
 
@@ -1122,23 +1125,16 @@ Rules:
         (a) => a.provider === 'facebook' && a.status === 'connected'
       );
 
-      // Load posts for the authoritative account (selected or first connected)
       const initialAccount = accounts.find(a => a.id === selectedAccountId) || accounts[0];
-      if (initialAccount?.id) {
-        await fetchPostsForConnection(initialAccount.id);
-      }
 
-      if (hasFacebook) {
-        const pages = await fetchFacebookPages();
-        await Promise.allSettled([
-          fetchInboxConversations(),
-          fetchPostComments(),
-          fetchMariGrowthData(),
-          fetchMarketResearchData(),
-          fetchBusinessLearningData(),
+      if (initialAccount?.id) {
+        // Step 2: Concurrently launch posts fetch & Facebook page discovery without blocking
+        Promise.allSettled([
+          fetchPostsForConnection(initialAccount.id),
+          hasFacebook ? fetchFacebookPages() : Promise.resolve([]),
         ]);
       } else if (accounts.length === 0) {
-        // Reset to clean empty state when no account connected
+        // Clean empty state when no accounts connected
         setFacebookPagePosts([]);
         setConnectionPosts({});
         setPostComments([]);
@@ -1154,11 +1150,14 @@ Rules:
 
     initializeGrowth();
 
-    // Auto-capture and store provider OAuth tokens (Facebook, Google, LinkedIn, etc.) returned by Supabase Auth
+    // Auto-capture and store provider OAuth tokens returned by Supabase Auth (deduplicated)
     const supabase = createClient();
-    
+    let isSyncingTokens = false;
+
     const syncSessionTokens = async (session: any) => {
-      if (!session?.user) return;
+      if (!session?.user || isSyncingTokens) return;
+      isSyncingTokens = true;
+
       try {
         const identities = session.user.identities || [];
         const accountsToCache: SocialAccount[] = [];
@@ -1182,79 +1181,6 @@ Rules:
             };
             accountsToCache.push(accObj);
 
-            // If provider is Facebook/Meta, query Graph API for real Pages
-            if (provKey === 'facebook' && session.provider_token) {
-              try {
-                const fbRes = await fetch(`https://graph.facebook.com/v19.0/me/accounts?fields=id,name,access_token,category,followers_count,picture{url}&access_token=${session.provider_token}`);
-                if (fbRes.ok) {
-                  const fbData = await fbRes.json();
-                  if (Array.isArray(fbData.data) && fbData.data.length > 0) {
-                    for (const page of fbData.data) {
-                      const pageAccount: SocialAccount = {
-                        id: `fb-page-${page.id}`,
-                        provider: 'facebook',
-                        label: page.name || 'Facebook Business Page',
-                        handle: `@${(page.name || 'facebook').toLowerCase().replace(/\s+/g, '_')}`,
-                        connectedAt: 'Today',
-                        status: 'connected',
-                        scopes: ['public_profile', 'email'],
-                        avatarUrl: page.picture?.data?.url || null,
-                        followers: page.followers_count ? page.followers_count.toLocaleString() : 'Active Page',
-                      };
-                      accountsToCache.push(pageAccount);
-
-                      // Save page token to Supabase
-                      await supabase.from('social_account_tokens').upsert({
-                        user_id: session.user.id,
-                        provider: 'facebook',
-                        access_token: page.access_token,
-                        account_label: page.name,
-                        account_handle: pageAccount.handle,
-                        avatar_url: pageAccount.avatarUrl,
-                        followers_count: page.followers_count || 0,
-                        status: 'connected',
-                        updated_at: new Date().toISOString(),
-                      }, { onConflict: 'user_id,provider' });
-
-                      // Fetch real posts for this Facebook page
-                      try {
-                        const postsRes = await fetch(`https://graph.facebook.com/v19.0/${page.id}/posts?fields=id,message,created_time,full_picture,shares,reactions.summary(true),comments.summary(true)&limit=10&access_token=${page.access_token}`);
-                        if (postsRes.ok) {
-                          const postsData = await postsRes.json();
-                          if (Array.isArray(postsData.data)) {
-                            const realPosts: ContentPost[] = postsData.data.map((p: any) => ({
-                              id: `fb-post-${p.id}`,
-                              title: p.message ? p.message.slice(0, 50) + '...' : 'Facebook Update',
-                              body: p.message || '',
-                              platform: 'facebook',
-                              hashtags: ['#FacebookLive'],
-                              status: 'published',
-                              publishedAt: new Date(p.created_time).toLocaleDateString(),
-                              mediaUrl: p.full_picture,
-                              mediaType: p.full_picture ? 'image' : undefined,
-                              engagement: {
-                                likes: p.reactions?.summary?.total_count || 0,
-                                shares: p.shares?.count || 0,
-                                reach: (p.reactions?.summary?.total_count || 0) * 12,
-                                comments: p.comments?.summary?.total_count || 0,
-                              }
-                            }));
-                            if (realPosts.length > 0) {
-                              setPosts(prev => [...realPosts, ...prev.filter(x => !realPosts.some(r => r.id === x.id))]);
-                            }
-                          }
-                        }
-                      } catch (pErr) {
-                        console.warn('[Growth] Facebook page posts query:', pErr);
-                      }
-                    }
-                  }
-                }
-              } catch (metaErr) {
-                console.warn('[Growth] Meta Graph API query:', metaErr);
-              }
-            }
-
             await supabase.from('social_account_tokens').upsert({
               user_id: session.user.id,
               provider: provKey,
@@ -1272,23 +1198,25 @@ Rules:
 
         if (accountsToCache.length > 0) {
           try {
-            const stored = JSON.parse(localStorage.getItem('ralion_connected_social_accounts') || '[]');
+            const cacheKey = `ralion_social_accounts_${session.user.id}`;
+            const stored = JSON.parse(localStorage.getItem(cacheKey) || '[]');
             const merged = [...stored.filter((s: any) => !accountsToCache.some(c => c.provider === s.provider)), ...accountsToCache];
-            localStorage.setItem('ralion_connected_social_accounts', JSON.stringify(merged));
+            localStorage.setItem(cacheKey, JSON.stringify(merged));
           } catch {}
         }
-        loadConnectedAccounts();
       } catch (err) {
         console.warn('[Growth] Auto-store provider token notice:', err);
+      } finally {
+        isSyncingTokens = false;
       }
     };
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) syncSessionTokens(session);
+      if (session && isMounted) syncSessionTokens(session);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
+      if (session && isMounted) {
         syncSessionTokens(session);
       }
     });
@@ -1299,15 +1227,43 @@ Rules:
       const search = window.location.search;
       if (hash.includes('access_token=') || search.includes('code=')) {
         setTimeout(() => {
-          loadConnectedAccounts();
+          if (isMounted) loadConnectedAccounts();
         }, 1200);
       }
     }
 
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
     };
-  }, [loadConnectedAccounts]);
+  }, [loadConnectedAccounts, fetchPostsForConnection, fetchFacebookPages, selectedAccountId]);
+
+  // ── Tab-Level Lazy Loading (Deffered Non-Critical Data) ───────────────────
+  useEffect(() => {
+    // 1. Lazy load Inbox when INBOX tab is opened
+    if (activeTab === 'INBOX' && !loadedTabsRef.current.has('INBOX')) {
+      loadedTabsRef.current.add('INBOX');
+      fetchInboxConversations();
+    }
+
+    // 2. Lazy load Intelligence / Mari / Market Research when relevant tab is opened
+    if ((activeTab === 'ANALYTICS' || activeTab === 'AI_STUDIO') && !loadedTabsRef.current.has('INTELLIGENCE')) {
+      loadedTabsRef.current.add('INTELLIGENCE');
+      Promise.allSettled([
+        fetchMariGrowthData(),
+        fetchMarketResearchData(),
+        fetchBusinessLearningData(),
+      ]);
+    }
+  }, [activeTab, fetchInboxConversations, fetchMariGrowthData, fetchMarketResearchData, fetchBusinessLearningData]);
+
+  useEffect(() => {
+    // 3. Lazy load comments when Comments modal or interaction is opened
+    if (isCommentsModalOpen && !loadedTabsRef.current.has('COMMENTS')) {
+      loadedTabsRef.current.add('COMMENTS');
+      fetchPostComments();
+    }
+  }, [isCommentsModalOpen, fetchPostComments]);
 
   // ── Handle redirect back from OAuth callback (?connected=provider or ?code=) ────────
   useEffect(() => {
