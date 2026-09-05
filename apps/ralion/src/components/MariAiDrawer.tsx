@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Send, Sparkles, Bot, FileText, Zap, CornerDownLeft } from 'lucide-react';
+import { X, Send, Sparkles, Bot, FileText, Zap, CornerDownLeft, ArrowRight } from 'lucide-react';
 import { processMariQuery, generateMarketingCampaign } from '@ralion/ai';
 import { Button, Badge } from '@ralion/ui';
+import { MariMarkdownMessage } from './MariMarkdownMessage';
 
 export interface MariAiDrawerProps {
   isOpen: boolean;
@@ -128,27 +129,7 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
                   )}
                 </div>
               )}
-              {(() => {
-                const text = msg.text;
-                const imgRegex = /!\[([^\]]*)\]\((.*?)\)/g;
-                if (!text.includes('![')) {
-                  return <p className="whitespace-pre-wrap">{text}</p>;
-                }
-                const parts = [];
-                let lastIndex = 0;
-                let match;
-                while ((match = imgRegex.exec(text)) !== null) {
-                  if (match.index > lastIndex) {
-                    parts.push(<span key={lastIndex} className="whitespace-pre-wrap">{text.substring(lastIndex, match.index)}</span>);
-                  }
-                  parts.push(<img key={match.index} src={match[2]} alt={match[1]} className="w-full h-auto rounded-lg my-3 shadow-md border border-zinc-700" loading="lazy" />);
-                  lastIndex = match.index + match[0].length;
-                }
-                if (lastIndex < text.length) {
-                  parts.push(<span key={lastIndex} className="whitespace-pre-wrap">{text.substring(lastIndex)}</span>);
-                }
-                return <div>{parts}</div>;
-              })()}
+              <MariMarkdownMessage text={msg.text} isUser={msg.sender === 'USER'} />
             </div>
 
             {/* Mari Creative Collaboration Action */}
@@ -174,8 +155,8 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
                   }}
                   className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-950/40 border border-purple-500/40 text-[11px] font-bold text-purple-300 hover:bg-purple-600/20 hover:border-purple-400 transition-all shadow-sm"
                 >
-                  <Sparkles className="w-3 h-3 text-purple-400" />
-                  Send Prompt to Creative Studio
+                  <Sparkles className="w-3 h-3 text-purple-400 shrink-0" />
+                  <span>Send Prompt to Creative Studio</span>
                 </button>
 
                 {/* Parse bracketed buttons in text e.g. [Create Reel] | [Create Visual] | [Open Growth Studio] */}
@@ -187,6 +168,7 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
                     'create visual': '/growth?tab=creatives',
                     'open growth studio': '/growth',
                     'connect facebook': '/growth?tab=channels',
+                    'connect facebook page': '/growth?tab=channels',
                     'generate creative': '/growth?tab=creatives',
                     'view crm pipeline': '/crm',
                     'sync website': '/settings',
@@ -217,10 +199,10 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
                           if (onNavigate) onNavigate(route);
                           onClose();
                         }}
-                        className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-zinc-900 border border-purple-500/30 text-[10px] font-semibold text-purple-300 hover:bg-purple-900/30 transition-all"
+                        className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-zinc-900 border border-purple-500/30 text-[10px] font-semibold text-purple-300 hover:bg-purple-900/30 transition-all"
                       >
-                        <Zap className="w-2.5 h-2.5 text-purple-400" />
-                        {label}
+                        <Zap className="w-2.5 h-2.5 text-purple-400 shrink-0" />
+                        <span>{label}</span>
                       </button>
                     );
                   });

@@ -67,6 +67,7 @@ import {
 } from '@ralion/ai';
 import { getRalionApiUrl } from '@/lib/api-config';
 import { useOrganization } from '@ralion/auth';
+import { MariMarkdownMessage } from '@/components/MariMarkdownMessage';
 
 interface ChatMessage {
   id: string;
@@ -406,6 +407,7 @@ export default function MariAiPage() {
             query: cleanQuery,
             organizationId: activeOrgId,
             activeScreen: { route: '/mari-ai', label: 'Mari Business Growth Partner' },
+            messages: [...messages, userMsg],
           }),
         });
 
@@ -435,8 +437,14 @@ export default function MariAiPage() {
         }
 
         const ragSearch = mariKnowledgeManager.searchKnowledgeBase(cleanQuery);
-        const ruleResponse = processMariQuery(cleanQuery);
-        const apiResult = await callMariAiApi(cleanQuery, undefined, activeCtx || businessContext);
+        const ruleResponse = processMariQuery(cleanQuery, activeCtx || businessContext);
+        const historyPayload = [...messages, userMsg].map(m => ({
+          role: (m.sender === 'USER' ? 'user' : 'model') as 'user' | 'model',
+          text: m.text,
+        }));
+        const apiResult = await callMariAiApi(cleanQuery, undefined, activeCtx || businessContext, {
+          conversationHistory: historyPayload,
+        });
 
         answerText = apiResult?.text || ruleResponse.answer;
         suggestedActions = (ruleResponse.suggestedActions || []) as MariActionPayload[];
@@ -916,112 +924,7 @@ export default function MariAiPage() {
                         : 'bg-zinc-950 border border-zinc-800/90 text-zinc-200'
                     }`}>
                       {/* Rich Media & Markdown Message Content */}
-                      {(() => {
-                        const text = m.text;
-                        // Image Regex: ![alt](url)
-                        const imgRegex = /!\[([^\]]*)\]\((.*?)\)/g;
-                        // Video Link Regex: \[Watch Video(?: Reel)?\]\((.*?)\)/gi
-                        const vidRegex = /\[Watch Video(?: Reel)?\]\((.*?)\)/gi;
-
-                        const elements: React.ReactNode[] = [];
-                        let lastIdx = 0;
-
-                        // Check for images
-                        let imgMatch;
-                        const hasImages = text.includes('![');
-                        const hasVideos = /\[Watch Video/i.test(text);
-
-                        if (!hasImages && !hasVideos) {
-                          return <p className="whitespace-pre-wrap">{text}</p>;
-                        }
-
-                        // Process images
-                        if (hasImages) {
-                          while ((imgMatch = imgRegex.exec(text)) !== null) {
-                            if (imgMatch.index > lastIdx) {
-                              elements.push(
-                                <p key={`t-${lastIdx}`} className="whitespace-pre-wrap my-1">
-                                  {text.substring(lastIdx, imgMatch.index)}
-                                </p>
-                              );
-                            }
-                            const imgUrl = imgMatch[2];
-                            const altText = imgMatch[1] || 'Generated Image';
-                            elements.push(
-                              <div key={`img-${imgMatch.index}`} className="my-3 overflow-hidden rounded-xl border border-purple-500/40 bg-zinc-950 shadow-2xl">
-                                <img
-                                  src={imgUrl}
-                                  alt={altText}
-                                  className="w-full max-h-[380px] object-cover rounded-xl transition-transform hover:scale-[1.01]"
-                                  loading="lazy"
-                                />
-                                <div className="p-2 flex items-center justify-between bg-zinc-900/90 text-[10px] text-zinc-400 border-t border-zinc-800">
-                                  <span className="font-mono text-purple-300">FLUX.1 High-Resolution Asset</span>
-                                  <a
-                                    href={imgUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="px-2 py-0.5 rounded bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 font-semibold"
-                                  >
-                                    View Full Size ↗
-                                  </a>
-                                </div>
-                              </div>
-                            );
-                            lastIdx = imgMatch.index + imgMatch[0].length;
-                          }
-                        }
-
-                        // Process videos
-                        if (hasVideos) {
-                          let vidMatch;
-                          while ((vidMatch = vidRegex.exec(text)) !== null) {
-                            if (vidMatch.index > lastIdx) {
-                              elements.push(
-                                <p key={`vt-${lastIdx}`} className="whitespace-pre-wrap my-1">
-                                  {text.substring(lastIdx, vidMatch.index)}
-                                </p>
-                              );
-                            }
-                            const vidUrl = vidMatch[1];
-                            elements.push(
-                              <div key={`vid-${vidMatch.index}`} className="my-3 overflow-hidden rounded-xl border border-purple-500/40 bg-zinc-950 shadow-2xl">
-                                <video
-                                  controls
-                                  autoPlay
-                                  loop
-                                  muted
-                                  playsInline
-                                  src={vidUrl}
-                                  className="w-full max-h-[340px] object-cover rounded-xl"
-                                />
-                                <div className="p-2 flex items-center justify-between bg-zinc-900/90 text-[10px] text-zinc-400 border-t border-zinc-800">
-                                  <span className="font-mono text-indigo-300">CogVideoX Animation Stream</span>
-                                  <a
-                                    href={vidUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="px-2 py-0.5 rounded bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 font-semibold"
-                                  >
-                                    Open Player ↗
-                                  </a>
-                                </div>
-                              </div>
-                            );
-                            lastIdx = vidMatch.index + vidMatch[0].length;
-                          }
-                        }
-
-                        if (lastIdx < text.length) {
-                          elements.push(
-                            <p key={`t-end-${lastIdx}`} className="whitespace-pre-wrap my-1">
-                              {text.substring(lastIdx)}
-                            </p>
-                          );
-                        }
-
-                        return <div>{elements}</div>;
-                      })()}
+                      <MariMarkdownMessage text={m.text} isUser={m.sender === 'USER'} />
 
                       {/* Suggested Action Chips & Parsed Bracket Actions */}
                       {(() => {
@@ -1032,6 +935,7 @@ export default function MariAiPage() {
                           'create visual': '/growth?tab=creatives',
                           'open growth studio': '/growth',
                           'connect facebook': '/growth?tab=channels',
+                          'connect facebook page': '/growth?tab=channels',
                           'generate creative': '/growth?tab=creatives',
                           'view crm pipeline': '/crm',
                           'sync website': '/settings',
@@ -1058,16 +962,19 @@ export default function MariAiPage() {
 
                         return (
                           <div className="pt-2.5 mt-2.5 border-t border-zinc-800/80 flex flex-wrap gap-2">
-                            {allActions.map((act, i) => (
-                              <button
-                                key={i}
-                                onClick={() => handleActionExecute(act)}
-                                className="px-2.5 py-1 rounded-lg bg-purple-950/50 border border-purple-500/40 hover:bg-purple-900/60 text-purple-200 text-[11px] font-semibold flex items-center gap-1 transition-all"
-                              >
-                                <ArrowRight className="w-3 h-3 text-purple-400" />
-                                {'label' in act ? act.label : (act as any).title || act.type}
-                              </button>
-                            ))}
+                            {allActions.map((act, i) => {
+                              const actLabel = 'label' in act ? act.label : (act as any).title || act.type;
+                              return (
+                                <button
+                                  key={i}
+                                  onClick={() => handleActionExecute(act)}
+                                  className="px-2.5 py-1 rounded-lg bg-purple-950/50 border border-purple-500/40 hover:bg-purple-900/60 text-purple-200 text-[11px] font-semibold flex items-center gap-1.5 transition-all shadow-sm"
+                                >
+                                  <ArrowRight className="w-3 h-3 text-purple-400 shrink-0" />
+                                  <span>{actLabel}</span>
+                                </button>
+                              );
+                            })}
                           </div>
                         );
                       })()}
