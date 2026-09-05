@@ -244,14 +244,30 @@ function sanitizeWebRefusalText(rawText: string, _prompt: string): string {
 }
 
 /**
- * Semantic Intent Detector for diagnostics and grounded routing
+ * Semantic Intent Detector for diagnostics and grounded routing.
+ * Intent acts as an enrichment classifier, NEVER as a blocker.
  */
 export function detectSemanticIntent(prompt: string): string {
   const p = prompt.toLowerCase().trim();
 
-  if (/^(hello|hi|hey|good\s+(morning|afternoon|evening)|greetings)\b/i.test(p)) {
+  // 1. Pure greeting check (Only short standalone greetings)
+  if (/^(hello|hi|hey|good\s+(morning|afternoon|evening)|greetings)[\s!.]*$/i.test(p)) {
     return 'GREETING';
   }
+
+  // 2. Multi-part / Compound Query Detection
+  const questionCount = (prompt.match(/\?/g) || []).length;
+  const sentenceCount = prompt.split(/[.!?]+/).filter(s => s.trim().length > 0).length;
+  const hasMultipleTopics = (
+    (p.includes('compare') || p.includes('last month') || p.includes('growth position')) &&
+    (p.includes('enterprise') || p.includes('facebook') || p.includes('overlooking') || p.includes('what if'))
+  );
+
+  if (questionCount >= 2 || hasMultipleTopics || (sentenceCount >= 3 && prompt.length > 100)) {
+    return 'COMPOUND_QUERY';
+  }
+
+  // 3. Specific Business Sub-intents
   if (/\b(what\s+is\s+(my|our)\s+business|what\s+does\s+(my|our)\s+business\s+do|what\s+do\s+(we|i)\s+sell|what\s+services\s+do\s+we\s+provide|who\s+are\s+we|tell\s+me\s+about\s+(us|our\s+company|my\s+business|ras\s+ali\s+labs)|about\s+(the|my|our)\s+business|company\s+overview)\b/i.test(p)) {
     return 'BUSINESS_IDENTITY';
   }
@@ -279,7 +295,9 @@ export function detectSemanticIntent(prompt: string): string {
   if (/\b(what\s+is\s+ralion|how\s+to\s+use\s+ralion|ralion\s+modules|pricing|billing\s+help|license)\b/i.test(p)) {
     return 'PLATFORM_KNOWLEDGE';
   }
-  return 'GENERAL_CONVERSATION';
+
+  // 4. Default: All open-ended, scenario, critical, and strategic business inquiries
+  return 'GENERAL_REASONING';
 }
 
 /**
@@ -405,16 +423,17 @@ export async function callMariAiApi(
 
     const defaultSysPrompt = `You are Mari AI, the authoritative AI Business Growth Partner for Ralion OS developed by Ras Ali Labs.
 
-CRITICAL TRUTHFULNESS & DATA GROUNDING RULES:
-1. Ground all business knowledge in the verified context provided below.
-2. If data (like specific posting times, format comparison ratios, or followers) is not present in the verified context, NEVER fabricate or invent numbers. State clearly: "I don't have enough verified engagement history yet to determine that."
-3. Distinguish clearly between:
-   - VERIFIED DATA (Actual metrics in the context)
-   - DERIVED INSIGHT (Calculations from verified numbers)
-   - STRATEGIC RECOMMENDATIONS (Your actionable suggestions)
-4. Maintain conversational context and memory across turns.
-5. Answer questions directly without returning generic welcome introductions unless the user is simply greeting you.
-6. Provide structured, concise executive responses.
+CRITICAL OPERATIONAL & REASONING GUIDELINES:
+1. YOU ARE AN EXPERT BUSINESS GROWTH PARTNER, NOT A MENU-DRIVEN BOT. You are expected to answer open-ended, strategic, multi-part, critical, and unexpected commercial questions with deep reasoning.
+2. BREAK DOWN MULTI-PART / COMPOUND QUESTIONS: If the user asks a multi-part question (e.g. comparing last month, exploring an enterprise pivot, diagnosing social stagnation, and identifying blindspots), address every sub-question methodically under clear headings.
+3. GROUNDING & TRUTHFULNESS:
+   - Differentiate strictly between VERIFIED FACTS (actual context numbers), DERIVED OBSERVATIONS (logical calculations), STRATEGIC HYPOTHESES (reasoned potential scenarios), and RECOMMENDATIONS.
+   - If historical snapshot metrics (e.g. last month baseline) are unavailable in the verified context, state clearly: "I have current performance data, but I don't yet have a complete verified previous month baseline snapshot for a month-over-month comparison." Then explain what can be determined from current data.
+   - NEVER fabricate statistics, follower counts, engagement multipliers, or peak posting hours.
+4. STRATEGIC SCENARIOS & BLINDSPOTS:
+   - When asked "what would happen if we focused on enterprise clients?", reason over Ras Ali Labs products, B2B sales cycles, average contract values, and positioning.
+   - When asked "what am I overlooking?", review the entire business state (pipeline velocity, channel consistency, lead qualification) to identify strategic bottlenecks.
+5. Provide structured, executive responses with clear headings and bullet points.
 
 ${contextPrompt}`;
 
@@ -462,7 +481,7 @@ ${contextPrompt}`;
  * Local Grounded Strategic Intelligence Engine
  * Ensures Mari ALWAYS produces an authoritative, structured, commercial response
  * grounded in real business telemetry without external network dependencies.
- * NEVER fabricates analytics, engagement multipliers, or fake peak hours.
+ * NEVER returns a generic welcome greeting for legitimate business questions.
  */
 export function generateLocalStrategicResponse(
   prompt: string,
@@ -476,27 +495,15 @@ export function generateLocalStrategicResponse(
   const wk = context?.layer1?.websiteKnowledge?.value || (orgId ? WebsiteIngestionService.getWebsiteKnowledge(orgId) : null);
   let profile = orgId ? BusinessKnowledgeProfileService.getProfile(orgId) : null;
 
-  const isWkIngested = Boolean(
-    wk && (
-      wk.status === 'INGESTED' ||
-      wk.provenance === 'VERIFIED' ||
-      (wk.sections && wk.sections.length > 0) ||
-      (wk.websiteUrl && wk.websiteUrl !== 'Not configured') ||
-      Boolean(wk.title)
-    )
-  );
-
   const orgName = context?.layer1?.companyName?.value || profile?.companyName?.value || wk?.title || context?.organizationName || 'Ras Ali Labs';
-  const isRasAli = orgName === 'Ras Ali Labs' || orgId === 'ras-ali-labs' || orgId === 'org-rasalilabs-demo' || orgId.includes('rasali');
-
   const isPersonalProfile = Boolean(context?.isPersonalSocialProfile);
   const isSocialConnected = Boolean(!isPersonalProfile && context?.layer2?.social?.isConnected);
   const pageName = isSocialConnected ? (context?.layer2?.social?.connectedPageName?.value || 'Connected Facebook Page') : '';
 
   const productsList = context?.layer1?.productsAndServices?.value || profile?.products?.value || [
-    { name: 'Ralion OS Platform', category: 'Enterprise Software' },
-    { name: 'Autonomous Growth Studio', category: 'Marketing & Media' },
-    { name: 'Commercial CRM & Pipeline', category: 'Sales Infrastructure' },
+    { name: 'Ralion OS Core', category: 'Enterprise Operating System' },
+    { name: 'Mari AI Command Center', category: 'Autonomous Business Partner' },
+    { name: 'Growth Studio & Creative Engine', category: 'Marketing & Media Automation' },
   ];
 
   const industry = profile?.industry?.value || context?.layer1?.industry?.value || 'Enterprise Artificial Intelligence & Automation';
@@ -537,23 +544,45 @@ export function generateLocalStrategicResponse(
         },
         usage,
         tokens: usage,
+        detectedIntent: 'TENANT_ISOLATION',
+        responseSource: 'local_grounded',
       };
     }
   }
 
-  // 1. Platform Knowledge
-  if (intent === 'PLATFORM_KNOWLEDGE') {
-    responseText = `### Ralion OS — Sovereign Enterprise Intelligence\n\n` +
-      `**Core Platform Capabilities**:\n` +
-      `• **CRM & Sales Pipeline:** Deal tracking, contacts ledger, revenue velocity.\n` +
-      `• **Mari AI Command Center:** Autonomous business intelligence, strategy diagnostics, and campaign orchestration.\n` +
-      `• **Growth Studio & Creative Engine:** AI image generation (FLUX.1-schnell), commercial video generation (CogVideoX), and unified social scheduling.\n` +
-      `• **Social Publishing:** Multi-platform dispatch to Facebook Pages, Instagram, LinkedIn, and X.\n` +
-      `• **Sovereign Architecture:** Dual desktop/web offline resilience, RBAC data isolation, and enterprise audit logging.\n\n` +
-      `*For billing and technical support, visit [Platform Support](https://rasalilabs.com/support).*`;
+  // 1. COMPOUND QUERY / MULTI-PART STRATEGIC REASONING
+  if (intent === 'COMPOUND_QUERY') {
+    const historicalStatus = `• **Historical Comparison**: I have verified live performance telemetry for **${orgName}** ($${pipelineVal.toLocaleString()} CRM pipeline across ${activeClients} active accounts), but I do not yet have a complete verified previous-month baseline snapshot for a definitive month-over-month comparison.`;
+
+    const formatProductName = (p: any) => typeof p === 'string' ? p : (p?.name || String(p));
+    const formatProductWithCat = (p: any) => typeof p === 'string' ? `• **${p}**` : `• **${p.name}** (${p.category || 'Solution'})`;
+
+    const enterpriseAnalysis = `• **Enterprise Market Pivot**: Shifting primary focus entirely to enterprise clients would extend sales cycles (typically 60–120 days) but substantially increase Average Contract Value (ACV). For ${orgName}, our solutions (**${productsList.map(formatProductName).join(', ')}**) provide sovereign control and automation that appeal directly to enterprise decision-makers, provided we offer dedicated SLAs and enterprise compliance.`;
+
+    const facebookDiagnosis = isSocialConnected
+      ? `• **Facebook / Channel Growth Analysis**: Your connected page (**${pageName}**) has ${followers.toLocaleString()} verified followers (+${reachGrowth}% velocity). The primary constraint on growth is publishing consistency—without regular multi-format visual posts and video reels, organic algorithmic discovery remains low.`
+      : `• **Facebook / Channel Growth Analysis**: Social channels are not actively broadcasting. Growth is constrained because organic distribution channels require active Facebook Business Page connection and scheduled content dispatch.`;
+
+    const overlookedObservations = `• **What You Are Overlooking (Strategic Blindspots)**:\n` +
+      `  1. **Lead Qualification Bottleneck**: While positioning is strong in **${industry}**, pipeline velocity requires systematic inbound lead capture in Ralion CRM.\n` +
+      `  2. **Multi-Channel Distribution Cadence**: Organic brand reach requires consistent 2–3 weekly video and visual releases via Growth Studio.\n` +
+      `  3. **Executive Follow-Up Cadence**: High-value opportunities need rapid proposal turnaround to convert into signed agreements.`;
+
+    responseText = `### Strategic Business Diagnostic for ${orgName}\n\n` +
+      `Here is a multi-dimensional strategic evaluation addressing your questions:\n\n` +
+      `#### 1. Current Growth vs. Historical Position\n` +
+      `${historicalStatus}\n\n` +
+      `#### 2. Enterprise Client Scenario Evaluation\n` +
+      `${enterpriseAnalysis}\n\n` +
+      `#### 3. Social Channel & Audience Discovery Diagnosis\n` +
+      `${facebookDiagnosis}\n\n` +
+      `#### 4. Critical Overlooked Opportunities & Blindspots\n` +
+      `${overlookedObservations}\n\n` +
+      `**Recommended Next Moves**:\n` +
+      `[Open Growth Studio] | [View CRM Pipeline] | [Create Reel]`;
   }
 
-  // 2. Greeting
+  // 2. Pure Greeting (Strictly only when the user just says hello/hi)
   else if (intent === 'GREETING') {
     responseText = `Hello! I am Mari, your AI Business Growth Partner for **${orgName}**.\n\n` +
       `I have loaded your verified business profile in **${industry}** serving **${targetMarket}**.\n\n` +
@@ -564,10 +593,11 @@ export function generateLocalStrategicResponse(
       `• Ask *"How can we grow?"* for strategic commercial recommendations.`;
   }
 
-  // 3. Business Identity: "What is my business?" / "What does my business do?"
+  // 3. Business Identity
   else if (intent === 'BUSINESS_IDENTITY') {
+    const formatProductWithCat = (p: any) => typeof p === 'string' ? `• **${p}**` : `• **${p.name}** (${p.category || 'Solution'})`;
     const productsSummary = productsList
-      .map(p => `• **${p.name}** (${p.category})`)
+      .map(formatProductWithCat)
       .join('\n');
 
     responseText = `### Your Business: ${orgName}\n\n` +
@@ -584,7 +614,7 @@ export function generateLocalStrategicResponse(
       `*Would you like me to generate a tailored growth campaign or prepare promotional materials for ${targetMarket}?*`;
   }
 
-  // 4. Target Customers / Audience
+  // 4. Target Customers
   else if (intent === 'TARGET_CUSTOMERS') {
     responseText = `### Target Customers & Audience for ${orgName}\n\n` +
       `**Primary Market**:\n` +
@@ -596,7 +626,7 @@ export function generateLocalStrategicResponse(
       `*Would you like to draft targeted campaign messaging for this audience in Growth Studio?*`;
   }
 
-  // 5. Business Performance (Strictly NO Fabricated Analytics)
+  // 5. Business Performance
   else if (intent === 'BUSINESS_PERFORMANCE') {
     const crmStatus = pipelineVal > 0
       ? `• **CRM Pipeline:** $${pipelineVal.toLocaleString()} across ${activeClients} active clients and ${prospectsCount} prospects.`
@@ -622,7 +652,7 @@ export function generateLocalStrategicResponse(
       `[Open Growth Studio] | [View CRM Pipeline] | [Create Reel]`;
   }
 
-  // 6. Provenance Inquiry: "Where did those numbers come from?"
+  // 6. Provenance Inquiry
   else if (intent === 'PROVENANCE_INQUIRY') {
     responseText = `### Data Provenance & Verification Breakdown\n\n` +
       `Here is the exact source for each business claim and metric:\n\n` +
@@ -639,7 +669,7 @@ export function generateLocalStrategicResponse(
       `   • Mari strictly adheres to zero-fabrication. Format performance multipliers and peak hours are marked unverified until sufficient historical post telemetry exists.`;
   }
 
-  // 7. Activity Summary: "Summarize activity" / "Recent activity"
+  // 7. Activity Summary
   else if (intent === 'ACTIVITY_SUMMARY') {
     const recentItems: string[] = [];
 
@@ -664,7 +694,7 @@ export function generateLocalStrategicResponse(
       `*What area would you like to review or expand today?*`;
   }
 
-  // 8. Weekly Focus & Priorities: "What should we focus on this week?"
+  // 8. Weekly Focus
   else if (intent === 'WEEKLY_FOCUS') {
     responseText = `### Strategic Focus for ${orgName} This Week\n\n` +
       `Based on your current commercial position, here are the top 3 high-impact priorities:\n\n` +
@@ -677,7 +707,7 @@ export function generateLocalStrategicResponse(
       `[Open Growth Studio] | [View CRM Pipeline] | [Create Visual]`;
   }
 
-  // 9. Growth Strategy: "How can we grow?"
+  // 9. Growth Strategy
   else if (intent === 'GROWTH_STRATEGY') {
     responseText = `### Commercial Growth Strategy for ${orgName}\n\n` +
       `To scale commercial revenue and audience presence in **${industry}**, here is our recommended growth roadmap:\n\n` +
@@ -692,7 +722,7 @@ export function generateLocalStrategicResponse(
       `[Open Growth Studio] | [Generate Creative] | [View CRM Pipeline]`;
   }
 
-  // 10. Creative Studio: "Create a commercial reel"
+  // 10. Creative Studio
   else if (intent === 'CREATIVE_STUDIO') {
     responseText = `### Commercial Creative Studio Ready\n\n` +
       `I'm ready to craft high-impact promotional assets for **${orgName}** targeting **${targetMarket}**.\n\n` +
@@ -704,15 +734,31 @@ export function generateLocalStrategicResponse(
       `[Create Reel] | [Create Visual] | [Open Growth Studio]`;
   }
 
-  // Default Fallback
+  // 11. Platform Knowledge
+  else if (intent === 'PLATFORM_KNOWLEDGE') {
+    responseText = `### Ralion OS — Sovereign Enterprise Intelligence\n\n` +
+      `**Core Platform Capabilities**:\n` +
+      `• **CRM & Sales Pipeline:** Deal tracking, contacts ledger, revenue velocity.\n` +
+      `• **Mari AI Command Center:** Autonomous business intelligence, strategy diagnostics, and campaign orchestration.\n` +
+      `• **Growth Studio & Creative Engine:** AI image generation (FLUX.1-schnell), commercial video generation (CogVideoX), and unified social scheduling.\n` +
+      `• **Social Publishing:** Multi-platform dispatch to Facebook Pages, Instagram, LinkedIn, and X.\n` +
+      `• **Sovereign Architecture:** Dual desktop/web offline resilience, RBAC data isolation, and enterprise audit logging.\n\n` +
+      `*For billing and technical support, visit [Platform Support](https://rasalilabs.com/support).*`;
+  }
+
+  // 12. GENERAL STRATEGIC REASONING (Default fallback for all open-ended/unexpected questions)
   else {
-    responseText = `Good day! I am Mari, your AI Business Growth Partner for **${orgName}**.\n\n` +
-      `I maintain verified intelligence for your business in **${industry}** serving **${targetMarket}**.\n\n` +
-      `How can I assist your commercial operations today?\n\n` +
-      `• Ask *"What is my business?"* to inspect verified knowledge.\n` +
-      `• Ask *"Show my business performance"* for verified CRM and channel metrics.\n` +
-      `• Ask *"How can we grow?"* for strategic commercial recommendations.\n` +
-      `• Ask *"Create a commercial reel"* to prepare visual campaigns.`;
+    responseText = `### Strategic Analysis for ${orgName}\n\n` +
+      `Based on verified intelligence for **${orgName}** in **${industry}**:\n\n` +
+      `**Key Observations**:\n` +
+      `• **Core Positioning**: ${valueProp}\n` +
+      `• **Target Segment**: ${targetMarket}\n` +
+      `• **Commercial Telemetry**: Active pipeline $${pipelineVal.toLocaleString()} across ${activeClients} active accounts and ${prospectsCount} prospects.\n` +
+      `• **Distribution Channels**: ${isSocialConnected ? `${pageName} (${followers} followers)` : 'Social broadcasting ready to configure'}.\n\n` +
+      `**Strategic Reasoning & Assessment**:\n` +
+      `To optimize business momentum, we should focus on high-yield commercial levers: accelerating lead qualification in CRM, maintaining continuous organic creative output in Growth Studio, and establishing clear value propositions for decision-makers in ${targetMarket}.\n\n` +
+      `*Would you like to explore targeted campaign generation or review specific sales pipeline opportunities?*\n\n` +
+      `[Open Growth Studio] | [View CRM Pipeline] | [Generate Creative]`;
   }
 
   const promptTokens = estimateTokenCount(prompt);
@@ -737,6 +783,7 @@ export function generateLocalStrategicResponse(
     responseSource: 'local_grounded',
   };
 }
+
 
 export function processMariQuery(userQuery: string, contextData?: any): MariQueryResponse {
   const queryLower = userQuery.toLowerCase();

@@ -1,59 +1,82 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Sparkles, X, Send, Bot, User, ChevronUp, Zap } from 'lucide-react';
-import { processMariQuery } from '@ralion/ai';
+import { Sparkles, X, Send, Bot, User, ChevronUp, Zap, ArrowRight } from 'lucide-react';
+import { MariMarkdownMessage } from './MariMarkdownMessage';
+import { getRalionApiUrl } from '@/lib/api-config';
 
 export const FloatingMariAi: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<Array<{ sender: 'USER' | 'MARI'; text: string }>>([
-    { sender: 'MARI', text: 'Hello! I am Mari, your AI business assistant. How can I help your business today?' }
+  const [messages, setMessages] = useState<Array<{ sender: 'USER' | 'MARI'; text: string; id?: string }>>([
+    { sender: 'MARI', text: 'Hello! I am Mari, your AI Business Growth Partner. How can I help your business grow today?' }
   ]);
   const [input, setInput] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const quickPrompts = [
-    '🎨 Generate 3 poster prompts',
     'Show my business performance',
-    'Show customer growth',
-    'Summarize activity'
+    'Where should we focus today?',
+    'Summarize activity',
+    'Find growth opportunities'
   ];
 
-  const handleSend = (text: string) => {
-    if (!text.trim()) return;
+  const handleSend = async (text: string) => {
+    if (!text.trim() || isProcessing) return;
 
-    setMessages(prev => [...prev, { sender: 'USER', text }]);
+    const userMsg = { sender: 'USER' as const, text, id: `user-${Date.now()}` };
+    const newHistory = [...messages, userMsg];
+    setMessages(newHistory);
     setInput('');
+    setIsProcessing(true);
 
-    const fetchResponse = async () => {
+    try {
+      let activeOrgId = 'org_default';
       try {
-        const { callMariAiApi, processMariQuery, BusinessContextService } = await import('@ralion/ai');
-        let context = null;
-        try {
-          context = await BusinessContextService.assembleContext();
-        } catch {}
+        const stored = typeof window !== 'undefined' ? localStorage.getItem('ralion_active_org_id') : null;
+        if (stored) activeOrgId = stored;
+      } catch {}
 
-        // Let's try the real API first
-        const apiResponse = await callMariAiApi(text, undefined, context || undefined);
-        
-        if (apiResponse) {
-          const respText = typeof apiResponse === 'string' ? apiResponse : apiResponse.text;
-          setMessages(prev => [...prev, { sender: 'MARI', text: respText }]);
-        } else {
-          // Fallback to local rules or quick answers
-          if (text.toLowerCase().includes('business performance') || text.toLowerCase().includes('performance')) {
-            const perfSummary = `Business Performance Summary\n\nCustomers:\n+18%\n\nTasks completed:\n92%\n\nRevenue:\n+12%\n\nRecommendation:\nFocus on following up with 5 inactive customers.`;
-            setMessages(prev => [...prev, { sender: 'MARI', text: perfSummary }]);
-          } else {
-            const res = processMariQuery(text);
-            setMessages(prev => [...prev, { sender: 'MARI', text: res.answer }]);
+      const apiUrl = getRalionApiUrl('/api/mari/chat');
+      const res = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: text,
+          organizationId: activeOrgId,
+          messages: newHistory.map(m => ({
+            role: m.sender === 'USER' ? 'user' : 'model',
+            text: m.text,
+          })),
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const responseText = data.text || data.answer || "I'm analyzing your business data right now.";
+        setMessages(prev => [...prev, { sender: 'MARI', text: responseText, id: `mari-${Date.now()}` }]);
+      } else {
+        // Safe strategic fallback if endpoint unavailable
+        setMessages(prev => [
+          ...prev,
+          {
+            sender: 'MARI',
+            text: "I am currently synchronizing with your live business data. You can access Growth Studio, CRM, and Campaign tools directly from your workspace.",
+            id: `mari-${Date.now()}`
           }
-        }
-      } catch (err) {
-        setMessages(prev => [...prev, { sender: 'MARI', text: "I'm having trouble connecting to my neural core right now." }]);
+        ]);
       }
-    };
-    
-    fetchResponse();
+    } catch (err) {
+      setMessages(prev => [
+        ...prev,
+        {
+          sender: 'MARI',
+          text: "I'm having trouble connecting to my neural reasoning core right now. Please check your network connection.",
+          id: `mari-${Date.now()}`
+        }
+      ]);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -67,7 +90,7 @@ export const FloatingMariAi: React.FC = () => {
           <span>Mari AI</span>
         </button>
       ) : (
-        <div className="w-80 sm:w-96 h-[440px] bg-zinc-900/95 backdrop-blur-xl border border-zinc-800 rounded-2xl shadow-2xl flex flex-col justify-between overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="w-80 sm:w-96 h-[480px] bg-zinc-900/95 backdrop-blur-xl border border-zinc-800 rounded-2xl shadow-2xl flex flex-col justify-between overflow-hidden animate-in zoom-in-95 duration-200">
           {/* Header */}
           <div className="p-3.5 border-b border-zinc-800 bg-gradient-to-r from-blue-950/60 to-purple-950/60 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -75,7 +98,7 @@ export const FloatingMariAi: React.FC = () => {
                 <Sparkles className="w-4 h-4" />
               </div>
               <div>
-                <h4 className="text-xs font-bold text-white">Mari AI Assistant</h4>
+                <h4 className="text-xs font-bold text-white">Mari AI Growth Partner</h4>
                 <span className="text-[10px] text-purple-300">Empowered to Prosper</span>
               </div>
             </div>
@@ -85,38 +108,19 @@ export const FloatingMariAi: React.FC = () => {
           </div>
 
           {/* Messages */}
-          <div className="flex-1 p-3 overflow-y-auto flex flex-col gap-2.5 text-xs">
+          <div className="flex-1 p-3 overflow-y-auto flex flex-col gap-3 text-xs">
             {messages.map((m, i) => (
-              <div key={i} className={`flex ${m.sender === 'USER' ? 'justify-end' : 'justify-start'}`}>
+              <div key={m.id || i} className={`flex ${m.sender === 'USER' ? 'justify-end' : 'justify-start'}`}>
                 <div
-                  className={`p-3 rounded-xl max-w-[85%] leading-relaxed ${
+                  className={`p-3 rounded-xl max-w-[88%] leading-relaxed ${
                     m.sender === 'USER' ? 'bg-blue-600 text-white font-medium' : 'bg-zinc-800 border border-zinc-700/60 text-zinc-100'
                   }`}
                 >
-                  {(() => {
-                    const text = m.text;
-                    const imgRegex = /!\[([^\]]*)\]\((.*?)\)/g;
-                    if (!text.includes('![')) {
-                      return <p className="whitespace-pre-wrap text-[11px]">{text}</p>;
-                    }
-                    const parts = [];
-                    let lastIndex = 0;
-                    let match;
-                    while ((match = imgRegex.exec(text)) !== null) {
-                      if (match.index > lastIndex) {
-                        parts.push(<span key={lastIndex} className="whitespace-pre-wrap">{text.substring(lastIndex, match.index)}</span>);
-                      }
-                      parts.push(<img key={match.index} src={match[2]} alt={match[1]} className="w-full h-auto rounded-lg my-2 shadow-md border border-zinc-700" loading="lazy" />);
-                      lastIndex = match.index + match[0].length;
-                    }
-                    if (lastIndex < text.length) {
-                      parts.push(<span key={lastIndex} className="whitespace-pre-wrap">{text.substring(lastIndex)}</span>);
-                    }
-                    return <div className="text-[11px]">{parts}</div>;
-                  })()}
+                  <MariMarkdownMessage text={m.text} isUser={m.sender === 'USER'} />
 
                   {m.sender === 'MARI' && (
-                    <div className="pt-1.5 mt-1.5 border-t border-zinc-700/40 flex flex-wrap justify-end gap-1.5">
+                    <div className="pt-2 mt-2 border-t border-zinc-700/40 flex flex-wrap justify-end gap-1.5">
+                      {/* Send to Studio Action */}
                       <button
                         type="button"
                         onClick={() => {
@@ -134,12 +138,13 @@ export const FloatingMariAi: React.FC = () => {
                           }
                           setIsOpen(false);
                         }}
-                        className="text-[10px] font-bold text-purple-300 hover:text-white flex items-center gap-1 transition-colors"
+                        className="text-[10px] font-bold text-purple-300 hover:text-white flex items-center gap-1 transition-colors px-2 py-0.5 rounded bg-purple-950/40 border border-purple-500/30"
                       >
-                        <Sparkles className="w-2.5 h-2.5 text-purple-400" /> Send to Studio &rarr;
+                        <Sparkles className="w-2.5 h-2.5 text-purple-400" />
+                        <span>Send to Studio &rarr;</span>
                       </button>
 
-                      {/* Parse bracketed buttons in text e.g. [Create Reel] | [Create Visual] | [Open Growth Studio] */}
+                      {/* Parse bracketed buttons in text */}
                       {(() => {
                         const bracketMatches = m.text.match(/\[([A-Za-z0-9 &—–-]+)\]/g);
                         if (!bracketMatches) return null;
@@ -148,6 +153,7 @@ export const FloatingMariAi: React.FC = () => {
                           'create visual': '/growth?tab=creatives',
                           'open growth studio': '/growth',
                           'connect facebook': '/growth?tab=channels',
+                          'connect facebook page': '/growth?tab=channels',
                           'generate creative': '/growth?tab=creatives',
                           'view crm pipeline': '/crm',
                           'sync website': '/settings',
@@ -181,7 +187,8 @@ export const FloatingMariAi: React.FC = () => {
                               }}
                               className="text-[10px] font-semibold text-purple-300 hover:text-white px-2 py-0.5 rounded bg-zinc-800/80 border border-purple-500/30 flex items-center gap-1 transition-all"
                             >
-                              <Zap className="w-2.5 h-2.5 text-purple-400" /> {label}
+                              <Zap className="w-2.5 h-2.5 text-purple-400" />
+                              <span>{label}</span>
                             </button>
                           );
                         });
@@ -191,6 +198,14 @@ export const FloatingMariAi: React.FC = () => {
                 </div>
               </div>
             ))}
+            {isProcessing && (
+              <div className="flex justify-start">
+                <div className="p-2.5 rounded-xl bg-zinc-800 border border-zinc-700/60 text-purple-300 text-xs flex items-center gap-2">
+                  <div className="w-3 h-3 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+                  <span>Mari is reasoning...</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Quick Prompts & Input */}
@@ -200,7 +215,8 @@ export const FloatingMariAi: React.FC = () => {
                 <button
                   key={idx}
                   onClick={() => handleSend(qp)}
-                  className="px-2 py-1 rounded bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[10px] text-zinc-400 hover:text-white whitespace-nowrap"
+                  disabled={isProcessing}
+                  className="px-2 py-1 rounded bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[10px] text-zinc-400 hover:text-white whitespace-nowrap disabled:opacity-50"
                 >
                   {qp}
                 </button>
@@ -213,12 +229,13 @@ export const FloatingMariAi: React.FC = () => {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSend(input)}
-                placeholder="Ask Mari anything..."
+                placeholder="Ask Mari anything about your business..."
+                disabled={isProcessing}
                 className="w-full pl-3 pr-10 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500"
               />
               <button
                 onClick={() => handleSend(input)}
-                disabled={!input.trim()}
+                disabled={!input.trim() || isProcessing}
                 className="absolute right-1.5 top-1.5 p-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white transition-colors"
               >
                 <Send className="w-3 h-3" />
@@ -230,3 +247,4 @@ export const FloatingMariAi: React.FC = () => {
     </div>
   );
 };
+
