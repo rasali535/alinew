@@ -328,8 +328,11 @@ export class FacebookPageManagementService {
 
     if (fbToken) {
       try {
-        const res = await fetch(`https://graph.facebook.com/v19.0/me/accounts?fields=id,name,username,category,access_token,tasks,picture,followers_count,fan_count&access_token=${encodeURIComponent(fbToken)}`);
-        if (res.ok) {
+        let nextPageUrl: string | null = `https://graph.facebook.com/v19.0/me/accounts?fields=id,name,username,category,access_token,tasks,picture,followers_count,fan_count&limit=100&access_token=${encodeURIComponent(fbToken)}`;
+        
+        while (nextPageUrl) {
+          const res = await fetch(nextPageUrl);
+          if (!res.ok) break;
           const data = await res.json();
           const graphPages = data.data || [];
           for (const p of graphPages) {
@@ -355,6 +358,7 @@ export class FacebookPageManagementService {
               ...(p.access_token ? { accessToken: p.access_token } : {}),
             });
           }
+          nextPageUrl = data.paging?.next || null;
         }
       } catch (graphErr: any) {
         console.warn('[FacebookPageManagement] Graph API /me/accounts discovery note:', graphErr.message);
