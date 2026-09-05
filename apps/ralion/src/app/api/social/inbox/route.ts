@@ -19,18 +19,23 @@ export async function GET(request: NextRequest) {
     }
 
     const conversations = await SocialInboxService.getConversations({
-      userId: context.user.id,
-      workspaceId: context.workspace.id,
-      organizationId: context.workspace.id,
+      userId: context.user?.id,
+      workspaceId: context.workspace?.id,
+      organizationId: context.workspace?.id,
       provider: provider || undefined,
     });
 
     return corsJsonResponse({
       success: true,
-      conversations,
+      conversations: Array.isArray(conversations) ? conversations : [],
     }, undefined, request);
   } catch (error: any) {
-    return corsJsonResponse({ success: false, error: error.message }, { status: 500 }, request);
+    console.error('[Social Inbox API GET] Error:', error?.message || error);
+    return corsJsonResponse({
+      success: false,
+      error: error?.message || 'Failed to retrieve social inbox conversations',
+      conversations: [],
+    }, { status: 500 }, request);
   }
 }
 
@@ -41,18 +46,26 @@ export async function POST(request: NextRequest) {
       return authRequiredResponse(request);
     }
 
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
     const { connectionId, provider, conversationId, recipientId, messageText } = body;
+
+    if (!conversationId || !messageText) {
+      return corsJsonResponse({
+        success: false,
+        error: 'conversationId and messageText are required parameters.',
+      }, { status: 400 }, request);
+    }
 
     const result = await SocialInboxService.sendReply({
       connectionId,
       provider,
       conversationId,
-      recipientId,
+      recipientId: recipientId || conversationId,
       messageText,
-      userId: context.user.id,
-      workspaceId: context.workspace.id,
-      organizationId: context.workspace.id,
+      userId: context.user?.id || 'unknown',
+      workspaceId: context.workspace?.id,
+      organizationId: context.workspace?.id,
+      senderName: context.profile?.fullName,
     });
 
     return corsJsonResponse({
@@ -60,6 +73,10 @@ export async function POST(request: NextRequest) {
       result,
     }, undefined, request);
   } catch (error: any) {
-    return corsJsonResponse({ success: false, error: error.message }, { status: 500 }, request);
+    console.error('[Social Inbox API POST] Error:', error?.message || error);
+    return corsJsonResponse({
+      success: false,
+      error: error?.message || 'Failed to send outbound reply',
+    }, { status: 500 }, request);
   }
 }

@@ -9,10 +9,15 @@ import { SocialPlatformType, SocialProviderRegistry, ZernioSocialService } from 
 import { SocialTokenManager } from './socialTokenManager.service';
 
 function getServiceSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co';
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co';
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SERVICE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    '';
   if (!key) {
-    throw new Error('[SocialInbox] Missing SUPABASE_SERVICE_ROLE_KEY environment variable.');
+    throw new Error('[SocialInbox] Missing Supabase credentials in server environment.');
   }
   return createClient(url, key, {
     auth: {
@@ -33,7 +38,15 @@ export class SocialInboxService {
     organizationId?: string;
     provider?: SocialPlatformType;
   } | string, legacyProvider?: SocialPlatformType) {
-    const supabase = getServiceSupabase();
+    if (!params) return [];
+
+    let supabase;
+    try {
+      supabase = getServiceSupabase();
+    } catch (e: any) {
+      console.warn('[SocialInboxService] Supabase client init notice:', e.message);
+      return [];
+    }
 
     const userId = typeof params === 'string' ? params : params.userId;
     const workspaceId = typeof params === 'object' ? params.workspaceId : undefined;
@@ -59,7 +72,8 @@ export class SocialInboxService {
         return [];
       }
 
-      const { data: conn } = await connQuery.maybeSingle();
+      const { data: conns } = await connQuery.limit(1);
+      const conn = Array.isArray(conns) && conns.length > 0 ? conns[0] : null;
       if (conn?.zernio_profile_id) {
         profileId = conn.zernio_profile_id;
         accountId = conn.zernio_account_id || null;
@@ -84,20 +98,21 @@ export class SocialInboxService {
         if (Array.isArray(convList) && convList.length > 0) {
           // Fetch message threads for top conversations in parallel
           await Promise.allSettled(
-            convList.slice(0, 6).map(async (conv: any) => {
-              const convId = conv.id;
+            convList.slice(0, 10).map(async (conv: any) => {
+              if (!conv || !conv.id) return;
+              const convId = String(conv.id);
               let messages: any[] = [];
 
               try {
                 const msgData = await ZernioSocialService.getConversationMessages(convId, accountId || undefined);
                 const rawMsgs = msgData?.messages || (Array.isArray(msgData) ? msgData : []);
                 if (Array.isArray(rawMsgs)) {
-                  messages = rawMsgs.map((m: any) => ({
-                    id: m.id,
+                  messages = rawMsgs.filter(Boolean).map((m: any) => ({
+                    id: m.id || `msg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
                     direction: m.direction === 'outgoing' ? 'OUTBOUND' : 'INBOUND',
                     sender_name: m.senderName || 'Facebook User',
-                    sender_id: m.senderId,
-                    message_text: m.message || '',
+                    sender_id: m.senderId || 'unknown',
+                    message_text: m.message || m.text || '',
                     timestamp: m.createdAt ? new Date(m.createdAt).toLocaleString() : 'Recent',
                   }));
                 }
@@ -121,10 +136,10 @@ export class SocialInboxService {
                 participantName: conv.participantName || 'Facebook User',
                 participantId: conv.participantId || convId,
                 avatarUrl: conv.participantPicture || null,
-                lastMessage: conv.lastMessage || '',
+                lastMessage: conv.lastMessage || (messages[messages.length - 1]?.message_text) || '',
                 lastTimestamp: conv.updatedTime ? new Date(conv.updatedTime).toLocaleString() : 'Recent',
                 unreadCount: Number(conv.unreadCount) || 0,
-                messages,
+                messages: Array.isArray(messages) ? messages : [],
               });
             })
           );
@@ -145,27 +160,36 @@ export class SocialInboxService {
       if (provider) {
         query = query.eq('provider', provider);
       }
+      if (workspaceId && workspaceId !== 'default' && workspaceId !== 'default-org') {
+        query = query.or(`workspace_id.eq.${workspaceId},sender_id.eq.${userId || workspaceId}`);
+      } else if (userId && userId !== 'default-user') {
+        query = query.eq('sender_id', userId);
+      }
 
       const { data, error } = await query;
 
       if (!error && Array.isArray(data)) {
         for (const msg of data) {
-          if (!conversationMap.has(msg.conversation_id)) {
-            conversationMap.set(msg.conversation_id, {
-              conversationId: msg.conversation_id,
-              provider: msg.provider,
-              participantName: msg.sender_name || msg.sender_id,
-              participantId: msg.sender_id,
-              avatarUrl: msg.sender_avatar_url,
-              lastMessage: msg.message_text,
+          if (!msg || !msg.conversation_id) continue;
+          const convId = String(msg.conversation_id);
+          if (!conversationMap.has(convId)) {
+            conversationMap.set(convId, {
+              conversationId: convId,
+              provider: msg.provider || 'facebook',
+              participantName: msg.sender_name || msg.sender_id || 'User',
+              participantId: msg.sender_id || 'unknown',
+              avatarUrl: msg.sender_avatar_url || null,
+              lastMessage: msg.message_text || '',
               lastTimestamp: msg.timestamp ? new Date(msg.timestamp).toLocaleString() : 'Recent',
               unreadCount: msg.status === 'DELIVERED' && msg.direction === 'INBOUND' ? 1 : 0,
               messages: [msg],
             });
           } else {
-            const conv = conversationMap.get(msg.conversation_id);
-            if (!conv.messages.some((m: any) => m.id === msg.id)) {
-              conv.messages.push(msg);
+            const conv = conversationMap.get(convId);
+            if (conv && Array.isArray(conv.messages)) {
+              if (!conv.messages.some((m: any) => m?.id === msg.id)) {
+                conv.messages.push(msg);
+              }
             }
           }
         }
