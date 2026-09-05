@@ -1,0 +1,29 @@
+DirectoryIndex index.html
+
+Options -Indexes +FollowSymLinks
+
+<IfModule mod_authz_core.c>
+  Require all granted
+</IfModule>
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /ralion/
+
+  # 1. Forward OAuth callbacks directly to Render backend
+  RewriteCond %{REQUEST_URI} ^/ralion/api/oauth/(.*)$ [NC]
+  RewriteRule ^api/oauth/(.*)$ https://ralion-dynamic-backend.onrender.com/ralion/api/oauth/$1 [R=307,L,QSA]
+
+  # 2. Route all /ralion/api/* to PHP proxy script
+  RewriteRule ^api/(.*)$ /api_proxy.php?__proxy_path=api/$1 [QSA,L]
+
+  # 3. Do NOT rewrite existing static assets
+  RewriteCond %{REQUEST_URI} !^/ralion/api/ [NC]
+  RewriteCond %{REQUEST_FILENAME} -f
+  RewriteRule ^ - [L]
+
+  # 4. SPA Fallback for /ralion/*
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^.*$ /ralion/index.html [L]
+</IfModule>

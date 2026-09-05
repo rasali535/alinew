@@ -131,17 +131,37 @@ try {
     fs.cpSync(desktopDist, path.join(outputDir, 'desktop'), { recursive: true });
   }
 
-  // 4. Ensure .htaccess with subfolder SPA routing is in build root and subfolders
+  // 4. Ensure .htaccess and api_proxy.php are in build root and subfolders
   const htaccessSrc = path.join(rootDir, 'apps', 'website', 'public', '.htaccess');
+  const ralionHtaccessSrc = path.join(rootDir, 'apps', 'ralion', 'public', '.htaccess');
+  const proxySrc = path.join(rootDir, 'apps', 'website', 'public', 'api_proxy.php');
+
   if (fs.existsSync(htaccessSrc)) {
     fs.copyFileSync(htaccessSrc, path.join(outputDir, '.htaccess'));
-    const ralionDir = path.join(outputDir, 'ralion');
-    if (fs.existsSync(ralionDir)) {
+  }
+  if (fs.existsSync(proxySrc)) {
+    fs.copyFileSync(proxySrc, path.join(outputDir, 'api_proxy.php'));
+  }
+
+  const ralionDir = path.join(outputDir, 'ralion');
+  if (fs.existsSync(ralionDir)) {
+    if (fs.existsSync(ralionHtaccessSrc)) {
+      fs.copyFileSync(ralionHtaccessSrc, path.join(ralionDir, '.htaccess'));
+    } else if (fs.existsSync(htaccessSrc)) {
       fs.copyFileSync(htaccessSrc, path.join(ralionDir, '.htaccess'));
     }
-    const adminDir = path.join(outputDir, 'admin');
-    if (fs.existsSync(adminDir)) {
+    if (fs.existsSync(proxySrc)) {
+      fs.copyFileSync(proxySrc, path.join(ralionDir, 'api_proxy.php'));
+    }
+  }
+
+  const adminDir = path.join(outputDir, 'admin');
+  if (fs.existsSync(adminDir)) {
+    if (fs.existsSync(htaccessSrc)) {
       fs.copyFileSync(htaccessSrc, path.join(adminDir, '.htaccess'));
+    }
+    if (fs.existsSync(proxySrc)) {
+      fs.copyFileSync(proxySrc, path.join(adminDir, 'api_proxy.php'));
     }
   }
 

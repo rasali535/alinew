@@ -10,39 +10,34 @@ Options -Indexes +FollowSymLinks
   RewriteEngine On
   RewriteBase /
 
-  # 1. Forward OAuth callbacks and dynamic API routes directly to Render backend
+  # 1. Forward OAuth callbacks directly to Render backend
   RewriteCond %{REQUEST_URI} ^/ralion/api/oauth/(.*)$ [NC]
   RewriteRule ^ralion/api/oauth/(.*)$ https://ralion-dynamic-backend.onrender.com/ralion/api/oauth/$1 [R=307,L,QSA]
 
   RewriteCond %{REQUEST_URI} ^/api/oauth/(.*)$ [NC]
   RewriteRule ^api/oauth/(.*)$ https://ralion-dynamic-backend.onrender.com/ralion/api/oauth/$1 [R=307,L,QSA]
 
-  # Reverse proxy general API requests if mod_proxy is present
-  <IfModule mod_proxy.c>
-    RewriteCond %{REQUEST_URI} ^/ralion/api/(.*)$ [NC]
-    RewriteRule ^ralion/api/(.*)$ https://ralion-dynamic-backend.onrender.com/ralion/api/$1 [P,L]
+  # 2. Route all /ralion/api/* and /api/* to PHP proxy script (guaranteed JSON response)
+  RewriteRule ^ralion/api/(.*)$ /api_proxy.php?__proxy_path=api/$1 [QSA,L]
+  RewriteRule ^api/(.*)$ /api_proxy.php?__proxy_path=api/$1 [QSA,L]
 
-    RewriteCond %{REQUEST_URI} ^/api/(.*)$ [NC]
-    RewriteRule ^api/(.*)$ https://ralion-dynamic-backend.onrender.com/ralion/api/$1 [P,L]
-  </IfModule>
-
-  # 2. Do NOT rewrite static assets (JS, CSS, images, fonts, binaries, maps) to index.html
+  # 3. Do NOT rewrite static assets (JS, CSS, images, fonts, binaries, maps) to index.html
   RewriteCond %{REQUEST_URI} !^/ralion/api/ [NC]
   RewriteCond %{REQUEST_URI} !^/api/ [NC]
   RewriteCond %{REQUEST_URI} \.(js|css|png|jpg|jpeg|gif|ico|svg|webp|woff2?|ttf|eot|otf|wasm|json|map|exe|dmg|AppImage|deb|zip|tar\.gz)$ [NC]
   RewriteRule ^ - [L]
 
-  # 3. Admin Next.js Sub-application (/admin/...)
+  # 4. Admin Next.js Sub-application (/admin/...)
   RewriteCond %{REQUEST_URI} ^/admin [NC]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteRule ^admin/?.*$ /admin/index.html [L]
 
-  # 4. Ralion Next.js Sub-application (/ralion/...)
+  # 5. Ralion Next.js Sub-application (/ralion/...)
   RewriteCond %{REQUEST_URI} ^/ralion [NC]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteRule ^ralion/?.*$ /ralion/index.html [L]
 
-  # 5. Root Marketing SPA Rewrite Rules
+  # 6. Root Marketing SPA Rewrite Rules
   RewriteRule ^index\.html$ - [L]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d

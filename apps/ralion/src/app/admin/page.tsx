@@ -177,11 +177,29 @@ export default function PlatformAdminPortal() {
     return headers;
   };
 
+  const safeJsonParse = async (res: Response) => {
+    try {
+      const text = await res.text();
+      if (!text || text.trim().startsWith('<')) {
+        return { success: false, error: `Invalid response format from server (HTTP ${res.status}). Expected JSON, received HTML.`, raw: text };
+      }
+      return JSON.parse(text);
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Failed to parse JSON response' };
+    }
+  };
+
   const adminFetch = async (endpoint: string, options?: RequestInit): Promise<Response> => {
     const authHeaders = await getAuthHeaders();
     const mergedHeaders: Record<string, string> = {
+      'Accept': 'application/json',
       ...authHeaders,
       ...(options?.headers as Record<string, string> || {}),
+    };
+
+    const isHtmlResponse = (r: Response) => {
+      const ct = r.headers.get('content-type') || '';
+      return ct.includes('text/html');
     };
 
     let targetUrl = endpoint;
@@ -194,19 +212,29 @@ export default function PlatformAdminPortal() {
 
     try {
       const res = await fetch(targetUrl, { ...options, headers: mergedHeaders });
-      if (res.status !== 404 && res.status !== 503) {
+      // If we got a valid JSON-like response (not 404, not 503, not HTML fallback)
+      if (res.status !== 404 && res.status !== 503 && !isHtmlResponse(res)) {
         return res;
       }
+
+      // Fallback 1: Try direct root path (e.g. /api/admin/...)
       const directUrl = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
       if (directUrl !== targetUrl) {
         const resDirect = await fetch(directUrl, { ...options, headers: mergedHeaders });
-        if (resDirect.ok || resDirect.status !== 404) return resDirect;
+        if ((resDirect.ok || resDirect.status !== 404) && !isHtmlResponse(resDirect)) {
+          return resDirect;
+        }
       }
+
+      // Fallback 2: Try canonical dynamic backend URL
       const canonicalUrl = getRalionApiUrl(endpoint);
       if (canonicalUrl !== targetUrl && canonicalUrl !== directUrl) {
         const resCanonical = await fetch(canonicalUrl, { ...options, headers: mergedHeaders });
-        if (resCanonical.ok || resCanonical.status !== 404) return resCanonical;
+        if ((resCanonical.ok || resCanonical.status !== 404) && !isHtmlResponse(resCanonical)) {
+          return resCanonical;
+        }
       }
+
       return res;
     } catch {
       return fetch(endpoint, { ...options, headers: mergedHeaders });
@@ -231,35 +259,27 @@ export default function PlatformAdminPortal() {
 
       if (mSettled.status === 'fulfilled') {
         const mRes = mSettled.value;
-        if (mRes.ok) {
-          const mData = await mRes.json();
-          if (mData.success && mData.data) {
-            metricsPayload = mData.data;
-            setMetrics(mData.data);
-          } else {
-            setPlatformError(mData.error || 'Unable to parse metrics response.');
-          }
+        const mData = await safeJsonParse(mRes);
+        if (mRes.ok && mData.success && mData.data) {
+          metricsPayload = mData.data;
+          setMetrics(mData.data);
         } else {
-          const errText = await mRes.text().catch(() => '');
-          let errMsg = `Unable to load Command Center data (HTTP ${mRes.status})`;
-          try {
-            const parsed = JSON.parse(errText);
-            if (parsed.error) errMsg = parsed.error;
-          } catch {}
-          setPlatformError(errMsg);
+          setPlatformError(mData.error || `Unable to load Command Center data (HTTP ${mRes.status})`);
         }
       } else {
         setPlatformError('Network error: Unable to reach /api/admin/metrics.');
       }
 
       if (cSettled.status === 'fulfilled' && cSettled.value.ok) {
-        const cData = await cSettled.value.json().catch(() => ({}));
-        setCustomers(cData.data || []);
+        const cData = await safeJsonParse(cSettled.value);
+        if (cData.data) {
+          setCustomers(cData.data || []);
+        }
       }
 
       // If standalone connected-users endpoint returns data, merge into metrics
       if (uSettled.status === 'fulfilled' && uSettled.value.ok) {
-        const uData = await uSettled.value.json().catch(() => ({}));
+        const uData = await safeJsonParse(uSettled.value);
         if (uData.success && uData.data?.users) {
           setMetrics(prev => ({
             ...(prev || metricsPayload || {} as any),
@@ -272,13 +292,17 @@ export default function PlatformAdminPortal() {
       }
 
       if (hSettled.status === 'fulfilled' && hSettled.value.ok) {
-        const hData = await hSettled.value.json().catch(() => ({}));
-        setSystemHealth(hData.data?.services || []);
+        const hData = await safeJsonParse(hSettled.value);
+        if (hData.data?.services) {
+          setSystemHealth(hData.data.services || []);
+        }
       }
 
       if (aSettled.status === 'fulfilled' && aSettled.value.ok) {
-        const aData = await aSettled.value.json().catch(() => ({}));
-        setAuditLogs(aData.data || []);
+        const aData = await safeJsonParse(aSettled.value);
+        if (aData.data) {
+          setAuditLogs(aData.data || []);
+        }
       }
     } catch (err: any) {
       console.error('Failed to load admin data:', err);
