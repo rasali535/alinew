@@ -15,6 +15,7 @@ import Link from 'next/link';
 import { AuthService } from '@/lib/services/auth.service';
 import { createClient } from '@/lib/supabase/client';
 import { TierAccessGate } from '@/components/TierAccessGate';
+import { MariMarkdownMessage } from '@/components/MariMarkdownMessage';
 import { callMariAiApi, generateHfImage, generateHfVideo, MariOrchestrationService, MariRecommendationContract } from '@ralion/ai';
 import { getRalionApiUrl, fetchRalionApi, getRalionAuthHeaders } from '@/lib/api-config';
 
@@ -3744,7 +3745,7 @@ Rules:
                           </Badge>
                         </div>
                         <p className="text-xs text-zinc-300 mt-1">
-                          During Facebook connection, Mari AI calibrated your business identity ({businessKnowledge?.businessName || activeFbPage?.name || fbConn?.label || 'Your Business'}), historical engagement, and regional audience to calibrate custom copy and growth angles.
+                          During Facebook connection, Mari AI calibrated your business identity ({businessKnowledge?.businessName || activeFbPage?.name || fbConn?.label || 'your business'}), historical engagement, and regional audience to calibrate custom copy and growth angles.
                         </p>
                       </div>
 
@@ -3964,7 +3965,7 @@ Rules:
                   <div className="flex flex-col gap-2 max-h-48 overflow-y-auto p-2">
                     {mariChatMessages.map((m, idx) => (
                       <div key={idx} className={`p-3 rounded-xl text-xs ${m.role === 'user' ? 'bg-indigo-950/60 text-indigo-100 ml-8' : 'bg-zinc-900 text-zinc-200 mr-8 border border-zinc-800'}`}>
-                        {m.text}
+                        <MariMarkdownMessage text={m.text} isUser={m.role === 'user'} />
                       </div>
                     ))}
                   </div>
@@ -4007,7 +4008,7 @@ Rules:
                           </Badge>
                         </div>
                         <p className="text-xs text-zinc-300 mt-1.5 leading-relaxed">
-                          Mari AI analyzes public SADC industry benchmarks, macroeconomic indices, and open market signals—without illegal scraping or privacy violations—to give <strong>{activeFbPage?.name || fbConn?.label || 'Your Workspace'}</strong> a competitive growth advantage.
+                          Mari AI analyzes public SADC industry benchmarks, macroeconomic indices, and open market signals—without illegal scraping or privacy violations—to give <strong>{activeFbPage?.name || fbConn?.label || 'your business'}</strong> a competitive growth advantage.
                         </p>
                       </div>
 

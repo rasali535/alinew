@@ -230,13 +230,14 @@ CORE OPERATING PRINCIPLES:
    - When asked "what does our website say about us?": Query and summarize verified website knowledge specifically (${websiteUrl || 'Not configured'}).
    - FACEBOOK SOURCE AWARENESS & 3 EXPLICIT STATES:
      * STATE A (Page connected and useful info available): State "According to your Facebook Page, [Page Name] presents the business as..." and summarize strictly verified Facebook metadata (Page: ${pageName}, Category: ${pageCategory || 'Business'}, About: ${pageAbout || 'N/A'}, Followers: ${followers}).
-     * STATE B (Facebook connected but no Page selected / personal profile / unconnected): State "Your Facebook account is connected, but you haven't selected a business Page yet. Select a Page and I can analyse exactly how it presents your business." (or note that Facebook is unconnected).
-     * STATE C (Page selected but About/description is unavailable): State that Facebook does not currently provide enough verified business description. Do NOT fabricate an industry, target market, or value proposition.
-   - When asked "which Facebook Page is connected?": State the connected Facebook Page (${pageName || 'None'}${isSocialConnected ? ` with ${followers} followers` : ''}) underneath the canonical business. Facebook connection NEVER changes the business name.
+     * STATE B1 (Facebook profile connected, but Page not selected): State "Facebook is connected, but no business Page is selected yet." Never treat a personal Facebook profile as a business Page.
+     * STATE B2 (Facebook not connected): State "Facebook is not currently connected."
+     * STATE C (Page selected but About/description is unavailable): State that Facebook does not currently provide enough verified business description for this Page.
+   - When asked "which Facebook Page is connected?": State the connected Facebook Page (${pageName || 'None'}${isSocialConnected && hasSelectedPage ? ` with ${followers} followers` : ''}) underneath the canonical business. Facebook connection NEVER changes the business name.
    - When asked "what do you know about my business?": Synthesize all available verified layers (Identity + Website + CRM + Social + Operations).
    - When asked "where should we focus today?": Reason across pipeline, audience reach, and workflow execution.
    - When asked to compare website with Facebook: Compare structured website positioning with the verified Facebook Page presence.
-   - NO PLACEHOLDER STRINGS: NEVER output phrases like "Unspecified Target Market", "Unspecified Industry", or "Verified business knowledge sources not yet established" as factual business descriptions.
+   - NO PLACEHOLDER STRINGS: NEVER output phrases like "Active Workspace", "Your Business", "Unspecified Target Market", "Unspecified Industry", or "Default" as business names.
    - NEVER invent or hallucinate metrics, growth percentages, or fake company identities.
 3. TENANT ISOLATION: Maintain absolute tenant boundaries. Never mention or reveal data from other organizations. Never refer to any synthetic "Default" entity or use @facebook as a company name.
 4. FORMATTING RULES:
@@ -447,23 +448,22 @@ Best regards,
     }
   }
 
-  // B. SOURCE-SPECIFIC: FACEBOOK KNOWLEDGE (STATE A, STATE B, STATE C)
+  // B. SOURCE-SPECIFIC: FACEBOOK KNOWLEDGE (STATE A, STATE B1/B2, STATE C)
   if (intent === 'FACEBOOK_KNOWLEDGE') {
     // STATE B1: Personal Profile or no Page selected
     if (isPersonalFb || (isSocialConnected && !hasSelectedPage)) {
       responseText = `### Facebook Business Page Not Selected
 
-Your Facebook account is connected, but you haven't selected a business Page yet. Select a Page and I can analyse exactly how it presents your business.`;
+Facebook is connected, but no business Page is selected yet. Select a Page in **Growth Studio → Channels** and I can analyse exactly how it presents your business.`;
       actions.push({ id: 'SELECT_FACEBOOK_PAGE', type: 'NAVIGATE', label: 'Select Facebook Page', payload: { route: '/growth?tab=channels' } });
       return { text: responseText, suggestedActions: actions };
     }
 
     // STATE B2: Completely Unconnected
     if (!isSocialConnected || !pageName || pageName === 'Not Connected') {
-      responseText = `### Facebook Channel Status for ${orgName || 'Active Workspace'}
+      responseText = `### Facebook Channel Status${orgName ? ` for ${orgName}` : ''}
 
-**Canonical Business**: ${orgName || 'Active Workspace'}  
-**Status**: Facebook is not currently connected.
+${orgName ? `**Canonical Business**: ${orgName}  \n` : ''}**Status**: Facebook is not currently connected.
 
 Connect your Facebook Page in **Growth Studio → Channels** to allow Mari to analyze your public social positioning, track audience reach, and publish content.`;
       actions.push({ id: 'CONNECT_FACEBOOK', type: 'NAVIGATE', label: 'Connect Facebook', payload: { route: '/growth?tab=channels' } });
@@ -501,19 +501,17 @@ ${pageAbout ? `${pageName} is positioned on Facebook as: "${pageAbout}".` : `${p
   // C. SOURCE-SPECIFIC: CONNECTED SOCIAL PAGE
   if (intent === 'CONNECTED_SOCIAL_PAGE') {
     const parentCompany = orgName ? ` for **${orgName}**` : '';
-    if (isPersonalFb) {
+    if (isPersonalFb || (isSocialConnected && !hasSelectedPage)) {
       responseText = `### Connected Social Channels${parentCompany}
 
-**Canonical Business**: ${orgName || 'Active Workspace'}  
-**Status**: Connected to a Personal Facebook Profile (Business Page not selected).
+${orgName ? `**Canonical Business**: ${orgName}  \n` : ''}**Status**: Facebook is connected, but no business Page is selected yet.
 
-Your Facebook account is connected, but you haven't selected a business Page yet. Select a Page in **Growth Studio → Channels** to enable Page-level business intelligence.`;
+Select a business Page in **Growth Studio → Channels** to enable Page-level business intelligence.`;
       actions.push({ id: 'SELECT_FACEBOOK_PAGE', type: 'NAVIGATE', label: 'Select Facebook Page', payload: { route: '/growth?tab=channels' } });
     } else if (isSocialConnected && pageName && pageName !== 'Not Connected') {
       responseText = `### Connected Social Channels${parentCompany}
 
-**Canonical Business**: ${orgName || 'Active Workspace'}  
-**Connected Facebook Page**: **${pageName}**  
+${orgName ? `**Canonical Business**: ${orgName}  \n` : ''}**Connected Facebook Page**: **${pageName}**  
 **Category**: ${pageCategory || 'Business'}  
 **Followers**: ${followers.toLocaleString()} verified followers  
 **Status**: Connected & Active via Meta Graph API  
@@ -523,8 +521,7 @@ Your Facebook account is connected, but you haven't selected a business Page yet
     } else {
       responseText = `### Social Channel Status${parentCompany}
 
-**Canonical Business**: ${orgName || 'Active Workspace'}  
-**Connected Facebook Page**: None currently connected.
+${orgName ? `**Canonical Business**: ${orgName}  \n` : ''}**Status**: Facebook is not currently connected.
 
 Connect your Facebook Page in **Growth Studio → Channels** to track audience reach, publish content, and monitor analytics.`;
       actions.push({ id: 'CONNECT_FACEBOOK', type: 'NAVIGATE', label: 'Connect Facebook', payload: { route: '/growth?tab=channels' } });
@@ -545,7 +542,7 @@ Connect your Facebook Page in **Growth Studio → Channels** to track audience r
       if (followers === 0) missingItems.push('• **Audience Base**: Zero followers recorded or page insights permissions need renewal.');
     }
 
-    responseText = `### Facebook Page Intelligence Audit for ${orgName || 'Active Workspace'}
+    responseText = `### Facebook Page Intelligence Audit${orgName ? ` for ${orgName}` : ''}
 
 Here is an objective assessment of information available vs. missing on your Facebook Page:
 
@@ -608,7 +605,7 @@ ${sections || `• **Core Positioning**: ${valueProp || `${orgName} commercial w
 
 ${valueProp ? `**Website Value Proposition**:\n${valueProp}` : ''}`;
     } else if (websiteUrl && websiteUrl !== 'Not configured') {
-      responseText = `### Website Knowledge for ${orgName || 'Your Business'}
+      responseText = `### Website Knowledge${orgName ? ` for ${orgName}` : ''}
 
 **Configured Website**: ${websiteUrl}  
 **Status**: Configured in business profile.
@@ -736,7 +733,7 @@ ${isSocialConnected
     if (!isSocialConnected) missingItems.push('• **Social Channel**: Facebook Business Page is not connected in Growth Studio.');
     missingItems.push('• **Month-over-Month Baselines**: Previous month performance snapshot baseline has not yet been recorded for longitudinal comparison.');
 
-    responseText = `### Missing Business Intelligence Audit for ${orgName || 'Active Workspace'}
+    responseText = `### Missing Business Intelligence Audit${orgName ? ` for ${orgName}` : ''}
 
 Here is an objective breakdown of information needed to maximize Mari's strategic reasoning:
 
@@ -754,7 +751,7 @@ Connecting these sources will enable deep predictive analytics and automated com
   // K. BUSINESS IDENTITY
   if (intent === 'BUSINESS_IDENTITY') {
     if (!isVerified && !orgName) {
-      responseText = `### Your Business
+      responseText = `### Business Identity
 
 Verified business information has not yet been established for this workspace.
 
@@ -763,12 +760,13 @@ You can configure your company name, industry, target market, and products in **
       return { text: responseText, suggestedActions: actions };
     }
 
-    responseText = `### Your Business: ${orgName}
+    const productsFormattedLines = rawProducts.map((p: any) => typeof p === 'string' ? `• **${p}**` : `• **${p.name}** (${p.category || 'Solution'})`).join('\n');
+    responseText = `### Business Identity: ${orgName}
 
 **Business Overview**:
 ${orgName}${industry ? ` operates in the **${industry}** sector` : ''}${valueProp ? `, focusing on ${valueProp}` : ''}.
 
-${productsFormatted ? `**Core Products & Services**:\n• ${productsFormatted}\n` : ''}${targetMarket ? `**Target Market**:\n• ${targetMarket}\n` : ''}${websiteUrl ? `**Website**:\n• ${websiteUrl}\n` : ''}`;
+${productsFormattedLines || (productsFormatted ? `**Core Products & Services**:\n• ${productsFormatted}\n` : '')}${targetMarket ? `**Target Market**:\n• ${targetMarket}\n` : ''}${websiteUrl ? `**Website**:\n• ${websiteUrl}\n` : ''}`;
 
     actions.push(
       { type: 'NAVIGATE', label: 'Open Growth Studio', payload: { route: '/growth' } },
@@ -785,7 +783,7 @@ ${productsFormatted ? `**Core Products & Services**:\n• ${productsFormatted}\n
 
     const enterpriseAnalysis = `• **Enterprise Market Pivot**: Shifting primary focus entirely to enterprise clients would extend sales cycles (typically 60–120 days) but substantially increase Average Contract Value (ACV). For ${orgName || 'your business'}, our solutions (${productsFormatted || 'enterprise solutions'}) provide sovereign control and automation that appeal directly to enterprise decision-makers, provided we offer dedicated SLAs and enterprise compliance.`;
 
-    const facebookDiagnosis = isSocialConnected
+    const facebookDiagnosis = isSocialConnected && hasSelectedPage
       ? `• **Facebook / Channel Growth Analysis**: Your connected page (**${pageName}**) has ${followers.toLocaleString()} verified followers. The primary constraint on growth is publishing consistency—without regular multi-format visual posts and video reels, organic algorithmic discovery remains low.`
       : `• **Facebook / Channel Growth Analysis**: Social channels are not actively broadcasting. Growth is constrained because organic distribution channels require active Facebook Business Page connection and scheduled content dispatch.`;
 
@@ -794,7 +792,7 @@ ${productsFormatted ? `**Core Products & Services**:\n• ${productsFormatted}\n
   2. **Multi-Channel Distribution Cadence**: Organic brand reach requires consistent 2–3 weekly video and visual releases via Growth Studio.
   3. **Executive Follow-Up Cadence**: High-value opportunities need rapid proposal turnaround to convert into signed agreements.`;
 
-    responseText = `### Strategic Business Diagnostic for ${orgName || 'Your Business'}
+    responseText = `### Strategic Business Diagnostic${orgName ? ` for ${orgName}` : ''}
 
 Here is a multi-dimensional strategic evaluation addressing your questions:
 
@@ -818,53 +816,17 @@ ${overlookedObservations}`;
     return { text: responseText, suggestedActions: actions };
   }
 
-  // I. BUSINESS IDENTITY
-  if (intent === 'BUSINESS_IDENTITY') {
-    if (!isVerified && !orgName) {
-      responseText = `### Your Business
-
-Verified business information has not yet been established for this workspace.
-
-You can configure your company name, industry, target market, and products in **Settings → Business Knowledge** to enable tailored business intelligence. In the meantime, I am ready to assist you with general business strategy, writing, planning, and operational workflows.`;
-      actions.push({ type: 'NAVIGATE', label: 'Add Business Knowledge', payload: { route: '/settings' } });
-      return { text: responseText, suggestedActions: actions };
-    }
-
-    const productsFormattedLines = rawProducts.map((p: any) => typeof p === 'string' ? `• **${p}**` : `• **${p.name}** (${p.category || 'Solution'})`).join('\n');
-    responseText = `### Your Business: ${orgName}
-
-**Business Overview**:
-${orgName} operates in the **${industry}** sector, delivering sovereign enterprise intelligence and automated business growth systems.
-
-**Core Value Proposition**:
-${valueProp}
-
-**Products & Services**:
-${productsFormattedLines || `• **${productsFormatted}**`}
-
-**Target Market**:
-${targetMarket}
-
-*Would you like me to generate a tailored growth campaign or prepare promotional materials for ${targetMarket}?*`;
-
-    actions.push(
-      { type: 'NAVIGATE', label: 'Create Growth Campaign', payload: { route: '/growth' } },
-      { type: 'NAVIGATE', label: 'View CRM Pipeline', payload: { route: '/crm' } }
-    );
-    return { text: responseText, suggestedActions: actions };
-  }
-
   // J. BUSINESS PERFORMANCE
   if (intent === 'BUSINESS_PERFORMANCE') {
     const crmStatus = pipelineVal > 0
       ? `• **CRM Pipeline:** $${pipelineVal.toLocaleString()} across ${activeClients} active clients.`
       : `• **CRM Pipeline:** No active deals logged yet in Ralion CRM.`;
 
-    const socialStatus = isSocialConnected
+    const socialStatus = isSocialConnected && hasSelectedPage
       ? `• **Social Channel (${pageName}):** ${followers.toLocaleString()} verified followers.`
       : `• **Social Channels:** Not currently connected. Connect your Facebook Page in Growth Studio to track verified audience reach.`;
 
-    responseText = `### Business Performance Summary for ${orgName || 'Active Workspace'}
+    responseText = `### Business Performance Summary${orgName ? ` for ${orgName}` : ''}
 
 **Verified Telemetry**:
 ${crmStatus}
@@ -882,7 +844,7 @@ To accelerate growth, prioritize qualifying active CRM leads and publishing regu
   }
 
   // K. GENERAL STRATEGIC REASONING
-  responseText = `### Strategic Analysis for ${orgName || 'Your Business'}
+  responseText = `### Strategic Analysis${orgName ? ` for ${orgName}` : ''}
 
 Based on available intelligence for **${orgName || 'your business'}**${isVerified ? ` in **${industry}**` : ''}:
 

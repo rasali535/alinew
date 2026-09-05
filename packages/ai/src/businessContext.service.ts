@@ -173,7 +173,7 @@ export class BusinessContextService {
     const now = Date.now();
     const cached = contextCache[orgId];
 
-    if (!options?.forceRefresh && cached && (now - cached.cachedAt < CACHE_TTL_MS)) {
+    if (!options?.forceRefresh && !options?.localOverrides && cached && (now - cached.cachedAt < CACHE_TTL_MS)) {
       if (options?.activeScreen) {
         cached.context.activeScreen = options.activeScreen;
       }
@@ -397,7 +397,7 @@ export class BusinessContextService {
       ? tasksList.filter((t: any) => t.status === 'PENDING' && t.priority === 'HIGH').length 
       : 0;
 
-    const isSocialConnected = isSocialPageConnected;
+    const isSocialConnected = Boolean(isSocialPageConnected || isPersonalFb);
     const followers = isSocialPageConnected ? (Number(fbPage?.fanCount) || 0) : 0;
     const pageName = isSocialPageConnected ? (fbPage?.name || 'Facebook Page') : (isPersonalFb ? 'Personal Profile (Business Page Not Connected)' : 'Not Connected');
 
@@ -433,9 +433,9 @@ export class BusinessContextService {
         isPersonalProfile: isPersonalFb,
         connectedPageName: {
           value: pageName,
-          provenance: isSocialConnected ? 'VERIFIED' : 'UNVERIFIED',
+          provenance: isSocialPageConnected ? 'VERIFIED' : (isPersonalFb ? 'USER_PROVIDED' : 'UNVERIFIED'),
           source: 'Meta Graph API',
-          confidence: isSocialConnected ? 1.0 : 0.0,
+          confidence: isSocialPageConnected ? 1.0 : (isPersonalFb ? 0.8 : 0.0),
           lastVerifiedAt: timestamp,
         },
         pageId: {
@@ -589,11 +589,13 @@ export class BusinessContextService {
       isPersonalSocialProfile: isPersonalFb,
     };
 
-    contextCache[orgId] = {
-      context,
-      cachedAt: now,
-      version: this.versionCounter,
-    };
+    if (!options?.localOverrides) {
+      contextCache[orgId] = {
+        context,
+        cachedAt: now,
+        version: this.versionCounter,
+      };
+    }
 
     return context;
   }

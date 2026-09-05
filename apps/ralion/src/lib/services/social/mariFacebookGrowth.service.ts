@@ -216,7 +216,7 @@ export class MariFacebookGrowthService {
     userId: string;
     focusObjective?: string;
   }): Promise<MariGrowthPlanResult> {
-    const brandName = params.context.pageName || 'Your Business';
+    const brandName = (params.context.pageName && params.context.pageName !== 'No Connected Page') ? params.context.pageName : 'your business';
     const tagSlug = brandName.replace(/[^a-zA-Z0-9]/g, '');
 
     const days: MariGrowthPlanDay[] = [
@@ -334,7 +334,7 @@ export class MariFacebookGrowthService {
     userId: string;
   }): Promise<{ answer: string; recommendedAction?: string; suggestedPrompt?: string }> {
     const p = params.prompt.toLowerCase();
-    const brandName = params.context.pageName || 'Your Business';
+    const brandName = (params.context.pageName && params.context.pageName !== 'No Connected Page') ? params.context.pageName : 'your business';
 
     if (p.includes('performing') || p.includes('performance') || p.includes('health') || p.includes('status')) {
       return {

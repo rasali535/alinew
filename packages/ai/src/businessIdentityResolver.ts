@@ -69,9 +69,20 @@ export class BusinessIdentityResolver {
       cleanId === 'c0b39862-cf19-4882-a822-c7f3f493fec0' ||
       cleanId === 'org_pameltex';
 
+    // 4. Check if this is Grape
+    const isGrape =
+      cleanId === 'grape' ||
+      cleanId === '8c8d6392-e457-4145-9423-f551fda3b728' ||
+      cleanId === 'chiwabby@gmail.com';
+
     if (profile && profile.companyName?.value) {
       const companyName = profile.companyName.value.trim();
-      const isClean = !companyName.startsWith('@') && !companyName.toLowerCase().includes('facebook');
+      const isClean =
+        !companyName.startsWith('@') &&
+        !companyName.toLowerCase().includes('facebook') &&
+        companyName.toLowerCase() !== 'active workspace' &&
+        companyName.toLowerCase() !== 'your business' &&
+        companyName.toLowerCase() !== 'default';
       
       if (isClean && companyName.length > 0) {
         const rawProducts = [
@@ -143,13 +154,37 @@ export class BusinessIdentityResolver {
       };
     }
 
-    // 4. Check Session-Provided Organization / Workspace Name
-    const sessionName = options?.sessionCompanyName || options?.sessionOrgName;
-    if (sessionName && sessionName.trim() && !sessionName.startsWith('@') && sessionName.toLowerCase() !== 'default') {
+    if (isGrape) {
+      return {
+        organizationId: 'grape',
+        workspaceId: options?.workspaceId || '8c8d6392-e457-4145-9423-f551fda3b728',
+        companyName: 'grape',
+        isVerified: false,
+        industry: '',
+        targetMarket: '',
+        valueProposition: '',
+        tagline: '',
+        websiteUrl: '',
+        productsAndServices: [],
+        brandVoice: 'Professional, Neutral',
+        source: 'REGISTERED_PROFILE',
+      };
+    }
+
+    // 5. Check Session-Provided Organization / Workspace Name
+    let sessionName = (options?.sessionCompanyName || options?.sessionOrgName || '').trim();
+    if (sessionName.endsWith("'s Workspace") || sessionName.endsWith("'s workspace")) {
+      sessionName = sessionName.replace(/'s [Ww]orkspace$/g, '').trim();
+    }
+
+    const invalidNames = ['default', 'active workspace', 'your business', 'default workspace', 'workspace', 'my workspace', 'none', 'unconfigured', '@facebook', 'facebook'];
+    const isInvalid = !sessionName || sessionName.startsWith('@') || invalidNames.includes(sessionName.toLowerCase());
+
+    if (!isInvalid && sessionName.length > 0) {
       return {
         organizationId: rawId || 'unconfigured-tenant',
         workspaceId: options?.workspaceId,
-        companyName: sessionName.trim(),
+        companyName: sessionName,
         isVerified: false,
         industry: '',
         targetMarket: '',
@@ -162,7 +197,7 @@ export class BusinessIdentityResolver {
       };
     }
 
-    // 5. Unverified Workspace / Tenant
+    // 6. Unverified Workspace / Tenant
     return {
       organizationId: rawId || 'unconfigured-tenant',
       workspaceId: options?.workspaceId,
