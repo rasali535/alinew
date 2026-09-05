@@ -189,6 +189,37 @@ export function createApp(): Application {
         }
     });
 
+    // Platform Admin API Proxy / Fallback to Next.js Ralion Backend
+    app.use(['/api/admin', '/ralion/api/admin'], async (req, res) => {
+        try {
+            const nextBase = process.env.RALION_UPSTREAM_URL || 
+                             (process.env.NODE_ENV === 'production' 
+                                ? 'https://ralion-dynamic-backend.onrender.com' 
+                                : 'http://localhost:6509');
+            const targetUrl = `${nextBase.replace(/\/+$/, '')}/api/admin${req.url}`;
+            
+            const response = await axios({
+                method: req.method,
+                url: targetUrl,
+                data: req.body,
+                headers: {
+                    ...req.headers,
+                    host: undefined,
+                },
+                validateStatus: () => true,
+            });
+
+            res.status(response.status).json(response.data);
+        } catch (err: any) {
+            logger.error('[Express Proxy] Error proxying platform admin request to Next.js:', err);
+            res.status(500).json({
+                success: false,
+                error: 'Platform admin proxy failure',
+                details: err.message,
+            });
+        }
+    });
+
     // API routes
     app.use('/api', chatRoutes);
 

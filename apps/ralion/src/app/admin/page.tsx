@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { createClient as createBrowserClient } from '@/lib/supabase/client';
+import { getRalionApiUrl } from '@/lib/api-config';
 import {
   ShieldAlert,
   Users,
@@ -176,25 +177,64 @@ export default function PlatformAdminPortal() {
     return headers;
   };
 
+  const adminFetch = async (endpoint: string, options?: RequestInit): Promise<Response> => {
+    const authHeaders = await getAuthHeaders();
+    const mergedHeaders: Record<string, string> = {
+      ...authHeaders,
+      ...(options?.headers as Record<string, string> || {}),
+    };
+
+    let targetUrl = endpoint;
+    if (typeof window !== 'undefined') {
+      const isSubpath = window.location.pathname.startsWith('/ralion');
+      if (isSubpath && !endpoint.startsWith('/ralion/')) {
+        targetUrl = `/ralion${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+      }
+    }
+
+    try {
+      const res = await fetch(targetUrl, { ...options, headers: mergedHeaders });
+      if (res.status !== 404 && res.status !== 503) {
+        return res;
+      }
+      const directUrl = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+      if (directUrl !== targetUrl) {
+        const resDirect = await fetch(directUrl, { ...options, headers: mergedHeaders });
+        if (resDirect.ok || resDirect.status !== 404) return resDirect;
+      }
+      const canonicalUrl = getRalionApiUrl(endpoint);
+      if (canonicalUrl !== targetUrl && canonicalUrl !== directUrl) {
+        const resCanonical = await fetch(canonicalUrl, { ...options, headers: mergedHeaders });
+        if (resCanonical.ok || resCanonical.status !== 404) return resCanonical;
+      }
+      return res;
+    } catch {
+      return fetch(endpoint, { ...options, headers: mergedHeaders });
+    }
+  };
+
   const fetchPlatformData = async () => {
     setLoading(true);
     setPlatformError(null);
     try {
-      const headers = await getAuthHeaders();
       const results = await Promise.allSettled([
-        fetch('/api/admin/metrics', { headers }),
-        fetch('/api/admin/customers', { headers }),
-        fetch('/api/admin/system/health', { headers }),
-        fetch('/api/admin/audit-logs', { headers }),
+        adminFetch('/api/admin/metrics'),
+        adminFetch('/api/admin/customers'),
+        adminFetch('/api/admin/connected-users'),
+        adminFetch('/api/admin/system/health'),
+        adminFetch('/api/admin/audit-logs'),
       ]);
 
-      const [mSettled, cSettled, hSettled, aSettled] = results;
+      const [mSettled, cSettled, uSettled, hSettled, aSettled] = results;
+
+      let metricsPayload: MetricsData | null = null;
 
       if (mSettled.status === 'fulfilled') {
         const mRes = mSettled.value;
         if (mRes.ok) {
           const mData = await mRes.json();
           if (mData.success && mData.data) {
+            metricsPayload = mData.data;
             setMetrics(mData.data);
           } else {
             setPlatformError(mData.error || 'Unable to parse metrics response.');
@@ -215,6 +255,20 @@ export default function PlatformAdminPortal() {
       if (cSettled.status === 'fulfilled' && cSettled.value.ok) {
         const cData = await cSettled.value.json().catch(() => ({}));
         setCustomers(cData.data || []);
+      }
+
+      // If standalone connected-users endpoint returns data, merge into metrics
+      if (uSettled.status === 'fulfilled' && uSettled.value.ok) {
+        const uData = await uSettled.value.json().catch(() => ({}));
+        if (uData.success && uData.data?.users) {
+          setMetrics(prev => ({
+            ...(prev || metricsPayload || {} as any),
+            connectedUsers: uData.data.users,
+            connectedUsersCount: uData.data.total ?? uData.data.users.length,
+            connectedUserCount: uData.data.total ?? uData.data.users.length,
+            activeConnectionCount: uData.data.activeConnectionsCount ?? prev?.activeConnectionCount,
+          }));
+        }
       }
 
       if (hSettled.status === 'fulfilled' && hSettled.value.ok) {
@@ -257,10 +311,7 @@ export default function PlatformAdminPortal() {
     }
 
     try {
-      const headers = await getAuthHeaders();
-      const res = await fetch(`/api/admin/organizations/${orgId}?reason=${encodeURIComponent(inspectionReason)}`, {
-        headers,
-      });
+      const res = await adminFetch(`/api/admin/organizations/${orgId}?reason=${encodeURIComponent(inspectionReason)}`);
       const data = await res.json();
       if (data.success) {
         setInspectedOrg(data.data);
@@ -285,10 +336,8 @@ export default function PlatformAdminPortal() {
     }
 
     try {
-      const headers = await getAuthHeaders();
-      const res = await fetch(`/api/admin/customers/${orgId}/status`, {
+      const res = await adminFetch(`/api/admin/customers/${orgId}/status`, {
         method: 'POST',
-        headers,
         body: JSON.stringify({ status: nextStatus, reason: promptReason }),
       });
       const data = await res.json();
@@ -311,10 +360,8 @@ export default function PlatformAdminPortal() {
     }
 
     try {
-      const headers = await getAuthHeaders();
-      const res = await fetch('/api/admin/credits/adjust', {
+      const res = await adminFetch('/api/admin/credits/adjust', {
         method: 'POST',
-        headers,
         body: JSON.stringify({
           organizationId: selectedOrgForCredit,
           amount: Number(creditAdjustmentAmount),
