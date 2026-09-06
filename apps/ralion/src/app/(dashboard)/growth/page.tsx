@@ -21,30 +21,49 @@ import { getRalionApiUrl, fetchRalionApi, getRalionAuthHeaders } from '@/lib/api
 import { useOrganization } from '@ralion/auth';
 import { AnalyticsSource, MetricState, formatAnalyticsMetric } from '@/lib/services/social/facebookAnalyticsSemantics';
 
-async function authFetch(pathOrUrl: string, init?: RequestInit): Promise<Response> {
+async function authFetch(pathOrUrl: string, init?: RequestInit, opName?: string): Promise<Response> {
   const url = pathOrUrl.startsWith('http') ? pathOrUrl : getRalionApiUrl(pathOrUrl);
-  const authHeaders = await getRalionAuthHeaders();
-  const headers = new Headers(init?.headers);
-  if (!headers.has('Authorization') && authHeaders.Authorization) {
-    headers.set('Authorization', authHeaders.Authorization);
+  const operation = opName || pathOrUrl.split('?')[0].replace(/^\/api\//, '').replace(/\//g, '_');
+  let tenantUuid = 'anonymous';
+
+  try {
+    const authHeaders = await getRalionAuthHeaders().catch(() => ({} as Record<string, string>));
+    tenantUuid = authHeaders['x-workspace-id'] || authHeaders['x-organization-id'] || authHeaders['x-user-id'] || 'default-tenant';
+    const headers = new Headers(init?.headers);
+    if (!headers.has('Authorization') && authHeaders.Authorization) {
+      headers.set('Authorization', authHeaders.Authorization);
+    }
+    if (!headers.has('x-user-id') && authHeaders['x-user-id']) {
+      headers.set('x-user-id', authHeaders['x-user-id']);
+    }
+    if (!headers.has('x-workspace-id') && authHeaders['x-workspace-id']) {
+      headers.set('x-workspace-id', authHeaders['x-workspace-id']);
+    }
+    if (!headers.has('x-organization-id') && authHeaders['x-organization-id']) {
+      headers.set('x-organization-id', authHeaders['x-organization-id']);
+    }
+    if (!headers.has('Content-Type') && init?.body && typeof init.body === 'string') {
+      headers.set('Content-Type', 'application/json');
+    }
+
+    const res = await fetch(url, {
+      ...init,
+      headers,
+      credentials: init?.credentials || 'include',
+    });
+
+    console.debug(`[Ralion Growth Telemetry] Op: ${operation} | URL: ${url} | Status: ${res.status} | Tenant: ${tenantUuid}`);
+    return res;
+  } catch (rawErr: any) {
+    const errObj = rawErr instanceof Error ? rawErr : new Error(typeof rawErr === 'object' ? JSON.stringify(rawErr) : String(rawErr));
+    console.warn(`[Ralion Growth Telemetry] [ERROR] Op: ${operation} | URL: ${url} | Tenant: ${tenantUuid} | Message: ${errObj.message}`);
+    // Safe structured fallback response so consumers never encounter unhandled promise rejections or raw object throws
+    return new Response(JSON.stringify({ success: false, error: errObj.message, status: 503 }), {
+      status: 503,
+      statusText: 'Service Unavailable',
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
-  if (!headers.has('x-user-id') && authHeaders['x-user-id']) {
-    headers.set('x-user-id', authHeaders['x-user-id']);
-  }
-  if (!headers.has('x-workspace-id') && authHeaders['x-workspace-id']) {
-    headers.set('x-workspace-id', authHeaders['x-workspace-id']);
-  }
-  if (!headers.has('x-organization-id') && authHeaders['x-organization-id']) {
-    headers.set('x-organization-id', authHeaders['x-organization-id']);
-  }
-  if (!headers.has('Content-Type') && init?.body && typeof init.body === 'string') {
-    headers.set('Content-Type', 'application/json');
-  }
-  return fetch(url, {
-    ...init,
-    headers,
-    credentials: init?.credentials || 'include',
-  });
 }
 
 function resolveSafeImageUrl(src?: string, fallbackTitle: string = 'Ralion Creative'): string {
@@ -556,7 +575,7 @@ Rules:
     try {
       const res = await authFetch('/api/social/facebook/pages');
       if (res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (data.entitlement) {
           setFacebookEntitlement(data.entitlement);
         }
@@ -577,7 +596,7 @@ Rules:
   // Helper: Open Page Selection / Discovery Modal
   const handleOpenPageSelection = async () => {
     setIsPageSelectionModalOpen(true);
-    await fetchFacebookPages();
+    await fetchFacebookPages().catch(e => console.warn('[Growth] Page select notice:', e));
   };
 
   // Helper: Select & Connect Page
@@ -603,16 +622,16 @@ Rules:
       }
 
       if (res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (data.success) {
           setOauthAlert({ type: 'success', message: `✅ Facebook Page connected: ${targetPage?.name || data.selectedPage?.pageName || pageId}!` });
-          const accounts = await loadConnectedAccounts();
+          const accounts = await loadConnectedAccounts().catch(() => []);
           const fbAccount = accounts.find(a => a.provider === 'facebook');
           if (fbAccount?.id) {
             setSelectedAccountId(fbAccount.id);
-            fetchPostsForConnection(fbAccount.id);
+            fetchPostsForConnection(fbAccount.id).catch(e => console.warn('[Growth] fetchPosts notice:', e));
           }
-          await fetchFacebookPages();
+          await fetchFacebookPages().catch(e => console.warn('[Growth] fetchPages notice:', e));
           setIsPageSelectionModalOpen(false);
         } else {
           setOauthAlert({ type: 'error', message: `❌ ${data.error || 'Failed to connect Facebook Page'}` });
@@ -622,7 +641,8 @@ Rules:
         setOauthAlert({ type: 'error', message: `❌ ${data.error || 'Failed to connect Facebook Page'}` });
       }
     } catch (err: any) {
-      setOauthAlert({ type: 'error', message: `❌ ${err.message || 'Failed to connect selected page'}` });
+      const errMsg = err instanceof Error ? err.message : String(err);
+      setOauthAlert({ type: 'error', message: `❌ ${errMsg || 'Failed to connect selected page'}` });
     } finally {
       setIsConnectingPage(false);
     }
@@ -640,7 +660,7 @@ Rules:
         body: JSON.stringify({ action: 'GET_PLAN' }),
       });
       if (res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (data.plan) {
           setMari7DayPlan(data.plan);
         }
@@ -669,7 +689,7 @@ Rules:
         body: JSON.stringify({ action: 'ASK_MARI', prompt: userMsg }),
       });
       if (res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (data.chat) {
           setMariChatMessages(prev => [
             ...prev,
@@ -711,8 +731,8 @@ Rules:
       try {
         const accountsMap: Record<string, SocialAccount> = {};
         const supabase = createClient();
-        const { data: { session } } = await supabase.auth.getSession();
-        const user = session?.user;
+        const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+        const user = data?.session?.user;
 
         if (!user) {
           setConnectedAccounts([]);
@@ -727,7 +747,7 @@ Rules:
         try {
           const res = await authFetch('/api/social/connections');
           if (res.ok) {
-            const data = await res.json();
+            const data = await res.json().catch(() => ({}));
             if (data.success && Array.isArray(data.connections)) {
               data.connections.forEach((c: any) => {
                 const prov = (c.provider || c.platform || '').toLowerCase();
@@ -796,7 +816,7 @@ Rules:
       try {
         const res = await authFetch(`/api/social/posts/by-connection?socialConnectionId=${encodeURIComponent(socialConnectionId)}`);
         if (res.ok) {
-          const data = await res.json();
+          const data = await res.json().catch(() => ({}));
           if (data.posts && Array.isArray(data.posts)) {
             const provider = data.provider || 'facebook';
 
@@ -970,7 +990,7 @@ Rules:
       const url = postId ? `/api/social/comments?postId=${encodeURIComponent(postId)}` : '/api/social/comments';
       const res = await authFetch(url);
       if (res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         setPostComments(data.comments || []);
       }
     } catch (err) {
@@ -1005,7 +1025,7 @@ Rules:
         }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
       if (!res.ok || !data.success) {
         throw new Error(data.error || `Server responded with status ${res.status}`);
@@ -1032,9 +1052,10 @@ Rules:
         }, 1500);
       }
     } catch (e: any) {
+      const errMsg = e instanceof Error ? e.message : String(e);
       setOauthAlert({
         type: 'error',
-        message: `✕ Failed to post comment reply to Facebook: ${e.message}`,
+        message: `✕ Failed to post comment reply to Facebook: ${errMsg}`,
       });
     } finally {
       setIsSubmittingReply(false);
@@ -1047,7 +1068,7 @@ Rules:
     try {
       const res = await authFetch('/api/social/inbox?provider=facebook');
       if (res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (data.conversations && Array.isArray(data.conversations)) {
           setInboxConversations(data.conversations);
           if (!activeConversationId && data.conversations.length > 0) {
@@ -1084,7 +1105,7 @@ Rules:
         }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
         throw new Error(data.error || `Server responded with status ${res.status}`);
       }
@@ -1117,9 +1138,10 @@ Rules:
       });
       setTimeout(() => setOauthAlert(null), 5000);
     } catch (err: any) {
+      const errMsg = err instanceof Error ? err.message : String(err);
       setOauthAlert({
         type: 'error',
-        message: `✕ Failed to send message: ${err.message}`,
+        message: `✕ Failed to send message: ${errMsg}`,
       });
     } finally {
       setIsSendingInboxReply(false);
@@ -1136,7 +1158,7 @@ Rules:
         body: JSON.stringify({ action: 'GET_DIAGNOSIS' }),
       });
       if (res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (data.score) {
           setMariGrowthScore(data.score);
         }
@@ -1155,7 +1177,7 @@ Rules:
       const pageId = activeFbPage?.pageId || selectedPageForConnect || 'default';
       const res = await authFetch(`/api/social/facebook/pages/${pageId}/market-research`);
       if (res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (data.report && data.report.benchmarks) {
           setMarketResearchReport(data.report);
         }
@@ -1171,7 +1193,7 @@ Rules:
       const pageId = activeFbPage?.pageId || selectedPageForConnect || 'default';
       const res = await authFetch(`/api/social/facebook/pages/${pageId}/business-learning`);
       if (res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (data.knowledge) {
           setBusinessKnowledge(data.knowledge);
         }
@@ -1449,7 +1471,8 @@ Rules:
       // 1. Save to Supabase with isolated connection ID
       try {
         const supabase = createClient();
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+        const user = data?.user;
         if (user) {
           await supabase.from('social_connections').upsert({
             user_id: user.id,
@@ -1478,9 +1501,10 @@ Rules:
       setIsConnectModalOpen(false);
       setManualAccountHandle('');
       setManualAccessToken('');
-      loadConnectedAccounts();
+      loadConnectedAccounts().catch(() => []);
     } catch (err: any) {
-      alert(`Failed to save manual connection: ${err.message}`);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      alert(`Failed to save manual connection: ${errMsg}`);
     } finally {
       setIsConnecting(false);
     }
@@ -1533,15 +1557,17 @@ Rules:
         await AuthService.linkSocialAccount(providerKey);
       } catch (authErr: any) {
         console.warn('[Growth OAuth fallback]', authErr);
+        const authMsg = authErr instanceof Error ? authErr.message : (typeof authErr === 'object' ? authErr.error_description || authErr.message || JSON.stringify(authErr) : String(authErr));
         setOauthAlert({
           type: 'error',
-          message: authErr?.message || 'Social connection authorization could not be started.'
+          message: authMsg || 'Social connection authorization could not be started.'
         });
       }
     } catch (err: any) {
+      const errMsg = err instanceof Error ? err.message : String(err);
       setOauthAlert({
         type: 'error',
-        message: `Failed to initiate OAuth: ${err?.message || 'Check connection settings'}`
+        message: `Failed to initiate OAuth: ${errMsg || 'Check connection settings'}`
       });
     } finally {
       setIsConnecting(false);
@@ -1552,7 +1578,8 @@ Rules:
   const handleDisconnectAccount = async (targetIdOrProvider: string, providerHint?: string) => {
     try {
       const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+      const user = data?.user;
       const targetAccount = connectedAccounts.find(a => a.id === targetIdOrProvider);
       const isConnectionId = targetIdOrProvider.includes('-') || (targetAccount && targetAccount.id === targetIdOrProvider);
       const providerKey = targetAccount?.provider || providerHint || targetIdOrProvider;
@@ -1621,7 +1648,7 @@ Rules:
       const res = await authFetch(`/api/oauth/${providerKey}/sync/`, { method: 'POST' });
       const contentType = res.headers.get('content-type') || '';
       if (res.ok && contentType.includes('application/json')) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (data.success && Array.isArray(data.posts) && data.posts.length > 0) {
           // Merge real posts into the posts list (avoid duplicates)
           setPosts(prev => {
