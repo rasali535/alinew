@@ -144,7 +144,7 @@ export default function MariAiPage() {
         const rawD = localStorage.getItem(`ralion:${activeOrgId}:documents`) || localStorage.getItem('ralion_documents');
         if (rawD) savedDocs = JSON.parse(rawD);
 
-        const rawP = localStorage.getItem(`ralion:${activeOrgId}:selected_fb_page`) || localStorage.getItem('ralion_selected_fb_page');
+        const rawP = activeOrgId ? localStorage.getItem(`ralion:${activeOrgId}:selected_fb_page`) : null;
         if (rawP) savedFbPage = JSON.parse(rawP);
       }
 

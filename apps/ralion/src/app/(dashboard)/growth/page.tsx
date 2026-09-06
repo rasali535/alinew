@@ -652,7 +652,7 @@ Rules:
   const handleGenerate7DayPlan = async () => {
     setIsGeneratingPlan(true);
     try {
-      const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
+      const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED');
       const pageId = activeFbPage?.pageId || selectedPageForConnect || 'default';
       const res = await authFetch(`/api/social/facebook/pages/${pageId}/mari-growth`, {
         method: 'POST',
@@ -681,7 +681,7 @@ Rules:
     setIsAskingMari(true);
 
     try {
-      const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
+      const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED');
       const pageId = activeFbPage?.pageId || selectedPageForConnect || 'default';
       const res = await authFetch(`/api/social/facebook/pages/${pageId}/mari-growth`, {
         method: 'POST',
