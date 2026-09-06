@@ -188,13 +188,29 @@ export class FacebookPageManagementService {
         return trimmed;
       }
       const lower = trimmed.toLowerCase();
-      if (lower === 'ras-ali-labs' || lower === 'rasalilabs' || lower === 'ras_ali_labs') {
+      if (
+        lower === 'ras-ali-labs' ||
+        lower === 'rasalilabs' ||
+        lower === 'ras_ali_labs' ||
+        lower.startsWith('org_22e61ff6') ||
+        lower.startsWith('22e61ff6')
+      ) {
         return '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf';
       }
-      if (lower === 'pameltex' || lower === 'pameltex-consultancy') {
+      if (
+        lower === 'pameltex' ||
+        lower === 'pameltex-consultancy' ||
+        lower.startsWith('org_c0b39862') ||
+        lower.startsWith('c0b39862')
+      ) {
         return 'c0b39862-cf19-4882-a822-c7f3f493fec0';
       }
-      if (lower === 'grape' || lower === 'grape-community') {
+      if (
+        lower === 'grape' ||
+        lower === 'grape-community' ||
+        lower.startsWith('org_8c8d6392') ||
+        lower.startsWith('8c8d6392')
+      ) {
         return '8c8d6392-e457-4145-9423-f551fda3b728';
       }
       return null;

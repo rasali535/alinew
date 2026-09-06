@@ -59,6 +59,8 @@ export class BusinessIdentityResolver {
     const isRasAli =
       cleanId === 'ras-ali-labs' ||
       cleanId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf' ||
+      cleanId.startsWith('org_22e61ff6') ||
+      cleanId.startsWith('22e61ff6') ||
       cleanId === 'rasalilabs' ||
       cleanId === 'org_rasalilabs' ||
       cleanId === 'ras ali labs';
@@ -66,11 +68,15 @@ export class BusinessIdentityResolver {
     const isPameltex =
       cleanId === 'pameltex' ||
       cleanId === 'c0b39862-cf19-4882-a822-c7f3f493fec0' ||
+      cleanId.startsWith('org_c0b39862') ||
+      cleanId.startsWith('c0b39862') ||
       cleanId === 'org_pameltex';
 
     const isGrape =
       cleanId === 'grape' ||
       cleanId === '8c8d6392-e457-4145-9423-f551fda3b728' ||
+      cleanId.startsWith('org_8c8d6392') ||
+      cleanId.startsWith('8c8d6392') ||
       cleanId === 'chiwabby@gmail.com';
 
     // 3. Authoritative Registered Tenant Checks

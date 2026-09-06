@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Sparkles, X, Send, Bot, User, ChevronUp, Zap, ArrowRight } from 'lucide-react';
 import { MariMarkdownMessage } from './MariMarkdownMessage';
-import { getRalionApiUrl } from '@/lib/api-config';
+import { getRalionApiUrl, getRalionAuthHeaders } from '@/lib/api-config';
 
 export const FloatingMariAi: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -36,16 +36,25 @@ export const FloatingMariAi: React.FC = () => {
     const buildVersion = '2026.09.06-v2';
 
     try {
-      let activeOrgId: string | undefined = undefined;
+      const authHeaders = await getRalionAuthHeaders();
+      let activeOrgId: string = '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf';
       try {
-        const stored = typeof window !== 'undefined' ? localStorage.getItem('ralion_active_org_id') : null;
+        const stored = typeof window !== 'undefined'
+          ? (localStorage.getItem('ralion_active_org_id') || localStorage.getItem('ralion_active_workspace_id') || localStorage.getItem('ralion_workspace_id'))
+          : null;
         if (stored && stored !== 'org_default' && stored !== 'default') activeOrgId = stored;
       } catch {}
 
       const res = await fetch(apiUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+          'x-organization-id': activeOrgId,
+          'x-workspace-id': activeOrgId,
+        },
         body: JSON.stringify({
+          query: text,
           prompt: text,
           organizationId: activeOrgId,
           messages: newHistory.map(m => ({

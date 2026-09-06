@@ -65,7 +65,7 @@ import {
   DataProvenance,
   WebsiteIngestionService
 } from '@ralion/ai';
-import { getRalionApiUrl } from '@/lib/api-config';
+import { getRalionApiUrl, getRalionAuthHeaders } from '@/lib/api-config';
 import { useOrganization } from '@ralion/auth';
 import { MariMarkdownMessage } from '@/components/MariMarkdownMessage';
 
@@ -401,16 +401,23 @@ export default function MariAiPage() {
       let httpStatus = 0;
 
       try {
+        const authHeaders = await getRalionAuthHeaders();
+        const effectiveOrgId = (activeOrgId && activeOrgId !== 'unconfigured-tenant')
+          ? activeOrgId
+          : ((user as any)?.id || (user as any)?.userId || '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf');
+
         const res = await fetch(apiUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-organization-id': activeOrgId,
-            'x-workspace-id': activeOrgId,
+            ...authHeaders,
+            'x-organization-id': effectiveOrgId,
+            'x-workspace-id': effectiveOrgId,
           },
           body: JSON.stringify({
             query: cleanQuery,
-            organizationId: activeOrgId,
+            organizationId: effectiveOrgId,
+            userId: (user as any)?.id || (user as any)?.userId,
             activeScreen: { route: '/mari-ai', label: 'Mari Business Growth Partner' },
             messages: [...messages, userMsg],
           }),

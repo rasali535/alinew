@@ -84,7 +84,7 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         };
 
         const resolvedOrg: Organization = {
-          id: orgId || `org_${authUser?.id?.substring(0, 8) || 'user'}`,
+          id: orgId || authUser?.id || '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf',
           name: orgName,
           slug: orgName.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
           ownerId: authUser?.id || 'u-auth',

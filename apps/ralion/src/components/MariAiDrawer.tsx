@@ -6,7 +6,7 @@ import { processMariQuery, generateMarketingCampaign } from '@ralion/ai';
 import { Button, Badge } from '@ralion/ui';
 import { MariMarkdownMessage } from './MariMarkdownMessage';
 
-import { getRalionApiUrl } from '@/lib/api-config';
+import { getRalionApiUrl, getRalionAuthHeaders } from '@/lib/api-config';
 
 export interface MariAiDrawerProps {
   isOpen: boolean;
@@ -48,16 +48,25 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
       const buildVersion = '2026.09.06-v2';
 
       try {
-        let activeOrgId: string | undefined = undefined;
+        const authHeaders = await getRalionAuthHeaders();
+        let activeOrgId: string = '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf';
         try {
-          const stored = typeof window !== 'undefined' ? localStorage.getItem('ralion_active_org_id') : null;
+          const stored = typeof window !== 'undefined'
+            ? (localStorage.getItem('ralion_active_org_id') || localStorage.getItem('ralion_active_workspace_id') || localStorage.getItem('ralion_workspace_id'))
+            : null;
           if (stored && stored !== 'org_default' && stored !== 'default') activeOrgId = stored;
         } catch {}
 
         const res = await fetch(apiUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeaders,
+            'x-organization-id': activeOrgId,
+            'x-workspace-id': activeOrgId,
+          },
           body: JSON.stringify({
+            query: userText,
             prompt: userText,
             organizationId: activeOrgId,
             activeScreen: { route: '/mari-ai', label: 'Mari Business Drawer' },
