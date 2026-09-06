@@ -189,6 +189,10 @@ export default function Chatbot() {
         }));
 
         let backendAnswer = null;
+        let httpStatus = 0;
+        let responseSource = 'UNKNOWN';
+        let fallbackUsed = false;
+        const requestUrl = `${getApiUrl()}/api/mari/chat`;
 
         try {
             const response = await chatAxios.post('/api/mari/chat', {
@@ -199,12 +203,25 @@ export default function Chatbot() {
                 conversationHistory: currentHistory
             });
 
+            httpStatus = response.status;
             backendAnswer = response.data?.answer || response.data?.response;
+            if (backendAnswer) {
+                responseSource = response.data?.responseSource || 'SERVER_MARI_CHAT_API';
+            }
         } catch (backendError) {
+            httpStatus = backendError?.response?.status || 0;
             console.warn('[Mari AI] Backend dynamic route note:', backendError?.message);
         }
 
         if (backendAnswer) {
+            console.log('[MARI_WEBSITE_TELEMETRY]', {
+                MARI_REQUEST_URL: requestUrl,
+                MARI_HTTP_STATUS: httpStatus,
+                MARI_RESPONSE_ANSWER: backendAnswer,
+                MARI_RESPONSE_SOURCE: responseSource,
+                MARI_FALLBACK_USED: false,
+                MARI_BUILD_VERSION: '2026.09.06-v2',
+            });
             setMessages(prev => [...prev, { role: 'assistant', content: backendAnswer }]);
             setIsLoading(false);
             return;
@@ -212,7 +229,16 @@ export default function Chatbot() {
 
         // --- PHASE 3: Client-Side Multimodal Mari AI Engine Fallback ---
         try {
+            fallbackUsed = true;
             const aiAnswer = await generateMariAIResponse(userMessage);
+            console.log('[MARI_WEBSITE_TELEMETRY]', {
+                MARI_REQUEST_URL: requestUrl,
+                MARI_HTTP_STATUS: httpStatus,
+                MARI_RESPONSE_ANSWER: aiAnswer,
+                MARI_RESPONSE_SOURCE: 'CLIENT_FALLBACK_AIML_ENGINE',
+                MARI_FALLBACK_USED: true,
+                MARI_BUILD_VERSION: '2026.09.06-v2',
+            });
             setMessages(prev => [...prev, { role: 'assistant', content: aiAnswer }]);
         } catch (aiError) {
             console.error('[Mari AI] Multimodal Engine Error:', aiError);

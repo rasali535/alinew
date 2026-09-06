@@ -40,6 +40,13 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
     setIsProcessing(true);
 
     const fetchResponse = async () => {
+      const apiUrl = getRalionApiUrl('/api/mari/chat');
+      let httpStatus = 0;
+      let respText = '';
+      let responseSource = 'UNKNOWN';
+      let fallbackUsed = false;
+      const buildVersion = '2026.09.06-v2';
+
       try {
         let activeOrgId: string | undefined = undefined;
         try {
@@ -47,7 +54,6 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
           if (stored && stored !== 'org_default' && stored !== 'default') activeOrgId = stored;
         } catch {}
 
-        const apiUrl = getRalionApiUrl('/api/mari/chat');
         const res = await fetch(apiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -62,9 +68,12 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
           }),
         });
 
+        httpStatus = res.status;
+
         if (res.ok) {
           const data = await res.json();
-          const respText = data.answer || data.text || "I've reviewed your business intelligence.";
+          respText = data.answer || data.text || "I've reviewed your business intelligence.";
+          responseSource = data.responseSource || 'SERVER_MARI_CHAT_API';
           setMessages(prev => [
             ...prev,
             {
@@ -75,23 +84,37 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
             }
           ]);
         } else {
+          fallbackUsed = true;
+          respText = "I am ready to assist with your growth strategy, campaign planning, and business analysis.";
+          responseSource = 'HTTP_NON_200_FALLBACK';
           setMessages(prev => [
             ...prev,
             {
               sender: 'MARI',
-              text: "I am ready to assist with your growth strategy, campaign planning, and business analysis.",
+              text: respText,
             }
           ]);
         }
-      } catch (err) {
+      } catch (err: any) {
+        fallbackUsed = true;
+        respText = "I'm having trouble connecting to my neural reasoning core right now. Please check your network connection.";
+        responseSource = 'NETWORK_ERROR_FALLBACK';
         setMessages(prev => [
           ...prev,
           {
             sender: 'MARI',
-            text: "I'm having trouble connecting to my neural reasoning core right now. Please check your network connection.",
+            text: respText,
           }
         ]);
       } finally {
+        console.log('[MARI_DRAWER_TELEMETRY]', {
+          MARI_REQUEST_URL: apiUrl,
+          MARI_HTTP_STATUS: httpStatus,
+          MARI_RESPONSE_ANSWER: respText,
+          MARI_RESPONSE_SOURCE: responseSource,
+          MARI_FALLBACK_USED: fallbackUsed,
+          MARI_BUILD_VERSION: buildVersion,
+        });
         setIsProcessing(false);
       }
     };

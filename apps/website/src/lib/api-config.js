@@ -5,7 +5,8 @@
  * Guarantees NO fallback to legacy dead backends (alinew.onrender.com).
  */
 
-export const AUTHORITATIVE_PROD_API = 'https://ralion-dynamic-backend.onrender.com';
+export const AUTHORITATIVE_PROD_API = 'https://rasalilabs.com/ralion';
+export const MARI_BUILD_VERSION = '2026.09.06-v2';
 
 /**
  * Returns the resolved dynamic API base URL.
@@ -25,7 +26,7 @@ export function getApiBase() {
       configuredUrl === 'undefined' ||
       configuredUrl === 'null' ||
       configuredUrl === '' ||
-      configuredUrl.includes('alinew.onrender.com')
+      configuredUrl.includes('onrender.com')
     ) {
       configuredUrl = null;
     }
@@ -41,14 +42,22 @@ export function getApiBase() {
   // 2. Local development fallback
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
+    const origin = window.location.origin;
+
+    if (hostname.includes('rasalilabs.com')) {
+      return `${origin}/ralion`;
+    }
+
     const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.');
     if (isLocal) {
       const port = window.location.port;
       if (port === '6509' || port === '3000') {
-        return window.location.origin;
+        return origin;
       }
       return 'http://localhost:6509';
     }
+
+    return `${origin}/ralion`;
   }
 
   // 3. Authoritative production dynamic backend
@@ -57,10 +66,13 @@ export function getApiBase() {
 
 /**
  * Resolves a full canonical endpoint URL.
- * Example: getApiUrl('/api/mari/chat') -> 'https://ralion-dynamic-backend.onrender.com/api/mari/chat'
+ * Example: getApiUrl('/api/mari/chat') -> 'https://rasalilabs.com/ralion/api/mari/chat'
  */
 export function getApiUrl(path = '') {
   const base = getApiBase();
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  if (base.endsWith('/ralion') && normalizedPath.startsWith('/ralion/')) {
+    return `${base}${normalizedPath.substring(7)}`;
+  }
   return `${base}${normalizedPath}`;
 }

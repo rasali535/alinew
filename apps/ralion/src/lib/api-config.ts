@@ -7,42 +7,45 @@
  */
 
 /**
+export const MARI_BUILD_VERSION = '2026.09.06-v2';
+
+/**
  * Returns the resolved dynamic API base URL.
  */
 export function getRalionApiBase(): string {
   // 1. Explicitly configured public API URL takes top priority
-  const configuredApiUrl = process.env.NEXT_PUBLIC_RALION_API_URL;
-  if (configuredApiUrl && configuredApiUrl.trim() !== '') {
+  const configuredApiUrl = process.env.NEXT_PUBLIC_RALION_API_URL || process.env.NEXT_PUBLIC_API_URL;
+  if (configuredApiUrl && configuredApiUrl.trim() !== '' && !configuredApiUrl.includes('onrender.com')) {
     return configuredApiUrl.replace(/\/+$/, '');
   }
 
   const isProd = process.env.NODE_ENV === 'production';
 
   if (typeof window !== 'undefined') {
+    const origin = window.location.origin;
     const hostname = window.location.hostname;
     const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.');
+
+    // If running on rasalilabs.com or any web host, the API routes are served at /ralion or origin
+    if (hostname.includes('rasalilabs.com')) {
+      return `${origin}/ralion`;
+    }
 
     // If running in local development or desktop electron preview
     if (isLocalhost || !isProd) {
       const port = window.location.port;
       // If running through Next.js dev server on localhost:6509 or 3000
       if (port === '6509' || port === '3000') {
-        return window.location.origin;
+        return origin;
       }
       return 'http://localhost:6509';
     }
 
-    // In production on the web (e.g. rasalilabs.com):
-    // Fallback to the canonical Render dynamic backend domain
-    return 'https://ralion-dynamic-backend.onrender.com';
+    return `${origin}/ralion`;
   }
 
   // Server-side fallback during build/SSR
-  if (isProd) {
-    return 'https://ralion-dynamic-backend.onrender.com';
-  }
-
-  return 'http://localhost:6509';
+  return 'https://rasalilabs.com/ralion';
 }
 
 /**

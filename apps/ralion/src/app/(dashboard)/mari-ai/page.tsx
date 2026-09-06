@@ -392,10 +392,15 @@ export default function MariAiPage() {
       let ragContext: string | undefined = undefined;
       let tokens: any = undefined;
       let modelUsed = 'Mari Enterprise Intelligence';
+      let responseSource = 'UNKNOWN';
+      let fallbackUsed = false;
+      const buildVersion = '2026.09.06-v2';
 
       // 1. Primary: Server-side authenticated Mari Chat API
+      const apiUrl = getRalionApiUrl('/api/mari/chat');
+      let httpStatus = 0;
+
       try {
-        const apiUrl = getRalionApiUrl('/api/mari/chat');
         const res = await fetch(apiUrl, {
           method: 'POST',
           headers: {
@@ -411,25 +416,28 @@ export default function MariAiPage() {
           }),
         });
 
+        httpStatus = res.status;
+
         if (res.ok) {
-          const contentType = res.headers.get('content-type') || '';
-          if (contentType.includes('application/json')) {
-            const data = await res.json();
-            if (data.success && data.answer) {
-              answerText = data.answer;
-              suggestedActions = data.actionsSuggested || [];
-              ragContext = data.ragContext || undefined;
-              tokens = data.usage;
-              modelUsed = data.modelUsed || 'Mari Enterprise Intelligence (gemini-2.5-flash)';
-            }
+          const data = await res.json();
+          if (data.success && data.answer) {
+            answerText = data.answer;
+            suggestedActions = data.actionsSuggested || [];
+            ragContext = data.ragContext || undefined;
+            tokens = data.usage;
+            modelUsed = data.modelUsed || 'Mari Enterprise Intelligence (gemini-2.5-flash)';
+            responseSource = data.responseSource || 'SERVER_MARI_CHAT_API';
           }
         }
-      } catch (apiErr) {
-        console.warn('[Mari UI] Server API notice, trying local engine:', apiErr);
+      } catch (apiErr: any) {
+        console.warn('[Mari UI] Server API notice:', apiErr.message);
       }
 
-      // 2. Secondary Fallback: In-browser AI engine if server is unreachable
+      // 2. Secondary Fallback: ONLY if network failed or server was completely unreachable
       if (!answerText) {
+        fallbackUsed = true;
+        responseSource = 'CLIENT_FALLBACK_LOCAL_ENGINE';
+
         let activeCtx = businessContext;
         if (!activeCtx || !activeCtx.layer1.websiteKnowledge?.value || !activeCtx.layer2.social?.isConnected) {
           activeCtx = await BusinessContextService.assembleContext(activeOrgId, { forceRefresh: true });
@@ -460,6 +468,16 @@ export default function MariAiPage() {
         };
         modelUsed = apiResult?.modelInfo ? `${apiResult.modelInfo.category} (${apiResult.modelInfo.model})` : 'Mari Growth Intelligence';
       }
+
+      // Live Diagnostic Telemetry in Browser Console
+      console.log('[MARI_TELEMETRY]', {
+        MARI_REQUEST_URL: apiUrl,
+        MARI_HTTP_STATUS: httpStatus,
+        MARI_RESPONSE_ANSWER: answerText,
+        MARI_RESPONSE_SOURCE: responseSource,
+        MARI_FALLBACK_USED: fallbackUsed,
+        MARI_BUILD_VERSION: buildVersion,
+      });
 
       const mariMsg: ChatMessage = {
         id: `mari-${Date.now()}`,

@@ -28,6 +28,12 @@ export const FloatingMariAi: React.FC = () => {
     setMessages(newHistory);
     setInput('');
     setIsProcessing(true);
+    const apiUrl = getRalionApiUrl('/api/mari/chat');
+    let httpStatus = 0;
+    let responseText = '';
+    let responseSource = 'UNKNOWN';
+    let fallbackUsed = false;
+    const buildVersion = '2026.09.06-v2';
 
     try {
       let activeOrgId: string | undefined = undefined;
@@ -36,7 +42,6 @@ export const FloatingMariAi: React.FC = () => {
         if (stored && stored !== 'org_default' && stored !== 'default') activeOrgId = stored;
       } catch {}
 
-      const apiUrl = getRalionApiUrl('/api/mari/chat');
       const res = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -50,31 +55,47 @@ export const FloatingMariAi: React.FC = () => {
         }),
       });
 
+      httpStatus = res.status;
+
       if (res.ok) {
         const data = await res.json();
-        const responseText = data.text || data.answer || "I'm analyzing your business data right now.";
+        responseText = data.answer || data.text || "I'm analyzing your business data right now.";
+        responseSource = data.responseSource || 'SERVER_MARI_CHAT_API';
         setMessages(prev => [...prev, { sender: 'MARI', text: responseText, id: `mari-${Date.now()}` }]);
       } else {
-        // Safe strategic fallback if endpoint unavailable
+        fallbackUsed = true;
+        responseText = "I am currently synchronizing with your live business data. You can access Growth Studio, CRM, and Campaign tools directly from your workspace.";
+        responseSource = 'HTTP_NON_200_FALLBACK';
         setMessages(prev => [
           ...prev,
           {
             sender: 'MARI',
-            text: "I am currently synchronizing with your live business data. You can access Growth Studio, CRM, and Campaign tools directly from your workspace.",
+            text: responseText,
             id: `mari-${Date.now()}`
           }
         ]);
       }
-    } catch (err) {
+    } catch (err: any) {
+      fallbackUsed = true;
+      responseText = "I'm having trouble connecting to my neural reasoning core right now. Please check your network connection.";
+      responseSource = 'NETWORK_ERROR_FALLBACK';
       setMessages(prev => [
         ...prev,
         {
           sender: 'MARI',
-          text: "I'm having trouble connecting to my neural reasoning core right now. Please check your network connection.",
+          text: responseText,
           id: `mari-${Date.now()}`
         }
       ]);
     } finally {
+      console.log('[MARI_FLOATING_TELEMETRY]', {
+        MARI_REQUEST_URL: apiUrl,
+        MARI_HTTP_STATUS: httpStatus,
+        MARI_RESPONSE_ANSWER: responseText,
+        MARI_RESPONSE_SOURCE: responseSource,
+        MARI_FALLBACK_USED: fallbackUsed,
+        MARI_BUILD_VERSION: buildVersion,
+      });
       setIsProcessing(false);
     }
   };
