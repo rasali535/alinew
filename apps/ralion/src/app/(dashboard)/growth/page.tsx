@@ -19,6 +19,7 @@ import { MariMarkdownMessage } from '@/components/MariMarkdownMessage';
 import { callMariAiApi, generateHfImage, generateHfVideo, MariOrchestrationService, MariRecommendationContract } from '@ralion/ai';
 import { getRalionApiUrl, fetchRalionApi, getRalionAuthHeaders } from '@/lib/api-config';
 import { useOrganization } from '@ralion/auth';
+import { AnalyticsSource, MetricState, formatAnalyticsMetric } from '@/lib/services/social/facebookAnalyticsSemantics';
 
 async function authFetch(pathOrUrl: string, init?: RequestInit): Promise<Response> {
   const url = pathOrUrl.startsWith('http') ? pathOrUrl : getRalionApiUrl(pathOrUrl);
@@ -125,6 +126,42 @@ function renderSparkline(values: number[], strokeColor: string, fillColor: strin
       <path d={area} fill={`url(#${id})`} />
       <path d={spline} fill="none" stroke={strokeColor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
+  );
+}
+
+function renderSourceBadge(source: AnalyticsSource, state?: MetricState, permissionRequired?: string) {
+  if (state === 'PERMISSION_REQUIRED' || permissionRequired) {
+    return (
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-950/80 text-amber-300 border border-amber-500/30" title={`Requires Meta permission: ${permissionRequired || 'pages_read_engagement'}`}>
+        ⚠️ Permission Required
+      </span>
+    );
+  }
+  if (source === 'META_LIVE') {
+    return (
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-500/30">
+        🟢 META_LIVE
+      </span>
+    );
+  }
+  if (source === 'RALION_TRACKED') {
+    return (
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-indigo-950/80 text-indigo-300 border border-indigo-500/30">
+        🔷 RALION_TRACKED
+      </span>
+    );
+  }
+  if (source === 'DERIVED') {
+    return (
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-purple-950/80 text-purple-300 border border-purple-500/30">
+        ✨ DERIVED
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-zinc-800 text-zinc-400 border border-zinc-700">
+      ⚪ UNAVAILABLE
+    </span>
   );
 }
 
@@ -2538,16 +2575,18 @@ Rules:
                   <span className="font-bold uppercase tracking-wider text-[10px] text-zinc-400">Audience Reach</span>
                   <Eye className="w-3.5 h-3.5 text-blue-400" />
                 </div>
-                <div className="text-2xl font-black text-white tracking-tight">{totalReach.toLocaleString()}</div>
+                <div className="text-2xl font-black text-white tracking-tight">
+                  {totalReach > 0 ? totalReach.toLocaleString() : publishedCount > 0 ? '0' : 'Data Unavailable'}
+                </div>
                 <div className="flex items-center gap-1 text-[11px] font-semibold text-zinc-400 mt-0.5">
-                  <span>{publishedCount} posts tracked</span>
+                  <span>{publishedCount > 0 ? `${publishedCount} posts tracked (Ralion-tracked)` : 'Meta insights unavailable'}</span>
                 </div>
               </div>
               <div className="mt-3 pt-2 border-t border-zinc-800/80">
                 {renderSparkline(dynamicSparklines.reach, '#3b82f6', '#3b82f6')}
-                <div className="flex justify-between text-[10px] text-zinc-500 font-mono mt-1">
-                  <span>Reach: {totalReach.toLocaleString()}</span>
-                  <span>Live</span>
+                <div className="flex justify-between items-center text-[10px] text-zinc-500 font-mono mt-1">
+                  <span>{totalReach > 0 ? `Reach: ${totalReach.toLocaleString()}` : 'Reach Telemetry'}</span>
+                  {renderSourceBadge(totalReach > 0 || publishedCount > 0 ? 'RALION_TRACKED' : 'UNAVAILABLE', totalReach === 0 && publishedCount === 0 ? 'DATA_UNAVAILABLE' : totalReach === 0 ? 'ZERO' : 'AVAILABLE')}
                 </div>
               </div>
             </Card>
@@ -2559,16 +2598,18 @@ Rules:
                   <span className="font-bold uppercase tracking-wider text-[10px] text-zinc-400">Total Engagement</span>
                   <Heart className="w-3.5 h-3.5 text-pink-400" />
                 </div>
-                <div className="text-2xl font-black text-white tracking-tight">{totalEngagement.toLocaleString()}</div>
+                <div className="text-2xl font-black text-white tracking-tight">
+                  {posts.length > 0 ? totalEngagement.toLocaleString() : 'Data Unavailable'}
+                </div>
                 <div className="flex items-center gap-1 text-[11px] font-semibold text-zinc-400 mt-0.5">
-                  <span>{totalLikes} likes • {totalComments} comments</span>
+                  <span>{posts.length > 0 ? `${totalLikes} likes • ${totalComments} comments` : 'Publish posts to track'}</span>
                 </div>
               </div>
               <div className="mt-3 pt-2 border-t border-zinc-800/80">
                 {renderSparkline(dynamicSparklines.engagement, '#ec4899', '#ec4899')}
-                <div className="flex justify-between text-[10px] text-zinc-500 font-mono mt-1">
+                <div className="flex justify-between items-center text-[10px] text-zinc-500 font-mono mt-1">
                   <span>Shares: {totalShares}</span>
-                  <span>Rate: {totalReach > 0 ? ((totalEngagement / totalReach) * 100).toFixed(1) : '0'}%</span>
+                  {renderSourceBadge(posts.length > 0 ? 'RALION_TRACKED' : 'UNAVAILABLE', posts.length === 0 ? 'DATA_UNAVAILABLE' : totalEngagement === 0 ? 'ZERO' : 'AVAILABLE')}
                 </div>
               </div>
             </Card>
@@ -2580,16 +2621,20 @@ Rules:
                   <span className="font-bold uppercase tracking-wider text-[10px] text-zinc-400">Page Followers</span>
                   <Users className="w-3.5 h-3.5 text-emerald-400" />
                 </div>
-                <div className="text-2xl font-black text-white tracking-tight">{fbFollowersCount > 0 ? fbFollowersCount.toLocaleString() : '0'}</div>
+                <div className="text-2xl font-black text-white tracking-tight">
+                  {isFacebookPage ? (fbFollowersCount > 0 ? fbFollowersCount.toLocaleString() : '0') : isPersonalFacebookProfile ? 'Data Unavailable' : (activeAcc?.followers ? activeAcc.followers : 'Data Unavailable')}
+                </div>
                 <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400 mt-0.5">
-                  <span className="text-zinc-500 font-normal">Active Facebook Destination</span>
+                  <span className="text-zinc-500 font-normal">
+                    {isFacebookPage ? 'Live Meta Page Destination' : isPersonalFacebookProfile ? 'Personal Profile (No Page Fans)' : 'Connected Account'}
+                  </span>
                 </div>
               </div>
               <div className="mt-3 pt-2 border-t border-zinc-800/80">
                 {renderSparkline(dynamicSparklines.fans, '#10b981', '#10b981')}
-                <div className="flex justify-between text-[10px] text-zinc-500 font-mono mt-1">
+                <div className="flex justify-between items-center text-[10px] text-zinc-500 font-mono mt-1">
                   <span>Page Audience</span>
-                  <span>Live</span>
+                  {renderSourceBadge(isFacebookPage ? 'META_LIVE' : isPersonalFacebookProfile ? 'UNAVAILABLE' : activeAcc ? 'RALION_TRACKED' : 'UNAVAILABLE')}
                 </div>
               </div>
             </Card>
@@ -2604,17 +2649,17 @@ Rules:
                   <Flame className="w-3.5 h-3.5 text-amber-400" />
                 </div>
                 <div className="text-2xl font-black text-amber-300 tracking-tight">
-                  {mariGrowthScore?.total ? `${mariGrowthScore.total}/100` : posts.length > 0 ? 'Calibrated' : 'Needs Data'}
+                  {mariGrowthScore?.total ? `${mariGrowthScore.total}/100` : posts.length > 0 ? 'Calibrated' : 'Data Unavailable'}
                 </div>
                 <div className="flex items-center gap-1 text-[11px] font-semibold text-zinc-400 mt-0.5">
-                  <span>{posts.length > 0 ? 'Active telemetry' : 'Publish posts to calibrate'}</span>
+                  <span>{posts.length > 0 ? 'Calibrated from tracked telemetry' : 'Publish posts to calibrate'}</span>
                 </div>
               </div>
               <div className="mt-3 pt-2 border-t border-zinc-800/80">
                 {renderSparkline(dynamicSparklines.viral, '#f59e0b', '#f59e0b')}
-                <div className="flex justify-between text-[10px] text-zinc-500 font-mono mt-1">
+                <div className="flex justify-between items-center text-[10px] text-zinc-500 font-mono mt-1">
                   <span>{posts.length} Posts</span>
-                  <span>Mari AI</span>
+                  {renderSourceBadge(posts.length > 0 ? 'DERIVED' : 'UNAVAILABLE')}
                 </div>
               </div>
             </Card>
@@ -2633,9 +2678,9 @@ Rules:
               </div>
               <div className="mt-3 pt-2 border-t border-zinc-800/80">
                 {renderSparkline(dynamicSparklines.views, '#a855f7', '#a855f7')}
-                <div className="flex justify-between text-[10px] text-zinc-500 font-mono mt-1">
-                  <span>Live Feed</span>
-                  <span>Synced</span>
+                <div className="flex justify-between items-center text-[10px] text-zinc-500 font-mono mt-1">
+                  <span>Post Inventory</span>
+                  {renderSourceBadge('RALION_TRACKED')}
                 </div>
               </div>
             </Card>
@@ -2654,9 +2699,9 @@ Rules:
               </div>
               <div className="mt-3 pt-2 border-t border-zinc-800/80">
                 {renderSparkline(dynamicSparklines.video, '#06b6d4', '#06b6d4')}
-                <div className="flex justify-between text-[10px] text-zinc-500 font-mono mt-1">
-                  <span>Active</span>
-                  <span>Live</span>
+                <div className="flex justify-between items-center text-[10px] text-zinc-500 font-mono mt-1">
+                  <span>Workspace Strategy</span>
+                  {renderSourceBadge('RALION_TRACKED')}
                 </div>
               </div>
             </Card>
@@ -2928,11 +2973,9 @@ Rules:
                     <h3 className="text-sm font-black text-white flex items-center gap-1.5">
                       <Clock className="w-4 h-4 text-indigo-400" /> Optimal Posting Times
                     </h3>
-                    <p className="text-[11px] text-zinc-400">Activity Telemetry & Peak Windows</p>
+                    <p className="text-[11px] text-zinc-400">Activity Telemetry & Peak Windows (Ralion-tracked)</p>
                   </div>
-                  <Badge variant={posts.length > 0 ? "purple" : "default"} className="text-[10px] font-mono">
-                    {posts.length > 0 ? "Radar Telemetry" : "Data Unavailable"}
-                  </Badge>
+                  {renderSourceBadge(posts.length > 0 ? 'DERIVED' : 'UNAVAILABLE')}
                 </div>
 
                 {posts.length === 0 ? (
@@ -3645,27 +3688,59 @@ Rules:
               {pageWorkspaceTab === 'OVERVIEW' && (
                 <div className="flex flex-col gap-5">
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800">
-                      <p className="text-[11px] text-zinc-400 uppercase font-semibold">Total Audience</p>
-                      <p className="text-2xl font-black text-white mt-1">{fbFollowersCount > 0 ? fbFollowersCount.toLocaleString() : '0'}</p>
-                      <p className="text-[10px] text-emerald-400 mt-0.5">
-                        {activeAcc?.provider === 'facebook' ? '🟢 Active Meta Page' : `🟢 Active ${activeAcc?.provider?.toUpperCase() || 'Social'} Channel`}
+                    <div className="p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <p className="text-[11px] text-zinc-400 uppercase font-semibold">Total Audience</p>
+                          {renderSourceBadge(isFacebookPage ? 'META_LIVE' : 'UNAVAILABLE')}
+                        </div>
+                        <p className="text-2xl font-black text-white mt-1">
+                          {isFacebookPage ? (fbFollowersCount > 0 ? fbFollowersCount.toLocaleString() : '0') : isPersonalFacebookProfile ? 'Data Unavailable' : (activeAcc?.followers ? activeAcc.followers : 'Data Unavailable')}
+                        </p>
+                      </div>
+                      <p className="text-[10px] text-emerald-400 mt-2">
+                        {activeAcc?.provider === 'facebook' ? 'Active Meta Page Audience' : `Active ${activeAcc?.provider?.toUpperCase() || 'Social'} Channel`}
                       </p>
                     </div>
-                    <div className="p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800">
-                      <p className="text-[11px] text-zinc-400 uppercase font-semibold">30-Day Growth</p>
-                      <p className="text-2xl font-black text-emerald-400 mt-1">{posts.length > 0 ? `+${(posts.length * 1.5).toFixed(1)}%` : '+0.0%'}</p>
-                      <p className="text-[10px] text-zinc-400 mt-0.5">+{posts.length} tracked posts</p>
+                    <div className="p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <p className="text-[11px] text-zinc-400 uppercase font-semibold">30-Day Growth</p>
+                          {renderSourceBadge(posts.length > 0 ? 'DERIVED' : 'UNAVAILABLE')}
+                        </div>
+                        <p className="text-2xl font-black text-emerald-400 mt-1">
+                          {posts.length > 0 ? `+${(posts.length * 1.5).toFixed(1)}%` : 'Data Unavailable'}
+                        </p>
+                      </div>
+                      <p className="text-[10px] text-zinc-400 mt-2">
+                        {posts.length > 0 ? `+${posts.length} tracked posts` : 'No post velocity'}
+                      </p>
                     </div>
-                    <div className="p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800">
-                      <p className="text-[11px] text-zinc-400 uppercase font-semibold">Avg. Engagement</p>
-                      <p className="text-2xl font-black text-purple-400 mt-1">{totalReach > 0 ? `${((totalEngagement / totalReach) * 100).toFixed(1)}%` : '0.0%'}</p>
-                      <p className="text-[10px] text-zinc-400 mt-0.5">Benchmark: 3.5%</p>
+                    <div className="p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <p className="text-[11px] text-zinc-400 uppercase font-semibold">Avg. Engagement</p>
+                          {renderSourceBadge(totalReach > 0 ? 'DERIVED' : 'UNAVAILABLE')}
+                        </div>
+                        <p className="text-2xl font-black text-purple-400 mt-1">
+                          {totalReach > 0 ? `${((totalEngagement / totalReach) * 100).toFixed(1)}%` : 'Data Unavailable'}
+                        </p>
+                      </div>
+                      <p className="text-[10px] text-zinc-400 mt-2">Benchmark: 3.5%</p>
                     </div>
-                    <div className="p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800">
-                      <p className="text-[11px] text-zinc-400 uppercase font-semibold">Mari Growth Score</p>
-                      <p className="text-2xl font-black text-amber-400 mt-1">{mariGrowthScore?.total ? `${mariGrowthScore.total} / 100` : 'Not Calibrated'}</p>
-                      <p className="text-[10px] text-zinc-400 mt-0.5">{mariGrowthScore?.tier || (mariGrowthScore?.total ? 'Active Tier' : 'Needs Data')}</p>
+                    <div className="p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <p className="text-[11px] text-zinc-400 uppercase font-semibold">Mari Growth Score</p>
+                          {renderSourceBadge(posts.length > 0 ? 'DERIVED' : 'UNAVAILABLE')}
+                        </div>
+                        <p className="text-2xl font-black text-amber-400 mt-1">
+                          {mariGrowthScore?.total ? `${mariGrowthScore.total} / 100` : posts.length > 0 ? 'Calibrated' : 'Data Unavailable'}
+                        </p>
+                      </div>
+                      <p className="text-[10px] text-zinc-400 mt-2">
+                        {mariGrowthScore?.tier || (mariGrowthScore?.total ? 'Active Tier' : 'Needs Data')}
+                      </p>
                     </div>
                   </div>
 
@@ -3796,20 +3871,43 @@ Rules:
               </div>
             ) : pageWorkspaceTab === 'ANALYTICS' && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800">
-                  <p className="text-xs text-zinc-400 font-semibold">Total Reach (30d)</p>
-                  <p className="text-2xl font-black text-white mt-1">{totalReach.toLocaleString()}</p>
-                  <p className="text-[10px] text-emerald-400 mt-1">📈 Verified Meta Insights</p>
+                <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-zinc-400 font-semibold">Total Reach (30d)</p>
+                      {renderSourceBadge(totalReach > 0 ? 'RALION_TRACKED' : 'UNAVAILABLE')}
+                    </div>
+                    <p className="text-2xl font-black text-white mt-1">
+                      {totalReach > 0 ? totalReach.toLocaleString() : 'Data Unavailable'}
+                    </p>
+                  </div>
+                  <p className="text-[10px] text-zinc-400 mt-2">
+                    {totalReach > 0 ? 'Aggregated from tracked posts' : 'Meta reach insights unavailable'}
+                  </p>
                 </div>
-                <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800">
-                  <p className="text-xs text-zinc-400 font-semibold">Total Impressions (30d)</p>
-                  <p className="text-2xl font-black text-white mt-1">{Math.round(totalReach * 1.4).toLocaleString()}</p>
-                  <p className="text-[10px] text-purple-400 mt-1">✨ Content Impressions</p>
+                <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-zinc-400 font-semibold">Total Impressions (30d)</p>
+                      {renderSourceBadge(totalReach > 0 ? 'DERIVED' : 'UNAVAILABLE')}
+                    </div>
+                    <p className="text-2xl font-black text-white mt-1">
+                      {totalReach > 0 ? Math.round(totalReach * 1.4).toLocaleString() : 'Data Unavailable'}
+                    </p>
+                  </div>
+                  <p className="text-[10px] text-purple-400 mt-2">
+                    {totalReach > 0 ? 'Derived from reach multiplier' : 'Telemetry unavailable'}
+                  </p>
                 </div>
-                <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800">
-                  <p className="text-xs text-zinc-400 font-semibold">Tracked Posts</p>
-                  <p className="text-2xl font-black text-amber-400 mt-1">{posts.length}</p>
-                  <p className="text-[10px] text-zinc-400 mt-1">Active sync with Facebook</p>
+                <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-zinc-400 font-semibold">Tracked Posts</p>
+                      {renderSourceBadge('RALION_TRACKED')}
+                    </div>
+                    <p className="text-2xl font-black text-amber-400 mt-1">{posts.length}</p>
+                  </div>
+                  <p className="text-[10px] text-zinc-400 mt-2">Active Ralion post inventory</p>
                 </div>
               </div>
             )}
@@ -5748,18 +5846,51 @@ Rules:
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { label: 'Total Audience Reach', value: totalReach.toLocaleString(), change: '+24% this week', icon: '👁️', color: 'text-blue-400' },
-              { label: 'Total Engagements', value: (totalLikes + totalShares + totalComments).toLocaleString(), change: '+18% growth', icon: '❤️', color: 'text-pink-400' },
-              { label: 'Published Content', value: publishedCount.toString(), change: `${scheduledCount} scheduled`, icon: '📝', color: 'text-emerald-400' },
-              { label: 'Active Campaigns', value: activeCampaignsCount.toString(), change: 'Running live', icon: '🚀', color: 'text-purple-400' }
+              {
+                label: 'Total Audience Reach',
+                value: totalReach > 0 ? totalReach.toLocaleString() : publishedCount > 0 ? '0' : 'Data Unavailable',
+                change: publishedCount > 0 ? `${publishedCount} posts tracked (Ralion-tracked)` : 'Meta reach insights unavailable',
+                icon: '👁️',
+                color: 'text-blue-400',
+                source: (totalReach > 0 || publishedCount > 0 ? 'RALION_TRACKED' : 'UNAVAILABLE') as AnalyticsSource,
+              },
+              {
+                label: 'Total Engagements',
+                value: posts.length > 0 ? (totalLikes + totalShares + totalComments).toLocaleString() : 'Data Unavailable',
+                change: posts.length > 0 ? `${totalLikes} likes • ${totalComments} comments` : 'Publish posts to track',
+                icon: '❤️',
+                color: 'text-pink-400',
+                source: (posts.length > 0 ? 'RALION_TRACKED' : 'UNAVAILABLE') as AnalyticsSource,
+              },
+              {
+                label: 'Published Content',
+                value: publishedCount.toString(),
+                change: `${scheduledCount} scheduled`,
+                icon: '📝',
+                color: 'text-emerald-400',
+                source: 'RALION_TRACKED' as AnalyticsSource,
+              },
+              {
+                label: 'Active Campaigns',
+                value: activeCampaignsCount.toString(),
+                change: `${campaigns.length} total campaigns`,
+                icon: '🚀',
+                color: 'text-purple-400',
+                source: 'RALION_TRACKED' as AnalyticsSource,
+              }
             ].map((m, i) => (
-              <Card key={i} className="p-5 border-zinc-800 bg-zinc-900/80">
-                <div className="text-2xl mb-1">{m.icon}</div>
-                <div className="text-[11px] text-zinc-400 uppercase tracking-wider font-bold">{m.label}</div>
-                <div className="text-2xl font-black text-white mt-1">{m.value}</div>
-                <div className={`text-[11px] font-semibold mt-0.5 ${m.color}`}>{m.change}</div>
+              <Card key={i} className="p-5 border-zinc-800 bg-zinc-900/80 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div className="text-2xl mb-1">{m.icon}</div>
+                    {renderSourceBadge(m.source)}
+                  </div>
+                  <div className="text-[11px] text-zinc-400 uppercase tracking-wider font-bold mt-2">{m.label}</div>
+                  <div className="text-2xl font-black text-white mt-1">{m.value}</div>
+                </div>
+                <div className={`text-[11px] font-semibold mt-2 pt-2 border-t border-zinc-800/60 ${m.color}`}>{m.change}</div>
               </Card>
             ))}
           </div>
