@@ -350,6 +350,8 @@ function generateLocalStrategicFallback(
   const isSocialConnected = Boolean(context?.layer2?.social?.isConnected);
   const hasSelectedPage = Boolean(context?.layer2?.social?.hasSelectedPage);
   const isPersonalFb = Boolean(context?.layer2?.social?.isPersonalProfile);
+  const isPageAccessUnavailable = Boolean(context?.layer2?.social?.pageAccessUnavailable);
+  const connectionState = context?.layer2?.social?.connectionState;
   const pageName = context?.layer2?.social?.connectedPageName?.value || '';
   const pageCategory = context?.layer2?.social?.pageCategory?.value || '';
   const pageAbout = context?.layer2?.social?.pageAbout?.value || '';
@@ -450,23 +452,43 @@ Best regards,
 
   // B. SOURCE-SPECIFIC: FACEBOOK KNOWLEDGE (STATE A, STATE B1/B2, STATE C)
   if (intent === 'FACEBOOK_KNOWLEDGE') {
-    // STATE B1: Personal Profile or no Page selected
-    if (isPersonalFb || (isSocialConnected && !hasSelectedPage)) {
+    // STATE: PROFILE_CONNECTED_PAGE_ACCESS_UNAVAILABLE
+    if (connectionState === 'PROFILE_CONNECTED_PAGE_ACCESS_UNAVAILABLE' || (isPageAccessUnavailable && !hasSelectedPage)) {
+      responseText = `### Facebook Page Access Unavailable
+
+Your Facebook account is connected, but I don't currently have access to a business Page to analyse. Connect a Facebook Page with Page permissions in **Growth Studio → Channels** to enable Page intelligence.`;
+      actions.push({ id: 'CONNECT_PAGE_ACCESS', type: 'NAVIGATE', label: 'Reconnect with Page Access', payload: { route: '/growth?tab=channels' } });
+      return { text: responseText, suggestedActions: actions };
+    }
+
+    // STATE: PROFILE_CONNECTED_PAGE_NOT_SELECTED
+    if (connectionState === 'PROFILE_CONNECTED_PAGE_NOT_SELECTED' || (isSocialConnected && !hasSelectedPage)) {
       responseText = `### Facebook Business Page Not Selected
 
-Facebook is connected, but no business Page is selected yet. Select a Page in **Growth Studio → Channels** and I can analyse exactly how it presents your business.`;
+Facebook is connected, but you haven't selected which business Page I should analyse. Select a Page in **Growth Studio → Channels** and I can analyse exactly how it presents your business.`;
       actions.push({ id: 'SELECT_FACEBOOK_PAGE', type: 'NAVIGATE', label: 'Select Facebook Page', payload: { route: '/growth?tab=channels' } });
       return { text: responseText, suggestedActions: actions };
     }
 
-    // STATE B2: Completely Unconnected
-    if (!isSocialConnected || !pageName || pageName === 'Not Connected') {
+    // STATE: Completely Unconnected
+    if (!isSocialConnected || connectionState === 'DISCONNECTED' || !pageName || pageName === 'Not Connected') {
       responseText = `### Facebook Channel Status${orgName ? ` for ${orgName}` : ''}
 
-${orgName ? `**Canonical Business**: ${orgName}  \n` : ''}**Status**: Facebook is not currently connected.
+${orgName ? `**Canonical Business**: ${orgName}  \n` : ''}**Status**: Facebook isn't currently connected for ${orgName || 'your business'}.
 
 Connect your Facebook Page in **Growth Studio → Channels** to allow Mari to analyze your public social positioning, track audience reach, and publish content.`;
       actions.push({ id: 'CONNECT_FACEBOOK', type: 'NAVIGATE', label: 'Connect Facebook', payload: { route: '/growth?tab=channels' } });
+      return { text: responseText, suggestedActions: actions };
+    }
+
+    // STATE: TOKEN_EXPIRED / REAUTH_REQUIRED
+    if (connectionState === 'TOKEN_EXPIRED' || connectionState === 'REAUTH_REQUIRED') {
+      responseText = `### Facebook Reconnection Required${orgName ? ` for ${orgName}` : ''}
+
+${orgName ? `**Canonical Business**: ${orgName}  \n` : ''}**Status**: Your Facebook connection has expired or needs reauthorization.
+
+Please reconnect your Facebook account in **Growth Studio → Channels** to restore Page intelligence and publishing.`;
+      actions.push({ id: 'RECONNECT_FACEBOOK', type: 'NAVIGATE', label: 'Reconnect Facebook', payload: { route: '/growth?tab=channels' } });
       return { text: responseText, suggestedActions: actions };
     }
 
@@ -501,7 +523,14 @@ ${pageAbout ? `${pageName} is positioned on Facebook as: "${pageAbout}".` : `${p
   // C. SOURCE-SPECIFIC: CONNECTED SOCIAL PAGE
   if (intent === 'CONNECTED_SOCIAL_PAGE') {
     const parentCompany = orgName ? ` for **${orgName}**` : '';
-    if (isPersonalFb || (isSocialConnected && !hasSelectedPage)) {
+    if (connectionState === 'PROFILE_CONNECTED_PAGE_ACCESS_UNAVAILABLE' || (isPageAccessUnavailable && !hasSelectedPage)) {
+      responseText = `### Connected Social Channels${parentCompany}
+
+${orgName ? `**Canonical Business**: ${orgName}  \n` : ''}**Status**: Your Facebook account is connected, but Facebook Page access is not currently available.
+
+Connect a Facebook Page with Page permissions in **Growth Studio → Channels** to enable Page intelligence.`;
+      actions.push({ id: 'CONNECT_PAGE_ACCESS', type: 'NAVIGATE', label: 'Reconnect with Page Access', payload: { route: '/growth?tab=channels' } });
+    } else if (connectionState === 'PROFILE_CONNECTED_PAGE_NOT_SELECTED' || (isSocialConnected && !hasSelectedPage)) {
       responseText = `### Connected Social Channels${parentCompany}
 
 ${orgName ? `**Canonical Business**: ${orgName}  \n` : ''}**Status**: Facebook is connected, but no business Page is selected yet.
@@ -521,7 +550,7 @@ ${orgName ? `**Canonical Business**: ${orgName}  \n` : ''}**Connected Facebook P
     } else {
       responseText = `### Social Channel Status${parentCompany}
 
-${orgName ? `**Canonical Business**: ${orgName}  \n` : ''}**Status**: Facebook is not currently connected.
+${orgName ? `**Canonical Business**: ${orgName}  \n` : ''}**Status**: Facebook isn't currently connected for ${orgName || 'your business'}.
 
 Connect your Facebook Page in **Growth Studio → Channels** to track audience reach, publish content, and monitor analytics.`;
       actions.push({ id: 'CONNECT_FACEBOOK', type: 'NAVIGATE', label: 'Connect Facebook', payload: { route: '/growth?tab=channels' } });

@@ -1,8 +1,8 @@
 import { NextRequest } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { deleteOAuthToken } from '@/lib/services/social.service';
 import { getConnectorForProvider, IntegrationProvider } from '@ralion/integrations';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
+import { getCurrentRalionContext } from '@/lib/auth/serverAuth';
+import { SocialDisconnectService } from '@/lib/services/social/socialDisconnect.service';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,30 +23,28 @@ export async function OPTIONS(request: NextRequest) {
 
 async function handleDisconnect(request: NextRequest, provider: string) {
   try {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-        global: { headers: { cookie: request.headers.get('cookie') || '' } },
-      }
-    );
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      await deleteOAuthToken(user.id, provider);
-    }
+    const context = await getCurrentRalionContext(request, { requireAuth: false });
+    const tenantId = context?.organization.id || context?.workspace.id || request.headers.get('x-organization-id') || request.headers.get('x-workspace-id') || undefined;
+    const workspaceId = context?.workspace.id || request.headers.get('x-workspace-id') || undefined;
+    const userId = context?.user.id || request.headers.get('x-user-id') || undefined;
+
+    const result = await SocialDisconnectService.disconnectSocialProvider({
+      tenantId,
+      workspaceId,
+      userId,
+      provider,
+    });
 
     try {
       const connector = getConnectorForProvider(provider as IntegrationProvider);
-      await connector.disconnect(user?.id || 'default-workspace');
-    } catch {
-      // Connector fallback if not implemented in GenericOAuthConnector
-    }
+      await connector.disconnect(workspaceId || userId || 'default-workspace');
+    } catch {}
 
     return corsJsonResponse({
       success: true,
       provider,
-      status: 'DISCONNECTED'
+      status: 'DISCONNECTED',
+      finalState: result.finalState,
     }, undefined, request);
   } catch (error: any) {
     return corsJsonResponse({ success: false, error: error.message || 'Disconnect failed' }, { status: 500 }, request);

@@ -51,6 +51,8 @@ export interface Layer2BusinessState {
     isConnected: boolean;
     hasSelectedPage?: boolean;
     isPersonalProfile?: boolean;
+    pageAccessUnavailable?: boolean;
+    connectionState?: 'DISCONNECTED' | 'PROFILE_CONNECTED_PAGE_ACCESS_UNAVAILABLE' | 'PROFILE_CONNECTED_PAGE_NOT_SELECTED' | 'PAGE_CONNECTED' | 'TOKEN_EXPIRED' | 'REAUTH_REQUIRED' | 'ERROR';
     connectedPageName?: ProvenanceItem<string>;
     pageId?: ProvenanceItem<string>;
     pageUsername?: ProvenanceItem<string>;
@@ -164,6 +166,7 @@ export class BusinessContextService {
         tasks?: any[];
         documents?: any[];
         fbPage?: any;
+        facebookState?: any;
         websiteKnowledge?: any;
         tier?: string;
         customKnowledge?: Partial<Layer1BusinessKnowledge>;
@@ -401,6 +404,9 @@ export class BusinessContextService {
     const followers = isSocialPageConnected ? (Number(fbPage?.fanCount) || 0) : 0;
     const pageName = isSocialPageConnected ? (fbPage?.name || 'Facebook Page') : (isPersonalFb ? 'Personal Profile (Business Page Not Connected)' : 'Not Connected');
 
+    const connectionState = options?.localOverrides?.facebookState || (fbPage?.connectionState) || (isSocialPageConnected ? 'PAGE_CONNECTED' : (isPersonalFb ? 'PROFILE_CONNECTED_PAGE_ACCESS_UNAVAILABLE' : (isSocialConnected ? 'PROFILE_CONNECTED_PAGE_NOT_SELECTED' : 'DISCONNECTED')));
+    const isPageAccessUnavailable = connectionState === 'PROFILE_CONNECTED_PAGE_ACCESS_UNAVAILABLE' || (isPersonalFb && !isSocialPageConnected);
+
     const layer2: Layer2BusinessState = {
       crm: {
         isConnected: hasRealContacts,
@@ -431,6 +437,8 @@ export class BusinessContextService {
         isConnected: isSocialConnected,
         hasSelectedPage: isSocialPageConnected,
         isPersonalProfile: isPersonalFb,
+        pageAccessUnavailable: isPageAccessUnavailable,
+        connectionState,
         connectedPageName: {
           value: pageName,
           provenance: isSocialPageConnected ? 'VERIFIED' : (isPersonalFb ? 'USER_PROVIDED' : 'UNVERIFIED'),

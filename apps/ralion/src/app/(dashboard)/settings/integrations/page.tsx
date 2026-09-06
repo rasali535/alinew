@@ -27,7 +27,33 @@ import {
   X
 } from 'lucide-react';
 import { INTEGRATION_SERVICES_REGISTRY, IntegrationCategory, IntegrationServiceMeta, MariMemoryGraph } from '@ralion/integrations';
-import { getRalionApiUrl } from '@/lib/api-config';
+import { getRalionApiUrl, getRalionAuthHeaders } from '@/lib/api-config';
+
+async function authFetch(pathOrUrl: string, init?: RequestInit): Promise<Response> {
+  const url = pathOrUrl.startsWith('http') ? pathOrUrl : getRalionApiUrl(pathOrUrl);
+  const authHeaders = await getRalionAuthHeaders();
+  const headers = new Headers(init?.headers);
+  if (!headers.has('Authorization') && authHeaders.Authorization) {
+    headers.set('Authorization', authHeaders.Authorization);
+  }
+  if (!headers.has('x-user-id') && authHeaders['x-user-id']) {
+    headers.set('x-user-id', authHeaders['x-user-id']);
+  }
+  if (!headers.has('x-workspace-id') && authHeaders['x-workspace-id']) {
+    headers.set('x-workspace-id', authHeaders['x-workspace-id']);
+  }
+  if (!headers.has('x-organization-id') && authHeaders['x-organization-id']) {
+    headers.set('x-organization-id', authHeaders['x-organization-id']);
+  }
+  if (!headers.has('Content-Type') && init?.body && typeof init.body === 'string') {
+    headers.set('Content-Type', 'application/json');
+  }
+  return fetch(url, {
+    ...init,
+    headers,
+    credentials: init?.credentials || 'include',
+  });
+}
 
 export default function IntegrationHubPage() {
   const [activeCategory, setActiveCategory] = useState<string>('ALL');
@@ -38,12 +64,12 @@ export default function IntegrationHubPage() {
   React.useEffect(() => {
     // Load real connected providers
     try {
-      fetch(getRalionApiUrl('/api/social/connections'))
+      authFetch('/api/social/connections')
         .then(res => res.ok ? res.json() : null)
         .then(data => {
           if (data && Array.isArray(data.connections)) {
             const active = data.connections
-              .filter((c: any) => c.status === 'connected' || c.connection_status === 'CONNECTED')
+              .filter((c: any) => c.status === 'connected' || c.connection_status === 'CONNECTED' || c.connection_status === 'ACTIVE')
               .map((c: any) => c.provider === 'facebook' ? 'meta' : c.provider);
             setConnectedProviders(Array.from(new Set(active)));
           }
@@ -75,7 +101,7 @@ export default function IntegrationHubPage() {
     
     // Request OAuth Connect URL
     try {
-      const res = await fetch(getRalionApiUrl(`/api/oauth/${selectedProvider.provider}/connect/?workspaceId=ras-ali-labs`));
+      const res = await authFetch(`/api/oauth/${selectedProvider.provider}/connect`);
       const data = await res.json();
       
       if (data.authorizationUrl) {
@@ -113,7 +139,7 @@ export default function IntegrationHubPage() {
     // Connect provider & retrieve MARI graph memory summary
     setConnectedProviders(prev => Array.from(new Set([...prev, selectedProvider.provider])));
     
-    const memory = MariMemoryGraph.getWorkspaceGraph('ras-ali-labs');
+    const memory = MariMemoryGraph.getWorkspaceGraph('workspace');
     setLearnedProfileSummary({
       businessName: memory.businessName,
       brandVoice: memory.brandVoice,
@@ -128,10 +154,8 @@ export default function IntegrationHubPage() {
     setSyncingProviders(prev => [...prev, provider]);
     
     try {
-      await fetch(getRalionApiUrl(`/api/oauth/${provider}/sync/`), {
+      await authFetch(`/api/oauth/${provider}/sync/`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workspaceId: 'ras-ali-labs' })
       });
     } catch (e) {
       console.warn('Sync route error:', e);
@@ -144,16 +168,14 @@ export default function IntegrationHubPage() {
 
   const handleDisconnect = async (provider: string) => {
     try {
-      await fetch(getRalionApiUrl(`/api/oauth/${provider}/disconnect/`), {
+      await authFetch(`/api/oauth/${provider}/disconnect/`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workspaceId: 'ras-ali-labs' })
       });
     } catch (e) {
       console.warn('Disconnect error:', e);
     }
 
-    setConnectedProviders(prev => prev.filter(p => p !== provider));
+    setConnectedProviders(prev => prev.filter(p => p !== provider && (provider !== 'meta' || p !== 'facebook')));
   };
 
   return (
