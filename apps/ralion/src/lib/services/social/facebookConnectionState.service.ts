@@ -454,6 +454,30 @@ export class FacebookConnectionStateService {
           ctaAction: 'MANAGE_PAGE',
           ctaLabel: 'Manage Page / Change Page',
         };
+
+        // Authoritatively persist live Meta Graph API follower count and metadata to social_connections
+        if (activeConnRecord?.id && selectedPage.followersCount !== undefined && activeConnRecord.followers_count !== selectedPage.followersCount) {
+          try {
+            await supabase
+              .from('social_connections')
+              .update({
+                followers_count: selectedPage.followersCount,
+                account_name: selectedPage.name,
+                username: selectedPage.username,
+                profile_image_url: selectedPage.avatarUrl,
+                metadata: {
+                  ...(activeConnRecord.metadata || {}),
+                  followers: selectedPage.followersCount,
+                  fan_count: selectedPage.followersCount,
+                  followers_count: selectedPage.followersCount,
+                  category: selectedPage.category,
+                },
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', activeConnRecord.id);
+          } catch {}
+        }
+
         stateCache.set(cacheKey, { result, cachedAt: now });
         return result;
       }

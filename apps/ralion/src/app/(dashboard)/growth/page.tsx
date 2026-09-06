@@ -2242,6 +2242,39 @@ Rules:
     };
   }, [splineChartSeries, fbFollowersCount]);
 
+  // Dynamic Real Optimal Posting Slots calculated strictly from published post activity
+  const optimalPostingSlots = React.useMemo(() => {
+    if (!posts || posts.length === 0) return [];
+    const slots = [
+      { time: '08:30 AM', label: 'Morning Briefing Window', count: 0, totalEng: 0 },
+      { time: '12:45 PM', label: 'Midday Executive Window', count: 0, totalEng: 0 },
+      { time: '03:30 PM', label: 'Afternoon Peak Window', count: 0, totalEng: 0 },
+      { time: '06:15 PM', label: 'Evening Trade Catch-Up', count: 0, totalEng: 0 },
+    ];
+
+    posts.forEach(p => {
+      const dateStr = p.rawPublishedAt || p.publishedAt || p.scheduledAt || (p as any).createdAt;
+      const d = dateStr ? new Date(dateStr) : new Date();
+      const hr = d.getHours();
+      const eng = (p.engagement?.likes || 0) + (p.engagement?.comments || 0) + (p.engagement?.shares || 0);
+      if (hr >= 6 && hr < 11) { slots[0].count++; slots[0].totalEng += eng; }
+      else if (hr >= 11 && hr < 14) { slots[1].count++; slots[1].totalEng += eng; }
+      else if (hr >= 14 && hr < 17) { slots[2].count++; slots[2].totalEng += eng; }
+      else { slots[3].count++; slots[3].totalEng += eng; }
+    });
+
+    const maxEng = Math.max(...slots.map(s => s.totalEng), 1);
+    const hasAnyActivity = slots.some(s => s.count > 0);
+
+    return slots.map(s => ({
+      time: s.time,
+      label: s.label,
+      count: s.count,
+      score: hasAnyActivity ? (s.count > 0 ? `${Math.round((s.totalEng / maxEng) * 100)}%` : '0%') : '0%',
+      isPeak: hasAnyActivity && s.totalEng === maxEng && s.totalEng > 0,
+    }));
+  }, [posts]);
+
   return (
     <div className="flex flex-col gap-6 max-w-7xl mx-auto pb-12">
       {/* OAuth & Publishing Alert Banner */}
@@ -2895,51 +2928,60 @@ Rules:
                     <h3 className="text-sm font-black text-white flex items-center gap-1.5">
                       <Clock className="w-4 h-4 text-indigo-400" /> Optimal Posting Times
                     </h3>
-                    <p className="text-[11px] text-zinc-400">Botswana & SADC Executive Window</p>
+                    <p className="text-[11px] text-zinc-400">Activity Telemetry & Peak Windows</p>
                   </div>
-                  <Badge variant="purple" className="text-[10px] font-mono">Radar Telemetry</Badge>
+                  <Badge variant={posts.length > 0 ? "purple" : "default"} className="text-[10px] font-mono">
+                    {posts.length > 0 ? "Radar Telemetry" : "Data Unavailable"}
+                  </Badge>
                 </div>
 
-                <div className="w-full h-44 bg-zinc-950/70 rounded-2xl border border-zinc-800/80 p-3 flex items-center justify-center relative overflow-hidden">
-                  <svg viewBox="0 0 200 200" className="w-full h-full">
-                    <polygon points="100,20 180,100 100,180 20,100" fill="none" stroke="#27272a" strokeWidth="1" />
-                    <polygon points="100,45 155,100 100,155 45,100" fill="none" stroke="#27272a" strokeWidth="1" />
-                    <polygon points="100,70 130,100 100,130 70,100" fill="none" stroke="#27272a" strokeWidth="1" />
-                    <line x1="100" y1="10" x2="100" y2="190" stroke="#27272a" strokeWidth="1" strokeDasharray="2 2" />
-                    <line x1="10" y1="100" x2="190" y2="100" stroke="#27272a" strokeWidth="1" strokeDasharray="2 2" />
-                    <polygon points="100,28 165,95 100,160 38,100" fill="#6366f1" fillOpacity="0.25" stroke="#818cf8" strokeWidth="2" />
-                    <text x="100" y="15" textAnchor="middle" fill="#a1a1aa" fontSize="8" fontFamily="monospace">12 AM</text>
-                    <text x="185" y="103" textAnchor="start" fill="#a1a1aa" fontSize="8" fontFamily="monospace">06 AM</text>
-                    <text x="100" y="196" textAnchor="middle" fill="#a1a1aa" fontSize="8" fontFamily="monospace">12 PM</text>
-                    <text x="12" y="103" textAnchor="end" fill="#a1a1aa" fontSize="8" fontFamily="monospace">06 PM</text>
-                  </svg>
-                </div>
-
-                <div className="flex flex-col gap-2 mt-4">
-                  {[
-                    { time: '08:30 AM', label: 'Morning Executive Briefing', score: '88%' },
-                    { time: '12:45 PM', label: 'Lunch Break Professional Scroll', score: '92%' },
-                    { time: '03:30 PM', label: 'Peak Afternoon Window', score: '97%', isPeak: true },
-                    { time: '06:15 PM', label: 'Evening Tech & Trade Catch-Up', score: '91%' }
-                  ].map((w, idx) => (
-                    <div
-                      key={idx}
-                      className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-all ${
-                        w.isPeak
-                          ? 'bg-indigo-950/60 border-indigo-500/40 text-indigo-200'
-                          : 'bg-zinc-950/60 border-zinc-800/80 text-zinc-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-white text-xs">{w.time}</span>
-                        <span className="text-[11px] text-zinc-400">{w.label}</span>
-                      </div>
-                      <span className={`font-bold font-mono text-xs ${w.isPeak ? 'text-indigo-300' : 'text-zinc-400'}`}>
-                        {w.score} {w.isPeak && '⭐'}
-                      </span>
+                {posts.length === 0 ? (
+                  <div className="w-full py-8 bg-zinc-950/70 rounded-2xl border border-zinc-800/80 p-4 flex flex-col items-center justify-center text-center gap-2">
+                    <Clock className="w-8 h-8 text-zinc-600 mb-1" />
+                    <span className="text-xs font-semibold text-zinc-400">Data Unavailable</span>
+                    <p className="text-[11px] text-zinc-500 max-w-xs">
+                      No post interaction telemetry recorded yet in current window. Optimal posting windows will calibrate automatically as posts are published and accumulate audience engagement.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="w-full h-44 bg-zinc-950/70 rounded-2xl border border-zinc-800/80 p-3 flex items-center justify-center relative overflow-hidden">
+                      <svg viewBox="0 0 200 200" className="w-full h-full">
+                        <polygon points="100,20 180,100 100,180 20,100" fill="none" stroke="#27272a" strokeWidth="1" />
+                        <polygon points="100,45 155,100 100,155 45,100" fill="none" stroke="#27272a" strokeWidth="1" />
+                        <polygon points="100,70 130,100 100,130 70,100" fill="none" stroke="#27272a" strokeWidth="1" />
+                        <line x1="100" y1="10" x2="100" y2="190" stroke="#27272a" strokeWidth="1" strokeDasharray="2 2" />
+                        <line x1="10" y1="100" x2="190" y2="100" stroke="#27272a" strokeWidth="1" strokeDasharray="2 2" />
+                        <polygon points="100,28 165,95 100,160 38,100" fill="#6366f1" fillOpacity="0.25" stroke="#818cf8" strokeWidth="2" />
+                        <text x="100" y="15" textAnchor="middle" fill="#a1a1aa" fontSize="8" fontFamily="monospace">12 AM</text>
+                        <text x="185" y="103" textAnchor="start" fill="#a1a1aa" fontSize="8" fontFamily="monospace">06 AM</text>
+                        <text x="100" y="196" textAnchor="middle" fill="#a1a1aa" fontSize="8" fontFamily="monospace">12 PM</text>
+                        <text x="12" y="103" textAnchor="end" fill="#a1a1aa" fontSize="8" fontFamily="monospace">06 PM</text>
+                      </svg>
                     </div>
-                  ))}
-                </div>
+
+                    <div className="flex flex-col gap-2 mt-4">
+                      {optimalPostingSlots.map((w, idx) => (
+                        <div
+                          key={idx}
+                          className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-all ${
+                            w.isPeak
+                              ? 'bg-indigo-950/60 border-indigo-500/40 text-indigo-200'
+                              : 'bg-zinc-950/60 border-zinc-800/80 text-zinc-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-white text-xs">{w.time}</span>
+                            <span className="text-[11px] text-zinc-400">{w.label} ({w.count} posts)</span>
+                          </div>
+                          <span className={`font-bold font-mono text-xs ${w.isPeak ? 'text-indigo-300' : 'text-zinc-400'}`}>
+                            {w.score} {w.isPeak && '⭐'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
               </Card>
 
               {/* AI Content Calendar & Real-Time Queue */}
