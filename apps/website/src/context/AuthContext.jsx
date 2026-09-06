@@ -12,24 +12,52 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     // Check initial active session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (error) {
+        console.warn('[AuthContext] Session resolution note:', error.message);
+        // Distinguish expired / revoked refresh tokens from network errors
+        if (
+          error.message?.includes('Refresh Token') ||
+          error.message?.includes('invalid_grant') ||
+          error?.status === 400
+        ) {
+          try {
+            supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+            if (typeof window !== 'undefined') {
+              window.localStorage?.removeItem('ralion-app-auth-token');
+              window.localStorage?.removeItem('sb-yidsfihagwttlmhfynmf-auth-token');
+            }
+          } catch {}
+        }
+        setSession(null);
+        setUser(null);
+      } else {
+        setSession(data?.session ?? null);
+        setUser(data?.session?.user ?? null);
+      }
       setLoading(false);
     }).catch(err => {
-      console.warn('Supabase getSession error:', err.message);
+      console.warn('[AuthContext] getSession unexpected error:', err.message);
+      setSession(null);
+      setUser(null);
       setLoading(false);
     });
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || (event === 'TOKEN_REFRESHED' && !session)) {
+        setSession(null);
+        setUser(null);
+      } else {
+        setSession(session);
+        setUser(session?.user ?? null);
+      }
       setLoading(false);
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
 
   const openAuthModal = (mode = 'login') => {
     setAuthMode(mode);

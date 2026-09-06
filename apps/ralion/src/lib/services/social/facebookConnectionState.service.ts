@@ -375,9 +375,24 @@ export class FacebookConnectionStateService {
         selectedPage = availablePages.find(p => p.pageId === boundPageId);
       }
 
+      // If activeConnRecord is already an active Business Page connection, resolve selectedPage from it
+      if (!selectedPage && boundPageId && (activeConnRecord?.account_type === 'BUSINESS' || activeConnRecord?.metadata?.is_page)) {
+        selectedPage = {
+          pageId: boundPageId,
+          name: activeConnRecord.account_name || activeConnRecord.metadata?.pageName || 'Facebook Page',
+          username: activeConnRecord.username || activeConnRecord.metadata?.pageUsername || `@${(activeConnRecord.account_name || 'page').toLowerCase().replace(/\s+/g, '_')}`,
+          category: activeConnRecord.metadata?.category || 'Business',
+          followersCount: Number(activeConnRecord.followers_count || activeConnRecord.metadata?.followers_count || 0),
+          avatarUrl: activeConnRecord.profile_image_url || activeConnRecord.metadata?.avatarUrl || null,
+        };
+        if (!availablePages.some(p => p.pageId === boundPageId)) {
+          availablePages.unshift(selectedPage);
+        }
+      }
+
       // Check state branches:
       // STATE: PROFILE_CONNECTED_PAGE_ACCESS_UNAVAILABLE
-      if (!hasPagesShowList || availablePages.length === 0) {
+      if (!hasPagesShowList || (availablePages.length === 0 && !selectedPage)) {
         const result: FacebookConnectionStateResult = {
           state: 'PROFILE_CONNECTED_PAGE_ACCESS_UNAVAILABLE',
           provider: 'facebook',

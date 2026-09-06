@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
           .filter((m: ChatHistoryTurn) => m.text.length > 0)
       : [];
 
-    // Auto-resolve active Facebook Page from database if not supplied in localOverrides
+    // Auto-resolve active Facebook Page and live posts from database if not supplied in localOverrides
     let localOverrides = body.localOverrides || {};
     if (!localOverrides.fbPage) {
       try {
@@ -94,9 +94,24 @@ export async function POST(request: NextRequest) {
           workspaceId: workspaceId || orgId,
           userId: authenticatedUserId,
         });
+
         if (activePage) {
+          let recentPosts: any[] = [];
+          try {
+            recentPosts = await FacebookPageManagementService.getPagePosts({
+              organizationId: orgId,
+              workspaceId: workspaceId || orgId,
+              userId: authenticatedUserId,
+              pageId: activePage.pageId,
+              limit: 10,
+            });
+          } catch (postErr: any) {
+            console.warn('[Mari Chat API] Recent posts fetch notice:', postErr?.message);
+          }
+
           localOverrides = {
             ...localOverrides,
+            facebookState: 'PAGE_CONNECTED',
             fbPage: {
               id: activePage.id,
               pageId: activePage.pageId,
@@ -109,6 +124,7 @@ export async function POST(request: NextRequest) {
               website: activePage.website,
               contactInfo: activePage.contactInfo,
               status: activePage.status,
+              recentPosts,
             },
           };
         }

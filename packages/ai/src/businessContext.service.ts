@@ -63,6 +63,8 @@ export interface Layer2BusinessState {
     reachGrowthPct?: ProvenanceItem<number>;
     engagementRatePct?: ProvenanceItem<number>;
     recentPostsCount?: ProvenanceItem<number>;
+    recentPosts?: Array<any>;
+    posts?: Array<any>;
     topPerformingType?: ProvenanceItem<string>;
     contactInfo?: {
       phone?: string;
@@ -221,6 +223,74 @@ export class BusinessContextService {
           }
         }
       } catch {}
+    } else if (!fbPage && typeof window === 'undefined') {
+      try {
+        const { createClient } = require('@supabase/supabase-js');
+        const sUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co';
+        const sKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpZHNmaWhhZ3d0dGxtaGZ5bm1mIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjgyMzk0NSwiZXhwIjoyMDk4Mzk5OTQ1fQ.mpparRo7a5t5B7uOlWBxiRI7NDsVGfmxkPUEbxSYBfA';
+        const sClient = createClient(sUrl, sKey, { auth: { persistSession: false } });
+
+        const toCanonicalUuid = (raw?: string | null): string | null => {
+          if (!raw) return null;
+          const trimmed = raw.trim();
+          if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)) {
+            return trimmed;
+          }
+          const lower = trimmed.toLowerCase();
+          if (lower === 'ras-ali-labs' || lower === 'rasalilabs' || lower === 'ras_ali_labs') {
+            return '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf';
+          }
+          if (lower === 'pameltex' || lower === 'pameltex-consultancy') {
+            return 'c0b39862-cf19-4882-a822-c7f3f493fec0';
+          }
+          if (lower === 'grape' || lower === 'grape-community') {
+            return '8c8d6392-e457-4145-9423-f551fda3b728';
+          }
+          return null;
+        };
+
+        const canonicalId = toCanonicalUuid(orgId);
+
+        if (canonicalId) {
+          const res = await sClient
+            .from('social_connections')
+            .select('*')
+            .eq('provider', 'facebook')
+            .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected'])
+            .or(`workspace_id.eq.${canonicalId},user_id.eq.${canonicalId},organization_id.eq.${canonicalId}`)
+            .order('updated_at', { ascending: false });
+
+          if (res.data && res.data.length > 0) {
+            const conn = res.data.find((c: any) => 
+              c.account_type === 'BUSINESS' || 
+              c.metadata?.is_page === true || 
+              c.metadata?.provider_account_type === 'FACEBOOK_PAGE'
+            ) || res.data[0];
+
+            if (conn) {
+              const isP = Boolean(conn.metadata?.is_page === true || conn.account_type === 'BUSINESS' || conn.metadata?.provider_account_type === 'FACEBOOK_PAGE');
+              fbPage = {
+                id: conn.id,
+                pageId: conn.metadata?.pageId || conn.provider_account_id || conn.id,
+                name: conn.account_name || conn.metadata?.pageName || (isP ? 'Facebook Page' : 'Personal Profile'),
+                username: conn.username || conn.metadata?.pageUsername || `@${(conn.account_name || 'page').toLowerCase().replace(/\s+/g, '_')}`,
+                category: conn.metadata?.category || 'Business',
+                fanCount: Number(conn.followers_count) || Number(conn.metadata?.followers_count) || 0,
+                about: conn.metadata?.about || conn.metadata?.description || undefined,
+                description: conn.metadata?.description || conn.metadata?.about || undefined,
+                website: conn.metadata?.website || conn.metadata?.websiteUrl || undefined,
+                contactInfo: conn.metadata?.contactInfo || conn.metadata?.phone || undefined,
+                status: conn.connection_status,
+                accountType: conn.account_type,
+                metadata: conn.metadata,
+                isPersonalProfile: !isP,
+              };
+            }
+          }
+        }
+      } catch (srvErr: any) {
+        console.warn('[BusinessContext] Server-side Facebook connection query notice:', srvErr?.message);
+      }
     }
 
     const isPersonalFb = Boolean(
@@ -503,12 +573,14 @@ export class BusinessContextService {
           lastVerifiedAt: timestamp,
         },
         recentPostsCount: {
-          value: Number(fbPage?.recentPostsCount || 0),
+          value: Number(fbPage?.recentPosts?.length || fbPage?.recentPostsCount || 0),
           provenance: isSocialConnected ? 'VERIFIED' : 'UNVERIFIED',
           source: 'Meta Graph API',
           confidence: isSocialConnected ? 1.0 : 0.0,
           lastVerifiedAt: timestamp,
         },
+        recentPosts: fbPage?.recentPosts || [],
+        posts: fbPage?.recentPosts || [],
         topPerformingType: {
           value: 'Not analyzed yet',
           provenance: 'UNVERIFIED',

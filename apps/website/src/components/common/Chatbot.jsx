@@ -5,48 +5,25 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import axios from 'axios';
 import { cn } from '@/lib/utils';
-
-// Access API URL from environment or default to localhost
-const getApiUrl = () => {
-    let url = import.meta.env.VITE_API_URL;
-
-    // Check if the URL is coming in without a protocol (common on Render)
-    if (url && !url.startsWith('http')) {
-        url = `https://${url}`;
-    }
-
-    // Fallback for local development or missing production env
-    if (!url) {
-        if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-            url = 'http://localhost:9090';
-        } else {
-            url = 'https://alinew.onrender.com';
-        }
-    }
-
-    console.log('--- Mari AI Debug ---');
-    console.log('Environment variable VITE_API_URL:', import.meta.env.VITE_API_URL);
-    console.log('Computed API_URL:', url);
-    console.log('-------------------');
-
-    return url;
-};
+import { getApiUrl, getApiBase } from '@/lib/api-config';
+import { generateMariAIResponse } from '@/lib/mariAI';
 
 const API_URL = getApiUrl();
 const API_KEY = import.meta.env.VITE_API_KEY || 'AIzaSyByz1QviGaYVn3y3ax2S3E1Uhrrhw6J5j0';
 
-// Global axios defaults for easier chat management
+// Global axios instance for Mari AI chat management (8s timeout for rapid fallback)
 const chatAxios = axios.create({
     baseURL: API_URL,
     headers: {
         'x-api-key': API_KEY,
         'Content-Type': 'application/json'
     },
-    timeout: 30000 // Match server timeout for Render stability
+    timeout: 8000
 });
 
 // Mascot Image Path
 const MASCOT_IMAGE = '/assets/images/logo.png';
+
 
 const QUICK_REPLIES = {
     '🚀 Ralion OS Platform': "Ralion OS is an AI Business Operating System that brings business operations, CRM, growth strategy, social intelligence, and automated creative generation into one unified workspace.\n\nKey capabilities include:\n1. Mari AI Growth Partner\n2. Ralion CRM & Pipeline Intelligence\n3. Growth Studio (FLUX & CogVideoX AI)\n4. Social Intelligence & Publishing\n5. Sovereign Multi-Tenant Security\n\nWould you like to explore a specific capability or start a free trial?",
@@ -150,52 +127,14 @@ export default function Chatbot() {
             ]);
         }
 
-        // 2. Resolve Session ID
+        // 2. Resolve Session ID (Deterministic Client-Side, No Network Block)
         let storedSessionId = localStorage.getItem('chat_session_id');
-        if (storedSessionId === 'undefined' || storedSessionId === 'null') {
-            storedSessionId = null;
-        }
-
-        if (!storedSessionId) {
-            try {
-                console.log('Mari AI attempting connection to:', `${API_URL}/api/sessions`);
-                const response = await chatAxios.post('/api/sessions', {
-                    userId: `user-${Math.random().toString(36).substr(2, 9)}`,
-                    metadata: { source: 'web_mari_ai' }
-                });
-                storedSessionId = response.data?.id;
-                if (storedSessionId) {
-                    localStorage.setItem('chat_session_id', storedSessionId);
-                    console.log('Mari AI Connected! Session:', storedSessionId);
-                }
-            } catch (error) {
-                console.warn('Mari AI Connection Notice:', error.message);
-                storedSessionId = `session-local-${Math.random().toString(36).substr(2, 9)}-${Date.now()}`;
-                localStorage.setItem('chat_session_id', storedSessionId);
-            }
+        if (!storedSessionId || storedSessionId === 'undefined' || storedSessionId === 'null') {
+            storedSessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+            localStorage.setItem('chat_session_id', storedSessionId);
         }
 
         setSessionId(storedSessionId);
-
-        // 3. Load History if available
-        if (storedSessionId && hasLeadInfo) {
-            try {
-                const historyRes = await chatAxios.get(`/api/chat/${storedSessionId}`);
-                if (historyRes.data.messages && historyRes.data.messages.length > 0) {
-                    setMessages(historyRes.data.messages.map(msg => ({
-                        role: msg.role,
-                        content: msg.content
-                    })));
-                }
-            } catch (error) {
-                console.warn('Could not sync history:', error.message);
-                if (error.response?.status === 404) {
-                    console.log('Invalid session ID detected. Clearing for next run.');
-                    localStorage.removeItem('chat_session_id');
-                }
-            }
-        }
-
         return storedSessionId;
     };
 
@@ -225,7 +164,7 @@ export default function Chatbot() {
         setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
         setIsLoading(true);
 
-        // --- PHASE 1: Local Knowledge Check (Non-AI) ---
+        // --- PHASE 1: Local Knowledge Check (Instant) ---
         const localMatch = LOCAL_KNOWLEDGBASE.find(item =>
             item.patterns.some(pattern => pattern.test(userMessage))
         );
@@ -238,38 +177,54 @@ export default function Chatbot() {
             return;
         }
 
-        // --- PHASE 2: AI Backend Call ---
-        // Check sessionId, retry init if missing
+        // --- PHASE 2: Dynamic Backend Call (/api/mari/chat or /api/chat) ---
         let activeSessionId = sessionId;
         if (!activeSessionId) {
             activeSessionId = await initChatSession();
-            if (!activeSessionId) {
-                setMessages(prev => [...prev, { role: 'assistant', content: "I'm having trouble connecting to the server. Please try again later." }]);
-                setIsLoading(false);
-                return;
-            }
         }
 
+        const currentHistory = messages.map(m => ({
+            role: m.role === 'user' ? 'user' : 'model',
+            content: m.content
+        }));
+
+        let backendAnswer = null;
+
         try {
-            const response = await chatAxios.post('/api/chat', {
+            const response = await chatAxios.post('/api/mari/chat', {
+                query: userMessage,
+                prompt: userMessage,
+                message: userMessage,
                 sessionId: activeSessionId,
-                message: userMessage
+                conversationHistory: currentHistory
             });
 
-            const reply = response.data?.response;
-            setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
-        } catch (error) {
-            console.error('Mari AI Send Error:', {
-                message: error.message,
-                status: error.response?.status,
-                data: error.response?.data,
-                config: error.config
-            });
-            setMessages(prev => [...prev, { role: 'assistant', content: "I'm having trouble connecting right now. Status: " + (error.response?.status || 'Network Error') }]);
+            backendAnswer = response.data?.answer || response.data?.response;
+        } catch (backendError) {
+            console.warn('[Mari AI] Backend dynamic route note:', backendError?.message);
+        }
+
+        if (backendAnswer) {
+            setMessages(prev => [...prev, { role: 'assistant', content: backendAnswer }]);
+            setIsLoading(false);
+            return;
+        }
+
+        // --- PHASE 3: Client-Side Multimodal Mari AI Engine Fallback ---
+        try {
+            const aiAnswer = await generateMariAIResponse(userMessage);
+            setMessages(prev => [...prev, { role: 'assistant', content: aiAnswer }]);
+        } catch (aiError) {
+            console.error('[Mari AI] Multimodal Engine Error:', aiError);
+            setMessages(prev => [
+                ...prev,
+                { role: 'assistant', content: "I'm experiencing a brief connectivity glitch with the server. Please try asking again in a few moments." }
+            ]);
         } finally {
             setIsLoading(false);
         }
     };
+
 
     // Mascot State
     const [mascotState, setMascotState] = useState('idle'); // idle, walking, sleeping

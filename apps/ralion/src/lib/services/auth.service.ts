@@ -302,12 +302,25 @@ export class AuthService {
     try {
       const { data: { session }, error } = await this.supabase.auth.getSession();
       if (error) {
-        console.error('[AuthService] Error fetching session:', error.message);
+        console.warn('[AuthService] Session resolution note:', error.message);
+        if (
+          error.message?.includes('Refresh Token') ||
+          error.message?.includes('invalid_grant') ||
+          (error as any)?.status === 400
+        ) {
+          try {
+            await this.supabase.auth.signOut({ scope: 'local' });
+            if (typeof window !== 'undefined') {
+              window.localStorage?.removeItem('ralion-app-auth-token');
+              window.localStorage?.removeItem('sb-yidsfihagwttlmhfynmf-auth-token');
+            }
+          } catch {}
+        }
         return null;
       }
       return session;
-    } catch (err) {
-      console.error('[AuthService] Unexpected error fetching session:', err);
+    } catch (err: any) {
+      console.warn('[AuthService] Unexpected error fetching session:', err?.message);
       return null;
     }
   }

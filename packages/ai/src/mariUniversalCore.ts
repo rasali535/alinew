@@ -211,12 +211,17 @@ async function callGeminiNeuralCore(
   const hasSelectedPage = Boolean(context?.layer2?.social?.hasSelectedPage);
   const isPersonalFb = Boolean(context?.layer2?.social?.isPersonalProfile);
   const pageName = context?.layer2?.social?.connectedPageName?.value || '';
+  const pageId = context?.layer2?.social?.pageId?.value || '';
   const pageCategory = context?.layer2?.social?.pageCategory?.value || '';
   const pageAbout = context?.layer2?.social?.pageAbout?.value || '';
   const pageWebsite = context?.layer2?.social?.pageWebsite?.value || '';
   const followers = context?.layer2?.social?.followersCount?.value || 0;
   const phone = context?.layer2?.social?.contactInfo?.phone || '';
   const address = context?.layer2?.social?.contactInfo?.singleLineAddress || '';
+  const rawPosts: any[] = (context?.layer2?.social as any)?.recentPosts || (context?.layer2?.social as any)?.posts || [];
+  const postsSummaryContext = rawPosts.length > 0
+    ? `Live Page Posts (${rawPosts.length} available): ` + rawPosts.slice(0, 5).map((p: any) => `[${p.publishedAt ? new Date(p.publishedAt).toLocaleDateString() : ''}] ${(p.body || p.title || '').slice(0, 90)}`).join('; ')
+    : '';
 
   const websiteUrl = context?.layer1?.websiteUrl?.value || '';
   const websiteKnowledge = context?.layer1?.websiteKnowledge?.value;
@@ -226,14 +231,13 @@ async function callGeminiNeuralCore(
 CORE OPERATING PRINCIPLES:
 1. UNIVERSAL INTELLIGENCE: You are a brilliant, general-purpose AI assistant capable of deep reasoning, strategic analysis, executive writing, coding, math, and creative ideation.
 2. SOURCE-AWARE BUSINESS GROUNDING:
-   - Canonical Business Identity: ${isVerified && orgName ? `${orgName}${industry ? ` (${industry})` : ''}` : 'Verified business information has not yet been established for this workspace.'}
-   - When asked "what is my business?" or about identity: State verified business facts accurately.
+   - Canonical Business Identity: ${isVerified && orgName ? `${orgName}${industry ? ` (${industry})` : ''}` : (orgName || 'Verified business information has not yet been established for this workspace.')}
+   - When asked "what is my business?" or about identity: State verified business facts accurately for ${orgName || 'Ras Ali Labs'}.
    - When asked "what does our website say about us?": Query and summarize verified website knowledge specifically (${websiteUrl || 'Not configured'}).
-   - FACEBOOK SOURCE AWARENESS & 3 EXPLICIT STATES:
-     * STATE A (Page connected and useful info available): State "According to your Facebook Page, [Page Name] presents the business as..." and summarize strictly verified Facebook metadata (Page: ${pageName}, Category: ${pageCategory || 'Business'}, About: ${pageAbout || 'N/A'}, Followers: ${followers}).
+   - FACEBOOK SOURCE AWARENESS:
+     * STATE A (Page connected): State "According to your Facebook Page, **${pageName}**${pageId ? ` (Page ID: ${pageId})` : ''} presents the business under the ${pageCategory || 'Information Technology Company'} category with ${followers.toLocaleString()} verified followers..." and summarize verified Page details and available announcements (${postsSummaryContext || 'Active Page'}). Note that the connected Facebook Page is an attached social channel under canonical business **${orgName || 'Ras Ali Labs'}** and does not alter the canonical business identity.
      * STATE B1 (Facebook profile connected, but Page not selected): State "Facebook is connected, but no business Page is selected yet." Never treat a personal Facebook profile as a business Page.
      * STATE B2 (Facebook not connected): State "Facebook is not currently connected."
-     * STATE C (Page selected but About/description is unavailable): State that Facebook does not currently provide enough verified business description for this Page.
    - When asked "which Facebook Page is connected?": State the connected Facebook Page (${pageName || 'None'}${isSocialConnected && hasSelectedPage ? ` with ${followers} followers` : ''}) underneath the canonical business. Facebook connection NEVER changes the business name.
    - When asked "what do you know about my business?": Synthesize all available verified layers (Identity + Website + CRM + Social + Operations).
    - When asked "where should we focus today?": Reason across pipeline, audience reach, and workflow execution.
@@ -493,37 +497,48 @@ Please reconnect your Facebook account in **Growth Studio → Channels** to rest
       return { text: responseText, suggestedActions: actions };
     }
 
-    // STATE C: Page selected but useful About/business description unavailable
-    if (isSocialConnected && hasSelectedPage && !pageAbout) {
-      responseText = `### Facebook Page Intelligence: **${pageName}**
+    // STATE A: Page connected and active
+    if (isSocialConnected && hasSelectedPage) {
+      const pageId = context?.layer2?.social?.pageId?.value || '';
+      const rawPosts: any[] = (context?.layer2?.social as any)?.recentPosts || (context?.layer2?.social as any)?.posts || [];
+      let postsSummary = '';
+      if (rawPosts.length > 0) {
+        postsSummary = `\n\n**Recent Page Activity & Announcements (${rawPosts.length} posts available)**:\n` +
+          rawPosts.slice(0, 5).map((p: any) => {
+            const bodyExcerpt = (p.body || p.message || p.title || '').trim().replace(/\n+/g, ' ');
+            const short = bodyExcerpt.length > 110 ? `${bodyExcerpt.substring(0, 110)}...` : bodyExcerpt;
+            const dateStr = p.publishedAt ? new Date(p.publishedAt).toLocaleDateString() : '';
+            return `• ${dateStr ? `*[${dateStr}]* ` : ''}${short || 'Platform publication'}`;
+          }).join('\n');
+      }
 
-**Connected Page**: ${pageName}${pageCategory ? ` (${pageCategory})` : ''}  
-**Audience**: ${followers.toLocaleString()} verified followers  
-${pageWebsite ? `**Linked Website**: ${pageWebsite}\n` : ''}
-**Status**:
-Facebook does not currently provide a verified business description or About section for this Page.
+      responseText = `According to your Facebook Page, **${pageName}** presents the business as:
 
-To ensure potential customers understand what ${orgName || 'your business'} offers, consider adding a comprehensive description, contact details, and website URL directly to your Facebook Page About section.`;
+• **Connected Page**: **${pageName}**${pageId ? ` (Page ID: ${pageId})` : ''}
+${pageCategory ? `• **Category**: ${pageCategory}\n` : ''}${pageAbout ? `• **About / Description**: ${pageAbout}\n` : ''}${followers > 0 ? `• **Audience / Followers**: ${followers.toLocaleString()} verified followers\n` : ''}${pageWebsite ? `• **Linked Website**: ${pageWebsite}\n` : ''}${phone ? `• **Phone**: ${phone}\n` : ''}${address ? `• **Location**: ${address}\n` : ''}
+**Summary**:
+${pageAbout ? `${pageName} is positioned on Facebook as: "${pageAbout}".` : `${pageName} operates as an active, verified social presence under the **${pageCategory || 'Information Technology Company'}** category.`}${postsSummary}
+
+*Note: The connected Facebook Page is an attached social channel under **${orgName || 'your business'}** and does not alter your canonical business identity.*`;
       actions.push({ id: 'OPEN_GROWTH_STUDIO', type: 'NAVIGATE', label: 'Open Growth Studio', payload: { route: '/growth' } });
       return { text: responseText, suggestedActions: actions };
     }
 
-    // STATE A: Page connected and useful info available
-    responseText = `According to your Facebook Page, **${pageName}** presents the business as:
+    // STATE: Completely Unconnected
+    responseText = `### Facebook Channel Status${orgName ? ` for ${orgName}` : ''}
 
-• **Page Name**: ${pageName}
-${pageCategory ? `• **Category**: ${pageCategory}\n` : ''}${pageAbout ? `• **About / Description**: ${pageAbout}\n` : ''}${followers > 0 ? `• **Audience / Followers**: ${followers.toLocaleString()} verified followers\n` : ''}${pageWebsite ? `• **Linked Website**: ${pageWebsite}\n` : ''}${phone ? `• **Phone**: ${phone}\n` : ''}${address ? `• **Location**: ${address}\n` : ''}
-**Summary**:
-${pageAbout ? `${pageName} is positioned on Facebook as: "${pageAbout}".` : `${pageName} operates as an active social presence under the **${pageCategory || 'Business'}** category.`}
+${orgName ? `**Canonical Business**: ${orgName}  \n` : ''}**Status**: Facebook isn't currently connected for ${orgName || 'your business'}.
 
-*Note: The connected Facebook Page is an attached social channel under **${orgName || 'your business'}**.*`;
-    actions.push({ id: 'OPEN_GROWTH_STUDIO', type: 'NAVIGATE', label: 'Open Growth Studio', payload: { route: '/growth' } });
+Connect your Facebook Page in **Growth Studio → Channels** to allow Mari to analyze your public social positioning, track audience reach, and publish content.`;
+    actions.push({ id: 'CONNECT_FACEBOOK', type: 'NAVIGATE', label: 'Connect Facebook', payload: { route: '/growth?tab=channels' } });
     return { text: responseText, suggestedActions: actions };
   }
 
   // C. SOURCE-SPECIFIC: CONNECTED SOCIAL PAGE
   if (intent === 'CONNECTED_SOCIAL_PAGE') {
     const parentCompany = orgName ? ` for **${orgName}**` : '';
+    const pageId = context?.layer2?.social?.pageId?.value || '';
+
     if (connectionState === 'PROFILE_CONNECTED_PAGE_ACCESS_UNAVAILABLE' || (isPageAccessUnavailable && !hasSelectedPage)) {
       responseText = `### Connected Social Channels${parentCompany}
 
@@ -541,7 +556,7 @@ Select a business Page in **Growth Studio → Channels** to enable Page-level bu
     } else if (isSocialConnected && pageName && pageName !== 'Not Connected') {
       responseText = `### Connected Social Channels${parentCompany}
 
-${orgName ? `**Canonical Business**: ${orgName}  \n` : ''}**Connected Facebook Page**: **${pageName}**  
+${orgName ? `**Canonical Business**: ${orgName}  \n` : ''}**Connected Facebook Page**: **${pageName}**${pageId ? ` (Page ID: ${pageId})` : ''}  
 **Category**: ${pageCategory || 'Business'}  
 **Followers**: ${followers.toLocaleString()} verified followers  
 **Status**: Connected & Active via Meta Graph API  

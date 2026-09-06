@@ -55,7 +55,7 @@ export class BusinessIdentityResolver {
       profile = BusinessKnowledgeProfileService.getProfile(cleanId);
     }
 
-    // 2. Check if this is Ras Ali Labs
+    // 2. Identify canonical registered tenants
     const isRasAli =
       cleanId === 'ras-ali-labs' ||
       cleanId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf' ||
@@ -63,20 +63,121 @@ export class BusinessIdentityResolver {
       cleanId === 'org_rasalilabs' ||
       cleanId === 'ras ali labs';
 
-    // 3. Check if this is Pameltex
     const isPameltex =
       cleanId === 'pameltex' ||
       cleanId === 'c0b39862-cf19-4882-a822-c7f3f493fec0' ||
       cleanId === 'org_pameltex';
 
-    // 4. Check if this is Grape
     const isGrape =
       cleanId === 'grape' ||
       cleanId === '8c8d6392-e457-4145-9423-f551fda3b728' ||
       cleanId === 'chiwabby@gmail.com';
 
+    // 3. Authoritative Registered Tenant Checks
+    if (isRasAli) {
+      const rawProducts = [
+        ...(profile?.products?.value || [
+          { name: 'Ralion OS Core', category: 'Platform' },
+          { name: 'Mari AI Command Center', category: 'AI Intelligence' },
+          { name: 'Ralion Growth Studio', category: 'Marketing' },
+        ]),
+        ...(profile?.services?.value || [
+          { name: 'Enterprise Cloud Deployment', category: 'Infrastructure' },
+          { name: 'Custom AI Agent Engineering', category: 'AI Services' },
+        ]),
+      ];
+
+      return {
+        organizationId: 'ras-ali-labs',
+        workspaceId: options?.workspaceId || '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf',
+        companyName: 'Ras Ali Labs',
+        isVerified: true,
+        industry: profile?.industry?.value || 'Enterprise Software, B2B SaaS & Industrial Intelligence',
+        targetMarket: (profile?.targetMarkets?.value && profile.targetMarkets.value.length > 0)
+          ? profile.targetMarkets.value.join(', ')
+          : 'SADC Mid-Market & Enterprise B2B, Healthcare Providers, Freight & Logistics Corridors',
+        valueProposition: (profile?.valuePropositions?.value && profile.valuePropositions.value.length > 0)
+          ? profile.valuePropositions.value.join('; ')
+          : 'Sovereign business automation and enterprise intelligence OS',
+        tagline: profile?.tagline?.value || 'Sovereign Business Operating Intelligence for Modern Enterprises',
+        websiteUrl: 'https://www.rasalilabs.com',
+        productsAndServices: rawProducts,
+        brandVoice: profile?.brandVoice?.value || 'Authoritative, innovative, precise, enterprise-grade',
+        source: 'REGISTERED_PROFILE',
+      };
+    }
+
+    if (isPameltex) {
+      const rawProducts = [
+        ...(profile?.products?.value || [
+          { name: 'Industrial Conti Suits & Overalls', category: 'Safety & PPE' },
+          { name: 'Corporate & Executive Uniforms', category: 'Apparel' },
+          { name: 'High-Visibility & Security Uniforms', category: 'Security' },
+          { name: 'Hospitality & Healthcare Scrubs', category: 'Healthcare' },
+        ]),
+        ...(profile?.services?.value || [
+          { name: 'Custom Garment Branding & Embroidery', category: 'Customization' },
+          { name: 'Bulk Corporate Wardrobe Management', category: 'Supply Chain' },
+        ]),
+      ];
+
+      return {
+        organizationId: 'pameltex',
+        workspaceId: options?.workspaceId || 'c0b39862-cf19-4882-a822-c7f3f493fec0',
+        companyName: 'Pameltex',
+        isVerified: true,
+        industry: profile?.industry?.value || 'Commercial Uniforms, Industrial Workwear & Safety Apparel Manufacturing',
+        targetMarket: (profile?.targetMarkets?.value && profile.targetMarkets.value.length > 0)
+          ? profile.targetMarkets.value.join(', ')
+          : 'Botswana Mining & Construction Companies, Security Firms, Logistics Providers',
+        valueProposition: (profile?.valuePropositions?.value && profile.valuePropositions.value.length > 0)
+          ? profile.valuePropositions.value.join('; ')
+          : 'Locally manufactured high-durability workwear and PPE compliant with regional safety standards',
+        tagline: profile?.tagline?.value || 'Quality Workwear & Corporate Apparel for Botswana and Southern Africa',
+        websiteUrl: 'https://www.pameltex.com',
+        productsAndServices: rawProducts,
+        brandVoice: profile?.brandVoice?.value || 'Reliable, practical, professional, quality-focused',
+        source: 'REGISTERED_PROFILE',
+      };
+    }
+
+    if (isGrape) {
+      return {
+        organizationId: 'grape',
+        workspaceId: options?.workspaceId || '8c8d6392-e457-4145-9423-f551fda3b728',
+        companyName: 'grape',
+        isVerified: false,
+        industry: profile?.industry?.value || '',
+        targetMarket: (profile?.targetMarkets?.value && profile.targetMarkets.value.length > 0)
+          ? profile.targetMarkets.value.join(', ')
+          : '',
+        valueProposition: (profile?.valuePropositions?.value && profile.valuePropositions.value.length > 0)
+          ? profile.valuePropositions.value.join('; ')
+          : '',
+        tagline: profile?.tagline?.value || '',
+        websiteUrl: profile?.websiteUrl?.value || '',
+        productsAndServices: profile?.products?.value || [],
+        brandVoice: profile?.brandVoice?.value || 'Professional, Neutral',
+        source: 'REGISTERED_PROFILE',
+      };
+    }
+
+    // 4. Resolve structured Business Knowledge Profile for arbitrary registered tenants
     if (profile && profile.companyName?.value) {
-      const companyName = profile.companyName.value.trim();
+      let companyName = profile.companyName.value.trim();
+      // Sanitize out HTML page titles / slogans
+      if (
+        companyName.toLowerCase().includes('multi-disciplinary') ||
+        companyName.toLowerCase().includes('creative & technologist') ||
+        companyName.includes(' - ') ||
+        companyName.includes(' | ')
+      ) {
+        const parts = companyName.split(/[-|]/);
+        if (parts[0] && parts[0].trim().length > 0) {
+          companyName = parts[0].trim();
+        }
+      }
+
       const isClean =
         !companyName.startsWith('@') &&
         !companyName.toLowerCase().includes('facebook') &&
@@ -108,67 +209,6 @@ export class BusinessIdentityResolver {
           source: 'BUSINESS_KNOWLEDGE_PROFILE',
         };
       }
-    }
-
-    // Explicit check for known registered organizations if profile lookup in-memory missed
-    if (isRasAli) {
-      return {
-        organizationId: 'ras-ali-labs',
-        workspaceId: options?.workspaceId || '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf',
-        companyName: 'Ras Ali Labs',
-        isVerified: true,
-        industry: 'Enterprise Software, B2B SaaS & Industrial Intelligence',
-        targetMarket: 'SADC Mid-Market & Enterprise B2B, Healthcare Providers, Freight & Logistics Corridors',
-        valueProposition: 'Sovereign business automation and enterprise intelligence OS',
-        tagline: 'Sovereign Business Operating Intelligence for Modern Enterprises',
-        websiteUrl: 'https://www.rasalilabs.com',
-        productsAndServices: [
-          { name: 'Ralion OS Core', category: 'Platform' },
-          { name: 'Mari AI Command Center', category: 'AI Intelligence' },
-          { name: 'Ralion Growth Studio', category: 'Marketing' },
-        ],
-        brandVoice: 'Authoritative, innovative, precise, enterprise-grade',
-        source: 'REGISTERED_PROFILE',
-      };
-    }
-
-    if (isPameltex) {
-      return {
-        organizationId: 'pameltex',
-        workspaceId: options?.workspaceId || 'c0b39862-cf19-4882-a822-c7f3f493fec0',
-        companyName: 'Pameltex',
-        isVerified: true,
-        industry: 'Commercial Uniforms, Industrial Workwear & Safety Apparel Manufacturing',
-        targetMarket: 'Botswana Mining & Construction Companies, Security Firms, Logistics Providers',
-        valueProposition: 'Locally manufactured high-durability workwear and PPE compliant with regional safety standards',
-        tagline: 'Quality Workwear & Corporate Apparel for Botswana and Southern Africa',
-        websiteUrl: 'https://www.pameltex.com',
-        productsAndServices: [
-          { name: 'Industrial Conti Suits & Overalls', category: 'Safety & PPE' },
-          { name: 'Corporate & Executive Uniforms', category: 'Apparel' },
-          { name: 'High-Visibility & Security Uniforms', category: 'Security' },
-          { name: 'Hospitality & Healthcare Scrubs', category: 'Healthcare' },
-        ],
-        brandVoice: 'Reliable, practical, professional, quality-focused',
-        source: 'REGISTERED_PROFILE',
-      };
-    }
-
-    if (isGrape) {
-      return {
-        organizationId: 'grape',
-        workspaceId: options?.workspaceId || '8c8d6392-e457-4145-9423-f551fda3b728',
-        companyName: 'grape',
-        isVerified: false,
-        industry: '',
-        targetMarket: '',
-        valueProposition: '',
-        tagline: '',
-        websiteUrl: '',
-        productsAndServices: [],
-        brandVoice: 'Professional, Neutral',
-        source: 'REGISTERED_PROFILE',
-      };
     }
 
     // 5. Check Session-Provided Organization / Workspace Name

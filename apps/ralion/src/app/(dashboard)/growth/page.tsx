@@ -558,18 +558,26 @@ Rules:
       }
 
       if (res.ok) {
-        setOauthAlert({ type: 'success', message: `✅ Facebook Page connected: ${targetPage?.name || pageId}!` });
-        const accounts = await loadConnectedAccounts();
-        const fbAccount = accounts.find(a => a.provider === 'facebook');
-        if (fbAccount?.id) {
-          setSelectedAccountId(fbAccount.id);
-          fetchPostsForConnection(fbAccount.id);
+        const data = await res.json();
+        if (data.success) {
+          setOauthAlert({ type: 'success', message: `✅ Facebook Page connected: ${targetPage?.name || data.selectedPage?.pageName || pageId}!` });
+          const accounts = await loadConnectedAccounts();
+          const fbAccount = accounts.find(a => a.provider === 'facebook');
+          if (fbAccount?.id) {
+            setSelectedAccountId(fbAccount.id);
+            fetchPostsForConnection(fbAccount.id);
+          }
+          await fetchFacebookPages();
+          setIsPageSelectionModalOpen(false);
+        } else {
+          setOauthAlert({ type: 'error', message: `❌ ${data.error || 'Failed to connect Facebook Page'}` });
         }
-        await fetchFacebookPages();
-        setIsPageSelectionModalOpen(false);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setOauthAlert({ type: 'error', message: `❌ ${data.error || 'Failed to connect Facebook Page'}` });
       }
     } catch (err: any) {
-      alert(err.message || 'Failed to connect selected page');
+      setOauthAlert({ type: 'error', message: `❌ ${err.message || 'Failed to connect selected page'}` });
     } finally {
       setIsConnectingPage(false);
     }
