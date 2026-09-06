@@ -10,14 +10,7 @@ Options -Indexes +FollowSymLinks
   RewriteEngine On
   RewriteBase /
 
-  # 1. Forward OAuth callbacks directly to Render backend
-  RewriteCond %{REQUEST_URI} ^/ralion/api/oauth/(.*)$ [NC]
-  RewriteRule ^ralion/api/oauth/(.*)$ https://ralion-dynamic-backend.onrender.com/ralion/api/oauth/$1 [R=307,L,QSA]
-
-  RewriteCond %{REQUEST_URI} ^/api/oauth/(.*)$ [NC]
-  RewriteRule ^api/oauth/(.*)$ https://ralion-dynamic-backend.onrender.com/ralion/api/oauth/$1 [R=307,L,QSA]
-
-  # 2. Route all /ralion/api/* and /api/* to PHP proxy script (guaranteed JSON response)
+  # 1. Route all /ralion/api/* and /api/* to PHP proxy script (transparent upstream proxy)
   RewriteRule ^ralion/api/(.*)$ /api_proxy.php?__proxy_path=api/$1 [QSA,L]
   RewriteRule ^api/(.*)$ /api_proxy.php?__proxy_path=api/$1 [QSA,L]
 

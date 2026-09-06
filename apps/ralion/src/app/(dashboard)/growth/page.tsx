@@ -30,6 +30,12 @@ async function authFetch(pathOrUrl: string, init?: RequestInit): Promise<Respons
   if (!headers.has('x-user-id') && authHeaders['x-user-id']) {
     headers.set('x-user-id', authHeaders['x-user-id']);
   }
+  if (!headers.has('x-workspace-id') && authHeaders['x-workspace-id']) {
+    headers.set('x-workspace-id', authHeaders['x-workspace-id']);
+  }
+  if (!headers.has('x-organization-id') && authHeaders['x-organization-id']) {
+    headers.set('x-organization-id', authHeaders['x-organization-id']);
+  }
   if (!headers.has('Content-Type') && init?.body && typeof init.body === 'string') {
     headers.set('Content-Type', 'application/json');
   }
@@ -1458,22 +1464,49 @@ Rules:
       }
 
       if (res.data?.error) {
-        alert(`Connection notice: ${res.data.error}`);
+        setOauthAlert({
+          type: 'error',
+          message: `Connection notice: ${res.data.error}`
+        });
         setIsConnecting(false);
         return;
       }
 
       if (res.status === 401) {
-        alert('Authentication required: Please log in or refresh your session to connect social accounts.');
+        setOauthAlert({
+          type: 'error',
+          message: 'Authentication required: Please log in or refresh your session to connect social accounts.'
+        });
         setIsConnecting(false);
         return;
       }
 
-      // Supabase Social OAuth Provider fallback
-      setIsConnectModalOpen(false);
-      await AuthService.linkSocialAccount(providerKey);
+      if (res.status === 403) {
+        setOauthAlert({
+          type: 'error',
+          message: 'Access denied: You do not have permission to connect social accounts for this organization.'
+        });
+        setIsConnecting(false);
+        return;
+      }
+
+      // Supabase Social OAuth Provider fallback (wrapped safely to avoid uncaught rejections)
+      try {
+        setIsConnectModalOpen(false);
+        await AuthService.linkSocialAccount(providerKey);
+      } catch (authErr: any) {
+        console.warn('[Growth OAuth fallback]', authErr);
+        setOauthAlert({
+          type: 'error',
+          message: authErr?.message || 'Social connection authorization could not be started.'
+        });
+      }
     } catch (err: any) {
-      alert(`Failed to initiate OAuth: ${err.message || 'Check connection settings'}`);
+      setOauthAlert({
+        type: 'error',
+        message: `Failed to initiate OAuth: ${err?.message || 'Check connection settings'}`
+      });
+    } finally {
       setIsConnecting(false);
     }
   };
@@ -1548,7 +1581,7 @@ Rules:
   const handleSyncAccount = async (providerKey: string) => {
     setIsSyncing(providerKey);
     try {
-      const res = await fetch(getRalionApiUrl(`/api/oauth/${providerKey}/sync/`), { method: 'POST', credentials: 'include' });
+      const res = await authFetch(`/api/oauth/${providerKey}/sync/`, { method: 'POST' });
       const contentType = res.headers.get('content-type') || '';
       if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();

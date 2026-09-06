@@ -133,6 +133,12 @@ export async function fetchRalionApi<T = any>(
     if (!headers.has('x-user-id') && authHeaders['x-user-id']) {
       headers.set('x-user-id', authHeaders['x-user-id']);
     }
+    if (!headers.has('x-workspace-id') && authHeaders['x-workspace-id']) {
+      headers.set('x-workspace-id', authHeaders['x-workspace-id']);
+    }
+    if (!headers.has('x-organization-id') && authHeaders['x-organization-id']) {
+      headers.set('x-organization-id', authHeaders['x-organization-id']);
+    }
     if (!headers.has('Content-Type') && init?.body && typeof init.body === 'string') {
       headers.set('Content-Type', 'application/json');
     }
