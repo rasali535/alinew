@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../../lib/cors';
 import { WebsiteIngestionService, BusinessContextService, BusinessKnowledgeProfileService } from '@ralion/ai';
+import { getCurrentRalionContext } from '../../../../../lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,9 +15,29 @@ export async function OPTIONS(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
+    const serverCtx = await getCurrentRalionContext(request, { requireAuth: false });
     const { searchParams } = new URL(request.url);
-    const orgId = searchParams.get('organizationId') || request.headers.get('x-organization-id') || 'org_demo';
+    const requestedOrgId = searchParams.get('organizationId') || request.headers.get('x-organization-id');
 
+    let canonicalOrgId = 'unconfigured-tenant';
+    if (serverCtx) {
+      canonicalOrgId = serverCtx.organization?.id || serverCtx.workspace.organization_id || serverCtx.workspace.id;
+      if (requestedOrgId && requestedOrgId !== canonicalOrgId && requestedOrgId !== serverCtx.workspace.id && requestedOrgId !== serverCtx.user.id) {
+        return corsJsonResponse(
+          { success: false, code: 'TENANT_CONTEXT_MISMATCH', error: 'Forbidden: Cannot access another tenant context' },
+          { status: 403 },
+          request
+        );
+      }
+    } else if (requestedOrgId && requestedOrgId !== 'org_demo' && requestedOrgId !== 'default') {
+      return corsJsonResponse(
+        { success: false, code: 'AUTHENTICATION_REQUIRED', error: 'Authentication required' },
+        { status: 401 },
+        request
+      );
+    }
+
+    const orgId = canonicalOrgId;
     const knowledge = WebsiteIngestionService.getWebsiteKnowledge(orgId);
     const status = WebsiteIngestionService.getIngestionStatus(orgId);
     const profile = BusinessKnowledgeProfileService.getProfile(orgId);
@@ -49,12 +70,32 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/mari/knowledge/website-sync
  * Triggers authoritative ingestion / sync of an organization's public website.
- * Body: { organizationId?: string; websiteUrl?: string; customSections?: any[]; overrideName?: string; overrideIndustry?: string }
  */
 export async function POST(request: NextRequest) {
   try {
+    const serverCtx = await getCurrentRalionContext(request, { requireAuth: false });
     const body = await request.json().catch(() => ({}));
-    const orgId = body.organizationId || request.headers.get('x-organization-id') || 'org_demo';
+    const requestedOrgId = body.organizationId || request.headers.get('x-organization-id');
+
+    let canonicalOrgId = 'unconfigured-tenant';
+    if (serverCtx) {
+      canonicalOrgId = serverCtx.organization?.id || serverCtx.workspace.organization_id || serverCtx.workspace.id;
+      if (requestedOrgId && requestedOrgId !== canonicalOrgId && requestedOrgId !== serverCtx.workspace.id && requestedOrgId !== serverCtx.user.id) {
+        return corsJsonResponse(
+          { success: false, code: 'TENANT_CONTEXT_MISMATCH', error: 'Forbidden: Cannot access another tenant context' },
+          { status: 403 },
+          request
+        );
+      }
+    } else if (requestedOrgId && requestedOrgId !== 'org_demo' && requestedOrgId !== 'default') {
+      return corsJsonResponse(
+        { success: false, code: 'AUTHENTICATION_REQUIRED', error: 'Authentication required' },
+        { status: 401 },
+        request
+      );
+    }
+
+    const orgId = canonicalOrgId;
     const websiteUrl = body.websiteUrl || 'https://example.com';
 
     const result = await WebsiteIngestionService.ingestWebsite(orgId, websiteUrl, {
@@ -95,4 +136,3 @@ export async function POST(request: NextRequest) {
     }, { status: isSsrf ? 403 : 500 }, request);
   }
 }
-

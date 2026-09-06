@@ -380,10 +380,10 @@ export class BusinessKnowledgeProfileService {
   static getProfile(orgId: string): BusinessKnowledgeProfile | null {
     if (!orgId) return null;
     const cleanId = orgId.trim().toLowerCase();
-    if (cleanId === 'ras-ali-labs' || cleanId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf' || cleanId === 'rasalilabs' || cleanId === 'org_rasalilabs' || cleanId === 'ras ali labs') {
+    if (cleanId === 'ras-ali-labs' || cleanId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf') {
       return tenantProfileMap.get('ras-ali-labs') || null;
     }
-    if (cleanId === 'pameltex' || cleanId === 'c0b39862-cf19-4882-a822-c7f3f493fec0' || cleanId === 'org_pameltex' || cleanId === 'pameltex ') {
+    if (cleanId === 'pameltex' || cleanId === 'c0b39862-cf19-4882-a822-c7f3f493fec0') {
       return tenantProfileMap.get('pameltex') || null;
     }
     const inMem = tenantProfileMap.get(orgId) || tenantProfileMap.get(cleanId);

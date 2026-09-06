@@ -153,11 +153,30 @@ export class BusinessContextService {
   }
 
   /**
+   * Invalidates cached business context for a tenant or purges all caches.
+   */
+  static invalidateContext(orgId?: string) {
+    if (orgId) {
+      delete contextCache[orgId];
+      delete contextCache[orgId.toLowerCase()];
+    } else {
+      Object.keys(contextCache).forEach((k) => delete contextCache[k]);
+    }
+  }
+
+  /**
+   * Purges all in-memory business context caches.
+   */
+  static purgeAllCaches() {
+    Object.keys(contextCache).forEach((k) => delete contextCache[k]);
+  }
+
+  /**
    * Assembles the complete 3-layer Business Context for an organization.
    * Maintains strict tenant isolation and isolates test fixtures from production.
    */
   static async assembleContext(
-    orgId: string = 'ras-ali-labs',
+    orgId?: string,
     options?: {
       activeScreen?: { route: string; label: string; entityId?: string };
       forceRefresh?: boolean;
@@ -175,8 +194,9 @@ export class BusinessContextService {
       };
     }
   ): Promise<BusinessContext> {
+    const cleanOrgId = (orgId || '').trim() || 'unconfigured-tenant';
     const now = Date.now();
-    const cached = contextCache[orgId];
+    const cached = contextCache[cleanOrgId];
 
     if (!options?.forceRefresh && !options?.localOverrides && cached && (now - cached.cachedAt < CACHE_TTL_MS)) {
       if (options?.activeScreen) {
@@ -186,40 +206,33 @@ export class BusinessContextService {
     }
 
     const timestamp = new Date().toISOString();
-    const isRasAli = orgId === 'ras-ali-labs' || orgId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf';
-    const isTest = Boolean(options?.isTestExecution || orgId.startsWith('test-') || orgId.includes('test'));
-    const registeredProfile = tenantProfileRegistry.get(orgId);
+    const isRasAli = cleanOrgId === 'ras-ali-labs' || cleanOrgId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf';
+    const isTest = Boolean(options?.isTestExecution || cleanOrgId.startsWith('test-') || cleanOrgId.includes('test'));
+    const registeredProfile = tenantProfileRegistry.get(cleanOrgId);
     
     // Check structured BusinessKnowledgeProfileService
     let knowledgeProfile: any = null;
     try {
       const { BusinessKnowledgeProfileService } = require('./businessKnowledgeProfile.service');
-      knowledgeProfile = BusinessKnowledgeProfileService.getProfile(orgId);
+      knowledgeProfile = BusinessKnowledgeProfileService.getProfile(cleanOrgId);
     } catch {}
 
     // 1. Layer 1: Business Knowledge & Ingested Website
-    const websiteKnowledge = options?.localOverrides?.websiteKnowledge || WebsiteIngestionService.getWebsiteKnowledge(orgId);
+    const websiteKnowledge = options?.localOverrides?.websiteKnowledge || WebsiteIngestionService.getWebsiteKnowledge(cleanOrgId);
     let fbPage = options?.localOverrides?.fbPage;
+
+    // Tenant-isolated localStorage validation
     if (!fbPage && typeof window !== 'undefined' && window.localStorage) {
       try {
         const rawP = window.localStorage.getItem('ralion_selected_fb_page');
         if (rawP) {
-          fbPage = JSON.parse(rawP);
-        } else {
-          const rawSoc = window.localStorage.getItem('ralion_connected_social_accounts');
-          if (rawSoc) {
-            const socList = JSON.parse(rawSoc);
-            const fb = socList.find((s: any) => s.provider === 'facebook' || s.platform === 'facebook');
-            if (fb) {
-              fbPage = {
-                name: fb.accountName || fb.name || fb.pageName || fb.handle || 'Facebook Page',
-                fanCount: fb.followers || fb.followersCount || fb.fanCount || 0,
-                id: fb.id || fb.accountId || 'fb_page_1',
-                accountType: fb.accountType || fb.account_type,
-                isPersonalProfile: fb.isPersonalProfile || fb.accountType === 'FACEBOOK_PERSONAL_PROFILE' || fb.account_type === 'PERSONAL',
-                metadata: fb.metadata,
-              };
-            }
+          const parsedP = JSON.parse(rawP);
+          // STRICT SECURITY: Only accept if explicitly tagged for this organization / workspace
+          if (
+            parsedP &&
+            (parsedP.organizationId === cleanOrgId || parsedP.workspaceId === cleanOrgId || parsedP.userId === cleanOrgId)
+          ) {
+            fbPage = parsedP;
           }
         }
       } catch {}
@@ -230,34 +243,14 @@ export class BusinessContextService {
         const sKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpZHNmaWhhZ3d0dGxtaGZ5bm1mIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjgyMzk0NSwiZXhwIjoyMDk4Mzk5OTQ1fQ.mpparRo7a5t5B7uOlWBxiRI7NDsVGfmxkPUEbxSYBfA';
         const sClient = createClient(sUrl, sKey, { auth: { persistSession: false } });
 
-        const toCanonicalUuid = (raw?: string | null): string | null => {
-          if (!raw) return null;
-          const trimmed = raw.trim();
-          if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)) {
-            return trimmed;
-          }
-          const lower = trimmed.toLowerCase();
-          if (lower === 'ras-ali-labs' || lower === 'rasalilabs' || lower === 'ras_ali_labs') {
-            return '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf';
-          }
-          if (lower === 'pameltex' || lower === 'pameltex-consultancy') {
-            return 'c0b39862-cf19-4882-a822-c7f3f493fec0';
-          }
-          if (lower === 'grape' || lower === 'grape-community') {
-            return '8c8d6392-e457-4145-9423-f551fda3b728';
-          }
-          return null;
-        };
-
-        const canonicalId = toCanonicalUuid(orgId);
-
-        if (canonicalId) {
+        // Query strictly for this tenant UUID or canonical slug
+        if (cleanOrgId !== 'unconfigured-tenant' && cleanOrgId !== 'public-visitor') {
           const res = await sClient
             .from('social_connections')
             .select('*')
             .eq('provider', 'facebook')
             .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected'])
-            .or(`workspace_id.eq.${canonicalId},user_id.eq.${canonicalId},organization_id.eq.${canonicalId}`)
+            .or(`workspace_id.eq.${cleanOrgId},user_id.eq.${cleanOrgId},organization_id.eq.${cleanOrgId}`)
             .order('updated_at', { ascending: false });
 
           if (res.data && res.data.length > 0) {
@@ -653,7 +646,7 @@ export class BusinessContextService {
     const versionStr = `2026-08-24-v${this.versionCounter}`;
 
     const context: BusinessContext = {
-      organizationId: orgId,
+      organizationId: cleanOrgId,
       organizationName: orgName,
       isTestTenant: isTest,
       version: versionStr,
@@ -670,7 +663,7 @@ export class BusinessContextService {
     };
 
     if (!options?.localOverrides) {
-      contextCache[orgId] = {
+      contextCache[cleanOrgId] = {
         context,
         cachedAt: now,
         version: this.versionCounter,
@@ -678,13 +671,6 @@ export class BusinessContextService {
     }
 
     return context;
-  }
-
-  /**
-   * Invalidates context cache on business data changes.
-   */
-  static invalidateContext(orgId: string = 'ras-ali-labs') {
-    delete contextCache[orgId];
   }
 
   /**

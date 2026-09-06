@@ -18,6 +18,7 @@ import { TierAccessGate } from '@/components/TierAccessGate';
 import { MariMarkdownMessage } from '@/components/MariMarkdownMessage';
 import { callMariAiApi, generateHfImage, generateHfVideo, MariOrchestrationService, MariRecommendationContract } from '@ralion/ai';
 import { getRalionApiUrl, fetchRalionApi, getRalionAuthHeaders } from '@/lib/api-config';
+import { useOrganization } from '@ralion/auth';
 
 async function authFetch(pathOrUrl: string, init?: RequestInit): Promise<Response> {
   const url = pathOrUrl.startsWith('http') ? pathOrUrl : getRalionApiUrl(pathOrUrl);
@@ -183,6 +184,7 @@ const platformConfig: Record<string, { label: string; color: string; bg: string;
 const splineChartDates = ['Day 1', 'Day 5', 'Day 10', 'Day 15', 'Day 20', 'Day 25', 'Today'];
 
 function GrowthPageContent() {
+  const { organization, user } = useOrganization();
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -311,9 +313,9 @@ function GrowthPageContent() {
     setIsBrainstorming(true);
     try {
       const { callMariAiApi, BusinessContextService } = await import('@ralion/ai');
-      let activeOrgId = 'ras-ali-labs';
+      let activeOrgId = organization?.id || user?.orgId || user?.uid || '';
       if (typeof window !== 'undefined') {
-        activeOrgId = localStorage.getItem('ralion_org_id') || localStorage.getItem('ralion_workspace_id') || 'ras-ali-labs';
+        activeOrgId = activeOrgId || localStorage.getItem('ralion_org_id') || localStorage.getItem('ralion_workspace_id') || '';
       }
       let context = null;
       try {

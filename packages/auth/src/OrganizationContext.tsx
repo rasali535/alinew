@@ -84,7 +84,7 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         };
 
         const resolvedOrg: Organization = {
-          id: orgId || authUser?.id || '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf',
+          id: orgId || authUser?.id || '',
           name: orgName,
           slug: orgName.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
           ownerId: authUser?.id || 'u-auth',
@@ -149,6 +149,17 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     setUser(null);
     setOrganization(null);
     setActiveBranch(null);
+    if (typeof window !== 'undefined') {
+      try {
+        const keysToPurge = Object.keys(localStorage).filter(
+          k => k.startsWith('ralion_') || k.startsWith('sb-') || k.includes('auth') || k.includes('tenant')
+        );
+        keysToPurge.forEach(k => localStorage.removeItem(k));
+        sessionStorage.clear();
+      } catch (e) {
+        console.warn('[OrganizationContext] Error clearing storage during logout:', e);
+      }
+    }
   };
 
   return (

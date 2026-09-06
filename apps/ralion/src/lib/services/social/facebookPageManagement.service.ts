@@ -105,7 +105,7 @@ export class FacebookPageManagementService {
    * Resolve organization subscription entitlement for Facebook Pages
    */
   static async getOrganizationEntitlement(organizationId?: string, userId?: string): Promise<EntitlementStatus> {
-    if (organizationId === 'ras-ali-labs' || userId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf') {
+    if (organizationId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf' || userId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf') {
       return {
         limit: 999999,
         current: 1,
@@ -128,90 +128,51 @@ export class FacebookPageManagementService {
         }
       } catch {
         const { data: ent } = await supabase
-          .from('organization_social_entitlements')
-          .select('facebook_page_limit')
+          .from('organization_subscriptions')
+          .select('tier, max_facebook_pages')
           .eq('organization_id', organizationId)
           .maybeSingle();
 
-        if (ent?.facebook_page_limit) {
-          limit = ent.facebook_page_limit;
+        if (ent) {
+          limit = ent.max_facebook_pages || (ent.tier === 'ENTERPRISE' ? 999 : ent.tier === 'PROFESSIONAL' ? 3 : 1);
+          planName = `${ent.tier || 'Community'} Plan`;
         }
       }
     }
 
-    let current = 0;
-    if (organizationId || userId) {
-      let query = supabase
-        .from('social_connections')
-        .select('id', { count: 'exact', head: true })
-        .eq('provider', 'facebook')
-        .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected']);
+    const { count } = await supabase
+      .from('facebook_pages')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', organizationId || '');
 
-      if (organizationId && userId) {
-        query = query.or(`workspace_id.eq.${organizationId},user_id.eq.${userId}`);
-      } else if (organizationId) {
-        query = query.eq('workspace_id', organizationId);
-      } else if (userId) {
-        query = query.eq('user_id', userId);
-      }
-
-      const { count } = await query;
-      current = count || 0;
-    }
-
+    const current = count || 0;
     const remaining = Math.max(0, limit - current);
 
     return {
       limit,
       current,
       remaining,
-      upgradeRequired: current >= limit,
+      upgradeRequired: remaining <= 0,
       planName,
     };
   }
 
   /**
-   * Authoritatively resolve the currently active selected Facebook Page for a tenant context.
+   * Get the primary connected Facebook page for a tenant
    */
-  static async getActivePage(params: {
-    organizationId?: string;
+  static async getPrimaryPage(params: {
     workspaceId?: string;
+    organizationId?: string;
     userId?: string;
   }): Promise<FacebookPageDescriptor | null> {
     const supabase = getServiceSupabase();
 
-    // Map known tenant slugs to canonical UUIDs
+    // Map tenant identifiers strictly to canonical UUIDs
     const toCanonicalUuid = (raw?: string | null): string | null => {
       if (!raw) return null;
       const trimmed = raw.trim();
       if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)) {
         return trimmed;
-      }
-      const lower = trimmed.toLowerCase();
-      if (
-        lower === 'ras-ali-labs' ||
-        lower === 'rasalilabs' ||
-        lower === 'ras_ali_labs' ||
-        lower.startsWith('org_22e61ff6') ||
-        lower.startsWith('22e61ff6')
-      ) {
-        return '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf';
-      }
-      if (
-        lower === 'pameltex' ||
-        lower === 'pameltex-consultancy' ||
-        lower.startsWith('org_c0b39862') ||
-        lower.startsWith('c0b39862')
-      ) {
-        return 'c0b39862-cf19-4882-a822-c7f3f493fec0';
-      }
-      if (
-        lower === 'grape' ||
-        lower === 'grape-community' ||
-        lower.startsWith('org_8c8d6392') ||
-        lower.startsWith('8c8d6392')
-      ) {
-        return '8c8d6392-e457-4145-9423-f551fda3b728';
       }
       return null;
     };
@@ -665,16 +626,6 @@ export class FacebookPageManagementService {
         const trimmed = raw.trim();
         if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)) {
           return trimmed;
-        }
-        const lower = trimmed.toLowerCase();
-        if (lower === 'ras-ali-labs' || lower === 'rasalilabs' || lower === 'ras_ali_labs') {
-          return '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf';
-        }
-        if (lower === 'pameltex' || lower === 'pameltex-consultancy') {
-          return 'c0b39862-cf19-4882-a822-c7f3f493fec0';
-        }
-        if (lower === 'grape' || lower === 'grape-community') {
-          return '8c8d6392-e457-4145-9423-f551fda3b728';
         }
         return null;
       };

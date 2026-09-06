@@ -4,8 +4,10 @@ import React, { useState } from 'react';
 import { Sparkles, X, Send, Bot, User, ChevronUp, Zap, ArrowRight } from 'lucide-react';
 import { MariMarkdownMessage } from './MariMarkdownMessage';
 import { getRalionApiUrl, getRalionAuthHeaders } from '@/lib/api-config';
+import { useOrganization } from '@ralion/auth';
 
 export const FloatingMariAi: React.FC = () => {
+  const { organization, user } = useOrganization();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Array<{ sender: 'USER' | 'MARI'; text: string; id?: string }>>([
     { sender: 'MARI', text: 'Hello! I am Mari, your AI Business Growth Partner. How can I help your business grow today?' }
@@ -37,12 +39,15 @@ export const FloatingMariAi: React.FC = () => {
 
     try {
       const authHeaders = await getRalionAuthHeaders();
-      let activeOrgId: string = '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf';
+      let activeOrgId: string = organization?.id || (user as any)?.id || (user as any)?.userId || '';
       try {
         const stored = typeof window !== 'undefined'
           ? (localStorage.getItem('ralion_active_org_id') || localStorage.getItem('ralion_active_workspace_id') || localStorage.getItem('ralion_workspace_id'))
           : null;
-        if (stored && stored !== 'org_default' && stored !== 'default') activeOrgId = stored;
+        if (stored && stored !== 'org_default' && stored !== 'default') {
+          // Only trust localStorage if no authenticated org/user is resolved yet or if it matches
+          if (!activeOrgId) activeOrgId = stored;
+        }
       } catch {}
 
       const res = await fetch(apiUrl, {

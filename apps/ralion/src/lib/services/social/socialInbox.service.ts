@@ -244,8 +244,8 @@ export class SocialInboxService {
       conn = Array.isArray(data) && data.length > 0 ? data[0] : null;
     }
 
-    // Fallback for Master Admin workspace
-    if (!conn && (params.organizationId === 'ras-ali-labs' || params.workspaceId === 'ras-ali-labs' || params.userId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf')) {
+    // Fallback for Master Admin workspace strictly
+    if (!conn && (params.organizationId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf' || params.workspaceId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf' || params.userId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf')) {
       conn = {
         id: 'f8656d3c-789b-4890-bc80-83920ce91870',
         infrastructure_provider: 'zernio',

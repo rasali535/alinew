@@ -5,6 +5,7 @@ import { X, Send, Sparkles, Bot, FileText, Zap, CornerDownLeft, ArrowRight } fro
 import { processMariQuery, generateMarketingCampaign } from '@ralion/ai';
 import { Button, Badge } from '@ralion/ui';
 import { MariMarkdownMessage } from './MariMarkdownMessage';
+import { useOrganization } from '@ralion/auth';
 
 import { getRalionApiUrl, getRalionAuthHeaders } from '@/lib/api-config';
 
@@ -19,6 +20,7 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
   onClose,
   onNavigate
 }) => {
+  const { organization, user } = useOrganization();
   const [messages, setMessages] = useState<Array<{ sender: 'USER' | 'MARI'; text: string; actions?: any[]; tokens?: { totalTokens?: number } }>>([
     {
       sender: 'MARI',
@@ -49,12 +51,14 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
 
       try {
         const authHeaders = await getRalionAuthHeaders();
-        let activeOrgId: string = '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf';
+        let activeOrgId: string = organization?.id || (user as any)?.id || (user as any)?.userId || '';
         try {
           const stored = typeof window !== 'undefined'
             ? (localStorage.getItem('ralion_active_org_id') || localStorage.getItem('ralion_active_workspace_id') || localStorage.getItem('ralion_workspace_id'))
             : null;
-          if (stored && stored !== 'org_default' && stored !== 'default') activeOrgId = stored;
+          if (stored && stored !== 'org_default' && stored !== 'default') {
+            if (!activeOrgId) activeOrgId = stored;
+          }
         } catch {}
 
         const res = await fetch(apiUrl, {

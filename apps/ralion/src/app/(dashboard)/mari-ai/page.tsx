@@ -115,7 +115,7 @@ export default function MariAiPage() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Knowledge Documents State & Website Sync
-  const [documentsList, setDocumentsList] = useState<KnowledgeDocument[]>(mariKnowledgeManager.getDocuments());
+  const [documentsList, setDocumentsList] = useState<KnowledgeDocument[]>([]);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [newDoc, setNewDoc] = useState({ title: '', category: 'SOP' as const, content: '' });
   const [isSyncingWebsite, setIsSyncingWebsite] = useState(false);
@@ -128,6 +128,7 @@ export default function MariAiPage() {
   const loadGrowthIntelligence = async (forceRefresh = false) => {
     setIsLoading(true);
     try {
+      setDocumentsList(mariKnowledgeManager.getDocuments(activeOrgId));
       let savedContacts: any[] = [];
       let savedTasks: any[] = [];
       let savedDocs: any[] = [];
@@ -404,7 +405,7 @@ export default function MariAiPage() {
         const authHeaders = await getRalionAuthHeaders();
         const effectiveOrgId = (activeOrgId && activeOrgId !== 'unconfigured-tenant')
           ? activeOrgId
-          : ((user as any)?.id || (user as any)?.userId || '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf');
+          : ((user as any)?.id || (user as any)?.userId || '');
 
         const res = await fetch(apiUrl, {
           method: 'POST',
@@ -451,7 +452,7 @@ export default function MariAiPage() {
           setBusinessContext(activeCtx);
         }
 
-        const ragSearch = mariKnowledgeManager.searchKnowledgeBase(cleanQuery);
+        const ragSearch = mariKnowledgeManager.searchKnowledgeBase(cleanQuery, activeOrgId);
         const ruleResponse = await processMariQuery({
           prompt: cleanQuery,
           organizationId: activeOrgId,
@@ -517,12 +518,13 @@ export default function MariAiPage() {
     if (!newDoc.title.trim() || !newDoc.content.trim()) return;
 
     mariKnowledgeManager.addDocument({
+      orgId: activeOrgId,
       title: newDoc.title.trim(),
       category: newDoc.category,
       content: newDoc.content.trim(),
     });
 
-    setDocumentsList(mariKnowledgeManager.getDocuments());
+    setDocumentsList(mariKnowledgeManager.getDocuments(activeOrgId));
     setNewDoc({ title: '', category: 'SOP', content: '' });
     setIsUploadModalOpen(false);
     loadGrowthIntelligence(true);

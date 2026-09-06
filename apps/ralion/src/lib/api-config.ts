@@ -84,15 +84,19 @@ export async function getRalionAuthHeaders(): Promise<Record<string, string>> {
         headers['x-user-id'] = data.session.user.id;
       }
 
-      // Extract active workspace and organization context from session or localStorage
+      // Prioritize authenticated session user ID and metadata over localStorage to prevent stale context leaks
+      const authenticatedUserId = data?.session?.user?.id;
       const activeWs =
         data?.session?.user?.user_metadata?.workspace_id ||
+        data?.session?.user?.user_metadata?.org_id ||
+        authenticatedUserId ||
         window.localStorage?.getItem('ralion_active_workspace_id') ||
-        window.localStorage?.getItem('ralion_workspace_id') ||
-        data?.session?.user?.id;
+        window.localStorage?.getItem('ralion_workspace_id');
 
       const activeOrg =
         data?.session?.user?.user_metadata?.org_id ||
+        data?.session?.user?.user_metadata?.organization_id ||
+        authenticatedUserId ||
         window.localStorage?.getItem('ralion_active_org_id') ||
         window.localStorage?.getItem('ralion_org_id') ||
         activeWs;

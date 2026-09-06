@@ -14,10 +14,11 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABAS
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 export function getServiceSupabase() {
-  if (!SUPABASE_SERVICE_ROLE_KEY) {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey) {
     throw new Error('[ServerAuth] Configuration error: SUPABASE_SERVICE_ROLE_KEY environment variable is required.');
   }
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  return createClient(SUPABASE_URL, serviceKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,

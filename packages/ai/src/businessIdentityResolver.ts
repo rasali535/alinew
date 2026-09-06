@@ -51,35 +51,25 @@ export class BusinessIdentityResolver {
 
     // 1. Resolve structured Business Knowledge Profile
     let profile: BusinessKnowledgeProfile | null = null;
-    if (cleanId) {
+    if (cleanId && cleanId !== 'unconfigured-tenant' && cleanId !== 'public-visitor') {
       profile = BusinessKnowledgeProfileService.getProfile(cleanId);
     }
 
-    // 2. Identify canonical registered tenants
+    // 2. Exact Authoritative Registered Tenant Checks
+    // Platform Admin tenant UUID: strictly restricted to 22e61ff6-16fe-44c7-9d67-38e2a2e91ccf or explicit ras-ali-labs
     const isRasAli =
       cleanId === 'ras-ali-labs' ||
-      cleanId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf' ||
-      cleanId.startsWith('org_22e61ff6') ||
-      cleanId.startsWith('22e61ff6') ||
-      cleanId === 'rasalilabs' ||
-      cleanId === 'org_rasalilabs' ||
-      cleanId === 'ras ali labs';
+      cleanId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf';
 
     const isPameltex =
       cleanId === 'pameltex' ||
-      cleanId === 'c0b39862-cf19-4882-a822-c7f3f493fec0' ||
-      cleanId.startsWith('org_c0b39862') ||
-      cleanId.startsWith('c0b39862') ||
-      cleanId === 'org_pameltex';
+      cleanId === 'c0b39862-cf19-4882-a822-c7f3f493fec0';
 
     const isGrape =
       cleanId === 'grape' ||
-      cleanId === '8c8d6392-e457-4145-9423-f551fda3b728' ||
-      cleanId.startsWith('org_8c8d6392') ||
-      cleanId.startsWith('8c8d6392') ||
-      cleanId === 'chiwabby@gmail.com';
+      cleanId === '8c8d6392-e457-4145-9423-f551fda3b728';
 
-    // 3. Authoritative Registered Tenant Checks
+    // 3. Authoritative Registered Tenant Resolution
     if (isRasAli) {
       const rawProducts = [
         ...(profile?.products?.value || [
@@ -189,7 +179,8 @@ export class BusinessIdentityResolver {
         !companyName.toLowerCase().includes('facebook') &&
         companyName.toLowerCase() !== 'active workspace' &&
         companyName.toLowerCase() !== 'your business' &&
-        companyName.toLowerCase() !== 'default';
+        companyName.toLowerCase() !== 'default' &&
+        companyName.toLowerCase() !== 'ras ali labs'; // Guard against cross-tenant injection
       
       if (isClean && companyName.length > 0) {
         const rawProducts = [
@@ -223,7 +214,7 @@ export class BusinessIdentityResolver {
       sessionName = sessionName.replace(/'s [Ww]orkspace$/g, '').trim();
     }
 
-    const invalidNames = ['default', 'active workspace', 'your business', 'default workspace', 'workspace', 'my workspace', 'none', 'unconfigured', '@facebook', 'facebook'];
+    const invalidNames = ['default', 'active workspace', 'your business', 'default workspace', 'workspace', 'my workspace', 'none', 'unconfigured', '@facebook', 'facebook', 'ras ali labs', 'ras-ali-labs', 'rasalilabs'];
     const isInvalid = !sessionName || sessionName.startsWith('@') || invalidNames.includes(sessionName.toLowerCase());
 
     if (!isInvalid && sessionName.length > 0) {
@@ -243,7 +234,7 @@ export class BusinessIdentityResolver {
       };
     }
 
-    // 6. Unverified Workspace / Tenant
+    // 6. Unverified Workspace / Tenant — NEVER FALLBACK TO RAS ALI LABS
     return {
       organizationId: rawId || 'unconfigured-tenant',
       workspaceId: options?.workspaceId,

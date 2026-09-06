@@ -46,17 +46,17 @@ export class MariKnowledgeManager {
   ];
 
   public getDocuments(orgId?: string): KnowledgeDocument[] {
-    if (orgId) {
-      return this.documents.filter(d => d.orgId === orgId);
+    if (!orgId || orgId === 'unconfigured-tenant' || orgId === 'public-visitor') {
+      return [];
     }
-    return this.documents;
+    return this.documents.filter(d => d.orgId === orgId);
   }
 
-  public addDocument(doc: { orgId?: string; title: string; category: KnowledgeDocument['category']; content: string }): KnowledgeDocument {
+  public addDocument(doc: { orgId: string; title: string; category: KnowledgeDocument['category']; content: string }): KnowledgeDocument {
     const chunks = chunkText(doc.content);
     const created: KnowledgeDocument = {
       id: `kb-${Date.now()}`,
-      orgId: doc.orgId || 'ras-ali-labs',
+      orgId: doc.orgId,
       title: doc.title,
       category: doc.category,
       content: doc.content,
@@ -69,7 +69,13 @@ export class MariKnowledgeManager {
   }
 
   public searchKnowledgeBase(query: string, orgId?: string): string {
-    const targetDocs = orgId ? this.documents.filter(d => d.orgId === orgId) : this.documents;
+    if (!orgId || orgId === 'unconfigured-tenant' || orgId === 'public-visitor') {
+      return "No matching organizational knowledge document found for your query.";
+    }
+    const targetDocs = this.documents.filter(d => d.orgId === orgId);
+    if (targetDocs.length === 0) {
+      return "No matching organizational knowledge document found for your query.";
+    }
     const allChunks: TextChunk[] = [];
     targetDocs.forEach(doc => {
       const chunks = chunkText(doc.content);
