@@ -7,6 +7,7 @@ import axios from 'axios';
 import { cn } from '@/lib/utils';
 import { getApiUrl, getApiBase } from '@/lib/api-config';
 import { generateMariAIResponse } from '@/lib/mariAI';
+import { MariMarkdownMessage } from './MariMarkdownMessage';
 
 const API_URL = getApiUrl();
 const API_KEY = import.meta.env.VITE_API_KEY || 'AIzaSyByz1QviGaYVn3y3ax2S3E1Uhrrhw6J5j0';
@@ -362,18 +363,20 @@ export default function Chatbot() {
                                     <div
                                         key={index}
                                         className={cn(
-                                            "flex w-max max-w-[85%] flex-col gap-2 rounded-2xl px-4 py-3 text-sm shadow-sm whitespace-pre-wrap",
+                                            "flex w-max max-w-[85%] flex-col gap-2 rounded-2xl px-4 py-3 text-sm shadow-sm",
                                             msg.role === 'user'
-                                                ? "ml-auto bg-green-600 text-white rounded-br-none"
+                                                ? "ml-auto bg-green-600 text-white rounded-br-none whitespace-pre-wrap"
                                                 : "bg-muted/80 backdrop-blur-sm rounded-bl-none border border-border/50"
                                         )}
                                     >
                                         {msg.role !== 'user' ? (
-                                            <div className="flex items-start gap-2">
+                                            <div className="flex items-start gap-2.5 w-full">
                                                 <div className="w-6 h-6 rounded-full overflow-hidden flex-shrink-0 mt-0.5 border border-green-500/20">
                                                     <img src={MASCOT_IMAGE} alt="Bot" className="w-full h-full object-cover" />
                                                 </div>
-                                                <div>{msg.content}</div>
+                                                <div className="flex-1 min-w-0">
+                                                    <MariMarkdownMessage text={msg.content} isUser={false} />
+                                                </div>
                                             </div>
                                         ) : (
                                             <div>{msg.content}</div>

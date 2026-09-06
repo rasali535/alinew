@@ -1,5 +1,3 @@
-'use client';
-
 import React from 'react';
 import {
   Sparkles,
@@ -7,11 +5,6 @@ import {
   Film,
   Image as ImageIcon,
 } from 'lucide-react';
-
-interface MariMarkdownMessageProps {
-  text: string;
-  isUser?: boolean;
-}
 
 /**
  * Normalizes raw Markdown text from any Mari backend/engine before parsing:
@@ -21,7 +14,7 @@ interface MariMarkdownMessageProps {
  * 4. Normalizes duplicated bullet patterns (e.g. `- **•**`, `- •`, `• •`, `* •`, `- -`, `**•**`)
  * 5. Cleans up extra whitespace and empty bracket tokens
  */
-export function normalizeMarkdownText(raw: string): string {
+export function normalizeMarkdownText(raw) {
   if (!raw) return '';
 
   let text = raw;
@@ -93,9 +86,8 @@ export function normalizeMarkdownText(raw: string): string {
 
 /**
  * Strips bracketed action tokens that are extracted and rendered as action buttons.
- * E.g., removes `[Create Reel] | [Create Visual] | [Open Growth Studio]`
  */
-export function stripActionBracketsFromText(text: string): string {
+export function stripActionBracketsFromText(text) {
   if (!text) return '';
   return text
     .replace(/(?:^|\n)\s*\[[A-Za-z0-9 &—–-]+\](?:\s*\|\s*\[[A-Za-z0-9 &—–-]+\])*\s*(?:\n|$)/g, '\n')
@@ -109,10 +101,10 @@ export function stripActionBracketsFromText(text: string): string {
 /**
  * Formats inline Markdown styling: bold, italic, bold-italic, inline code, and links.
  */
-function renderInlineFormatted(text: string): React.ReactNode[] {
+function renderInlineFormatted(text) {
   if (!text) return [];
 
-  const tokens: React.ReactNode[] = [];
+  const tokens = [];
   let remaining = text;
   let keyIdx = 0;
 
@@ -124,8 +116,7 @@ function renderInlineFormatted(text: string): React.ReactNode[] {
   const codeRegex = /`([^`]+)`/;
 
   while (remaining.length > 0) {
-    type MatchCandidate = { type: 'link' | 'boldItalic' | 'bold' | 'italic' | 'code'; match: RegExpExecArray; index: number };
-    const candidates: MatchCandidate[] = [];
+    const candidates = [];
 
     const matchLink = linkRegex.exec(remaining);
     if (matchLink) candidates.push({ type: 'link', match: matchLink, index: matchLink.index });
@@ -165,7 +156,7 @@ function renderInlineFormatted(text: string): React.ReactNode[] {
           href={url}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-purple-400 hover:text-purple-300 font-semibold underline inline-flex items-center gap-0.5 transition-colors"
+          className="text-green-400 hover:text-green-300 font-semibold underline inline-flex items-center gap-0.5 transition-colors"
         >
           {label}
           <ExternalLink className="w-2.5 h-2.5 inline" />
@@ -174,14 +165,14 @@ function renderInlineFormatted(text: string): React.ReactNode[] {
       remaining = remaining.substring(first.index + first.match[0].length);
     } else if (first.type === 'boldItalic') {
       tokens.push(
-        <strong key={`bi-${keyIdx++}`} className="font-bold text-white">
-          <em className="italic text-zinc-300">{first.match[1]}</em>
+        <strong key={`bi-${keyIdx++}`} className="font-bold text-foreground">
+          <em className="italic text-muted-foreground">{first.match[1]}</em>
         </strong>
       );
       remaining = remaining.substring(first.index + first.match[0].length);
     } else if (first.type === 'bold') {
       tokens.push(
-        <strong key={`bold-${keyIdx++}`} className="font-bold text-white">
+        <strong key={`bold-${keyIdx++}`} className="font-bold text-foreground">
           {first.match[1]}
         </strong>
       );
@@ -194,7 +185,7 @@ function renderInlineFormatted(text: string): React.ReactNode[] {
         tokens.push(<span key={`it-pre-${keyIdx++}`}>{prefix}</span>);
       }
       tokens.push(
-        <em key={`italic-${keyIdx++}`} className="italic text-zinc-300">
+        <em key={`italic-${keyIdx++}`} className="italic text-muted-foreground">
           {content}
         </em>
       );
@@ -203,7 +194,7 @@ function renderInlineFormatted(text: string): React.ReactNode[] {
       tokens.push(
         <code
           key={`code-${keyIdx++}`}
-          className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-purple-300 font-mono text-[11px]"
+          className="px-1.5 py-0.5 rounded bg-muted border border-border text-green-400 font-mono text-[11px]"
         >
           {first.match[1]}
         </code>
@@ -218,26 +209,26 @@ function renderInlineFormatted(text: string): React.ReactNode[] {
 /**
  * Parses markdown lines into semantic elements (headings, list items, paragraphs, hr).
  */
-function renderMarkdownParagraphs(content: string): React.ReactNode[] {
+function renderMarkdownParagraphs(content) {
   if (!content || !content.trim()) return [];
 
   const lines = content.split('\n');
-  const nodes: React.ReactNode[] = [];
-  let currentList: React.ReactNode[] = [];
-  let listType: 'bullet' | 'number' | null = null;
+  const nodes = [];
+  let currentList = [];
+  let listType = null;
   let blockKey = 0;
 
   const flushList = () => {
     if (currentList.length > 0) {
       if (listType === 'number') {
         nodes.push(
-          <ol key={`ol-${blockKey++}`} className="space-y-1.5 my-2 pl-1 list-decimal list-inside text-zinc-200">
+          <ol key={`ol-${blockKey++}`} className="space-y-1.5 my-2 pl-1 list-decimal list-inside text-foreground/90">
             {currentList}
           </ol>
         );
       } else {
         nodes.push(
-          <ul key={`ul-${blockKey++}`} className="space-y-1.5 my-2 pl-0.5 text-zinc-200">
+          <ul key={`ul-${blockKey++}`} className="space-y-1.5 my-2 pl-0.5 text-foreground/90">
             {currentList}
           </ul>
         );
@@ -258,7 +249,7 @@ function renderMarkdownParagraphs(content: string): React.ReactNode[] {
     // Horizontal Rule: --- or *** or ___
     if (line === '---' || line === '***' || line === '___') {
       flushList();
-      nodes.push(<hr key={`hr-${blockKey++}`} className="my-3 border-zinc-800" />);
+      nodes.push(<hr key={`hr-${blockKey++}`} className="my-3 border-border" />);
       continue;
     }
 
@@ -267,8 +258,8 @@ function renderMarkdownParagraphs(content: string): React.ReactNode[] {
       flushList();
       const headingText = line.replace(/^###\s+/, '');
       nodes.push(
-        <h3 key={`h3-${blockKey++}`} className="text-sm font-bold text-white mt-3.5 mb-1.5 flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+        <h3 key={`h3-${blockKey++}`} className="text-sm font-bold text-foreground mt-3.5 mb-1.5 flex items-center gap-1.5">
+          <Sparkles className="w-3.5 h-3.5 text-green-400 shrink-0" />
           <span>{renderInlineFormatted(headingText)}</span>
         </h3>
       );
@@ -280,7 +271,7 @@ function renderMarkdownParagraphs(content: string): React.ReactNode[] {
       flushList();
       const headingText = line.replace(/^##\s+/, '');
       nodes.push(
-        <h2 key={`h2-${blockKey++}`} className="text-sm font-extrabold text-white mt-4 mb-2">
+        <h2 key={`h2-${blockKey++}`} className="text-sm font-extrabold text-foreground mt-4 mb-2">
           {renderInlineFormatted(headingText)}
         </h2>
       );
@@ -292,7 +283,7 @@ function renderMarkdownParagraphs(content: string): React.ReactNode[] {
       flushList();
       const headingText = line.replace(/^#\s+/, '');
       nodes.push(
-        <h1 key={`h1-${blockKey++}`} className="text-base font-black text-white mt-4 mb-2">
+        <h1 key={`h1-${blockKey++}`} className="text-base font-black text-foreground mt-4 mb-2">
           {renderInlineFormatted(headingText)}
         </h1>
       );
@@ -303,7 +294,7 @@ function renderMarkdownParagraphs(content: string): React.ReactNode[] {
     if (line.startsWith('> ')) {
       flushList();
       nodes.push(
-        <blockquote key={`bq-${blockKey++}`} className="pl-3 border-l-2 border-purple-500/60 my-2 text-zinc-400 italic">
+        <blockquote key={`bq-${blockKey++}`} className="pl-3 border-l-2 border-green-500/60 my-2 text-muted-foreground italic">
           {renderInlineFormatted(line.replace(/^>\s*/, ''))}
         </blockquote>
       );
@@ -316,8 +307,8 @@ function renderMarkdownParagraphs(content: string): React.ReactNode[] {
       listType = 'bullet';
       const itemText = line.replace(/^(?:[•\-*]\s*)+/, '').trim();
       currentList.push(
-        <li key={`li-${blockKey++}`} className="flex items-start gap-2 text-zinc-200">
-          <span className="text-purple-400 font-bold shrink-0 mt-0.5">•</span>
+        <li key={`li-${blockKey++}`} className="flex items-start gap-2 text-foreground/90">
+          <span className="text-green-400 font-bold shrink-0 mt-0.5">•</span>
           <span className="flex-1">{renderInlineFormatted(itemText)}</span>
         </li>
       );
@@ -330,7 +321,7 @@ function renderMarkdownParagraphs(content: string): React.ReactNode[] {
       listType = 'number';
       const itemText = line.replace(/^\d+\.\s+/, '');
       currentList.push(
-        <li key={`nli-${blockKey++}`} className="flex items-start gap-2 text-zinc-200">
+        <li key={`nli-${blockKey++}`} className="flex items-start gap-2 text-foreground/90">
           <span className="flex-1">{renderInlineFormatted(itemText)}</span>
         </li>
       );
@@ -340,7 +331,7 @@ function renderMarkdownParagraphs(content: string): React.ReactNode[] {
     // Standard paragraph or key-value pair
     flushList();
     nodes.push(
-      <p key={`p-${blockKey++}`} className="my-1.5 text-zinc-200 leading-relaxed">
+      <p key={`p-${blockKey++}`} className="my-1.5 text-foreground/90 leading-relaxed">
         {renderInlineFormatted(line)}
       </p>
     );
@@ -350,14 +341,14 @@ function renderMarkdownParagraphs(content: string): React.ReactNode[] {
   return nodes;
 }
 
-export const MariMarkdownMessage: React.FC<MariMarkdownMessageProps> = ({ text, isUser = false }) => {
+export const MariMarkdownMessage = ({ text, isUser = false }) => {
   if (!text) return null;
 
   if (isUser) {
     return <p className="whitespace-pre-wrap">{text}</p>;
   }
 
-  // 1. Normalize Markdown text (unescape backslashes, fix bold colons, clean duplicated bullets, strip SVGs)
+  // 1. Normalize Markdown text
   const displayContent = normalizeMarkdownText(text);
 
   // 2. Check for image and video embeds
@@ -366,7 +357,7 @@ export const MariMarkdownMessage: React.FC<MariMarkdownMessageProps> = ({ text, 
 
   // If rich media exists, process segments
   if (hasImages || hasVideos) {
-    const blocks: React.ReactNode[] = [];
+    const blocks = [];
     let lastIndex = 0;
     const combinedRegex = /(!\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)|\[Watch Video(?: Reel)?\]\((https?:\/\/[^\s)]+)\))/gi;
     let match;
@@ -386,7 +377,7 @@ export const MariMarkdownMessage: React.FC<MariMarkdownMessageProps> = ({ text, 
         const alt = match[2] || 'Generated Creative';
         const url = match[3];
         blocks.push(
-          <div key={`img-${match.index}`} className="my-3 overflow-hidden rounded-xl border border-purple-500/40 bg-zinc-950 shadow-2xl">
+          <div key={`img-${match.index}`} className="my-3 overflow-hidden rounded-xl border border-green-500/40 bg-zinc-950 shadow-2xl">
             <img
               src={url}
               alt={alt}
@@ -394,14 +385,14 @@ export const MariMarkdownMessage: React.FC<MariMarkdownMessageProps> = ({ text, 
               loading="lazy"
             />
             <div className="p-2 flex items-center justify-between bg-zinc-900/90 text-[10px] text-zinc-400 border-t border-zinc-800">
-              <span className="font-mono text-purple-300 flex items-center gap-1">
-                <ImageIcon className="w-3 h-3 text-purple-400" /> FLUX.1 High-Resolution Asset
+              <span className="font-mono text-green-300 flex items-center gap-1">
+                <ImageIcon className="w-3 h-3 text-green-400" /> FLUX.1 High-Resolution Asset
               </span>
               <a
                 href={url}
                 target="_blank"
                 rel="noreferrer"
-                className="px-2 py-0.5 rounded bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 font-semibold flex items-center gap-1"
+                className="px-2 py-0.5 rounded bg-green-600/30 hover:bg-green-600/50 text-green-200 font-semibold flex items-center gap-1"
               >
                 View Full Size ↗
               </a>
@@ -411,7 +402,7 @@ export const MariMarkdownMessage: React.FC<MariMarkdownMessageProps> = ({ text, 
       } else {
         const vidUrl = match[4];
         blocks.push(
-          <div key={`vid-${match.index}`} className="my-3 overflow-hidden rounded-xl border border-purple-500/40 bg-zinc-950 shadow-2xl">
+          <div key={`vid-${match.index}`} className="my-3 overflow-hidden rounded-xl border border-green-500/40 bg-zinc-950 shadow-2xl">
             <video
               controls
               autoPlay
@@ -422,14 +413,14 @@ export const MariMarkdownMessage: React.FC<MariMarkdownMessageProps> = ({ text, 
               className="w-full max-h-[340px] object-cover rounded-xl"
             />
             <div className="p-2 flex items-center justify-between bg-zinc-900/90 text-[10px] text-zinc-400 border-t border-zinc-800">
-              <span className="font-mono text-indigo-300 flex items-center gap-1">
-                <Film className="w-3 h-3 text-indigo-400" /> CogVideoX Animation Stream
+              <span className="font-mono text-emerald-300 flex items-center gap-1">
+                <Film className="w-3 h-3 text-emerald-400" /> CogVideoX Animation Stream
               </span>
               <a
                 href={vidUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="px-2 py-0.5 rounded bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 font-semibold flex items-center gap-1"
+                className="px-2 py-0.5 rounded bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 font-semibold flex items-center gap-1"
               >
                 Open Player ↗
               </a>
@@ -453,7 +444,7 @@ export const MariMarkdownMessage: React.FC<MariMarkdownMessageProps> = ({ text, 
   }
 
   // Pure text Markdown structure
-  return <div className="space-y-2.5 text-xs leading-relaxed">{renderMarkdownParagraphs(displayContent)}</div>;
+  return <div className="space-y-2 text-xs leading-relaxed">{renderMarkdownParagraphs(displayContent)}</div>;
 };
 
 export default MariMarkdownMessage;
