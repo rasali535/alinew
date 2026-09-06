@@ -32,6 +32,7 @@ import {
 import { MariTokenTelemetryService, MariTokenUsage, estimateTokenCount } from './tokenTelemetry.service';
 import { MariActionPayload } from './mariActions';
 import { mariKnowledgeManager } from './knowledgeBase';
+import { TenantCreditsService, CREDIT_COSTS } from './tenantCredits.service';
 
 export type MariCapabilityMode = 'GENERAL' | 'BUSINESS' | 'ACTION';
 export type RequestedContextSource =
@@ -950,6 +951,45 @@ export class MariUniversalCore {
         ragContext = rag;
       }
     } catch {}
+
+    // 4.5. Tenant Credit Accounting & Gate
+    if (orgId && orgId !== 'unconfigured-tenant' && detectedIntent !== 'GREETING') {
+      try {
+        TenantCreditsService.deductCredits(
+          orgId,
+          CREDIT_COSTS.MARI_STRATEGY,
+          `Mari AI Reasoning: ${cleanPrompt.substring(0, 32)}...`,
+          {
+            sourceFeature: 'MARI_CHAT',
+            correlationId: requestId,
+            userId: request.userId,
+            provider: 'google',
+            model: 'gemini-2.5-flash',
+          }
+        );
+      } catch (creditErr: any) {
+        if (creditErr?.errorCode === 'INSUFFICIENT_CREDITS' || creditErr?.message?.includes('Insufficient credits')) {
+          return {
+            answer: 'You have consumed your monthly credit allowance. To continue using Mari AI Strategic Reasoning and Creative Generation, please upgrade your plan in Billing & Subscriptions.\n\n[Upgrade Plan](/billing) [View Usage](/billing)',
+            capabilityMode: 'BUSINESS',
+            detectedIntent: 'INSUFFICIENT_CREDITS',
+            modelUsed: 'Ralion Credit Gateway',
+            responseSource: 'local_grounded',
+            suggestedActions: [
+              { type: 'NAVIGATE', label: 'Upgrade Subscription', payload: { route: '/billing' } },
+              { type: 'NAVIGATE', label: 'View Usage', payload: { route: '/billing' } },
+            ],
+            ragContext: null,
+            contextSources: [],
+            tenantId: orgId,
+            companyName: resolvedCompanyName,
+            isBusinessContextVerified: isVerified,
+            usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+            requestId,
+          };
+        }
+      }
+    }
 
     // 5. Invoke Gemini Reasoning
     let answerText = '';

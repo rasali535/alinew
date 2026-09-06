@@ -145,23 +145,15 @@ export async function GET(request: NextRequest) {
 
     let balance = 0;
     let consumed = 0;
+    let monthlyAllowance = 250;
     try {
-      // Check wallet for orgId and aliases
-      let wallet = null;
-      for (const a of aliases) {
-        try {
-          const w = TenantCreditsService.getOrCreateWallet(a);
-          if (w && (w.balance > 0 || w.lifetimeConsumed > 0)) {
-            wallet = w;
-            break;
-          }
-        } catch {}
+      if (plan === 'COMMUNITY' || plan === 'FREE') {
+        TenantCreditsService.reconcileCommunityMigration(orgId);
       }
-      if (!wallet) {
-        wallet = TenantCreditsService.getOrCreateWallet(orgId);
-      }
-      balance = wallet.balance;
+      const wallet = TenantCreditsService.getOrCreateWallet(orgId, plan as any);
+      balance = wallet.totalBalance ?? wallet.balance;
       consumed = wallet.lifetimeConsumed;
+      monthlyAllowance = wallet.monthlyQuota;
     } catch {}
 
     // Find creative assets
@@ -209,12 +201,20 @@ export async function GET(request: NextRequest) {
       id: orgId,
       organizationId: orgId,
       name: resolvedName,
+      owner: resolvedName,
       ownerEmail: resolvedEmail,
       plan,
+      subscriptionStatus: isSuspended ? 'SUSPENDED' : (subStatus === 'PAST_DUE' ? 'PAST_DUE' : 'ACTIVE'),
+      monthlyCreditAllowance: monthlyAllowance,
+      monthlyAllowance,
+      availableCredits: balance,
       credits: balance,
       creditsConsumed: consumed,
+      creditsConsumedThisCycle: consumed,
+      lifetimeUsage: consumed,
       status: isSuspended ? 'SUSPENDED' : (subStatus === 'PAST_DUE' ? 'SUSPENDED' : 'ACTIVE'),
       createdAt,
+      signupDate: createdAt,
       lastActive: createdAt,
       websiteIngestionStatus: p?.websiteUrl?.value ? 'VERIFIED' : 'NONE',
       metaStatus,

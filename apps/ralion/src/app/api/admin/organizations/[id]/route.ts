@@ -49,6 +49,7 @@ export async function GET(
   let wallet: any = null;
   let creditHistory: any[] = [];
   try {
+    TenantCreditsService.reconcileCommunityMigration(organizationId);
     wallet = TenantCreditsService.getOrCreateWallet(organizationId);
     creditHistory = TenantCreditsService.getTransactions(organizationId);
   } catch {}

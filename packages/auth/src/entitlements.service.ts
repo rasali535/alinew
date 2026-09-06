@@ -19,7 +19,7 @@ export const PLAN_CATALOG: Record<SubscriptionPlanId, PlanEntitlements> = {
     name: 'Community (Free Forever)',
     description: 'Core business tools and essential CRM for solo entrepreneurs',
     monthlyPriceUsd: 0,
-    monthlyCreditQuota: 100,
+    monthlyCreditQuota: 250,
     maxWorkspaces: 1,
     maxSocialConnections: 1,
     maxTeamMembers: 2,

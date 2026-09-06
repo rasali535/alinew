@@ -465,4 +465,61 @@ export interface BillingWebhookEventRecord {
   error?: string;
 }
 
+// ═════════════════════════════════════════════════════════════════════════════
+// AUTHORITATIVE CREDIT WALLET & LEDGER SCHEMAS
+// ═════════════════════════════════════════════════════════════════════════════
+
+export type CreditTransactionType =
+  | 'INITIAL_GRANT'
+  | 'MONTHLY_RENEWAL'
+  | 'MIGRATION_ADJUSTMENT'
+  | 'CONSUMPTION'
+  | 'REFUND'
+  | 'ADMIN_GRANT'
+  | 'ADMIN_DEDUCT';
+
+export type CreditSourceFeature =
+  | 'MARI_CHAT'
+  | 'CREATIVE_IMAGE'
+  | 'CREATIVE_VIDEO'
+  | 'GROWTH'
+  | 'CRM'
+  | 'ADMIN'
+  | 'SYSTEM';
+
+export interface TenantCreditWalletRecord {
+  organizationId: string;
+  tier: SubscriptionPlanId;
+  planCredits: number;
+  bonusCredits: number;
+  totalBalance: number;
+  monthlyQuota: number;
+  lifetimeGranted: number;
+  lifetimeConsumed: number;
+  lastRenewedAt: string;
+  updatedAt: string;
+}
+
+export interface TenantCreditLedgerRecord {
+  id: string;
+  organizationId: string;
+  userId?: string;
+  amount: number;
+  balanceBefore: number;
+  balanceAfter: number;
+  planCreditsBefore?: number;
+  planCreditsAfter?: number;
+  bonusCreditsBefore?: number;
+  bonusCreditsAfter?: number;
+  type: CreditTransactionType;
+  sourceFeature: CreditSourceFeature;
+  provider?: string;
+  model?: string;
+  correlationId?: string;
+  reason: string;
+  metadata?: Record<string, any>;
+  createdAt: string;
+}
+
+
 

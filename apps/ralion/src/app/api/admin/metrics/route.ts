@@ -79,35 +79,58 @@ export async function GET(request: NextRequest) {
       orgId => !PlatformAdminService.isTenantSuspended(orgId)
     ).length;
 
-    // 2. Credits & Creative Studio Generations
+    // 2. Credits & Creative Studio Generations from Authoritative Ledger
     const allAssets = CreativeAssetService.listAssets('all');
     const imageAssets = allAssets.filter(a => a.type === 'POSTER_IMAGE');
     const videoAssets = allAssets.filter(a => a.type === 'VIDEO_REEL');
 
     let totalCreditsIssued = 0;
     let totalCreditsConsumed = 0;
-
-    customerOrgIds.forEach(orgId => {
-      try {
-        const wallet = TenantCreditsService.getOrCreateWallet(orgId);
-        totalCreditsIssued += wallet.balance + wallet.lifetimeConsumed;
-        totalCreditsConsumed += wallet.lifetimeConsumed;
-      } catch {}
-    });
-
-    // 3. Subscriptions & Estimated MRR
+    let payingCustomers = 0;
     let estimatedMRR = 0;
+
+    // Apply idempotent Community migration reconciliation for canonical tenants
     customerOrgIds.forEach(orgId => {
       try {
+        TenantCreditsService.reconcileCommunityMigration(orgId);
+        const wallet = TenantCreditsService.getOrCreateWallet(orgId);
+        totalCreditsIssued += wallet.monthlyQuota;
+        totalCreditsConsumed += wallet.lifetimeConsumed;
+
         const sub = BillingDatabaseService.getSubscription(orgId);
-        if (sub.status === 'ACTIVE') {
+        if (sub && sub.status === 'ACTIVE') {
           const pId = sub.planId as string;
-          if (pId === 'ENTERPRISE') estimatedMRR += 499;
-          else if (pId === 'PROFESSIONAL' || pId === 'GROWTH') estimatedMRR += 149;
-          else if (pId === 'STARTER' || pId === 'STANDARD') estimatedMRR += 49;
+          if (pId === 'STARTER' || pId === 'STANDARD') {
+            estimatedMRR += 19;
+            payingCustomers += 1;
+          } else if (pId === 'PROFESSIONAL' || pId === 'GROWTH') {
+            estimatedMRR += 49;
+            payingCustomers += 1;
+          } else if (pId === 'ENTERPRISE') {
+            // Enterprise is custom billing
+            payingCustomers += 1;
+          }
         }
       } catch {}
     });
+
+    const estimatedARR = estimatedMRR * 12;
+
+    // 3. AI Token Telemetry & Estimated Operational Cost
+    let totalAiTokens = 0;
+    customerOrgIds.forEach(orgId => {
+      try {
+        const { MariTokenTelemetryService } = require('@ralion/ai');
+        const usage = MariTokenTelemetryService.getTotalUsage(orgId);
+        totalAiTokens += usage.totalTokens;
+      } catch {}
+    });
+
+    // Estimated provider cost registry (operational cost, not verified gross margin)
+    const estimatedProviderCostUsd =
+      (totalAiTokens / 1000) * 0.0001 +
+      imageAssets.length * 0.003 +
+      videoAssets.length * 0.05;
 
     // 4. Live Social & Meta Connections
     let connectedMetaCount = 0;
@@ -263,10 +286,17 @@ export async function GET(request: NextRequest) {
       data: {
         totalCustomers,
         activeCustomers,
+        payingCustomers,
         suspendedCustomers: totalCustomers - activeCustomers,
         estimatedMRR,
+        estimatedARR,
+        mrr: estimatedMRR,
+        arr: estimatedARR,
         totalCreditsIssued,
         totalCreditsConsumed,
+        totalAiTokens,
+        estimatedProviderCostUsd: Number(estimatedProviderCostUsd.toFixed(4)),
+        estimatedGrossMarginPct: estimatedMRR > 0 ? Math.max(0, Math.round(((estimatedMRR - estimatedProviderCostUsd) / estimatedMRR) * 100)) : 100,
         creativeGenerations: {
           total: allAssets.length,
           images: imageAssets.length,

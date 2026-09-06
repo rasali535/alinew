@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
     const catalogPlan = PLAN_CATALOG[planId as keyof typeof PLAN_CATALOG] || PLAN_CATALOG.COMMUNITY;
     const targetTier = planId === 'ENTERPRISE' ? 'ENTERPRISE' : planId === 'PROFESSIONAL' ? 'PROFESSIONAL' : 'COMMUNITY';
     const wallet = TenantCreditsService.getOrCreateWallet(organizationId, targetTier);
-    const targetQuota = targetTier === 'ENTERPRISE' ? 3000 : targetTier === 'PROFESSIONAL' ? 750 : 50;
+    const targetQuota = catalogPlan.monthlyCreditQuota;
     if (wallet.balance < targetQuota) {
       TenantCreditsService.addCredits(organizationId, targetQuota - wallet.balance, `Subscription tier upgrade to ${targetTier}`);
     }
