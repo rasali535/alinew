@@ -337,7 +337,7 @@ tenantProfileMap.set('pameltex', {
 });
 
 // Durable storage key prefix for business profiles
-const PROFILE_STORAGE_PREFIX = 'ralion_bkp_';
+const PROFILE_STORAGE_PREFIX = 'ralion:';
 
 export class BusinessKnowledgeProfileService {
   /**
@@ -347,10 +347,10 @@ export class BusinessKnowledgeProfileService {
     if (!orgId) return null;
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
-        const raw = window.localStorage.getItem(`${PROFILE_STORAGE_PREFIX}${orgId}`);
+        const raw = window.localStorage.getItem(`ralion:${orgId}:businessProfile`) || window.localStorage.getItem(`ralion_bkp_${orgId}`);
         if (raw) {
           const parsed = JSON.parse(raw);
-          if (parsed && parsed.organizationId === orgId) {
+          if (parsed && (parsed.organizationId === orgId || parsed.workspaceId === orgId)) {
             tenantProfileMap.set(orgId, parsed);
             return parsed;
           }
@@ -368,7 +368,31 @@ export class BusinessKnowledgeProfileService {
     tenantProfileMap.set(orgId, profile);
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
-        window.localStorage.setItem(`${PROFILE_STORAGE_PREFIX}${orgId}`, JSON.stringify(profile));
+        window.localStorage.setItem(`ralion:${orgId}:businessProfile`, JSON.stringify(profile));
+      } catch {}
+    }
+  }
+
+  /**
+   * Purges all in-memory and durable business profile caches
+   */
+  static purgeAllCaches(): void {
+    tenantProfileMap.clear();
+    // Reseed canonical profiles
+    tenantProfileMap.set('ras-ali-labs', { ...tenantProfileMap.get('ras-ali-labs')! });
+    tenantProfileMap.set('22e61ff6-16fe-44c7-9d67-38e2a2e91ccf', { ...tenantProfileMap.get('ras-ali-labs')!, organizationId: '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf' });
+    tenantProfileMap.set('pameltex', { ...tenantProfileMap.get('pameltex')! });
+    tenantProfileMap.set('c0b39862-cf19-4882-a822-c7f3f493fec0', { ...tenantProfileMap.get('pameltex')!, organizationId: 'c0b39862-cf19-4882-a822-c7f3f493fec0' });
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < window.localStorage.length; i++) {
+          const k = window.localStorage.key(i);
+          if (k && (k.includes(':businessProfile') || k.startsWith('ralion_bkp_'))) {
+            keysToRemove.push(k);
+          }
+        }
+        keysToRemove.forEach(k => window.localStorage.removeItem(k));
       } catch {}
     }
   }

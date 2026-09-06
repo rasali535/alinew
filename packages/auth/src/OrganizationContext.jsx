@@ -137,7 +137,7 @@ export const OrganizationProvider = ({ children }) => {
     if (typeof window !== 'undefined') {
       try {
         const keysToPurge = Object.keys(localStorage).filter(
-          k => k.startsWith('ralion_') || k.startsWith('sb-') || k.includes('auth') || k.includes('tenant')
+          k => k.startsWith('ralion:') || k.startsWith('ralion_') || k.startsWith('sb-') || k.includes('auth') || k.includes('tenant')
         );
         keysToPurge.forEach(k => localStorage.removeItem(k));
         sessionStorage.clear();

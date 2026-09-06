@@ -26,7 +26,7 @@ import { getRalionApiUrl } from '@/lib/api-config';
 
 export default function RalionOnboardingPage() {
   const router = useRouter();
-  const { setOrganization } = useOrganization();
+  const { setOrganization, organization, user } = useOrganization();
 
   const [step, setStep] = useState(1);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -81,7 +81,7 @@ export default function RalionOnboardingPage() {
 
       setAnalysisStage('Building your Business Knowledge Profile...');
       
-      const targetOrgId = `org_${businessData.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+      const targetOrgId = organization?.id || user?.orgId || `org_${businessData.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
       const normalizedUrl = businessData.websiteUrl.trim();
       let wk: any = null;
 
@@ -147,7 +147,7 @@ export default function RalionOnboardingPage() {
   };
 
   const handleCompleteOnboarding = () => {
-    const orgId = `org_${businessData.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+    const orgId = organization?.id || user?.orgId || `org_${businessData.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
     
     // Register business profile in tenant context engine
     BusinessContextService.registerTenantProfile(orgId, {

@@ -495,21 +495,24 @@ export function generateLocalStrategicResponse(
   const wk = context?.layer1?.websiteKnowledge?.value || (orgId ? WebsiteIngestionService.getWebsiteKnowledge(orgId) : null);
   let profile = orgId ? BusinessKnowledgeProfileService.getProfile(orgId) : null;
 
-  const orgName = context?.layer1?.companyName?.value || profile?.companyName?.value || wk?.title || context?.organizationName || 'Ras Ali Labs';
+  const isRasAli = (orgId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf') || (orgId === 'ras-ali-labs');
+  const orgName = context?.layer1?.companyName?.value || profile?.companyName?.value || wk?.title || context?.organizationName || (isRasAli ? 'Ras Ali Labs' : 'Your Business');
   const isPersonalProfile = Boolean(context?.isPersonalSocialProfile);
   const isSocialConnected = Boolean(!isPersonalProfile && context?.layer2?.social?.isConnected);
   const pageName = isSocialConnected ? (context?.layer2?.social?.connectedPageName?.value || 'Connected Facebook Page') : '';
 
-  const productsList = context?.layer1?.productsAndServices?.value || profile?.products?.value || [
+  const productsList = context?.layer1?.productsAndServices?.value || profile?.products?.value || (isRasAli ? [
     { name: 'Ralion OS Core', category: 'Enterprise Operating System' },
     { name: 'Mari AI Command Center', category: 'Autonomous Business Partner' },
     { name: 'Growth Studio & Creative Engine', category: 'Marketing & Media Automation' },
-  ];
+  ] : [
+    { name: 'Core Offerings', category: 'Products & Services' },
+  ]);
 
-  const industry = profile?.industry?.value || context?.layer1?.industry?.value || 'Enterprise Artificial Intelligence & Automation';
-  const targetMarket = profile?.targetMarkets?.value?.[0] || context?.layer1?.targetMarket?.value || 'Founders, Executives, and Commercial Growth Teams';
-  const valueProp = profile?.valuePropositions?.value?.[0] || context?.layer1?.valueProposition?.value || 'Autonomous enterprise intelligence, multi-channel growth systems, and sovereign operations.';
-  const websiteUrl = wk?.websiteUrl || profile?.websiteUrl?.value || context?.layer1?.websiteUrl?.value || 'https://www.rasalilabs.com';
+  const industry = profile?.industry?.value || context?.layer1?.industry?.value || (isRasAli ? 'Enterprise Artificial Intelligence & Automation' : 'Commercial Enterprise');
+  const targetMarket = profile?.targetMarkets?.value?.[0] || context?.layer1?.targetMarket?.value || (isRasAli ? 'Founders, Executives, and Commercial Growth Teams' : 'Commercial Clients & Partners');
+  const valueProp = profile?.valuePropositions?.value?.[0] || context?.layer1?.valueProposition?.value || (isRasAli ? 'Autonomous enterprise intelligence, multi-channel growth systems, and sovereign operations.' : 'Quality commercial service delivery and verified client fulfillment.');
+  const websiteUrl = wk?.websiteUrl || profile?.websiteUrl?.value || context?.layer1?.websiteUrl?.value || (isRasAli ? 'https://www.rasalilabs.com' : '');
 
   const pipelineVal = context?.layer2?.crm?.totalPipelineValue?.value || 0;
   const activeClients = context?.layer2?.crm?.activeCustomersCount?.value || 0;

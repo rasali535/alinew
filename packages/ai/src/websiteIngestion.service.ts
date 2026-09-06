@@ -172,7 +172,7 @@ const RAS_ALI_LABS_VERIFIED_WEBSITE: IngestedWebsiteKnowledge = {
 };
 
 // Durable storage key prefix
-const STORAGE_PREFIX = 'ralion_wk_';
+const STORAGE_PREFIX = 'ralion:';
 
 export class WebsiteIngestionService {
   /**
@@ -183,13 +183,13 @@ export class WebsiteIngestionService {
 
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
-        // Direct org key only - never scan arbitrary keys from other organizations
-        const raw = window.localStorage.getItem(`${STORAGE_PREFIX}${orgId}`);
+        // Direct org key only - check both namespaced and legacy key
+        const raw = window.localStorage.getItem(`ralion:${orgId}:website`) || window.localStorage.getItem(`ralion_wk_${orgId}`);
         if (raw) {
           const parsed = JSON.parse(raw);
           if (
             parsed &&
-            (parsed.organizationId === orgId || parsed.workspaceId === orgId || orgId === 'ras-ali-labs') &&
+            (parsed.organizationId === orgId || parsed.workspaceId === orgId) &&
             (parsed.status === 'INGESTED' || parsed.provenance === 'VERIFIED' || parsed.websiteUrl)
           ) {
             websiteStore[orgId] = parsed;
@@ -210,7 +210,7 @@ export class WebsiteIngestionService {
 
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
-        window.localStorage.setItem(`${STORAGE_PREFIX}${orgId}`, JSON.stringify(record));
+        window.localStorage.setItem(`ralion:${orgId}:website`, JSON.stringify(record));
       } catch {}
     }
   }
@@ -240,10 +240,13 @@ export class WebsiteIngestionService {
       return durable;
     }
 
-    // Strict check: Only 'ras-ali-labs' gets the default Ras Ali Labs profile
-    if (orgId === 'ras-ali-labs') {
-      websiteStore['ras-ali-labs'] = { ...RAS_ALI_LABS_VERIFIED_WEBSITE };
-      return websiteStore['ras-ali-labs'];
+    // Strict check: Only the canonical Platform Admin UUID gets the default Ras Ali Labs profile
+    if (orgId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf') {
+      websiteStore['22e61ff6-16fe-44c7-9d67-38e2a2e91ccf'] = {
+        ...RAS_ALI_LABS_VERIFIED_WEBSITE,
+        organizationId: '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf',
+      };
+      return websiteStore['22e61ff6-16fe-44c7-9d67-38e2a2e91ccf'];
     }
 
     return null;

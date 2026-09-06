@@ -428,7 +428,7 @@ Rules:
     title: '',
     body: '',
     platform: 'facebook',
-    hashtags: '#RalionOS #RasAliLabs #EnterpriseAI',
+    hashtags: '#RalionOS #EnterpriseAI',
     scheduledAt: '',
   });
 
@@ -1858,7 +1858,7 @@ Rules:
       title: item.title,
       body: isMedia ? item.prompt : item.output,
       platform: 'facebook',
-      hashtags: ['#RalionOS', '#RasAliLabs', '#EnterpriseAI'],
+      hashtags: ['#RalionOS', '#EnterpriseAI'],
       status: 'draft',
       mediaUrl: isMedia ? item.output : undefined,
       mediaType: item.type === 'VIDEO_REEL' ? 'video' : item.type === 'POSTER_IMAGE' ? 'image' : undefined,
@@ -5948,7 +5948,7 @@ Rules:
               type="text" 
               value={newPost.hashtags} 
               onChange={e => setNewPost({ ...newPost, hashtags: e.target.value })} 
-              placeholder="#RalionOS #RasAliLabs #EnterpriseAI" 
+              placeholder="#RalionOS #EnterpriseAI" 
               className="w-full mt-1 px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white focus:outline-none font-mono text-indigo-400" 
             />
           </div>
@@ -6075,7 +6075,7 @@ Rules:
                     title: '',
                     body: '',
                     platform: 'facebook',
-                    hashtags: '#RalionOS #RasAliLabs #EnterpriseAI',
+                    hashtags: '#RalionOS #EnterpriseAI',
                     scheduledAt: '',
                     mediaUrl: undefined,
                     mediaType: undefined,

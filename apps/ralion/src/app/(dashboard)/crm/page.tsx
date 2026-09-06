@@ -19,6 +19,7 @@ const DEAL_STAGE_PROBABILITIES: Record<string, number> = {
 
 
 import { createClient } from '@/lib/supabase/client';
+import { useOrganization } from '@ralion/auth';
 
 interface ContactItem {
   id: string;
@@ -35,6 +36,8 @@ interface ContactItem {
 }
 
 export default function CRMPage() {
+  const { organization } = useOrganization();
+  const activeOrgId = organization?.id || '';
   const [contacts, setContacts] = useState<ContactItem[]>([]);
   const [activeTab, setActiveTab] = useState<'PIPELINE' | 'CONTACTS'>('PIPELINE');
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
@@ -69,7 +72,8 @@ export default function CRMPage() {
         }));
         setContacts(mapped);
       } else {
-        const local = typeof window !== 'undefined' ? localStorage.getItem('ralion_contacts') : null;
+        const key = activeOrgId ? `ralion:${activeOrgId}:contacts` : 'ralion_contacts';
+        const local = typeof window !== 'undefined' ? localStorage.getItem(key) : null;
         if (local) {
           setContacts(JSON.parse(local));
         } else {
@@ -78,7 +82,8 @@ export default function CRMPage() {
       }
     } catch (e) {
       console.warn('Checking local storage for contacts:', e);
-      const local = typeof window !== 'undefined' ? localStorage.getItem('ralion_contacts') : null;
+      const key = activeOrgId ? `ralion:${activeOrgId}:contacts` : 'ralion_contacts';
+      const local = typeof window !== 'undefined' ? localStorage.getItem(key) : null;
       if (local) setContacts(JSON.parse(local));
     } finally {
       setIsLoading(false);
@@ -87,7 +92,7 @@ export default function CRMPage() {
 
   React.useEffect(() => {
     loadContacts();
-  }, []);
+  }, [activeOrgId]);
 
   const pipelineStages: DealStage[] = ['LEAD', 'CONTACTED', 'QUALIFIED', 'PROPOSAL', 'NEGOTIATION', 'WON'];
 
@@ -112,7 +117,8 @@ export default function CRMPage() {
     const nextList = [created, ...contacts];
     setContacts(nextList);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('ralion_contacts', JSON.stringify(nextList));
+      const key = activeOrgId ? `ralion:${activeOrgId}:contacts` : 'ralion_contacts';
+      localStorage.setItem(key, JSON.stringify(nextList));
     }
 
     try {

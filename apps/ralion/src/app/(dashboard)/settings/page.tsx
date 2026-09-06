@@ -10,9 +10,9 @@ import { useOrganization } from '@ralion/auth';
 import Link from 'next/link';
 
 export default function SettingsPage() {
-  const { organization } = useOrganization();
-  const activeOrgId = organization?.id || organization?.slug || 'ras-ali-labs';
-  const isRasAli = activeOrgId === 'ras-ali-labs';
+  const { organization, isLoading } = useOrganization();
+  const activeOrgId = organization?.id || '';
+  const isRasAli = activeOrgId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf';
 
   const [enabledPlugins, setEnabledPlugins] = useState<string[]>(['health', 'funeral', 'logistics', 'trade']);
   const [activeTab, setActiveTab] = useState<'KNOWLEDGE' | 'PLUGINS' | 'ROLES' | 'BRANCHES' | 'SECURITY'>('KNOWLEDGE');
@@ -20,7 +20,7 @@ export default function SettingsPage() {
   const [deviceId, setDeviceId] = useState('RALION-HW-HASH-2026-BW-882109');
   const [isSyncingWebsite, setIsSyncingWebsite] = useState(false);
   const [websiteSyncSuccess, setWebsiteSyncSuccess] = useState<string | null>(null);
-  const [wkKnowledge, setWkKnowledge] = useState<any>(() => WebsiteIngestionService.getWebsiteKnowledge(activeOrgId));
+  const [wkKnowledge, setWkKnowledge] = useState<any>(null);
   const [offlineStatus, setOfflineStatus] = useState({
     isOffline: false,
     offlineGraceDaysRemaining: 7,
@@ -29,6 +29,10 @@ export default function SettingsPage() {
   });
 
   const loadTenantWk = async () => {
+    if (!activeOrgId) {
+      setWkKnowledge(null);
+      return;
+    }
     try {
       const apiUrl = getRalionApiUrl(`/api/mari/knowledge/website-sync?organizationId=${encodeURIComponent(activeOrgId)}`);
       const res = await fetch(apiUrl);
@@ -45,15 +49,24 @@ export default function SettingsPage() {
   };
 
   useEffect(() => {
-    loadTenantWk();
+    if (activeOrgId) {
+      loadTenantWk();
+    } else {
+      setWkKnowledge(null);
+    }
   }, [activeOrgId]);
 
   const handleSyncWebsite = async () => {
+    if (!activeOrgId) return;
     setIsSyncingWebsite(true);
     setWebsiteSyncSuccess(null);
     try {
       const orgId = activeOrgId;
-      const url = wkKnowledge?.websiteUrl || (isRasAli ? 'https://www.rasalilabs.com' : 'https://example.com');
+      const url = wkKnowledge?.websiteUrl || (isRasAli ? 'https://www.rasalilabs.com' : '');
+      if (!url) {
+        setWebsiteSyncSuccess('Please provide a website URL to ingest.');
+        return;
+      }
       let success = false;
 
       try {
@@ -107,6 +120,16 @@ export default function SettingsPage() {
     );
   };
 
+  if (isLoading || !activeOrgId) {
+    return (
+      <div className="flex flex-col gap-6 max-w-7xl mx-auto p-6 animate-pulse">
+        <div className="h-8 bg-zinc-800 rounded w-1/3 mb-2" />
+        <div className="h-4 bg-zinc-800/60 rounded w-1/2 mb-6" />
+        <div className="h-48 bg-zinc-900 border border-zinc-800 rounded-xl" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between border-b border-zinc-800/80 pb-5">
@@ -116,7 +139,7 @@ export default function SettingsPage() {
             <Badge variant="primary">Mari Knowledge Active</Badge>
           </div>
           <p className="text-xs text-zinc-400 mt-1">
-            Ras Ali Labs multi-tenant governance, verified business knowledge sources, industry plugins, and desktop security.
+            Enterprise multi-tenant governance, verified business knowledge sources, industry plugins, and desktop security.
           </p>
         </div>
 
@@ -202,9 +225,9 @@ export default function SettingsPage() {
           {/* Sources Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
-              { title: 'Company Identity & Registration', layer: 'Layer 1', provenance: 'VERIFIED', status: 'Live', icon: Building2, desc: 'Official registered profile for Ras Ali Labs (Pty) Ltd.' },
-              { title: 'Products & Solutions Catalog', layer: 'Layer 1', provenance: 'VERIFIED', status: 'Live', icon: Database, desc: 'Ralion OS Core, Mari AI, Growth Studio, Vertical Industry OS.' },
-              { title: 'Brand Guidelines & Tone of Voice', layer: 'Layer 1', provenance: 'USER_PROVIDED', status: 'Active', icon: BookOpen, desc: 'African excellence, authoritative, professional.' },
+              { title: 'Company Identity & Registration', layer: 'Layer 1', provenance: 'VERIFIED', status: 'Live', icon: Building2, desc: `Official registered profile for ${organization?.name || 'Organization'}.` },
+              { title: 'Products & Solutions Catalog', layer: 'Layer 1', provenance: 'VERIFIED', status: 'Live', icon: Database, desc: 'Commercial products, solutions catalog, and service definitions.' },
+              { title: 'Brand Guidelines & Tone of Voice', layer: 'Layer 1', provenance: 'USER_PROVIDED', status: 'Active', icon: BookOpen, desc: 'Brand identity, tone of voice, and public positioning.' },
               { title: 'CRM Portfolio Ledger', layer: 'Layer 2', provenance: 'VERIFIED', status: 'Connected', icon: Activity, desc: 'Live customer directory, pipeline values, deal stages.' },
               { title: 'Meta Graph API (Facebook Page)', layer: 'Layer 2', provenance: 'VERIFIED', status: 'Connected', icon: Globe, desc: 'Live followers, reach velocity, engagement metrics.' },
               { title: 'Mari Growth Memory', layer: 'Layer 3', provenance: 'VERIFIED', status: 'Active', icon: Sparkles, desc: 'Accepted recommendations, measured outcomes, and learnings.' },

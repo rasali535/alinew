@@ -38,9 +38,12 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, CartesianGrid } from 'recharts';
+import { useOrganization } from '@ralion/auth';
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { organization } = useOrganization();
+  const activeOrgId = organization?.id || '';
   const [viewMode, setViewMode] = useState<DashboardViewMode>('CEO');
   const [userTier, setUserTier] = useState<string>('COMMUNITY');
   const [mariInsight, setMariInsight] = useState('Mari AI Command Center is active. Add operational leads, tasks, or social channels to receive real-time strategic recommendations.');
@@ -59,12 +62,12 @@ export default function DashboardPage() {
 
   // Task Form State
   const [taskTitle, setTaskTitle] = useState('');
-  const [taskPriority, setTaskPriority] = useState<'LOW' | 'MEDIUM' | 'HIGH'>('MEDIUM');
+  const [taskPriority, setTaskPriority] = useState<'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'>('MEDIUM');
   const [taskDueDate, setTaskDueDate] = useState('');
 
   // Document Form State
   const [docName, setDocName] = useState('');
-  const [docCategory, setDocCategory] = useState('CONTRACT');
+  const [docCategory, setDocCategory] = useState<string>('CONTRACT');
   const [isUploading, setIsUploading] = useState(false);
 
   // Dynamic Metrics State
@@ -77,17 +80,17 @@ export default function DashboardPage() {
     if (typeof window === 'undefined') return;
 
     // 1. Contacts & CRM
-    const savedContacts = localStorage.getItem('ralion_contacts');
+    const savedContacts = localStorage.getItem(`ralion:${activeOrgId}:contacts`) || (activeOrgId ? null : localStorage.getItem('ralion_contacts'));
     const contactsList = savedContacts ? JSON.parse(savedContacts) : [];
     setContacts(contactsList);
 
     // 2. Tasks
-    const savedTasks = localStorage.getItem('ralion_tasks');
+    const savedTasks = localStorage.getItem(`ralion:${activeOrgId}:tasks`) || (activeOrgId ? null : localStorage.getItem('ralion_tasks'));
     const tasksList = savedTasks ? JSON.parse(savedTasks) : [];
     setTasks(tasksList);
 
     // 3. Documents
-    const savedDocs = localStorage.getItem('ralion_documents');
+    const savedDocs = localStorage.getItem(`ralion:${activeOrgId}:documents`) || (activeOrgId ? null : localStorage.getItem('ralion_documents'));
     const docsList = savedDocs ? JSON.parse(savedDocs) : [];
     setDocuments(docsList);
   };
@@ -106,7 +109,7 @@ export default function DashboardPage() {
     });
 
     refreshDashboardData();
-  }, []);
+  }, [activeOrgId]);
 
   // Compute live KPIs strictly from real records
   const totalRevenue = useMemo(() => {
@@ -162,7 +165,8 @@ export default function DashboardPage() {
     const updated = [newContact, ...contacts];
     setContacts(updated);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('ralion_contacts', JSON.stringify(updated));
+      const key = activeOrgId ? `ralion:${activeOrgId}:contacts` : 'ralion_contacts';
+      localStorage.setItem(key, JSON.stringify(updated));
     }
 
     setCustomerName('');
@@ -189,7 +193,8 @@ export default function DashboardPage() {
     const updated = [newTask, ...tasks];
     setTasks(updated);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('ralion_tasks', JSON.stringify(updated));
+      const key = activeOrgId ? `ralion:${activeOrgId}:tasks` : 'ralion_tasks';
+      localStorage.setItem(key, JSON.stringify(updated));
     }
 
     setTaskTitle('');
@@ -207,7 +212,8 @@ export default function DashboardPage() {
     });
     setTasks(updated);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('ralion_tasks', JSON.stringify(updated));
+      const key = activeOrgId ? `ralion:${activeOrgId}:tasks` : 'ralion_tasks';
+      localStorage.setItem(key, JSON.stringify(updated));
     }
   };
 
@@ -229,7 +235,8 @@ export default function DashboardPage() {
       const updated = [newDoc, ...documents];
       setDocuments(updated);
       if (typeof window !== 'undefined') {
-        localStorage.setItem('ralion_documents', JSON.stringify(updated));
+        const key = activeOrgId ? `ralion:${activeOrgId}:documents` : 'ralion_documents';
+        localStorage.setItem(key, JSON.stringify(updated));
       }
 
       setDocName('');

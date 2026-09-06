@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, Button, Badg
 import { Users, Plus, Search, Filter, Mail, Phone, MapPin, Clock, FileText, ChevronRight, X, Sparkles, Building } from 'lucide-react';
 
 import { createClient } from '@/lib/supabase/client';
+import { useOrganization } from '@ralion/auth';
 
 interface CustomerProfile {
   id: string;
@@ -20,6 +21,8 @@ interface CustomerProfile {
 }
 
 export default function CustomersPage() {
+  const { organization } = useOrganization();
+  const activeOrgId = organization?.id || '';
   const [customers, setCustomers] = useState<CustomerProfile[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerProfile | null>(null);
@@ -63,7 +66,8 @@ export default function CustomersPage() {
         }));
         setCustomers(mapped);
       } else {
-        const local = typeof window !== 'undefined' ? localStorage.getItem('ralion_customers_list') : null;
+        const key = activeOrgId ? `ralion:${activeOrgId}:customers_list` : 'ralion_customers_list';
+        const local = typeof window !== 'undefined' ? localStorage.getItem(key) : null;
         if (local) {
           setCustomers(JSON.parse(local));
         } else {
@@ -72,7 +76,8 @@ export default function CustomersPage() {
       }
     } catch (e) {
       console.warn('Could not fetch from remote table, checking local storage:', e);
-      const local = typeof window !== 'undefined' ? localStorage.getItem('ralion_customers_list') : null;
+      const key = activeOrgId ? `ralion:${activeOrgId}:customers_list` : 'ralion_customers_list';
+      const local = typeof window !== 'undefined' ? localStorage.getItem(key) : null;
       if (local) setCustomers(JSON.parse(local));
     } finally {
       setIsLoading(false);
@@ -81,7 +86,7 @@ export default function CustomersPage() {
 
   React.useEffect(() => {
     loadCustomers();
-  }, []);
+  }, [activeOrgId]);
 
   const filteredCustomers = customers.filter(c =>
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -110,7 +115,8 @@ export default function CustomersPage() {
     const nextList = [created, ...customers];
     setCustomers(nextList);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('ralion_customers_list', JSON.stringify(nextList));
+      const key = activeOrgId ? `ralion:${activeOrgId}:customers_list` : 'ralion_customers_list';
+      localStorage.setItem(key, JSON.stringify(nextList));
     }
 
     try {

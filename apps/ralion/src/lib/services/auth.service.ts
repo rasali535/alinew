@@ -393,9 +393,9 @@ export class AuthService {
         ];
         keysToRemove.forEach((k) => localStorage.removeItem(k));
 
-        // Clear dynamic keys with ralion_ or sb- prefix
+        // Clear dynamic keys with ralion:, ralion_, or sb- prefix
         Object.keys(localStorage).forEach((key) => {
-          if (key.startsWith('ralion_') || key.startsWith('sb-')) {
+          if (key.startsWith('ralion:') || key.startsWith('ralion_') || key.startsWith('sb-') || key.includes('auth') || key.includes('tenant')) {
             localStorage.removeItem(key);
           }
         });

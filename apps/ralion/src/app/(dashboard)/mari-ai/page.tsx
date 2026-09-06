@@ -135,30 +135,32 @@ export default function MariAiPage() {
       let savedFbPage: any = null;
 
       if (typeof window !== 'undefined') {
-        const rawC = localStorage.getItem('ralion_contacts');
+        const rawC = localStorage.getItem(`ralion:${activeOrgId}:contacts`) || localStorage.getItem('ralion_contacts');
         if (rawC) savedContacts = JSON.parse(rawC);
 
-        const rawT = localStorage.getItem('ralion_tasks');
+        const rawT = localStorage.getItem(`ralion:${activeOrgId}:tasks`) || localStorage.getItem('ralion_tasks');
         if (rawT) savedTasks = JSON.parse(rawT);
 
-        const rawD = localStorage.getItem('ralion_documents');
+        const rawD = localStorage.getItem(`ralion:${activeOrgId}:documents`) || localStorage.getItem('ralion_documents');
         if (rawD) savedDocs = JSON.parse(rawD);
 
-        const rawP = localStorage.getItem('ralion_selected_fb_page');
+        const rawP = localStorage.getItem(`ralion:${activeOrgId}:selected_fb_page`) || localStorage.getItem('ralion_selected_fb_page');
         if (rawP) savedFbPage = JSON.parse(rawP);
       }
 
       // Hydrate website knowledge from API / durable storage
-      try {
-        const apiUrl = getRalionApiUrl(`/api/mari/knowledge/website-sync?organizationId=${encodeURIComponent(activeOrgId)}`);
-        const syncRes = await fetch(apiUrl);
-        if (syncRes.ok) {
-          const syncData = await syncRes.json();
-          if (syncData.success && syncData.websiteKnowledge) {
-            WebsiteIngestionService.setIngestionState(activeOrgId, syncData.status || 'INGESTED', syncData.websiteKnowledge);
+      if (activeOrgId) {
+        try {
+          const apiUrl = getRalionApiUrl(`/api/mari/knowledge/website-sync?organizationId=${encodeURIComponent(activeOrgId)}`);
+          const syncRes = await fetch(apiUrl);
+          if (syncRes.ok) {
+            const syncData = await syncRes.json();
+            if (syncData.success && syncData.websiteKnowledge) {
+              WebsiteIngestionService.setIngestionState(activeOrgId, syncData.status || 'INGESTED', syncData.websiteKnowledge);
+            }
           }
-        }
-      } catch {}
+        } catch {}
+      }
 
       const context = await BusinessContextService.assembleContext(activeOrgId, {
         activeScreen: { route: '/mari-ai', label: 'Mari Business Growth Partner' },
@@ -186,10 +188,11 @@ export default function MariAiPage() {
       // Check if returning from a completed Growth/Social action
       let returnGreetingAdded = false;
       if (typeof window !== 'undefined') {
-        const lastActionRaw = localStorage.getItem('ralion_last_action_result');
+        const lastActionRaw = localStorage.getItem(`ralion:${activeOrgId}:last_action_result`) || localStorage.getItem('ralion_last_action_result');
         if (lastActionRaw) {
           try {
             const lastAction = JSON.parse(lastActionRaw);
+            localStorage.removeItem(`ralion:${activeOrgId}:last_action_result`);
             localStorage.removeItem('ralion_last_action_result');
             setMessages([
               {
@@ -535,8 +538,12 @@ export default function MariAiPage() {
     setIsSyncingWebsite(true);
     setWebsiteSyncSuccess(null);
     try {
-      const orgId = businessContext?.organizationId || activeOrgId || 'org_default';
-      const url = businessContext?.layer1.websiteUrl?.value || 'https://www.rasalilabs.com';
+      const orgId = businessContext?.organizationId || activeOrgId || '';
+      const url = businessContext?.layer1.websiteUrl?.value || (orgId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf' ? 'https://www.rasalilabs.com' : '');
+      if (!url) {
+        setWebsiteSyncSuccess('No website URL configured for this organization.');
+        return;
+      }
       let success = false;
 
       try {
