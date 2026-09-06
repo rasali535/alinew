@@ -165,11 +165,14 @@ function getMariApiEndpoint(path: string): string {
       return `http://localhost:6509${normalizedPath}`;
     }
     // Web / production dynamic backend
-    return `https://ralion-dynamic-backend.onrender.com${normalizedPath}`;
+    if (hostname.includes('rasalilabs.com')) {
+      return `${window.location.origin}/ralion${normalizedPath}`;
+    }
+    return `https://rasalilabs.com/ralion${normalizedPath}`;
   }
 
   if (process.env.NODE_ENV === 'production') {
-    return `https://ralion-dynamic-backend.onrender.com${normalizedPath}`;
+    return `https://rasalilabs.com/ralion${normalizedPath}`;
   }
 
   return `http://localhost:6509${normalizedPath}`;

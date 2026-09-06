@@ -122,6 +122,10 @@ const nextConfig = {
               source: '/ralion/api/:path*',
               destination: '/api/:path*',
             },
+            {
+              source: '/ralion/:path*',
+              destination: '/:path*',
+            },
           ];
         },
       }

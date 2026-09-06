@@ -10,7 +10,11 @@ import { AuthService } from '@/lib/services/auth.service';
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTarget = searchParams.get('redirect') || '/ralion/dashboard';
+  const rawRedirect = searchParams.get('redirect');
+  let redirectTarget = '/ralion/dashboard';
+  if (rawRedirect && !rawRedirect.includes('onrender.com') && !rawRedirect.endsWith('/login')) {
+    redirectTarget = rawRedirect;
+  }
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);

@@ -12,6 +12,30 @@ interface ProductAccessGuardProps {
 
 type GuardState = 'loading' | 'authenticated' | 'unauthenticated' | 'unauthorized' | 'no_workspace' | 'error';
 
+function getCanonicalLoginUrl(currentHref?: string): string {
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    const isLocalhost =
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      window.location.protocol === 'file:';
+
+    if (isLocalhost) {
+      const port = window.location.port;
+      const base = port === '3000' ? '/login' : '/ralion/login';
+      const redirectParam = currentHref ? `?redirect=${encodeURIComponent(currentHref)}` : '';
+      return `${base}${redirectParam}`;
+    }
+  }
+
+  // Canonical production platform URL — ensure we never redirect to onrender.com
+  let targetHref = currentHref;
+  if (!targetHref || targetHref.includes('onrender.com') || targetHref.endsWith('/login')) {
+    targetHref = 'https://rasalilabs.com/ralion/dashboard';
+  }
+  return `https://rasalilabs.com/ralion/login?redirect=${encodeURIComponent(targetHref)}`;
+}
+
 export const ProductAccessGuard: React.FC<ProductAccessGuardProps> = ({ children }) => {
   const [guardState, setGuardState] = useState<GuardState>('loading');
   const [access, setAccess] = useState<ProductAccessResult | null>(null);
@@ -66,11 +90,11 @@ export const ProductAccessGuard: React.FC<ProductAccessGuardProps> = ({ children
           setAccess({ hasAccess: true, edition: isDesktop ? 'desktop_enterprise' : 'community', status: 'active' });
           setGuardState('authenticated');
         } else {
-          // Remote unauthenticated user: Trigger redirect to /ralion/login and show sign-in prompt
+          // Remote unauthenticated user: Trigger redirect to canonical login and show sign-in prompt
           setGuardState('unauthenticated');
           if (typeof window !== 'undefined') {
             const currentHref = window.location.href;
-            const loginUrl = `/ralion/login?redirect=${encodeURIComponent(currentHref)}`;
+            const loginUrl = getCanonicalLoginUrl(currentHref);
             try {
               window.location.href = loginUrl;
             } catch {
@@ -159,7 +183,7 @@ export const ProductAccessGuard: React.FC<ProductAccessGuardProps> = ({ children
               className="w-full justify-center bg-gradient-to-r from-blue-600 to-purple-600 font-bold"
               onClick={() => {
                 const currentHref = typeof window !== 'undefined' ? window.location.href : '/ralion/dashboard';
-                window.location.href = `/ralion/login?redirect=${encodeURIComponent(currentHref)}`;
+                window.location.href = getCanonicalLoginUrl(currentHref);
               }}
             >
               <LogIn className="w-4 h-4 mr-2" /> Sign In to Workspace <ArrowRight className="w-4 h-4 ml-1" />
@@ -285,7 +309,7 @@ export const ProductAccessGuard: React.FC<ProductAccessGuardProps> = ({ children
               className="w-full justify-center border-zinc-800 bg-zinc-950 hover:bg-zinc-900"
               onClick={() => {
                 const currentHref = typeof window !== 'undefined' ? window.location.href : '/ralion/dashboard';
-                window.location.href = `/ralion/login?redirect=${encodeURIComponent(currentHref)}`;
+                window.location.href = getCanonicalLoginUrl(currentHref);
               }}
             >
               <LogIn className="w-4 h-4 mr-2" /> Go to Sign In
