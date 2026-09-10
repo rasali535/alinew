@@ -9,6 +9,23 @@ export async function OPTIONS(request: NextRequest) {
   return handleCorsPreflight(request);
 }
 
+function normalizeWebsiteUrl(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  const candidate = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    if (!parsed.hostname || parsed.username || parsed.password) return null;
+    parsed.hash = '';
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
 /**
  * GET /api/mari/knowledge/website-sync
  * Retrieves the current tenant's website ingestion status and knowledge profile.
@@ -27,33 +44,31 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    let canonicalOrgId = serverCtx.organization?.id || serverCtx.workspace.organization_id || serverCtx.workspace.id;
-    {
-      if (requestedOrgId && requestedOrgId !== canonicalOrgId && requestedOrgId !== serverCtx.workspace.id) {
-        return corsJsonResponse(
-          { success: false, code: 'TENANT_CONTEXT_MISMATCH', error: 'Forbidden: Cannot access another tenant context' },
-          { status: 403 },
-          request
-        );
-      }
+    const canonicalOrgId = serverCtx.organization.id;
+    if (requestedOrgId && requestedOrgId !== canonicalOrgId && requestedOrgId !== serverCtx.workspace.id) {
+      return corsJsonResponse(
+        { success: false, code: 'TENANT_CONTEXT_MISMATCH', error: 'Forbidden: Cannot access another tenant context' },
+        { status: 403 },
+        request
+      );
     }
 
-    const orgId = canonicalOrgId;
-    const knowledge = WebsiteIngestionService.getWebsiteKnowledge(orgId);
-    const status = WebsiteIngestionService.getIngestionStatus(orgId);
-    const profile = BusinessKnowledgeProfileService.getProfile(orgId);
+    const knowledge = WebsiteIngestionService.getWebsiteKnowledge(canonicalOrgId);
+    const status = WebsiteIngestionService.getIngestionStatus(canonicalOrgId);
+    const profile = BusinessKnowledgeProfileService.getProfile(canonicalOrgId);
 
     return corsJsonResponse({
       success: true,
       status,
-      organizationId: orgId,
+      organizationId: canonicalOrgId,
+      workspaceId: serverCtx.workspace.id,
       websiteUrl: knowledge?.websiteUrl || '',
       normalizedUrl: knowledge?.normalizedUrl || '',
       ingestedAt: knowledge?.ingestedAt || null,
       websiteKnowledge: knowledge,
       profile: profile ? {
         businessName: profile.companyName?.value || knowledge?.title,
-        industry: profile.industry?.value || 'Commercial Enterprise',
+        industry: profile.industry?.value || null,
         description: profile.description?.value || knowledge?.description,
         productsServices: knowledge?.productsServices || [],
         contactInfo: knowledge?.contactInformation,
@@ -86,42 +101,45 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let canonicalOrgId = serverCtx.organization?.id || serverCtx.workspace.organization_id || serverCtx.workspace.id;
-    {
-      if (requestedOrgId && requestedOrgId !== canonicalOrgId && requestedOrgId !== serverCtx.workspace.id) {
-        return corsJsonResponse(
-          { success: false, code: 'TENANT_CONTEXT_MISMATCH', error: 'Forbidden: Cannot access another tenant context' },
-          { status: 403 },
-          request
-        );
-      }
+    const canonicalOrgId = serverCtx.organization.id;
+    if (requestedOrgId && requestedOrgId !== canonicalOrgId && requestedOrgId !== serverCtx.workspace.id) {
+      return corsJsonResponse(
+        { success: false, code: 'TENANT_CONTEXT_MISMATCH', error: 'Forbidden: Cannot access another tenant context' },
+        { status: 403 },
+        request
+      );
     }
 
-    const orgId = canonicalOrgId;
-    const websiteUrl = body.websiteUrl || 'https://example.com';
+    const websiteUrl = normalizeWebsiteUrl(body.websiteUrl);
+    if (!websiteUrl) {
+      return corsJsonResponse(
+        { success: false, code: 'INVALID_WEBSITE_URL', error: 'Enter a valid public website URL.' },
+        { status: 400 },
+        request
+      );
+    }
 
-    const result = await WebsiteIngestionService.ingestWebsite(orgId, websiteUrl, {
+    const result = await WebsiteIngestionService.ingestWebsite(canonicalOrgId, websiteUrl, {
       customSections: body.customSections,
       overrideName: body.overrideName,
       overrideIndustry: body.overrideIndustry,
     });
 
-    // Invalidate cached business context so the next query uses updated knowledge
-    BusinessContextService.invalidateContext(orgId);
-
-    const profile = BusinessKnowledgeProfileService.getProfile(orgId);
+    BusinessContextService.invalidateContext(canonicalOrgId);
+    const profile = BusinessKnowledgeProfileService.getProfile(canonicalOrgId);
 
     return corsJsonResponse({
       success: true,
       status: result.status,
-      organizationId: orgId,
+      organizationId: canonicalOrgId,
+      workspaceId: serverCtx.workspace.id,
       websiteUrl: result.websiteUrl,
       normalizedUrl: result.normalizedUrl,
       ingestedAt: result.ingestedAt,
       message: `Website knowledge for ${result.websiteUrl} successfully ingested and verified into Layer 1 Business Knowledge.`,
       profile: {
         businessName: profile?.companyName?.value || result.title,
-        industry: profile?.industry?.value || 'Commercial Enterprise',
+        industry: profile?.industry?.value || null,
         description: profile?.description?.value || result.description,
         productsServices: result.productsServices,
         contactInfo: result.contactInformation,
