@@ -19,9 +19,7 @@ function requireSupabaseUrl(): string {
 
 export function getServiceSupabase() {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!serviceKey) {
-    throw new Error('[ServerAuth] SUPABASE_SERVICE_ROLE_KEY environment variable is required.');
-  }
+  if (!serviceKey) throw new Error('[ServerAuth] SUPABASE_SERVICE_ROLE_KEY environment variable is required.');
   return createClient(requireSupabaseUrl(), serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
   });
@@ -130,13 +128,13 @@ export async function getCurrentRalionContext(
       workspaceRow = requestedWorkspace;
       membershipRow = { id: `owner_${authUser.id}_${requestedWorkspace.id}`, workspace_id: requestedWorkspace.id, user_id: authUser.id, role: 'owner' };
     } else {
-      const { data: member, error: memberError } = await supabase
+      const { data: member, error } = await supabase
         .from('workspace_members')
         .select('id, workspace_id, user_id, role')
         .eq('workspace_id', requestedWorkspace.id)
         .eq('user_id', authUser.id)
         .maybeSingle();
-      if (memberError || !member) return null;
+      if (error || !member) return null;
       workspaceRow = requestedWorkspace;
       membershipRow = member;
     }
