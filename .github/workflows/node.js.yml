@@ -1,7 +1,4 @@
-# This workflow performs installation, security checks, build and tests.
-# NOTE: package-lock.json is currently out of sync with the workspace manifests.
-# Use npm install temporarily so security/build validation can continue; restore
-# npm ci once the lockfile is regenerated and committed deterministically.
+# This workflow performs deterministic installation, security checks, build and tests.
 
 name: Node.js CI
 
@@ -26,8 +23,8 @@ jobs:
       with:
         node-version: ${{ matrix.node-version }}
         cache: 'npm'
-    - name: Install dependencies (temporary lockfile-repair mode)
-      run: npm install --no-audit --no-fund
+    - name: Install dependencies
+      run: npm ci --no-audit --no-fund
     - name: Scan tracked source for privileged credentials
       run: npm run security:secrets
     - name: Verify Facebook tenant isolation invariants
