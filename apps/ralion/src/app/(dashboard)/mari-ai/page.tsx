@@ -87,7 +87,7 @@ interface ChatMessage {
 export default function MariAiPage() {
   const router = useRouter();
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { organization, user } = useOrganization();
+  const { organization, user, isLoading: isOrganizationLoading } = useOrganization();
 
   // Active view tab
   const [activeTab, setActiveTab] = useState<'GROWTH_PARTNER' | 'KNOWLEDGE' | 'ADMIN_INFRA'>('GROWTH_PARTNER');
@@ -122,10 +122,15 @@ export default function MariAiPage() {
   const [websiteSyncSuccess, setWebsiteSyncSuccess] = useState<string | null>(null);
   const [websiteInputUrl, setWebsiteInputUrl] = useState('');
 
-  const activeOrgId = organization?.id || organization?.slug || (user as any)?.id || (user as any)?.userId || 'unconfigured-tenant';
+  const activeOrgId = organization?.id || '';
+  const hasCanonicalTenant = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(activeOrgId);
 
   // Load Business Context, Growth Profile, and Briefing on Mount
   const loadGrowthIntelligence = async (forceRefresh = false) => {
+    if (!hasCanonicalTenant) {
+      setIsLoading(isOrganizationLoading);
+      return;
+    }
     setIsLoading(true);
     try {
       setDocumentsList(mariKnowledgeManager.getDocuments(activeOrgId));
@@ -152,7 +157,15 @@ export default function MariAiPage() {
       if (activeOrgId) {
         try {
           const apiUrl = getRalionApiUrl(`/api/mari/knowledge/website-sync?organizationId=${encodeURIComponent(activeOrgId)}`);
-          const syncRes = await fetch(apiUrl);
+          const authHeaders = await getRalionAuthHeaders();
+          const syncRes = await fetch(apiUrl, {
+            headers: {
+              ...authHeaders,
+              'x-organization-id': activeOrgId,
+              'x-workspace-id': activeOrgId,
+            },
+            credentials: 'include',
+          });
           if (syncRes.ok) {
             const syncData = await syncRes.json();
             if (syncData.success && syncData.websiteKnowledge) {
@@ -262,15 +275,17 @@ export default function MariAiPage() {
   };
 
   useEffect(() => {
+    if (isOrganizationLoading || !hasCanonicalTenant) return;
+
     import('@/lib/services/auth.service').then(({ AuthService }) => {
-      AuthService.getCurrentUser().then((user) => {
-        if (user?.fullName) setUserName(user.fullName);
-        if (user?.tier) setUserTier(user.tier.toUpperCase() as any);
+      AuthService.getCurrentUser().then((currentUser) => {
+        if (currentUser?.fullName) setUserName(currentUser.fullName);
+        if (currentUser?.tier) setUserTier(currentUser.tier.toUpperCase() as any);
       });
     });
 
     loadGrowthIntelligence();
-  }, []);
+  }, [isOrganizationLoading, activeOrgId]);
 
   // Scroll to bottom when messages update
   useEffect(() => {
@@ -406,9 +421,10 @@ export default function MariAiPage() {
 
       try {
         const authHeaders = await getRalionAuthHeaders();
-        const effectiveOrgId = (activeOrgId && activeOrgId !== 'unconfigured-tenant')
-          ? activeOrgId
-          : ((user as any)?.id || (user as any)?.userId || '');
+        if (!hasCanonicalTenant) {
+          throw new Error('Your organization workspace is still loading. Please retry in a moment.');
+        }
+        const effectiveOrgId = activeOrgId;
 
         const res = await fetch(apiUrl, {
           method: 'POST',
@@ -484,7 +500,7 @@ export default function MariAiPage() {
       console.log('[MARI_TELEMETRY]', {
         MARI_REQUEST_URL: apiUrl,
         MARI_HTTP_STATUS: httpStatus,
-        MARI_RESPONSE_ANSWER: answerText,
+        MARI_RESPONSE_HAS_ANSWER: Boolean(answerText),
         MARI_RESPONSE_SOURCE: responseSource,
         MARI_FALLBACK_USED: fallbackUsed,
         MARI_BUILD_VERSION: buildVersion,
@@ -539,7 +555,11 @@ export default function MariAiPage() {
     setWebsiteSyncSuccess(null);
     try {
       const orgId = businessContext?.organizationId || activeOrgId || '';
-      const url = businessContext?.layer1.websiteUrl?.value || (orgId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf' ? 'https://www.rasalilabs.com' : '');
+      if (!hasCanonicalTenant || !orgId) {
+        setWebsiteSyncSuccess('Organization workspace is not ready yet.');
+        return;
+      }
+      const url = businessContext?.layer1.websiteUrl?.value || '';
       if (!url) {
         setWebsiteSyncSuccess('No website URL configured for this organization.');
         return;
@@ -548,9 +568,16 @@ export default function MariAiPage() {
 
       try {
         const apiUrl = getRalionApiUrl('/api/mari/knowledge/website-sync');
+        const authHeaders = await getRalionAuthHeaders();
         const res = await fetch(apiUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeaders,
+            'x-organization-id': orgId,
+            'x-workspace-id': orgId,
+          },
+          credentials: 'include',
           body: JSON.stringify({
             organizationId: orgId,
             websiteUrl: url,
@@ -1252,15 +1279,26 @@ export default function MariAiPage() {
                       setIsSyncingWebsite(true);
                       setWebsiteSyncSuccess(null);
                       try {
-                        const targetOrgId = activeOrgId || 'org_default';
+                        if (!hasCanonicalTenant) {
+                          setWebsiteSyncSuccess('Organization workspace is not ready yet.');
+                          return;
+                        }
+                        const targetOrgId = activeOrgId;
                         const normalizedUrl = websiteInputUrl.trim();
                         let wkData: any = null;
 
                         try {
                           const apiUrl = getRalionApiUrl('/api/mari/knowledge/website-sync');
+                          const authHeaders = await getRalionAuthHeaders();
                           const res = await fetch(apiUrl, {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
+                            headers: {
+                              'Content-Type': 'application/json',
+                              ...authHeaders,
+                              'x-organization-id': targetOrgId,
+                              'x-workspace-id': targetOrgId,
+                            },
+                            credentials: 'include',
                             body: JSON.stringify({
                               organizationId: targetOrgId,
                               websiteUrl: normalizedUrl,

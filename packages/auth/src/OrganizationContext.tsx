@@ -35,10 +35,15 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       if (typeof window === 'undefined') return;
 
-      // 1. Try to read active user from Supabase auth token in localStorage
+      // 1. Resolve the active Supabase user from Ralion's canonical storage key first.
       let authUser: any = null;
       try {
-        for (let i = 0; i < localStorage.length; i++) {
+        const directSession = localStorage.getItem('ralion-app-auth-token');
+        if (directSession) {
+          const parsed = JSON.parse(directSession);
+          authUser = parsed?.user || parsed?.currentSession?.user || null;
+        }
+        for (let i = 0; !authUser && i < localStorage.length; i++) {
           const key = localStorage.key(i);
           if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
             const raw = localStorage.getItem(key);
