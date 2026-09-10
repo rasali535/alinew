@@ -14,8 +14,8 @@ This project is compatible with Supabase as the PostgreSQL backend. Follow these
 2. Find the **Connection string** section.
 3. Select **URI** (not Transaction Pooler for initial setup/migrations).
 4. Copy the URL. It should look like:
-   `postgresql://postgres.wctqmtwaoaugxlqkslhn:[PASSWORD]@aws-0-us-east-1.pooler.supabase.com:6543/postgres`
-5. Replace `[PASSWORD]` with your actual database password.
+   `postgresql://postgres.[PROJECT-REF]:[PASSWORD]@[HOST]:6543/postgres`
+5. Replace `[PASSWORD]` with your actual database password only in your secure runtime environment. Never commit it to Git.
 
 ## 3. Enable Extensions
 
@@ -30,10 +30,10 @@ You can enable extensions via the Supabase Dashboard:
 
 ## 4. Environment Variables
 
-Update your `.env` file (or Render Environment Variables) with the following:
+Set the connection string in your local/server environment only. Keep production credentials out of source control.
 
 ```env
-DATABASE_URL=postgresql://postgres.wctqmtwaoaugxlqkslhn:xOruveqI2UiOpBsX@aws-1-eu-west-1.pooler.supabase.com:6543/postgres
+DATABASE_URL=postgresql://postgres.[PROJECT-REF]:[PASSWORD]@[HOST]:6543/postgres
 DATABASE_SSL=true
 ```
 
@@ -43,9 +43,9 @@ DATABASE_SSL=true
 
 If you see this error in the Render logs:
 
-1. **Check Project ID**: Ensure `wctqmtwaoaugxlqkslhn` is correct in your `DATABASE_URL`.
-2. **Special Characters**: Nếu password của bạn có các ký tự đặc biệt như `@`, `#`, `:`, `/`, bạn **phải** mã hóa chúng (URL Encode). Ví dụ: `@` trở thành `%40`.
-3. **Use Transaction Pooler**: Ensure you are using the **Pooler URI** (Port 6543) and not the direct connection (Port 5432).
-4. **Project Status**: Verify your Supabase project is not "Paused".
+1. **Check Project ID**: Ensure the project reference in `DATABASE_URL` matches the intended Supabase project.
+2. **Special Characters**: If the password contains characters such as `@`, `#`, `:`, or `/`, URL-encode them before placing the value in the runtime secret store. For example, `@` becomes `%40`.
+3. **Use Transaction Pooler**: Ensure you are using the **Pooler URI** (Port 6543) and not the direct connection (Port 5432), when that is the deployment's configured connection mode.
+4. **Project Status**: Verify your Supabase project is not paused.
 
 *Note: For Render, ensure `DATABASE_SSL` is set to `true` to allow encrypted connections to Supabase.*

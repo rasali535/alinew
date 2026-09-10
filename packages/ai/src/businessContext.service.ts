@@ -221,10 +221,10 @@ export class BusinessContextService {
     const websiteKnowledge = options?.localOverrides?.websiteKnowledge || WebsiteIngestionService.getWebsiteKnowledge(cleanOrgId);
     let fbPage = options?.localOverrides?.fbPage;
 
-    // Tenant-isolated localStorage validation
+    // Tenant-isolated localStorage validation. Never read a global Facebook-page key.
     if (!fbPage && typeof window !== 'undefined' && window.localStorage) {
       try {
-        const rawP = window.localStorage.getItem('ralion_selected_fb_page');
+        const rawP = window.localStorage.getItem(`ralion:${cleanOrgId}:selected_fb_page`);
         if (rawP) {
           const parsedP = JSON.parse(rawP);
           // STRICT SECURITY: Only accept if explicitly tagged for this organization / workspace
@@ -239,8 +239,11 @@ export class BusinessContextService {
     } else if (!fbPage && typeof window === 'undefined') {
       try {
         const { createClient } = require('@supabase/supabase-js');
-        const sUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co';
-        const sKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpZHNmaWhhZ3d0dGxtaGZ5bm1mIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjgyMzk0NSwiZXhwIjoyMDk4Mzk5OTQ1fQ.mpparRo7a5t5B7uOlWBxiRI7NDsVGfmxkPUEbxSYBfA';
+        const sUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const sKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        if (!sUrl || !sKey) {
+          throw new Error('Supabase server credentials are not configured for Mari business context resolution.');
+        }
         const sClient = createClient(sUrl, sKey, { auth: { persistSession: false } });
 
         // Query strictly for this tenant UUID or canonical slug

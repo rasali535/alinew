@@ -15,26 +15,27 @@ export async function OPTIONS(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const serverCtx = await getCurrentRalionContext(request, { requireAuth: false });
+    const serverCtx = await getCurrentRalionContext(request, { requireAuth: true });
     const { searchParams } = new URL(request.url);
     const requestedOrgId = searchParams.get('organizationId') || request.headers.get('x-organization-id');
 
-    let canonicalOrgId = 'unconfigured-tenant';
-    if (serverCtx) {
-      canonicalOrgId = serverCtx.organization?.id || serverCtx.workspace.organization_id || serverCtx.workspace.id;
-      if (requestedOrgId && requestedOrgId !== canonicalOrgId && requestedOrgId !== serverCtx.workspace.id && requestedOrgId !== serverCtx.user.id) {
+    if (!serverCtx) {
+      return corsJsonResponse(
+        { success: false, code: 'AUTHENTICATION_REQUIRED', error: 'Authentication required' },
+        { status: 401 },
+        request
+      );
+    }
+
+    let canonicalOrgId = serverCtx.organization?.id || serverCtx.workspace.organization_id || serverCtx.workspace.id;
+    {
+      if (requestedOrgId && requestedOrgId !== canonicalOrgId && requestedOrgId !== serverCtx.workspace.id) {
         return corsJsonResponse(
           { success: false, code: 'TENANT_CONTEXT_MISMATCH', error: 'Forbidden: Cannot access another tenant context' },
           { status: 403 },
           request
         );
       }
-    } else if (requestedOrgId && requestedOrgId !== 'org_demo' && requestedOrgId !== 'default') {
-      return corsJsonResponse(
-        { success: false, code: 'AUTHENTICATION_REQUIRED', error: 'Authentication required' },
-        { status: 401 },
-        request
-      );
     }
 
     const orgId = canonicalOrgId;
@@ -73,26 +74,27 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const serverCtx = await getCurrentRalionContext(request, { requireAuth: false });
+    const serverCtx = await getCurrentRalionContext(request, { requireAuth: true });
     const body = await request.json().catch(() => ({}));
     const requestedOrgId = body.organizationId || request.headers.get('x-organization-id');
 
-    let canonicalOrgId = 'unconfigured-tenant';
-    if (serverCtx) {
-      canonicalOrgId = serverCtx.organization?.id || serverCtx.workspace.organization_id || serverCtx.workspace.id;
-      if (requestedOrgId && requestedOrgId !== canonicalOrgId && requestedOrgId !== serverCtx.workspace.id && requestedOrgId !== serverCtx.user.id) {
+    if (!serverCtx) {
+      return corsJsonResponse(
+        { success: false, code: 'AUTHENTICATION_REQUIRED', error: 'Authentication required' },
+        { status: 401 },
+        request
+      );
+    }
+
+    let canonicalOrgId = serverCtx.organization?.id || serverCtx.workspace.organization_id || serverCtx.workspace.id;
+    {
+      if (requestedOrgId && requestedOrgId !== canonicalOrgId && requestedOrgId !== serverCtx.workspace.id) {
         return corsJsonResponse(
           { success: false, code: 'TENANT_CONTEXT_MISMATCH', error: 'Forbidden: Cannot access another tenant context' },
           { status: 403 },
           request
         );
       }
-    } else if (requestedOrgId && requestedOrgId !== 'org_demo' && requestedOrgId !== 'default') {
-      return corsJsonResponse(
-        { success: false, code: 'AUTHENTICATION_REQUIRED', error: 'Authentication required' },
-        { status: 401 },
-        request
-      );
     }
 
     const orgId = canonicalOrgId;

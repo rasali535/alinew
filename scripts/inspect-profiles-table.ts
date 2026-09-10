@@ -1,18 +1,48 @@
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
+
 dotenv.config();
 
-const url = 'https://yidsfihagwttlmhfynmf.supabase.co';
-const key = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpZHNmaWhhZ3d0dGxtaGZ5bm1mIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjgyMzk0NSwiZXhwIjoyMDk4Mzk5OTQ1fQ.mpparRo7a5t5B7uOlWBxiRI7NDsVGfmxkPUEbxSYBfA';
-const supabase = createClient(url, key);
+const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!url) {
+  throw new Error('SUPABASE_URL is not configured.');
+}
+
+if (!key) {
+  throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured.');
+}
+
+const supabase = createClient(url, key, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false,
+  },
+});
 
 async function inspectProfiles() {
-  const { data: profs } = await supabase.from('profiles').select('*');
-  console.log('--- ALL SUPABASE PROFILES ---');
-  for (const p of profs || []) {
-    console.log(`User ID: ${p.id}, email: ${p.email}, full_name: ${p.full_name}, business_name: ${p.business_name}, company_name: ${p.company_name}, title: ${p.title}`);
-    console.log('Raw row:', JSON.stringify(p, null, 2));
+  const { data: profiles, error } = await supabase
+    .from('profiles')
+    .select('id, business_name, company_name, title');
+
+  if (error) {
+    throw new Error(`Unable to inspect profiles: ${error.message}`);
+  }
+
+  console.log('--- SUPABASE PROFILE SUMMARY ---');
+  for (const profile of profiles || []) {
+    console.log({
+      id: profile.id,
+      businessName: profile.business_name || null,
+      companyName: profile.company_name || null,
+      title: profile.title || null,
+    });
   }
 }
 
-inspectProfiles();
+inspectProfiles().catch((error) => {
+  console.error('[inspect-profiles-table] Failed:', error instanceof Error ? error.message : 'Unknown error');
+  process.exitCode = 1;
+});

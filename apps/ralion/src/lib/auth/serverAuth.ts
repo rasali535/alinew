@@ -2,31 +2,43 @@
  * Ralion OS — Authoritative Server-Side Auth & Workspace Context Resolver
  * Ras Ali Labs (Pty) Ltd
  *
- * Enforces strict multi-tenant isolation across all Ralion API routes.
- * Validates Supabase JWT, resolves user profile, checks workspace membership,
- * and ensures no tenant cross-leakage.
+ * Validates Supabase JWTs and derives tenant context from authenticated
+ * ownership or workspace membership. Client tenant headers are requests only;
+ * they never grant access by themselves.
  */
 
 import { NextRequest } from 'next/server';
 import { createClient, User } from '@supabase/supabase-js';
+import { corsJsonResponse } from '../cors';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co';
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+function requireSupabaseUrl(): string {
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!url) throw new Error('[ServerAuth] SUPABASE_URL is required.');
+  return url;
+}
 
 export function getServiceSupabase() {
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_SERVICE_ROLE_KEY;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceKey) {
-    throw new Error('[ServerAuth] Configuration error: SUPABASE_SERVICE_ROLE_KEY environment variable is required.');
+    throw new Error('[ServerAuth] SUPABASE_SERVICE_ROLE_KEY environment variable is required.');
   }
-  return createClient(SUPABASE_URL, serviceKey, {
+
+  return createClient(requireSupabaseUrl(), serviceKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
+      detectSessionInUrl: false,
     },
   });
 }
 
-import { corsJsonResponse } from '../cors';
+function canonicalUuid(raw?: string | null): string | null {
+  if (!raw) return null;
+  const value = raw.trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+    ? value
+    : null;
+}
 
 export interface RalionUserProfile {
   id: string;
@@ -68,11 +80,7 @@ export interface RalionSessionContext {
 
 export function authRequiredResponse(request: NextRequest) {
   return corsJsonResponse(
-    {
-      success: false,
-      error: 'AUTHENTICATION_REQUIRED',
-      message: 'Authentication required',
-    },
+    { success: false, error: 'AUTHENTICATION_REQUIRED', message: 'Authentication required' },
     { status: 401 },
     request
   );
@@ -80,11 +88,7 @@ export function authRequiredResponse(request: NextRequest) {
 
 export function forbiddenResponse(request: NextRequest, message = 'You do not have access to this resource') {
   return corsJsonResponse(
-    {
-      success: false,
-      error: 'FORBIDDEN',
-      message,
-    },
+    { success: false, error: 'FORBIDDEN', message },
     { status: 403 },
     request
   );
@@ -92,26 +96,16 @@ export function forbiddenResponse(request: NextRequest, message = 'You do not ha
 
 export function notFoundResponse(request: NextRequest, message = 'Resource not found') {
   return corsJsonResponse(
-    {
-      success: false,
-      error: 'NOT_FOUND',
-      message,
-    },
+    { success: false, error: 'NOT_FOUND', message },
     { status: 404 },
     request
   );
 }
 
-/**
- * Extract Bearer token from Request headers or cookies
- */
 export function extractAuthToken(request: NextRequest): string | null {
   const authHeader = request.headers.get('authorization') || request.headers.get('Authorization');
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    return authHeader.substring(7).trim();
-  }
+  if (authHeader?.startsWith('Bearer ')) return authHeader.substring(7).trim();
 
-  // Cookie extraction (Supabase default cookie naming conventions)
   const cookieNames = [
     'sb-yidsfihagwttlmhfynmf-auth-token',
     'sb-access-token',
@@ -121,90 +115,65 @@ export function extractAuthToken(request: NextRequest): string | null {
 
   for (const name of cookieNames) {
     const cookie = request.cookies.get(name);
-    if (cookie?.value) {
-      try {
-        const parsed = JSON.parse(cookie.value);
-        if (parsed.access_token) return parsed.access_token;
-        if (Array.isArray(parsed) && parsed[0]) return parsed[0];
-      } catch {
-        return cookie.value;
-      }
+    if (!cookie?.value) continue;
+    try {
+      const parsed = JSON.parse(cookie.value);
+      if (parsed.access_token) return parsed.access_token;
+      if (Array.isArray(parsed) && parsed[0]) return parsed[0];
+    } catch {
+      return cookie.value;
     }
   }
 
   return null;
 }
 
-/**
- * Authoritatively resolve the current user, profile, workspace, and membership for an API request.
- */
 export async function getCurrentRalionContext(
   request: NextRequest,
   options: { requireAuth?: boolean } = { requireAuth: true }
 ): Promise<RalionSessionContext | null> {
-  let supabase: ReturnType<typeof getServiceSupabase> | null = null;
+  let supabase: ReturnType<typeof getServiceSupabase>;
   try {
     supabase = getServiceSupabase();
-  } catch (e: any) {
-    if (options.requireAuth) {
-      throw e;
-    }
+  } catch (error) {
+    if (options.requireAuth) throw error;
     return null;
   }
 
   const token = extractAuthToken(request);
-  const headerUserId = request.headers.get('x-user-id');
-  const headerWorkspaceId = request.headers.get('x-workspace-id') || request.headers.get('x-organization-id');
+  if (!token) return null;
 
   let authUser: User | null = null;
-
-  // 1. Authoritative JWT Token Verification
-  if (token) {
-    try {
-      const { data, error } = await supabase.auth.getUser(token);
-      if (!error && data?.user) {
-        authUser = data.user;
-      } else if (error) {
-        console.warn('[ServerAuth] JWT validation rejected:', error.message);
-      }
-    } catch (e: any) {
-      console.warn('[ServerAuth] Token verification warning:', e.message);
-    }
-  }
-
-  // If unauthenticated, return null (never trust client header spoofing)
-  if (!authUser) {
-    if (options.requireAuth) {
-      return null;
-    }
+  try {
+    const { data, error } = await supabase.auth.getUser(token);
+    if (!error && data?.user) authUser = data.user;
+  } catch {
     return null;
   }
+  if (!authUser) return null;
 
-  // 3. Resolve or create profile
   let profile: RalionUserProfile = {
     id: authUser.id,
-    fullName:
-      authUser.user_metadata?.full_name ||
-      authUser.user_metadata?.name ||
-      authUser.email?.split('@')[0] ||
-      'Ralion User',
+    fullName: authUser.user_metadata?.full_name || authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'Ralion User',
     email: authUser.email || '',
     avatarUrl: authUser.user_metadata?.avatar_url || authUser.user_metadata?.picture || null,
   };
 
   try {
-    const { data: dbProfile, error: pErr } = await supabase
+    const { data: dbProfile, error } = await supabase
       .from('profiles')
       .select('id, full_name, email, avatar_url')
       .eq('id', authUser.id)
       .maybeSingle();
 
     if (dbProfile) {
-      profile.fullName = dbProfile.full_name || profile.fullName;
-      profile.email = dbProfile.email || profile.email;
-      profile.avatarUrl = dbProfile.avatar_url || profile.avatarUrl;
-    } else if (!pErr) {
-      // Auto-insert profile on first lookup
+      profile = {
+        id: authUser.id,
+        fullName: dbProfile.full_name || profile.fullName,
+        email: dbProfile.email || profile.email,
+        avatarUrl: dbProfile.avatar_url || profile.avatarUrl,
+      };
+    } else if (!error) {
       await supabase.from('profiles').insert({
         id: authUser.id,
         full_name: profile.fullName,
@@ -214,10 +183,11 @@ export async function getCurrentRalionContext(
         updated_at: new Date().toISOString(),
       });
     }
-  } catch (err: any) {
-    console.warn('[ServerAuth] Profile query notice:', err.message);
+  } catch {
+    // Profile enrichment is optional; authenticated identity remains authoritative.
   }
 
+<<<<<<< HEAD
   // 4. Resolve Workspace from database (authoritative source)
   const workspaceName = `${profile.fullName}'s Workspace`;
   const companyName =
@@ -400,16 +370,78 @@ export async function getCurrentRalionContext(
     workspace_id: targetWorkspaceId,
     user_id: authUser.id,
     role: (dbMembership?.role?.toLowerCase() as any) || 'owner',
+=======
+  const requestedRaw = request.headers.get('x-workspace-id') || request.headers.get('x-organization-id');
+  const requestedWorkspaceId = requestedRaw ? canonicalUuid(requestedRaw) : null;
+
+  // Invalid non-empty tenant headers fail closed rather than falling back to another tenant.
+  if (requestedRaw && !requestedWorkspaceId) return null;
+
+  let targetWorkspaceId = requestedWorkspaceId || authUser.id;
+  let membershipRole: RalionWorkspaceMembership['role'] = 'owner';
+  let membershipId = `owner_${authUser.id}`;
+
+  if (targetWorkspaceId !== authUser.id) {
+    const { data: member, error } = await supabase
+      .from('workspace_members')
+      .select('id, workspace_id, user_id, role')
+      .eq('workspace_id', targetWorkspaceId)
+      .eq('user_id', authUser.id)
+      .maybeSingle();
+
+    if (error || !member) return null;
+    membershipRole = ['owner', 'admin', 'member', 'viewer'].includes(member.role) ? member.role : 'viewer';
+    membershipId = member.id || `mem_${authUser.id}_${targetWorkspaceId}`;
+  }
+
+  let workspaceRow: any = null;
+  try {
+    const { data } = await supabase
+      .from('workspaces')
+      .select('id, name, slug, owner_id, organization_id')
+      .eq('id', targetWorkspaceId)
+      .maybeSingle();
+    workspaceRow = data || null;
+  } catch {
+    workspaceRow = null;
+  }
+
+  // If a persisted workspace exists and the user is not its owner, membership must already have been verified.
+  if (workspaceRow?.owner_id === authUser.id) membershipRole = 'owner';
+
+  const workspaceName = workspaceRow?.name || authUser.user_metadata?.org_name?.trim() || `${profile.fullName}'s Workspace`;
+  const organizationId = canonicalUuid(workspaceRow?.organization_id) || targetWorkspaceId;
+
+  const workspace: RalionWorkspace = {
+    id: targetWorkspaceId,
+    name: workspaceName,
+    slug: workspaceRow?.slug || `ws-${targetWorkspaceId.slice(0, 8)}`,
+    owner_id: workspaceRow?.owner_id || authUser.id,
+    organization_id: organizationId,
+  };
+
+  const membership: RalionWorkspaceMembership = {
+    id: membershipId,
+    workspace_id: targetWorkspaceId,
+    user_id: authUser.id,
+    role: membershipRole,
+>>>>>>> 9eda1a89d238995149d53edf418d6c59a1526b00
   };
 
   console.log('[ServerAuth] Context verified:', {
     userId: authUser.id,
+<<<<<<< HEAD
     userEmail: authUser.email ? authUser.email.replace(/(?<=.).(?=.*@)/g, '*') : 'hidden',
     workspaceId: workspace.id,
     organizationId: canonicalOrgId,
     companyName: dbOrganization?.name || companyName,
     role: membership.role,
     source: dbWorkspace ? 'DATABASE' : 'FALLBACK',
+=======
+    workspaceId: targetWorkspaceId,
+    organizationId,
+    role: membershipRole,
+>>>>>>> 9eda1a89d238995149d53edf418d6c59a1526b00
   });
 
   return {
@@ -422,9 +454,15 @@ export async function getCurrentRalionContext(
     workspace,
     membership,
     organization: {
+<<<<<<< HEAD
       id: canonicalOrgId,
       name: dbOrganization?.name || companyName,
       tier: dbOrganization?.plan || authUser.user_metadata?.tier || 'STANDARD',
+=======
+      id: organizationId,
+      name: workspaceName,
+      tier: authUser.user_metadata?.tier || 'STANDARD',
+>>>>>>> 9eda1a89d238995149d53edf418d6c59a1526b00
     },
   };
 }

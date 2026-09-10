@@ -74,6 +74,7 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       let accessToken: string | null = null;
       let supabaseUser: any = null;
 
+<<<<<<< HEAD
       try {
         // Dynamically import to avoid circular deps with the app's supabase client
         const storageKey = 'ralion-app-auth-token';
@@ -97,6 +98,25 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
                   supabaseUser = parsedSb?.user || null;
                   break;
                 }
+=======
+      // 1. Resolve the active Supabase user from Ralion's canonical storage key first.
+      let authUser: any = null;
+      try {
+        const directSession = localStorage.getItem('ralion-app-auth-token');
+        if (directSession) {
+          const parsed = JSON.parse(directSession);
+          authUser = parsed?.user || parsed?.currentSession?.user || null;
+        }
+        for (let i = 0; !authUser && i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
+            const raw = localStorage.getItem(key);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (parsed?.user) {
+                authUser = parsed.user;
+                break;
+>>>>>>> 9eda1a89d238995149d53edf418d6c59a1526b00
               }
             }
           }

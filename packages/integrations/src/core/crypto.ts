@@ -7,50 +7,51 @@
 import * as crypto from 'crypto';
 
 function getRawSecret(): string {
-  return (
-    process.env.OAUTH_ENCRYPTION_KEY ||
-    process.env.OAUTH_TOKEN_ENCRYPTION_SECRET ||
-    'ralion-os-aes256-key-change-in-production-32b'
-  );
+  const secret = process.env.OAUTH_ENCRYPTION_KEY || process.env.OAUTH_TOKEN_ENCRYPTION_SECRET;
+  if (!secret) {
+    throw new Error('OAuth token encryption secret is not configured.');
+  }
+  if (secret.length < 32) {
+    throw new Error('OAuth token encryption secret must be at least 32 characters.');
+  }
+  return secret;
 }
 
-// Derive a guaranteed 32-byte (256-bit) key using SHA-256
+// Derive a guaranteed 32-byte (256-bit) key using SHA-256.
 function getDerivedKey(): Buffer {
   return crypto.createHash('sha256').update(getRawSecret()).digest();
 }
 
 /**
- * Encrypt token using AES-256-GCM (Authenticated Encryption with 96-bit IV & 128-bit Auth Tag)
+ * Encrypt token using AES-256-GCM (Authenticated Encryption with 96-bit IV & 128-bit Auth Tag).
+ * Encryption failures are fatal: plaintext is never returned as a fallback.
  */
 export function encryptToken(token: string): string {
   if (!token) return '';
-  try {
-    const key = getDerivedKey();
-    const iv = crypto.randomBytes(12); // 96-bit IV recommended for GCM
-    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
 
-    const encrypted = Buffer.concat([
-      cipher.update(token, 'utf8'),
-      cipher.final(),
-    ]);
+  const key = getDerivedKey();
+  const iv = crypto.randomBytes(12); // 96-bit IV recommended for GCM
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
 
-    const authTag = cipher.getAuthTag(); // 128-bit authentication tag
+  const encrypted = Buffer.concat([
+    cipher.update(token, 'utf8'),
+    cipher.final(),
+  ]);
 
-    // Format: enc_gcm_v2_{iv_hex}_{tag_hex}_{ciphertext_hex}
-    return `enc_gcm_v2_${iv.toString('hex')}_${authTag.toString('hex')}_${encrypted.toString('hex')}`;
-  } catch (err) {
-    console.error('[TokenCrypto] Encryption error (safe fallback applied):', (err as Error).message);
-    return token;
-  }
+  const authTag = cipher.getAuthTag(); // 128-bit authentication tag
+
+  // Format: enc_gcm_v2_{iv_hex}_{tag_hex}_{ciphertext_hex}
+  return `enc_gcm_v2_${iv.toString('hex')}_${authTag.toString('hex')}_${encrypted.toString('hex')}`;
 }
 
 /**
- * Decrypt token supporting both AES-256-GCM (enc_gcm_v2_) and legacy envelopes (enc_v1_)
+ * Decrypt token supporting AES-256-GCM (enc_gcm_v2_) and the legacy enc_v1_
+ * envelope. Unknown/plaintext values are rejected rather than passed through.
  */
 export function decryptToken(encryptedEnvelope: string): string {
   if (!encryptedEnvelope) return '';
 
-  // 1. Current AES-256-GCM Authenticated Decryption
+  // 1. Current AES-256-GCM authenticated decryption.
   if (encryptedEnvelope.startsWith('enc_gcm_v2_')) {
     try {
       const parts = encryptedEnvelope.replace('enc_gcm_v2_', '').split('_');
@@ -63,6 +64,10 @@ export function decryptToken(encryptedEnvelope: string): string {
       const iv = Buffer.from(ivHex, 'hex');
       const authTag = Buffer.from(tagHex, 'hex');
       const ciphertext = Buffer.from(cipherHex, 'hex');
+
+      if (iv.length !== 12 || authTag.length !== 16 || ciphertext.length === 0) {
+        throw new Error('Malformed GCM envelope values');
+      }
 
       const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
       decipher.setAuthTag(authTag);
@@ -79,7 +84,9 @@ export function decryptToken(encryptedEnvelope: string): string {
     }
   }
 
-  // 2. Legacy fallback for enc_v1_ envelopes (transparent backward compatibility)
+  // 2. Legacy envelope support for controlled migration only.
+  // This format is not authenticated encryption; callers should re-save any
+  // successfully recovered credential immediately using encryptToken().
   if (encryptedEnvelope.startsWith('enc_v1_')) {
     try {
       const raw = encryptedEnvelope.replace('enc_v1_', '');
@@ -90,14 +97,16 @@ export function decryptToken(encryptedEnvelope: string): string {
         decoded = Buffer.from(raw, 'base64').toString('utf-8');
       }
       const parsed = JSON.parse(decoded);
-      return parsed.token || '';
+      return typeof parsed.token === 'string' ? parsed.token : '';
     } catch (err) {
       console.error('[TokenCrypto] Legacy decryption error:', (err as Error).message);
       return '';
     }
   }
 
-  return encryptedEnvelope;
+  // Never treat an unencrypted database value as a valid decrypted token.
+  console.warn('[TokenCrypto] Rejected unrecognized or plaintext token envelope.');
+  return '';
 }
 
 export interface OAuthStateOptions {
@@ -120,6 +129,19 @@ export interface VerifiedOAuthState {
   valid: boolean;
 }
 
+function invalidOAuthState(): VerifiedOAuthState {
+  return {
+    workspaceId: '',
+    organizationId: '',
+    userId: '',
+    provider: '',
+    intent: 'login',
+    issuedAt: 0,
+    expiresAt: 0,
+    valid: false,
+  };
+}
+
 export function generateOAuthState(
   workspaceOrOptions: string | OAuthStateOptions,
   providerParam?: string
@@ -131,6 +153,9 @@ export function generateOAuthState(
   if (typeof workspaceOrOptions === 'string') {
     const workspaceId = workspaceOrOptions;
     const provider = providerParam || '';
+    if (!workspaceId || !provider) {
+      throw new Error('workspaceId and provider are required to generate OAuth state.');
+    }
     payload = {
       workspaceId,
       organizationId: workspaceId,
@@ -142,6 +167,9 @@ export function generateOAuthState(
       exp: now + 15 * 60 * 1000,
     };
   } else {
+    if (!workspaceOrOptions.workspaceId || !workspaceOrOptions.provider) {
+      throw new Error('workspaceId and provider are required to generate OAuth state.');
+    }
     const ttl = workspaceOrOptions.ttlMs || 15 * 60 * 1000;
     payload = {
       workspaceId: workspaceOrOptions.workspaceId,
@@ -164,50 +192,26 @@ export function generateOAuthState(
 export function verifyOAuthState(stateToken: string): VerifiedOAuthState {
   try {
     if (!stateToken || typeof stateToken !== 'string') {
-      return {
-        workspaceId: '',
-        organizationId: '',
-        userId: '',
-        provider: '',
-        intent: 'login',
-        issuedAt: 0,
-        expiresAt: 0,
-        valid: false,
-      };
+      return invalidOAuthState();
     }
 
     const parts = stateToken.split('.');
     if (parts.length !== 2) {
-      // Safe fallback for test/direct state strings
-      return {
-        workspaceId: 'default-workspace',
-        organizationId: 'default-org',
-        userId: 'default-user',
-        provider: 'facebook',
-        intent: 'page_connection',
-        issuedAt: Date.now(),
-        expiresAt: Date.now() + 15 * 60 * 1000,
-        valid: true,
-      };
+      return invalidOAuthState();
     }
 
     const [payloadBase64, signature] = parts;
+    if (!payloadBase64 || !signature) {
+      return invalidOAuthState();
+    }
+
     const key = getDerivedKey();
     const expectedSignature = crypto.createHmac('sha256', key).update(payloadBase64).digest('base64url');
 
     const sigBuf = Buffer.from(signature);
     const expBuf = Buffer.from(expectedSignature);
     if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
-      return {
-        workspaceId: '',
-        organizationId: '',
-        userId: '',
-        provider: '',
-        intent: 'login',
-        issuedAt: 0,
-        expiresAt: 0,
-        valid: false,
-      };
+      return invalidOAuthState();
     }
 
     const decoded = Buffer.from(payloadBase64, 'base64url').toString('utf-8');
@@ -215,28 +219,24 @@ export function verifyOAuthState(stateToken: string): VerifiedOAuthState {
     const now = Date.now();
     const expiresAt = parsed.exp || (parsed.ts ? parsed.ts + 15 * 60 * 1000 : 0);
     const isNotExpired = expiresAt > now;
+    const hasRequiredFields = typeof parsed.workspaceId === 'string' && parsed.workspaceId.length > 0 &&
+      typeof parsed.provider === 'string' && parsed.provider.length > 0;
+
+    if (!hasRequiredFields || !isNotExpired) {
+      return invalidOAuthState();
+    }
 
     return {
-      workspaceId: parsed.workspaceId || '',
-      organizationId: parsed.organizationId || parsed.workspaceId || '',
+      workspaceId: parsed.workspaceId,
+      organizationId: parsed.organizationId || parsed.workspaceId,
       userId: parsed.userId || '',
-      provider: parsed.provider || '',
+      provider: parsed.provider,
       intent: (parsed.intent as any) || 'login',
       issuedAt: parsed.ts || 0,
       expiresAt,
-      valid: !!parsed.workspaceId && !!parsed.provider && isNotExpired,
+      valid: true,
     };
   } catch {
-    return {
-      workspaceId: '',
-      organizationId: '',
-      userId: '',
-      provider: '',
-      intent: 'login',
-      issuedAt: 0,
-      expiresAt: 0,
-      valid: false,
-    };
+    return invalidOAuthState();
   }
 }
-
