@@ -25,26 +25,39 @@ export async function verifyPlatformAdminRequest(request: NextRequest): Promise<
       hasAdminKey: Boolean(adminKey),
     });
   }
-  
-  // 1. Master platform secret key bypass for automated administrative cron/backend runners / admin portal
-  const platformSecret = process.env.RALION_PLATFORM_ADMIN_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (
-    adminKey &&
-    (adminKey === 'platform-admin-master-key-verified' ||
-      (platformSecret && adminKey === platformSecret))
-  ) {
+
+  // 1. Server-side platform secret for trusted administrative automation.
+  // Never allow a hardcoded/default bypass value.
+  const platformSecret = process.env.RALION_PLATFORM_ADMIN_SECRET;
+  if (adminKey) {
+    if (!platformSecret) {
+      return {
+        authorized: false,
+        statusCode: 500,
+        error: 'Platform admin secret is not configured.',
+      };
+    }
+
+    if (adminKey === platformSecret) {
+      return {
+        authorized: true,
+        user: {
+          id: 'platform-system-admin',
+          email: 'ali@rasalilabs.com',
+          role: 'PLATFORM_ADMIN',
+          organizationId: 'ras-ali-labs',
+        },
+      };
+    }
+
     return {
-      authorized: true,
-      user: {
-        id: 'platform-system-admin',
-        email: 'ali@rasalilabs.com',
-        role: 'PLATFORM_ADMIN',
-        organizationId: 'ras-ali-labs',
-      },
+      authorized: false,
+      statusCode: 403,
+      error: 'Forbidden: Invalid platform administrator key.',
     };
   }
 
-  // 2. Extract Bearer token from Authorization header or Supabase cookies
+  // 2. Extract Bearer token from Authorization header or Supabase cookies.
   let token = authHeader.replace(/^Bearer\s+/i, '').trim();
   if (token.startsWith('{')) {
     try {
@@ -99,7 +112,6 @@ export async function verifyPlatformAdminRequest(request: NextRequest): Promise<
     );
 
     if (!isAuthorized) {
-      // Log unauthorized attempt
       PlatformAdminService.recordAuditLog({
         adminUserId: user.id,
         adminEmail: user.email,
