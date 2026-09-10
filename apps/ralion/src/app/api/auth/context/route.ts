@@ -1,6 +1,10 @@
 import { NextRequest } from 'next/server';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../lib/cors';
-import { getCurrentRalionContext, extractAuthToken } from '../../../../lib/auth/serverAuth';
+import {
+  extractAuthToken,
+  getCurrentRalionContext,
+  getServiceSupabase,
+} from '../../../../lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +17,32 @@ export async function GET(request: NextRequest) {
     const token = extractAuthToken(request);
     if (!token) {
       return corsJsonResponse(
-        { success: false, error: 'AUTHENTICATION_REQUIRED', message: 'Bearer token is required.' },
+        {
+          success: false,
+          code: 'AUTH_TOKEN_MISSING',
+          error: 'Authentication required',
+          message: 'Bearer token is required.',
+        },
+        { status: 401 },
+        request
+      );
+    }
+
+    // Validate the authenticated user independently from workspace resolution.
+    // This prevents a missing/misaligned workspace from masquerading as an
+    // expired session and triggering pointless client refresh loops.
+    const supabase = getServiceSupabase();
+    const { data: authData, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !authData?.user) {
+      console.warn('[AuthContext API] Supabase session rejected');
+      return corsJsonResponse(
+        {
+          success: false,
+          code: 'AUTH_TOKEN_INVALID',
+          error: 'Session is invalid or expired',
+          message: 'Please sign in again.',
+        },
         { status: 401 },
         request
       );
@@ -21,9 +50,18 @@ export async function GET(request: NextRequest) {
 
     const ctx = await getCurrentRalionContext(request, { requireAuth: true });
     if (!ctx) {
+      console.warn('[AuthContext API] Authenticated user has no verified workspace context', {
+        userId: authData.user.id,
+      });
       return corsJsonResponse(
-        { success: false, error: 'AUTHENTICATION_REQUIRED', message: 'Session or workspace context is invalid.' },
-        { status: 401 },
+        {
+          success: false,
+          code: 'WORKSPACE_CONTEXT_MISSING',
+          authenticated: true,
+          error: 'Workspace context unavailable',
+          message: 'Your account is authenticated, but its organization workspace has not been resolved yet.',
+        },
+        { status: 409 },
         request
       );
     }
@@ -63,7 +101,7 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     console.error('[AuthContext API] Failed to resolve context');
     return corsJsonResponse(
-      { success: false, error: 'INTERNAL_ERROR', message: 'Failed to resolve auth context.' },
+      { success: false, code: 'INTERNAL_ERROR', error: 'Internal error', message: 'Failed to resolve auth context.' },
       { status: 500 },
       request
     );
