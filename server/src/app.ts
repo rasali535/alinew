@@ -207,15 +207,16 @@ export function createApp(): Application {
     });
 
     // Platform Admin API Proxy to the configured Next.js Ralion backend.
-    app.use(['/api/admin', '/ralion/api/admin'], async (req, res) => {
+    app.use(['/api/admin', '/ralion/api/admin'], async (req, res): Promise<void> => {
         try {
             const nextBase = process.env.RALION_UPSTREAM_URL ||
                 (process.env.NODE_ENV === 'development' ? 'http://localhost:6509' : '');
             if (!nextBase) {
-                return res.status(503).json({
+                res.status(503).json({
                     success: false,
                     error: 'Platform admin upstream is not configured',
                 });
+                return;
             }
 
             const targetUrl = `${nextBase.replace(/\/+$/, '')}/api/admin${req.url}`;
@@ -232,13 +233,15 @@ export function createApp(): Application {
                 validateStatus: () => true,
             });
 
-            return res.status(response.status).json(response.data);
+            res.status(response.status).json(response.data);
+            return;
         } catch (err: any) {
             logger.error('[Express Proxy] Error proxying platform admin request to Next.js:', err);
-            return res.status(500).json({
+            res.status(500).json({
                 success: false,
                 error: 'Platform admin proxy failure',
             });
+            return;
         }
     });
 
