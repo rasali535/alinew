@@ -44,19 +44,26 @@ export function getRalionApiUrl(path: string): string {
   return `${base}${normalizedPath}`;
 }
 
-async function getBrowserSession(refresh = false) {
+async function getBrowserSession(forceRefresh = false) {
   if (typeof window === 'undefined') return null;
   try {
     const { createClient } = await import('@/lib/supabase/client');
     const supabase = createClient();
-    if (refresh) {
-      const { data, error } = await supabase.auth.refreshSession();
-      if (error) return null;
-      return data.session || null;
-    }
-    const { data, error } = await supabase.auth.getSession();
+    let { data, error } = await supabase.auth.getSession();
     if (error) return null;
-    return data.session || null;
+
+    const session = data.session;
+    const expiresSoon = Boolean(
+      session?.expires_at && session.expires_at * 1000 <= Date.now() + 60_000
+    );
+
+    if ((forceRefresh || expiresSoon) && session?.refresh_token) {
+      const refreshed = await supabase.auth.refreshSession();
+      if (!refreshed.error && refreshed.data.session) return refreshed.data.session;
+      if (forceRefresh) return null;
+    }
+
+    return session || null;
   } catch {
     return null;
   }
