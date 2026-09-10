@@ -394,18 +394,11 @@ export class FacebookPageManagementService {
       .eq('organization_id', tenantId)
       .eq('user_id', userId);
 
-    const { data: satRow } = await supabase
-      .from('social_account_tokens')
-      .select('encrypted_access_token, encrypted_refresh_token, expires_at, metadata')
-      .eq('user_id', userId)
-      .eq('provider', 'facebook')
-      .maybeSingle();
-
-    let encryptedAccessToken: string | null = satRow?.encrypted_access_token || null;
-    let encryptedRefreshToken: string | null = satRow?.encrypted_refresh_token || null;
-    let tokenExpiresAt: string | null = satRow?.expires_at || null;
+    let encryptedAccessToken: string | null = null;
+    let encryptedRefreshToken: string | null = null;
+    let tokenExpiresAt: string | null = null;
     let zernioProfileId: string | null = null;
-    let facebookUserId: string | null = satRow?.metadata?.facebookUserId || null;
+    let facebookUserId: string | null = null;
 
     for (const c of allUserConns || []) {
       if (!encryptedAccessToken && c.metadata?.encrypted_access_token) encryptedAccessToken = c.metadata.encrypted_access_token;
@@ -490,20 +483,6 @@ export class FacebookPageManagementService {
       if (error) throw error;
       connectionId = inserted?.id || null;
     }
-
-    await supabase
-      .from('social_account_tokens')
-      .update({
-        account_label: `Facebook Page (${params.pageData.name || 'Connected'})`,
-        account_handle: `@${pageHandle}`,
-        page_id: params.pageId,
-        avatar_url: params.pageData.avatarUrl || null,
-        followers_count: Number(params.pageData.followersCount || 0),
-        status: encryptedAccessToken ? 'connected' : 'reauth_required',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('user_id', userId)
-      .eq('provider', 'facebook');
 
     await AuditLoggerService.log({
       eventType: 'FACEBOOK_PAGE_CONNECTED' as any,
@@ -672,8 +651,11 @@ export class FacebookPageManagementService {
       try {
         const fields = 'id,message,created_time,full_picture,shares,reactions.summary(total_count).limit(0).as(likes),comments.summary(total_count).limit(0).as(comments)';
         const fbRes = await fetch(
-          `https://graph.facebook.com/v19.0/${targetPageId}/posts?fields=${fields}&limit=25&access_token=${encodeURIComponent(fbToken)}`,
-          { signal: AbortSignal.timeout(8000) }
+          `https://graph.facebook.com/v19.0/${targetPageId}/posts?fields=${fields}&limit=25`,
+          {
+            headers: { Authorization: `Bearer ${fbToken}` },
+            signal: AbortSignal.timeout(8000),
+          }
         );
         if (fbRes.ok) {
           const fbJson = await fbRes.json();
