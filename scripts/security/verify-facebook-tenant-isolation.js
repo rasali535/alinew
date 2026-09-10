@@ -34,10 +34,13 @@ if (selectedColumns(pageService).includes('access_token')) {
 forbid(pageService, /MetaCredentialService\.getValidToken/, 'User-global Meta token fallback is forbidden for Page operations.');
 forbid(pageService, /default-(?:tenant|workspace|org|user)/, 'Synthetic default tenant identifiers are forbidden.');
 forbid(pageService, /totalReach\s*\*\s*1\.4/, 'Derived impressions from reach are forbidden.');
+forbid(pageService, /[?&]access_token=/, 'Meta access tokens must never be placed in Graph API query strings.');
+forbid(pageService, /\.from\(['"]social_account_tokens['"]\)/, 'Facebook Page management must not use user-global social_account_tokens rows.');
 
 requirePattern(pageService, /\.eq\('organization_id',\s*tenantId\)/, 'Facebook connection queries must be tenant-scoped.');
 requirePattern(pageService, /\.eq\('user_id',\s*userId\)/, 'Facebook connection queries must be authenticated-user scoped.');
 requirePattern(pageService, /SocialTokenManager\.getValidToken\(conn\.id,\s*'facebook'\)/, 'Direct Graph access must use the selected connection token path.');
+requirePattern(pageService, /Authorization:\s*`Bearer \$\{fbToken\}`/, 'Direct Graph access must send Meta token in the Authorization header.');
 requirePattern(pageService, /requireTenantId\(/, 'Facebook Page operations must fail closed without canonical tenant context.');
 requirePattern(pageService, /requireUserId\(/, 'Facebook Page operations must fail closed without authenticated user context.');
 
@@ -52,4 +55,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log('[security:facebook-isolation] PASS — plaintext token fallbacks, synthetic tenant defaults, and unscoped tenant access guards are absent.');
+console.log('[security:facebook-isolation] PASS — tenant-scoped token handling, Graph authorization headers, and fail-closed access guards are enforced.');
