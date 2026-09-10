@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { UserProfile, Organization, Branch, LicenseTier } from './types';
 
 export interface OrganizationContextType {
@@ -8,6 +8,7 @@ export interface OrganizationContextType {
   organization: Organization | null;
   activeBranch: Branch | null;
   isLoading: boolean;
+  isContextResolved: boolean;
   setOrganization: (org: Organization) => void;
   setActiveBranch: (branch: Branch) => void;
   refreshOrganization: () => Promise<void>;
@@ -19,141 +20,185 @@ const OrganizationContext = createContext<OrganizationContextType>({
   organization: null,
   activeBranch: null,
   isLoading: true,
+  isContextResolved: false,
   setOrganization: () => {},
   setActiveBranch: () => {},
   refreshOrganization: async () => {},
   logout: () => {},
 });
 
+function getContextApiBase(): string {
+  if (typeof window === 'undefined') return '';
+  const origin = window.location.origin;
+  const hostname = window.location.hostname;
+  if (hostname.includes('rasalilabs.com')) return `${origin}/ralion`;
+  const port = window.location.port;
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    if (port === '6509' || port === '3000') return origin;
+    return 'http://localhost:6509';
+  }
+  return `${origin}/ralion`;
+}
+
+function readStoredSession(): { accessToken: string | null; user: any | null } {
+  let accessToken: string | null = null;
+  let user: any | null = null;
+  try {
+    const directSession = localStorage.getItem('ralion-app-auth-token');
+    if (directSession) {
+      const parsed = JSON.parse(directSession);
+      accessToken = parsed?.access_token || parsed?.currentSession?.access_token || null;
+      user = parsed?.user || parsed?.currentSession?.user || null;
+    }
+    for (let i = 0; !accessToken && i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith('sb-') || !key.endsWith('-auth-token')) continue;
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      accessToken = parsed?.access_token || parsed?.currentSession?.access_token || null;
+      user = user || parsed?.user || parsed?.currentSession?.user || null;
+    }
+  } catch {}
+  return { accessToken, user };
+}
+
 export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [activeBranch, setActiveBranch] = useState<Branch | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isContextResolved, setIsContextResolved] = useState(false);
+  const isResolvingRef = useRef(false);
 
-  const fetchCurrentOrgState = useCallback(async () => {
+  const resolveAuthoritativeContext = useCallback(async () => {
+    if (typeof window === 'undefined' || isResolvingRef.current) return;
+    isResolvingRef.current = true;
+    setIsLoading(true);
     try {
-      if (typeof window === 'undefined') return;
-
-      // 1. Resolve the active Supabase user from Ralion's canonical storage key first.
-      let authUser: any = null;
-      try {
-        const directSession = localStorage.getItem('ralion-app-auth-token');
-        if (directSession) {
-          const parsed = JSON.parse(directSession);
-          authUser = parsed?.user || parsed?.currentSession?.user || null;
-        }
-        for (let i = 0; !authUser && i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
-            const raw = localStorage.getItem(key);
-            if (raw) {
-              const parsed = JSON.parse(raw);
-              if (parsed?.user) {
-                authUser = parsed.user;
-                break;
-              }
-            }
-          }
-        }
-        if (!authUser) {
-          const cached = localStorage.getItem('ralion_cached_user');
-          if (cached) {
-            authUser = JSON.parse(cached);
-          }
-        }
-      } catch {
-        // Fallback
-      }
-
-      const orgId = authUser?.user_metadata?.org_id ||
-        authUser?.user_metadata?.organization_id ||
-        (typeof window !== 'undefined' ? localStorage.getItem('ralion_active_workspace_id') : null) ||
-        (typeof window !== 'undefined' ? localStorage.getItem('ralion_organization_id') : null);
-
-      const orgName = authUser?.user_metadata?.org_name ||
-        authUser?.user_metadata?.organization_name ||
-        (typeof window !== 'undefined' ? localStorage.getItem('ralion_org_name') : null) ||
-        'Organization';
-
-      const userTier = (authUser?.user_metadata?.tier ||
-        (typeof window !== 'undefined' ? localStorage.getItem('ralion_user_tier') : null) ||
-        'COMMUNITY') as LicenseTier;
-
-      if (authUser || orgId) {
-        const branch: Branch = {
-          id: 'b-main',
-          name: authUser?.user_metadata?.branch_name || 'Main HQ Branch',
-          code: 'HQ-01',
-          isMain: true,
-        };
-
-        const resolvedOrg: Organization = {
-          id: orgId || authUser?.id || '',
-          name: orgName,
-          slug: orgName.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-          ownerId: authUser?.id || 'u-auth',
-          licenseTier: userTier,
-          maxUsers: userTier === 'ENTERPRISE' ? 999 : userTier === 'PROFESSIONAL' ? 20 : 5,
-          enabledModules: ['mari', 'crm', 'tasks', 'calendar', 'documents', 'workflows', 'billing', 'growth'],
-          activeBranches: [branch],
-          activeDepartments: [{ id: 'd-1', name: 'Operations', code: 'OPS' }],
-          createdAt: authUser?.created_at || new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-
-        const profile: UserProfile = {
-          uid: authUser?.id || 'u-auth',
-          email: authUser?.email || '',
-          displayName: authUser?.user_metadata?.full_name || authUser?.email?.split('@')[0] || 'User',
-          orgId: resolvedOrg.id,
-          role: authUser?.user_metadata?.role || 'ORGANIZATION_OWNER',
-          permissions: ['org:manage', 'billing:manage', 'crm:read', 'crm:write'],
-          branchId: 'b-main',
-          isActive: true,
-          createdAt: authUser?.created_at || new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-
-        setUser(profile);
-        setOrganization(resolvedOrg);
-        setActiveBranch(branch);
-      } else {
+      const { accessToken, user: supabaseUser } = readStoredSession();
+      if (!accessToken) {
         setUser(null);
         setOrganization(null);
         setActiveBranch(null);
+        setIsContextResolved(true);
+        return;
       }
+
+      const res = await fetch(`${getContextApiBase()}/api/auth/context`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json',
+        },
+        credentials: 'include',
+      });
+
+      if (!res.ok) {
+        console.warn('[AuthContext] Server context resolution failed:', res.status);
+        setUser(null);
+        setOrganization(null);
+        setActiveBranch(null);
+        setIsContextResolved(true);
+        return;
+      }
+
+      const data = await res.json();
+      if (!data.success || !data.user || !data.workspace || !data.organization || !data.membership) {
+        console.warn('[AuthContext] Server returned incomplete context');
+        setUser(null);
+        setOrganization(null);
+        setActiveBranch(null);
+        setIsContextResolved(true);
+        return;
+      }
+
+      const branch: Branch = {
+        id: 'b-main',
+        name: supabaseUser?.user_metadata?.branch_name || 'Main HQ Branch',
+        code: 'HQ-01',
+        isMain: true,
+      };
+
+      const resolvedOrg: Organization = {
+        id: data.organization.id,
+        name: data.organization.name,
+        slug: data.workspace.slug || data.organization.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        ownerId: data.workspace.ownerId || data.user.id,
+        licenseTier: (data.organization.tier || 'COMMUNITY') as LicenseTier,
+        maxUsers: data.organization.tier === 'ENTERPRISE' ? 999 : data.organization.tier === 'PROFESSIONAL' ? 20 : 5,
+        enabledModules: ['mari', 'crm', 'tasks', 'calendar', 'documents', 'workflows', 'billing', 'growth'],
+        activeBranches: [branch],
+        activeDepartments: [{ id: 'd-1', name: 'Operations', code: 'OPS' }],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      const profile: UserProfile = {
+        uid: data.user.id,
+        email: data.user.email || '',
+        displayName: data.user.fullName || data.user.email?.split('@')[0] || 'User',
+        orgId: resolvedOrg.id,
+        role: (data.membership.role?.toUpperCase() as any) || 'ORGANIZATION_OWNER',
+        permissions: ['org:manage', 'billing:manage', 'crm:read', 'crm:write'],
+        branchId: 'b-main',
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      setUser(profile);
+      setOrganization(resolvedOrg);
+      setActiveBranch(branch);
+      setIsContextResolved(true);
+
+      try {
+        localStorage.setItem('ralion_active_workspace_id', data.workspace.id);
+        localStorage.setItem('ralion_organization_id', data.organization.id);
+        if (data.organization.name) localStorage.setItem('ralion_org_name', data.organization.name);
+      } catch {}
+
+      console.log('[AuthContext]', {
+        hasSession: true,
+        resolvedWorkspaceId: data.workspace.id,
+        resolvedOrganizationId: data.organization.id,
+        source: 'SERVER_VERIFIED',
+      });
     } catch (err) {
-      console.warn('[OrganizationContext] Failed to load org state:', err);
+      console.warn('[AuthContext] Context resolution error:', err);
+      setUser(null);
+      setOrganization(null);
+      setActiveBranch(null);
+      setIsContextResolved(true);
     } finally {
       setIsLoading(false);
+      isResolvingRef.current = false;
     }
   }, []);
 
   useEffect(() => {
-    fetchCurrentOrgState();
-
-    const handleOrgUpdate = () => {
-      fetchCurrentOrgState();
-    };
-
-    if (typeof window !== 'undefined') {
-      window.addEventListener('ralion_subscription_updated', handleOrgUpdate);
-      window.addEventListener('ralion_organization_updated', handleOrgUpdate);
-    }
-
-    return () => {
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('ralion_subscription_updated', handleOrgUpdate);
-        window.removeEventListener('ralion_organization_updated', handleOrgUpdate);
+    resolveAuthoritativeContext();
+    const handleOrgUpdate = () => resolveAuthoritativeContext();
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key && (e.key === 'ralion-app-auth-token' || (e.key.startsWith('sb-') && e.key.endsWith('-auth-token')))) {
+        resolveAuthoritativeContext();
       }
     };
-  }, [fetchCurrentOrgState]);
+    window.addEventListener('ralion_subscription_updated', handleOrgUpdate);
+    window.addEventListener('ralion_organization_updated', handleOrgUpdate);
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('ralion_subscription_updated', handleOrgUpdate);
+      window.removeEventListener('ralion_organization_updated', handleOrgUpdate);
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [resolveAuthoritativeContext]);
 
   const logout = () => {
     setUser(null);
     setOrganization(null);
     setActiveBranch(null);
+    setIsContextResolved(false);
     if (typeof window !== 'undefined') {
       try {
         const keysToPurge = Object.keys(localStorage).filter(
@@ -168,18 +213,7 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   };
 
   return (
-    <OrganizationContext.Provider
-      value={{
-        user,
-        organization,
-        activeBranch,
-        isLoading,
-        setOrganization,
-        setActiveBranch,
-        refreshOrganization: fetchCurrentOrgState,
-        logout,
-      }}
-    >
+    <OrganizationContext.Provider value={{ user, organization, activeBranch, isLoading, isContextResolved, setOrganization, setActiveBranch, refreshOrganization: resolveAuthoritativeContext, logout }}>
       {children}
     </OrganizationContext.Provider>
   );
