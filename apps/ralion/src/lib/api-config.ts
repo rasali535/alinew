@@ -2,18 +2,13 @@
  * Ralion OS — Central API Configuration & Routing Helper
  * Ras Ali Labs (Pty) Ltd
  *
- * Ensures all dynamic API requests from the frontend (whether hosted on Hostinger
- * or locally) are routed to the canonical dynamic backend (e.g. Render / Docker).
+ * Ensures all dynamic API requests from the frontend are routed to the
+ * canonical Ralion API endpoint.
  */
 
-/**
 export const MARI_BUILD_VERSION = '2026.09.06-v2';
 
-/**
- * Returns the resolved dynamic API base URL.
- */
 export function getRalionApiBase(): string {
-  // 1. Explicitly configured public API URL takes top priority
   const configuredApiUrl = process.env.NEXT_PUBLIC_RALION_API_URL || process.env.NEXT_PUBLIC_API_URL;
   if (configuredApiUrl && configuredApiUrl.trim() !== '' && !configuredApiUrl.includes('onrender.com')) {
     return configuredApiUrl.replace(/\/+$/, '');
@@ -26,47 +21,35 @@ export function getRalionApiBase(): string {
     const hostname = window.location.hostname;
     const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.');
 
-    // If running on rasalilabs.com or any web host, the API routes are served at /ralion or origin
-    if (hostname.includes('rasalilabs.com')) {
-      return `${origin}/ralion`;
-    }
+    if (hostname.includes('rasalilabs.com')) return `${origin}/ralion`;
 
-    // If running in local development or desktop electron preview
     if (isLocalhost || !isProd) {
       const port = window.location.port;
-      // If running through Next.js dev server on localhost:6509 or 3000
-      if (port === '6509' || port === '3000') {
-        return origin;
-      }
+      if (port === '6509' || port === '3000') return origin;
       return 'http://localhost:6509';
     }
 
     return `${origin}/ralion`;
   }
 
-  // Server-side fallback during build/SSR
   return 'https://rasalilabs.com/ralion';
 }
 
-/**
- * Build a full canonical API URL for a given route path.
- * Example: getRalionApiUrl('/api/social/publish')
- * Returns: 'https://ralion-dynamic-backend.onrender.com/api/social/publish' or 'http://localhost:6509/api/social/publish'
- */
 export function getRalionApiUrl(path: string): string {
   const base = getRalionApiBase();
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-
-  // If base already contains basePath (e.g. /ralion) and normalizedPath starts with /ralion, avoid duplication
   if (base.endsWith('/ralion') && normalizedPath.startsWith('/ralion/')) {
     return `${base}${normalizedPath.substring(7)}`;
   }
-
   return `${base}${normalizedPath}`;
 }
 
 /**
- * Extract active Supabase session token in browser environment for authenticated requests.
+ * Authentication headers only. Tenant identity is resolved authoritatively by
+ * the server and must never fall back to the authenticated user ID.
+ *
+ * Legacy workspace/org IDs written by OrganizationProvider are included only
+ * as routing hints; server-side membership validation remains authoritative.
  */
 export async function getRalionAuthHeaders(): Promise<Record<string, string>> {
   const headers: Record<string, string> = {};
@@ -77,46 +60,24 @@ export async function getRalionAuthHeaders(): Promise<Record<string, string>> {
       const supabase = createClient();
       const { data } = await supabase.auth.getSession();
       const token = data?.session?.access_token;
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      if (data?.session?.user?.id) {
-        headers['x-user-id'] = data.session.user.id;
-      }
+      if (token) headers.Authorization = `Bearer ${token}`;
+      if (data?.session?.user?.id) headers['x-user-id'] = data.session.user.id;
 
-      // Prioritize authenticated session user ID and metadata over localStorage to prevent stale context leaks
-      const authenticatedUserId = data?.session?.user?.id;
-      const activeWs =
-        data?.session?.user?.user_metadata?.workspace_id ||
-        data?.session?.user?.user_metadata?.org_id ||
-        authenticatedUserId ||
-        window.localStorage?.getItem('ralion_active_workspace_id') ||
-        window.localStorage?.getItem('ralion_workspace_id');
+      const metadata = data?.session?.user?.user_metadata || {};
+      const storedWorkspaceId = window.localStorage?.getItem('ralion_active_workspace_id') || window.localStorage?.getItem('ralion_workspace_id');
+      const storedOrgId = window.localStorage?.getItem('ralion_organization_id') || window.localStorage?.getItem('ralion_active_org_id') || window.localStorage?.getItem('ralion_org_id');
 
-      const activeOrg =
-        data?.session?.user?.user_metadata?.org_id ||
-        data?.session?.user?.user_metadata?.organization_id ||
-        authenticatedUserId ||
-        window.localStorage?.getItem('ralion_active_org_id') ||
-        window.localStorage?.getItem('ralion_org_id') ||
-        activeWs;
+      const activeWs = metadata.workspace_id || storedWorkspaceId || null;
+      const activeOrg = metadata.org_id || metadata.organization_id || storedOrgId || null;
 
-      if (activeWs) {
-        headers['x-workspace-id'] = activeWs;
-      }
-      if (activeOrg) {
-        headers['x-organization-id'] = activeOrg;
-      }
+      if (activeWs) headers['x-workspace-id'] = activeWs;
+      if (activeOrg) headers['x-organization-id'] = activeOrg;
     } catch {}
   }
 
   return headers;
 }
 
-/**
- * Type-safe fetch wrapper that automatically routes to the Ralion dynamic backend,
- * attaches credentials, and parses JSON responses safely.
- */
 export async function fetchRalionApi<T = any>(
   path: string,
   init?: RequestInit
@@ -127,21 +88,11 @@ export async function fetchRalionApi<T = any>(
     const authHeaders = await getRalionAuthHeaders();
     const headers = new Headers(init?.headers);
 
-    if (!headers.has('Authorization') && authHeaders.Authorization) {
-      headers.set('Authorization', authHeaders.Authorization);
-    }
-    if (!headers.has('x-user-id') && authHeaders['x-user-id']) {
-      headers.set('x-user-id', authHeaders['x-user-id']);
-    }
-    if (!headers.has('x-workspace-id') && authHeaders['x-workspace-id']) {
-      headers.set('x-workspace-id', authHeaders['x-workspace-id']);
-    }
-    if (!headers.has('x-organization-id') && authHeaders['x-organization-id']) {
-      headers.set('x-organization-id', authHeaders['x-organization-id']);
-    }
-    if (!headers.has('Content-Type') && init?.body && typeof init.body === 'string') {
-      headers.set('Content-Type', 'application/json');
-    }
+    if (!headers.has('Authorization') && authHeaders.Authorization) headers.set('Authorization', authHeaders.Authorization);
+    if (!headers.has('x-user-id') && authHeaders['x-user-id']) headers.set('x-user-id', authHeaders['x-user-id']);
+    if (!headers.has('x-workspace-id') && authHeaders['x-workspace-id']) headers.set('x-workspace-id', authHeaders['x-workspace-id']);
+    if (!headers.has('x-organization-id') && authHeaders['x-organization-id']) headers.set('x-organization-id', authHeaders['x-organization-id']);
+    if (!headers.has('Content-Type') && init?.body && typeof init.body === 'string') headers.set('Content-Type', 'application/json');
 
     const res = await fetch(url, {
       ...init,
@@ -156,7 +107,6 @@ export async function fetchRalionApi<T = any>(
       data = await res.json();
     } else {
       const text = await res.text();
-      // If we received an HTML document instead of JSON (e.g. 404 rewrite on static server)
       if (text.trim().startsWith('<!doctype') || text.trim().startsWith('<html')) {
         return {
           ok: false,
