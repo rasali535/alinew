@@ -31,10 +31,27 @@ export function createApp(): Application {
         },
     }));
 
-    // CORS configuration
+    // CORS configuration — exact allowlist only. Never reflect arbitrary origins with credentials.
+    const configuredOrigins = (process.env.CORS_ORIGINS || 'https://rasalilabs.com')
+        .split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean);
+    if (config.nodeEnv === 'development') {
+        configuredOrigins.push('http://localhost:5173', 'http://localhost:6509');
+    }
+    const allowedOrigins = new Set(configuredOrigins);
+
     app.use(cors({
-        origin: true, // Allow all origins reflectively
+        origin(origin, callback) {
+            // Non-browser/server-to-server requests may not send Origin.
+            if (!origin || allowedOrigins.has(origin)) {
+                return callback(null, true);
+            }
+            return callback(new Error('Origin not allowed by CORS policy'));
+        },
         credentials: true,
+        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Authorization', 'Content-Type', 'x-workspace-id', 'x-organization-id'],
     }));
 
     // Body parsing middleware
@@ -78,36 +95,32 @@ export function createApp(): Application {
     // Health check endpoint (no auth required)
     app.get('/health', healthCheck);
 
-    // Simple DB test
-    app.get('/test-db', async (_req, res) => {
-        try {
-            const start = Date.now();
-            const result = await db.query('SELECT NOW()');
-            res.json({ status: 'ok', time: result.rows[0], duration: Date.now() - start });
-        } catch (err: any) {
-            res.status(500).json({ status: 'error', message: err.message });
-        }
-    });
+    // Simple DB test — development only; do not expose database diagnostics publicly.
+    if (config.nodeEnv === 'development') {
+        app.get('/test-db', async (_req, res) => {
+            try {
+                const start = Date.now();
+                const result = await db.query('SELECT NOW()');
+                res.json({ status: 'ok', time: result.rows[0], duration: Date.now() - start });
+            } catch (err: any) {
+                res.status(500).json({ status: 'error', message: err.message });
+            }
+        });
 
-    // Temporary logs endpoint for debugging
-    app.get('/debug-logs', (req, res) => {
-        const type = (req.query.type as string) === 'combined' ? 'combined.log' : 'error.log';
-        const logPath = path.join(process.cwd(), 'logs', type);
+        // Local debugging only. Production logs must stay in the configured logging platform.
+        app.get('/debug-logs', (req, res) => {
+            const type = (req.query.type as string) === 'combined' ? 'combined.log' : 'error.log';
+            const logPath = path.join(process.cwd(), 'logs', type);
 
-        if (fs.existsSync(logPath)) {
-            const content = fs.readFileSync(logPath, 'utf8');
-            res.header('Content-Type', 'text/plain');
-            res.send(content);
-        } else {
-            res.status(404).json({
-                error: 'Log file not found',
-                path: logPath,
-                existingFiles: fs.existsSync(path.join(process.cwd(), 'logs'))
-                    ? fs.readdirSync(path.join(process.cwd(), 'logs'))
-                    : 'logs dir missing'
-            });
-        }
-    });
+            if (fs.existsSync(logPath)) {
+                const content = fs.readFileSync(logPath, 'utf8');
+                res.header('Content-Type', 'text/plain');
+                res.send(content);
+            } else {
+                res.status(404).json({ error: 'Log file not found' });
+            }
+        });
+    }
 
     // Creative asset delivery endpoint backed by Supabase Storage
     app.get([
@@ -124,10 +137,14 @@ export function createApp(): Application {
                 return res.status(400).json({ error: 'Invalid filename' });
             }
 
-            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co';
-            const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpZHNmaWhhZ3d0dGxtaGZ5bm1mIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjQ3ODIzOSwiZXhwIjoyMDg4MDU0MjM5fQ.J3Y348_TksyQ6fXw-b5N148rI5U5Y1tWpU6V4sJpEwM';
+            const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+            const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+            if (!supabaseUrl || !supabaseKey) {
+                logger.error('Supabase storage credentials are not configured');
+                return res.status(503).json({ error: 'STORAGE_UNAVAILABLE' });
+            }
 
-            // 1. Download directly from Supabase Storage authenticated endpoint
+            // Download directly from Supabase Storage authenticated endpoint.
             const storageUrl = `${supabaseUrl}/storage/v1/object/creatives/${filename}`;
             const authEndpoint = `${supabaseUrl}/storage/v1/object/authenticated/creatives/${filename}`;
 
@@ -142,7 +159,7 @@ export function createApp(): Application {
                     validateStatus: () => true,
                 });
             } catch {
-                // Ignore and try fallback
+                // Ignore and try authenticated endpoint fallback.
             }
 
             if (!response || response.status !== 200) {
@@ -156,7 +173,7 @@ export function createApp(): Application {
                         validateStatus: () => true,
                     });
                 } catch {
-                    // Ignore
+                    // Ignore and return durable-storage miss below.
                 }
             }
 
@@ -189,22 +206,28 @@ export function createApp(): Application {
         }
     });
 
-    // Platform Admin API Proxy / Fallback to Next.js Ralion Backend
+    // Platform Admin API Proxy to the configured Next.js Ralion backend.
     app.use(['/api/admin', '/ralion/api/admin'], async (req, res) => {
         try {
-            const nextBase = process.env.RALION_UPSTREAM_URL || 
-                             (process.env.NODE_ENV === 'production' 
-                                ? 'https://ralion-dynamic-backend.onrender.com' 
-                                : 'http://localhost:6509');
+            const nextBase = process.env.RALION_UPSTREAM_URL ||
+                (process.env.NODE_ENV === 'development' ? 'http://localhost:6509' : '');
+            if (!nextBase) {
+                return res.status(503).json({
+                    success: false,
+                    error: 'Platform admin upstream is not configured',
+                });
+            }
+
             const targetUrl = `${nextBase.replace(/\/+$/, '')}/api/admin${req.url}`;
-            
             const response = await axios({
                 method: req.method,
                 url: targetUrl,
                 data: req.body,
                 headers: {
-                    ...req.headers,
-                    host: undefined,
+                    authorization: req.get('authorization') || undefined,
+                    'content-type': req.get('content-type') || 'application/json',
+                    'x-workspace-id': req.get('x-workspace-id') || undefined,
+                    'x-organization-id': req.get('x-organization-id') || undefined,
                 },
                 validateStatus: () => true,
             });
@@ -215,7 +238,6 @@ export function createApp(): Application {
             res.status(500).json({
                 success: false,
                 error: 'Platform admin proxy failure',
-                details: err.message,
             });
         }
     });
