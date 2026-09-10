@@ -18,19 +18,15 @@ export async function GET(request: NextRequest) {
 
   try {
     const context = await getCurrentRalionContext(request, { requireAuth: true });
+    if (!context) return authRequiredResponse(request);
 
-    // Enforce 401 Unauthorized for unauthenticated requests
-    if (!context) {
-      return authRequiredResponse(request);
-    }
-
-    // Strictly filter out DISCONNECTED/REVOKED accounts so deleted channels never resurrect
     const { data: rawConnections, error } = await supabase
       .from('social_connections')
       .select(
         'id, user_id, organization_id, workspace_id, provider, provider_account_id, account_name, username, profile_image_url, account_type, connection_status, token_status, scopes, capabilities, metadata, followers_count, infrastructure_provider, zernio_account_id, zernio_profile_id, connected_at, created_at, updated_at'
       )
-      .or(`workspace_id.eq.${context.workspace.id},user_id.eq.${context.user.id}`)
+      .eq('workspace_id', context.workspace.id)
+      .eq('organization_id', context.organization.id)
       .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected', 'active'])
       .order('created_at', { ascending: false });
 
@@ -47,6 +43,7 @@ export async function GET(request: NextRequest) {
     return corsJsonResponse({
       success: true,
       authenticated: true,
+      organizationId: context.organization.id,
       workspaceId: context.workspace.id,
       connections,
       allCapabilities: SocialProviderRegistry.getAllCapabilities(),
@@ -58,13 +55,14 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const context = await getCurrentRalionContext(request, { requireAuth: false });
-    const body = await request.json();
-    const { action, connectionId, provider, userId, workspaceId } = body;
+    const context = await getCurrentRalionContext(request, { requireAuth: true });
+    if (!context) return authRequiredResponse(request);
 
-    const resolvedTenantId = context?.organization.id || context?.workspace.id || workspaceId;
-    const resolvedWorkspaceId = context?.workspace.id || workspaceId;
-    const resolvedUserId = context?.user.id || userId;
+    const body = await request.json();
+    const { action, connectionId, provider } = body;
+    const resolvedTenantId = context.organization.id;
+    const resolvedWorkspaceId = context.workspace.id;
+    const resolvedUserId = context.user.id;
 
     if (action === 'disconnect') {
       const result = await SocialDisconnectService.disconnectSocialProvider({
@@ -75,17 +73,15 @@ export async function POST(request: NextRequest) {
         connectionId,
       });
 
-      if (resolvedUserId) {
-        await AuditLoggerService.log({
-          eventType: 'SOCIAL_ACCOUNT_DISCONNECTED',
-          eventCategory: 'META',
-          userId: resolvedUserId,
-          success: true,
-          resourceType: 'social_connection',
-          resourceId: connectionId || `${provider}_all`,
-          metadata: { provider, result },
-        });
-      }
+      await AuditLoggerService.log({
+        eventType: 'SOCIAL_ACCOUNT_DISCONNECTED',
+        eventCategory: 'META',
+        userId: resolvedUserId,
+        success: true,
+        resourceType: 'social_connection',
+        resourceId: connectionId || `${provider}_all`,
+        metadata: { provider, result },
+      });
 
       return corsJsonResponse({
         success: true,
