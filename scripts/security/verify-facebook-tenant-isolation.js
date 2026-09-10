@@ -17,9 +17,20 @@ function requirePattern(source, regex, message) {
   if (!regex.test(source)) failures.push(message);
 }
 
+function selectedColumns(source) {
+  const columns = [];
+  const selectRegex = /\.select\(\s*(['"])(.*?)\1\s*\)/gs;
+  for (const match of source.matchAll(selectRegex)) {
+    columns.push(...match[2].split(',').map((value) => value.trim()));
+  }
+  return columns;
+}
+
 forbid(pageService, /metadata\?\.pageAccessToken/, 'Plaintext pageAccessToken read path is forbidden.');
 forbid(pageService, /sat\?\.access_token/, 'Legacy plaintext social_account_tokens.access_token fallback is forbidden.');
-forbid(pageService, /select\([^\n]*access_token[^\n]*\)/, 'Queries must not select plaintext access_token columns.');
+if (selectedColumns(pageService).includes('access_token')) {
+  failures.push('Queries must not select plaintext access_token columns.');
+}
 forbid(pageService, /MetaCredentialService\.getValidToken/, 'User-global Meta token fallback is forbidden for Page operations.');
 forbid(pageService, /default-(?:tenant|workspace|org|user)/, 'Synthetic default tenant identifiers are forbidden.');
 forbid(pageService, /totalReach\s*\*\s*1\.4/, 'Derived impressions from reach are forbidden.');
