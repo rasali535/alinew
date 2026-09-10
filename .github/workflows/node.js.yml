@@ -29,6 +29,8 @@ jobs:
       run: npm run security:secrets
     - name: Verify Facebook tenant isolation invariants
       run: npm run security:facebook-isolation
+    - name: Verify social database RLS invariants
+      run: npm run security:social-rls
     - name: Build all workspaces
       run: npm run build --if-present
     - name: Run test suite
