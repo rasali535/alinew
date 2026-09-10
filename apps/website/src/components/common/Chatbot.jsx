@@ -10,13 +10,13 @@ import { generateMariAIResponse } from '@/lib/mariAI';
 import { MariMarkdownMessage } from './MariMarkdownMessage';
 
 const API_URL = getApiUrl();
-const API_KEY = import.meta.env.VITE_API_KEY || 'AIzaSyByz1QviGaYVn3y3ax2S3E1Uhrrhw6J5j0';
+const API_KEY = import.meta.env.VITE_API_KEY;
 
 // Global axios instance for Mari AI chat management (8s timeout for rapid fallback)
 const chatAxios = axios.create({
     baseURL: API_URL,
     headers: {
-        'x-api-key': API_KEY,
+        ...(API_KEY ? { 'x-api-key': API_KEY } : {}),
         'Content-Type': 'application/json'
     },
     timeout: 8000
