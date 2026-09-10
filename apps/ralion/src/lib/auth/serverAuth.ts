@@ -218,73 +218,198 @@ export async function getCurrentRalionContext(
     console.warn('[ServerAuth] Profile query notice:', err.message);
   }
 
-  // 4. Resolve Workspace
-  // Default workspace ID is deterministic to the user ID if not explicitly specified
-  const primaryWorkspaceId = authUser.id;
-  let targetWorkspaceId = primaryWorkspaceId;
-
-  if (headerWorkspaceId && headerWorkspaceId !== 'default-org' && headerWorkspaceId !== 'default') {
-    // If a specific workspace ID is requested, verify the user owns or belongs to it
-    if (headerWorkspaceId === authUser.id) {
-      targetWorkspaceId = headerWorkspaceId;
-    } else {
-      // Check membership
-      try {
-        const { data: member } = await supabase
-          .from('workspace_members')
-          .select('workspace_id, role')
-          .eq('workspace_id', headerWorkspaceId)
-          .eq('user_id', authUser.id)
-          .maybeSingle();
-
-        if (member) {
-          targetWorkspaceId = headerWorkspaceId;
-        } else {
-          // Denied cross-tenant access, restrict back to user's primary workspace
-          targetWorkspaceId = primaryWorkspaceId;
-        }
-      } catch {
-        targetWorkspaceId = primaryWorkspaceId;
-      }
-    }
-  }
-
+  // 4. Resolve Workspace from database (authoritative source)
   const workspaceName = `${profile.fullName}'s Workspace`;
-
   const companyName =
     authUser.user_metadata?.org_name?.trim() ||
     (authUser.email?.endsWith('@rasalilabs.com') ? 'Ras Ali Labs' : '') ||
     workspaceName;
 
-  const orgId =
-    authUser.user_metadata?.organizationId ||
-    authUser.user_metadata?.organization_id ||
-    (authUser.email?.endsWith('@rasalilabs.com') ? 'ras-ali-labs' : '') ||
-    (authUser.user_metadata?.org_name ? authUser.user_metadata.org_name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') : '') ||
-    targetWorkspaceId;
+  let dbWorkspace: any = null;
+  let dbMembership: any = null;
+  let dbOrganization: any = null;
+
+  // 4a. Look up existing workspace owned by this user
+  try {
+    const { data: ownedWs } = await supabase
+      .from('workspaces')
+      .select('id, name, slug, owner_id, organization_id, created_at')
+      .eq('owner_id', authUser.id)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (ownedWs) {
+      dbWorkspace = ownedWs;
+    }
+  } catch (err: any) {
+    console.warn('[ServerAuth] Workspace lookup notice:', err.message);
+  }
+
+  // 4b. If no owned workspace, check membership in any workspace
+  if (!dbWorkspace) {
+    try {
+      const { data: memberWs } = await supabase
+        .from('workspace_members')
+        .select('workspace_id, role, workspaces ( id, name, slug, owner_id, organization_id, created_at )')
+        .eq('user_id', authUser.id)
+        .order('joined_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (memberWs?.workspaces) {
+        dbWorkspace = (memberWs as any).workspaces;
+        dbMembership = { workspace_id: memberWs.workspace_id, role: memberWs.role };
+      }
+    } catch (err: any) {
+      console.warn('[ServerAuth] Membership lookup notice:', err.message);
+    }
+  }
+
+  // 4c. Auto-create workspace + membership if authenticated user has none
+  if (!dbWorkspace) {
+    try {
+      const wsSlug = `ws-${authUser.id.slice(0, 8)}`;
+
+      // Create organization first
+      const { data: newOrg } = await supabase
+        .from('organizations')
+        .insert({
+          name: companyName,
+          slug: companyName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || wsSlug,
+          plan: authUser.user_metadata?.tier || 'PROFESSIONAL',
+        })
+        .select('id, name, slug, plan, created_at')
+        .single();
+
+      if (newOrg) {
+        dbOrganization = newOrg;
+
+        // Create workspace linked to the organization
+        const { data: newWs } = await supabase
+          .from('workspaces')
+          .insert({
+            organization_id: newOrg.id,
+            name: companyName,
+            slug: wsSlug,
+            owner_id: authUser.id,
+            industry: authUser.user_metadata?.industry || null,
+          })
+          .select('id, name, slug, owner_id, organization_id, created_at')
+          .single();
+
+        if (newWs) {
+          dbWorkspace = newWs;
+
+          // Create owner membership
+          await supabase
+            .from('workspace_members')
+            .insert({
+              workspace_id: newWs.id,
+              user_id: authUser.id,
+              role: 'OWNER',
+            });
+
+          console.log('[ServerAuth] Auto-provisioned workspace for new user:', {
+            userId: authUser.id,
+            workspaceId: newWs.id,
+            organizationId: newOrg.id,
+          });
+        }
+      }
+    } catch (err: any) {
+      console.warn('[ServerAuth] Auto-provision notice:', err.message);
+    }
+  }
+
+  // 4d. Resolve the organization from the workspace's organization_id
+  if (!dbOrganization && dbWorkspace?.organization_id) {
+    try {
+      const { data: orgRow } = await supabase
+        .from('organizations')
+        .select('id, name, slug, plan, created_at')
+        .eq('id', dbWorkspace.organization_id)
+        .maybeSingle();
+
+      if (orgRow) {
+        dbOrganization = orgRow;
+      }
+    } catch (err: any) {
+      console.warn('[ServerAuth] Organization lookup notice:', err.message);
+    }
+  }
+
+  // 4e. If a specific workspace ID was requested via header, verify membership
+  let targetWorkspaceId = dbWorkspace?.id || authUser.id;
+
+  if (headerWorkspaceId && headerWorkspaceId !== 'default-org' && headerWorkspaceId !== 'default' && headerWorkspaceId !== targetWorkspaceId) {
+    try {
+      const { data: member } = await supabase
+        .from('workspace_members')
+        .select('workspace_id, role')
+        .eq('workspace_id', headerWorkspaceId)
+        .eq('user_id', authUser.id)
+        .maybeSingle();
+
+      if (member) {
+        targetWorkspaceId = headerWorkspaceId;
+        // Re-fetch the target workspace details
+        const { data: targetWs } = await supabase
+          .from('workspaces')
+          .select('id, name, slug, owner_id, organization_id, created_at')
+          .eq('id', headerWorkspaceId)
+          .maybeSingle();
+        if (targetWs) {
+          dbWorkspace = targetWs;
+        }
+      }
+    } catch {
+      // Keep the user's primary workspace
+    }
+  }
+
+  // 4f. Resolve membership if not already resolved
+  if (!dbMembership && dbWorkspace) {
+    try {
+      const { data: mem } = await supabase
+        .from('workspace_members')
+        .select('id, workspace_id, user_id, role')
+        .eq('workspace_id', dbWorkspace.id)
+        .eq('user_id', authUser.id)
+        .maybeSingle();
+
+      if (mem) {
+        dbMembership = mem;
+      }
+    } catch {}
+  }
+
+  // Build canonical response objects
+  const canonicalOrgId = dbOrganization?.id || dbWorkspace?.organization_id || targetWorkspaceId;
 
   const workspace: RalionWorkspace = {
     id: targetWorkspaceId,
-    name: companyName,
-    slug: `ws-${authUser.id.slice(0, 8)}`,
-    owner_id: authUser.id,
-    organization_id: orgId,
+    name: dbWorkspace?.name || companyName,
+    slug: dbWorkspace?.slug || `ws-${authUser.id.slice(0, 8)}`,
+    owner_id: dbWorkspace?.owner_id || authUser.id,
+    organization_id: canonicalOrgId,
   };
 
   const membership: RalionWorkspaceMembership = {
-    id: `mem_${authUser.id.slice(0, 12)}`,
+    id: dbMembership?.id || `mem_${authUser.id.slice(0, 12)}`,
     workspace_id: targetWorkspaceId,
     user_id: authUser.id,
-    role: 'owner',
+    role: (dbMembership?.role?.toLowerCase() as any) || 'owner',
   };
 
   console.log('[ServerAuth] Context verified:', {
     userId: authUser.id,
     userEmail: authUser.email ? authUser.email.replace(/(?<=.).(?=.*@)/g, '*') : 'hidden',
     workspaceId: workspace.id,
-    organizationId: orgId,
-    companyName,
+    organizationId: canonicalOrgId,
+    companyName: dbOrganization?.name || companyName,
     role: membership.role,
+    source: dbWorkspace ? 'DATABASE' : 'FALLBACK',
   });
 
   return {
@@ -297,9 +422,9 @@ export async function getCurrentRalionContext(
     workspace,
     membership,
     organization: {
-      id: orgId,
-      name: companyName,
-      tier: authUser.user_metadata?.tier || 'STANDARD',
+      id: canonicalOrgId,
+      name: dbOrganization?.name || companyName,
+      tier: dbOrganization?.plan || authUser.user_metadata?.tier || 'STANDARD',
     },
   };
 }

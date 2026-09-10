@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar, Header } from '@ralion/ui';
+import { OrganizationProvider } from '@ralion/auth';
 import { MariAiDrawer } from '../../components/MariAiDrawer';
 import { FloatingMariAi } from '../../components/FloatingMariAi';
 import { ProductAccessGuard } from '../../components/ProductAccessGuard';
@@ -55,98 +56,100 @@ export default function DashboardLayout({
   };
 
   return (
-    <ProductAccessGuard>
-      <div className="flex h-screen bg-zinc-950 text-zinc-100 overflow-hidden">
-        {/* Desktop Sidebar */}
-        <div className="hidden md:flex shrink-0">
-          <Sidebar
-            currentPath={pathname}
-            orgName={organizationName}
-            tier={displayTier}
-            isPlatformAdmin={isPlatformAdmin}
-            platformUrl={process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com'}
-            isCollapsed={isSidebarCollapsed}
-            onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
-            onNavigate={handleNavigate}
-            onOpenMariAI={() => setIsMariDrawerOpen(true)}
-            onLogout={async () => {
-              const { AuthService } = await import('@/lib/services/auth.service');
-              await AuthService.logout();
-            }}
-          />
-        </div>
-
-        {/* Mobile Sidebar Overlay & Drawer */}
-        {isMobileSidebarOpen && (
-          <div className="md:hidden fixed inset-0 z-50 flex">
-            <div 
-              className="fixed inset-0 bg-black/70 backdrop-blur-sm transition-opacity"
-              onClick={() => setIsMobileSidebarOpen(false)}
+    <OrganizationProvider>
+      <ProductAccessGuard>
+        <div className="flex h-screen bg-zinc-950 text-zinc-100 overflow-hidden">
+          {/* Desktop Sidebar */}
+          <div className="hidden md:flex shrink-0">
+            <Sidebar
+              currentPath={pathname}
+              orgName={organizationName}
+              tier={displayTier}
+              isPlatformAdmin={isPlatformAdmin}
+              platformUrl={process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com'}
+              isCollapsed={isSidebarCollapsed}
+              onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
+              onNavigate={handleNavigate}
+              onOpenMariAI={() => setIsMariDrawerOpen(true)}
+              onLogout={async () => {
+                const { AuthService } = await import('@/lib/services/auth.service');
+                await AuthService.logout();
+              }}
             />
-            <div className="relative z-50 flex flex-col w-64 max-w-[85vw] h-full bg-zinc-950 border-r border-zinc-800 shadow-2xl">
-              <Sidebar
-                currentPath={pathname}
-                orgName={organizationName}
-                tier={displayTier}
-                isPlatformAdmin={isPlatformAdmin}
-                platformUrl={process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com'}
-                isCollapsed={false}
-                onNavigate={handleNavigate}
-                onOpenMariAI={() => {
-                  setIsMobileSidebarOpen(false);
-                  setIsMariDrawerOpen(true);
-                }}
-                onLogout={async () => {
-                  const { AuthService } = await import('@/lib/services/auth.service');
-                  await AuthService.logout();
-                }}
-              />
-            </div>
           </div>
-        )}
 
-        {/* Main Content Area */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <Header
-            user={{
-              name: currentUser?.fullName || 'User',
-              role: isPlatformAdmin ? 'PLATFORM_ADMIN' : currentUser?.tier === 'ENTERPRISE' ? 'ENTERPRISE_ADMIN' : currentUser?.tier === 'STANDARD' ? 'STANDARD_USER' : currentUser?.tier === 'PROFESSIONAL' ? 'PRO_OPERATOR' : 'ORGANIZATION_OWNER',
-              email: currentUser?.email || 'user@example.com'
-            }}
-            orgName={organizationName}
-            isAdmin={isPlatformAdmin}
-            activeBranch={branchName}
-            unreadNotifications={0}
-            exitUrl={process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com'}
-            onExit={() => {
-              const platformUrl = process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com';
-              window.location.href = platformUrl;
-            }}
-            onOpenAdmin={() => {
-              handleNavigate('/ralion/admin');
-            }}
-            onOpenMariAI={() => setIsMariDrawerOpen(true)}
-            onToggleMobileSidebar={() => setIsMobileSidebarOpen(prev => !prev)}
-            onLogout={async () => {
-              const { AuthService } = await import('@/lib/services/auth.service');
-              await AuthService.logout();
-            }}
+          {/* Mobile Sidebar Overlay & Drawer */}
+          {isMobileSidebarOpen && (
+            <div className="md:hidden fixed inset-0 z-50 flex">
+              <div 
+                className="fixed inset-0 bg-black/70 backdrop-blur-sm transition-opacity"
+                onClick={() => setIsMobileSidebarOpen(false)}
+              />
+              <div className="relative z-50 flex flex-col w-64 max-w-[85vw] h-full bg-zinc-950 border-r border-zinc-800 shadow-2xl">
+                <Sidebar
+                  currentPath={pathname}
+                  orgName={organizationName}
+                  tier={displayTier}
+                  isPlatformAdmin={isPlatformAdmin}
+                  platformUrl={process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com'}
+                  isCollapsed={false}
+                  onNavigate={handleNavigate}
+                  onOpenMariAI={() => {
+                    setIsMobileSidebarOpen(false);
+                    setIsMariDrawerOpen(true);
+                  }}
+                  onLogout={async () => {
+                    const { AuthService } = await import('@/lib/services/auth.service');
+                    await AuthService.logout();
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Main Content Area */}
+          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+            <Header
+              user={{
+                name: currentUser?.fullName || 'User',
+                role: isPlatformAdmin ? 'PLATFORM_ADMIN' : currentUser?.tier === 'ENTERPRISE' ? 'ENTERPRISE_ADMIN' : currentUser?.tier === 'STANDARD' ? 'STANDARD_USER' : currentUser?.tier === 'PROFESSIONAL' ? 'PRO_OPERATOR' : 'ORGANIZATION_OWNER',
+                email: currentUser?.email || 'user@example.com'
+              }}
+              orgName={organizationName}
+              isAdmin={isPlatformAdmin}
+              activeBranch={branchName}
+              unreadNotifications={0}
+              exitUrl={process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com'}
+              onExit={() => {
+                const platformUrl = process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com';
+                window.location.href = platformUrl;
+              }}
+              onOpenAdmin={() => {
+                handleNavigate('/ralion/admin');
+              }}
+              onOpenMariAI={() => setIsMariDrawerOpen(true)}
+              onToggleMobileSidebar={() => setIsMobileSidebarOpen(prev => !prev)}
+              onLogout={async () => {
+                const { AuthService } = await import('@/lib/services/auth.service');
+                await AuthService.logout();
+              }}
+            />
+
+            <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-zinc-950">
+              {children}
+            </main>
+          </div>
+
+          {/* Slide-over Mari AI Drawer */}
+          <MariAiDrawer
+            isOpen={isMariDrawerOpen}
+            onClose={() => setIsMariDrawerOpen(false)}
           />
 
-          <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-zinc-950">
-            {children}
-          </main>
+          {/* Floating Mari AI Assistant Widget */}
+          <FloatingMariAi />
         </div>
-
-        {/* Slide-over Mari AI Drawer */}
-        <MariAiDrawer
-          isOpen={isMariDrawerOpen}
-          onClose={() => setIsMariDrawerOpen(false)}
-        />
-
-        {/* Floating Mari AI Assistant Widget */}
-        <FloatingMariAi />
-      </div>
-    </ProductAccessGuard>
+      </ProductAccessGuard>
+    </OrganizationProvider>
   );
 }
