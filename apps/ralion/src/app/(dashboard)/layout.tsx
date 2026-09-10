@@ -17,7 +17,7 @@ export default function DashboardLayout({
   const [isMariDrawerOpen, setIsMariDrawerOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  
+
   const [currentUser, setCurrentUser] = useState<{
     fullName: string | null;
     email: string | null;
@@ -34,7 +34,6 @@ export default function DashboardLayout({
     });
   }, []);
 
-  // Close mobile sidebar on route change
   useEffect(() => {
     setIsMobileSidebarOpen(false);
   }, [pathname]);
@@ -57,7 +56,6 @@ export default function DashboardLayout({
   return (
     <ProductAccessGuard>
       <div className="flex h-screen bg-zinc-950 text-zinc-100 overflow-hidden">
-        {/* Desktop Sidebar */}
         <div className="hidden md:flex shrink-0">
           <Sidebar
             currentPath={pathname}
@@ -76,10 +74,9 @@ export default function DashboardLayout({
           />
         </div>
 
-        {/* Mobile Sidebar Overlay & Drawer */}
         {isMobileSidebarOpen && (
           <div className="md:hidden fixed inset-0 z-50 flex">
-            <div 
+            <div
               className="fixed inset-0 bg-black/70 backdrop-blur-sm transition-opacity"
               onClick={() => setIsMobileSidebarOpen(false)}
             />
@@ -105,7 +102,6 @@ export default function DashboardLayout({
           </div>
         )}
 
-        {/* Main Content Area */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <Header
             user={{
@@ -138,13 +134,11 @@ export default function DashboardLayout({
           </main>
         </div>
 
-        {/* Slide-over Mari AI Drawer */}
         <MariAiDrawer
           isOpen={isMariDrawerOpen}
           onClose={() => setIsMariDrawerOpen(false)}
         />
 
-        {/* Floating Mari AI Assistant Widget */}
         <FloatingMariAi />
       </div>
     </ProductAccessGuard>
