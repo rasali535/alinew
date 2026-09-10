@@ -232,10 +232,10 @@ export function createApp(): Application {
                 validateStatus: () => true,
             });
 
-            res.status(response.status).json(response.data);
+            return res.status(response.status).json(response.data);
         } catch (err: any) {
             logger.error('[Express Proxy] Error proxying platform admin request to Next.js:', err);
-            res.status(500).json({
+            return res.status(500).json({
                 success: false,
                 error: 'Platform admin proxy failure',
             });
