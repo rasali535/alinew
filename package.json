@@ -27,7 +27,8 @@
     "test:e2e": "node ./scripts/production-e2e-readiness.js",
     "security:audit": "node ./scripts/security-audit.js",
     "security:secrets": "node ./scripts/security/scan-secrets.js",
-    "security:facebook-isolation": "node ./scripts/security/verify-facebook-tenant-isolation.js"
+    "security:facebook-isolation": "node ./scripts/security/verify-facebook-tenant-isolation.js",
+    "security:social-rls": "node ./scripts/security/verify-social-rls-hardening.js"
   },
   "overrides": {
     "react": "^19.0.0",
