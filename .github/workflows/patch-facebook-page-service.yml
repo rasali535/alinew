@@ -1,0 +1,80 @@
+name: Patch Facebook page service
+
+on:
+  push:
+    branches:
+      - security/p0-secret-purge
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: security/p0-secret-purge
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+      - name: Patch tenant-bound Facebook token handling
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('apps/ralion/src/lib/services/social/facebookPageManagement.service.ts')
+          s = p.read_text()
+
+          # Remove user-global social_account_tokens lookup. Page operations may only
+          # source encrypted credentials from tenant-scoped social_connections rows.
+          s, n1 = re.subn(
+              r"\n\s*const \{ data: satRow \} = await supabase\n\s*\.from\('social_account_tokens'\)\n\s*\.select\('encrypted_access_token, encrypted_refresh_token, expires_at, metadata'\)\n\s*\.eq\('user_id', userId\)\n\s*\.eq\('provider', 'facebook'\)\n\s*\.maybeSingle\(\);\n\n\s*let encryptedAccessToken: string \| null = satRow\?\.encrypted_access_token \|\| null;\n\s*let encryptedRefreshToken: string \| null = satRow\?\.encrypted_refresh_token \|\| null;\n\s*let tokenExpiresAt: string \| null = satRow\?\.expires_at \|\| null;\n\s*let zernioProfileId: string \| null = null;\n\s*let facebookUserId: string \| null = satRow\?\.metadata\?\.facebookUserId \|\| null;",
+              "\n\n    let encryptedAccessToken: string | null = null;\n    let encryptedRefreshToken: string | null = null;\n    let tokenExpiresAt: string | null = null;\n    let zernioProfileId: string | null = null;\n    let facebookUserId: string | null = null;",
+              s,
+              flags=re.M,
+          )
+
+          # Remove user-global token-row mutation on Page selection.
+          s, n2 = re.subn(
+              r"\n\s*await supabase\n\s*\.from\('social_account_tokens'\)\n\s*\.update\(\{.*?\n\s*\}\)\n\s*\.eq\('user_id', userId\)\n\s*\.eq\('provider', 'facebook'\);",
+              "",
+              s,
+              count=1,
+              flags=re.S,
+          )
+
+          # Never place access tokens in URLs; use Authorization header.
+          old = """        const fbRes = await fetch(\n          `https://graph.facebook.com/v19.0/${targetPageId}/posts?fields=${fields}&limit=25&access_token=${encodeURIComponent(fbToken)}`,\n          { signal: AbortSignal.timeout(8000) }\n        );"""
+          new = """        const fbRes = await fetch(\n          `https://graph.facebook.com/v19.0/${targetPageId}/posts?fields=${fields}&limit=25`,\n          {\n            headers: { Authorization: `Bearer ${fbToken}` },\n            signal: AbortSignal.timeout(8000),\n          }\n        );"""
+          if old in s:
+              s = s.replace(old, new, 1)
+              n3 = 1
+          else:
+              n3 = 0
+
+          if not (n1 == 1 and n2 == 1 and n3 == 1):
+              raise SystemExit(f'Patch invariants failed: token_lookup={n1}, token_update={n2}, graph_header={n3}')
+
+          p.write_text(s)
+          PY
+
+      - name: Run Facebook isolation guard
+        run: node scripts/security/verify-facebook-tenant-isolation.js
+
+      - name: Commit hardened service
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No patch required"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/ralion/src/lib/services/social/facebookPageManagement.service.ts
+          git commit -m "security(p0): bind Facebook Page tokens to tenant connections"
+          git push origin HEAD:security/p0-secret-purge
