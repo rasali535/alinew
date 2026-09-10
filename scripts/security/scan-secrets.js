@@ -25,6 +25,7 @@ const placeholderFragments = [
   'your-',
   '<redacted>',
   '[redacted]',
+  '[redacted_',
   'changeme',
   'change_me',
   'example',
@@ -37,6 +38,7 @@ const placeholderFragments = [
   'generate-a-',
   '[project-ref]',
   '[password]',
+  'postgresql://user:password@',
 ];
 
 const detectors = [
@@ -82,6 +84,7 @@ function isProbablyText(buffer) {
 
 function isPlaceholder(value) {
   const lower = value.toLowerCase();
+  if (value === '...' || value.endsWith('...')) return true;
   return placeholderFragments.some((fragment) => lower.includes(fragment));
 }
 
