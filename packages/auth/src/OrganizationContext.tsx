@@ -40,7 +40,12 @@ function getContextApiBase(): string {
   return `${origin}/ralion`;
 }
 
-function readStoredSession(): { accessToken: string | null; user: any | null } {
+function getSharedSupabaseClient(): any | null {
+  if (typeof window === 'undefined') return null;
+  return (window as any).__ralion_supabase_instance__ || (globalThis as any).__ralion_supabase_instance__ || null;
+}
+
+function readStoredSessionFallback(): { accessToken: string | null; user: any | null } {
   let accessToken: string | null = null;
   let user: any | null = null;
   try {
@@ -63,6 +68,46 @@ function readStoredSession(): { accessToken: string | null; user: any | null } {
   return { accessToken, user };
 }
 
+async function readCurrentSession(forceRefresh = false): Promise<{ accessToken: string | null; user: any | null }> {
+  const sharedClient = getSharedSupabaseClient();
+
+  if (sharedClient?.auth) {
+    try {
+      if (forceRefresh && typeof sharedClient.auth.refreshSession === 'function') {
+        const refreshed = await sharedClient.auth.refreshSession();
+        const refreshedSession = refreshed?.data?.session;
+        if (refreshedSession?.access_token) {
+          return { accessToken: refreshedSession.access_token, user: refreshedSession.user || null };
+        }
+      }
+
+      if (typeof sharedClient.auth.getSession === 'function') {
+        const result = await sharedClient.auth.getSession();
+        const session = result?.data?.session;
+        if (session?.access_token) {
+          return { accessToken: session.access_token, user: session.user || null };
+        }
+      }
+    } catch (err) {
+      console.warn('[AuthContext] Supabase session resolution note:', err);
+    }
+  }
+
+  return readStoredSessionFallback();
+}
+
+async function fetchAuthoritativeContext(accessToken: string) {
+  return fetch(`${getContextApiBase()}/api/auth/context`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+    },
+    credentials: 'include',
+    cache: 'no-store',
+  });
+}
+
 export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [organization, setOrganization] = useState<Organization | null>(null);
@@ -71,45 +116,50 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [isContextResolved, setIsContextResolved] = useState(false);
   const isResolvingRef = useRef(false);
 
+  const clearResolvedContext = useCallback(() => {
+    setUser(null);
+    setOrganization(null);
+    setActiveBranch(null);
+    setIsContextResolved(true);
+  }, []);
+
   const resolveAuthoritativeContext = useCallback(async () => {
     if (typeof window === 'undefined' || isResolvingRef.current) return;
     isResolvingRef.current = true;
     setIsLoading(true);
+    setIsContextResolved(false);
+
     try {
-      const { accessToken, user: supabaseUser } = readStoredSession();
+      let { accessToken, user: supabaseUser } = await readCurrentSession(false);
       if (!accessToken) {
-        setUser(null);
-        setOrganization(null);
-        setActiveBranch(null);
-        setIsContextResolved(true);
+        clearResolvedContext();
         return;
       }
 
-      const res = await fetch(`${getContextApiBase()}/api/auth/context`, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: 'application/json',
-        },
-        credentials: 'include',
-      });
+      let res = await fetchAuthoritativeContext(accessToken);
+
+      // A 401 commonly means the browser still has an expired access token while
+      // a valid refresh token exists. Refresh through the canonical Supabase client
+      // once, then retry with the newly issued JWT. Never weaken server validation.
+      if (res.status === 401) {
+        const refreshed = await readCurrentSession(true);
+        if (refreshed.accessToken && refreshed.accessToken !== accessToken) {
+          accessToken = refreshed.accessToken;
+          supabaseUser = refreshed.user || supabaseUser;
+          res = await fetchAuthoritativeContext(accessToken);
+        }
+      }
 
       if (!res.ok) {
         console.warn('[AuthContext] Server context resolution failed:', res.status);
-        setUser(null);
-        setOrganization(null);
-        setActiveBranch(null);
-        setIsContextResolved(true);
+        clearResolvedContext();
         return;
       }
 
       const data = await res.json();
       if (!data.success || !data.user || !data.workspace || !data.organization || !data.membership) {
         console.warn('[AuthContext] Server returned incomplete context');
-        setUser(null);
-        setOrganization(null);
-        setActiveBranch(null);
-        setIsContextResolved(true);
+        clearResolvedContext();
         return;
       }
 
@@ -166,33 +216,44 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       });
     } catch (err) {
       console.warn('[AuthContext] Context resolution error:', err);
-      setUser(null);
-      setOrganization(null);
-      setActiveBranch(null);
-      setIsContextResolved(true);
+      clearResolvedContext();
     } finally {
       setIsLoading(false);
       isResolvingRef.current = false;
     }
-  }, []);
+  }, [clearResolvedContext]);
 
   useEffect(() => {
     resolveAuthoritativeContext();
+
     const handleOrgUpdate = () => resolveAuthoritativeContext();
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key && (e.key === 'ralion-app-auth-token' || (e.key.startsWith('sb-') && e.key.endsWith('-auth-token')))) {
         resolveAuthoritativeContext();
       }
     };
+
+    const sharedClient = getSharedSupabaseClient();
+    const authSubscription = sharedClient?.auth?.onAuthStateChange?.((event: string) => {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        resolveAuthoritativeContext();
+      }
+      if (event === 'SIGNED_OUT') {
+        clearResolvedContext();
+      }
+    });
+
     window.addEventListener('ralion_subscription_updated', handleOrgUpdate);
     window.addEventListener('ralion_organization_updated', handleOrgUpdate);
     window.addEventListener('storage', handleStorageChange);
+
     return () => {
       window.removeEventListener('ralion_subscription_updated', handleOrgUpdate);
       window.removeEventListener('ralion_organization_updated', handleOrgUpdate);
       window.removeEventListener('storage', handleStorageChange);
+      authSubscription?.data?.subscription?.unsubscribe?.();
     };
-  }, [resolveAuthoritativeContext]);
+  }, [resolveAuthoritativeContext, clearResolvedContext]);
 
   const logout = () => {
     setUser(null);
