@@ -16,8 +16,16 @@ import { encryptToken, decryptToken } from '@ralion/integrations';
 import { AuditLoggerService } from './auditLogger.service';
 
 function getServiceSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co';
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url) {
+    throw new Error('SUPABASE_URL is not configured for Meta credential management.');
+  }
+  if (!key) {
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured for Meta credential management.');
+  }
+
   return createClient(url, key, {
     auth: {
       persistSession: false,
@@ -54,6 +62,13 @@ export class MetaCredentialService {
     const encryptedAccessToken = encryptToken(params.accessToken);
     const encryptedRefreshToken = params.refreshToken ? encryptToken(params.refreshToken) : null;
     const tokenExpiresAt = params.expiresAt ? params.expiresAt.toISOString() : null;
+
+    if (!encryptedAccessToken.startsWith('enc_gcm_v2_')) {
+      throw new Error('[MetaCredentialService] Refusing to persist an unencrypted access token.');
+    }
+    if (params.refreshToken && (!encryptedRefreshToken || !encryptedRefreshToken.startsWith('enc_gcm_v2_'))) {
+      throw new Error('[MetaCredentialService] Refusing to persist an unencrypted refresh token.');
+    }
 
     try {
       // 1. Store in primary meta_connections table
@@ -97,7 +112,7 @@ export class MetaCredentialService {
         last_synced_at: new Date().toISOString(),
       }, { onConflict: 'user_id,provider' });
 
-      // 3. Emit structured audit log event (Zero token exposure)
+      // 3. Emit structured audit log event (zero token exposure)
       await AuditLoggerService.log({
         eventType: 'META_TOKEN_CREATED',
         eventCategory: 'META',
@@ -118,14 +133,15 @@ export class MetaCredentialService {
 
       return true;
     } catch (err) {
-      console.error('[MetaCredentialService] Save token failed:', (err as Error).message);
+      const message = err instanceof Error ? err.message : 'Unknown Meta credential storage error';
+      console.error('[MetaCredentialService] Save token failed:', message);
       await AuditLoggerService.log({
         eventType: 'META_API_FAILURE',
         eventCategory: 'META',
         userId: params.userId,
         metaUserId: params.metaUserId,
         success: false,
-        metadata: { error: (err as Error).message, action: 'saveToken' },
+        metadata: { error: message, action: 'saveToken' },
       });
       throw err;
     }
@@ -152,7 +168,7 @@ export class MetaCredentialService {
 
     const decryptedToken = decryptToken(data.encrypted_access_token);
     if (!decryptedToken) {
-      console.error('[MetaCredentialService] Failed to decrypt token for user:', userId);
+      console.error('[MetaCredentialService] Failed to decrypt stored token for requested account.');
       return null;
     }
 
@@ -163,7 +179,7 @@ export class MetaCredentialService {
       metaUserId: data.meta_user_id,
       scopes: data.scopes,
       isExpired,
-      pageId: data.pageId,
+      pageId: data.page_id,
       expiresAt: data.token_expires_at ? new Date(data.token_expires_at) : undefined,
     };
   }
@@ -173,15 +189,15 @@ export class MetaCredentialService {
    */
   static async revokeToken(userId: string, metaUserId: string, provider: 'facebook' | 'instagram' | 'meta' = 'facebook'): Promise<boolean> {
     const creds = await this.getValidToken(userId, provider);
-    
+
     if (creds?.accessToken) {
       try {
-        // Meta Graph API standard permission revocation: DELETE /me/permissions
         const res = await fetch(`https://graph.facebook.com/v19.0/me/permissions?access_token=${encodeURIComponent(creds.accessToken)}`, {
           method: 'DELETE',
         });
-        const result = await res.json();
-        console.log('[MetaCredentialService] Meta Graph API Revoke status:', result);
+        if (!res.ok) {
+          console.warn('[MetaCredentialService] Meta Graph API revocation returned a non-success status.');
+        }
       } catch (graphErr) {
         console.warn('[MetaCredentialService] Meta remote revocation warning:', (graphErr as Error).message);
       }
@@ -197,7 +213,8 @@ export class MetaCredentialService {
         disconnected_at: new Date().toISOString(),
       })
       .eq('user_id', userId)
-      .eq('meta_user_id', metaUserId);
+      .eq('meta_user_id', metaUserId)
+      .eq('provider', provider);
 
     await AuditLoggerService.log({
       eventType: 'META_TOKEN_REVOKED',
@@ -217,7 +234,6 @@ export class MetaCredentialService {
   static async disconnectAccount(userId: string, provider: 'facebook' | 'instagram' | 'meta' = 'facebook'): Promise<boolean> {
     const supabase = getServiceSupabase();
 
-    // 1. Find existing connection
     const { data: conn } = await supabase
       .from('meta_connections')
       .select('meta_user_id')
@@ -227,12 +243,10 @@ export class MetaCredentialService {
 
     const metaUserId = conn?.meta_user_id || 'unknown';
 
-    // 2. Revoke remote token
     if (conn?.meta_user_id) {
       await this.revokeToken(userId, conn.meta_user_id, provider);
     }
 
-    // 3. Mark disconnected and clear tokens from database
     await supabase
       .from('meta_connections')
       .update({
@@ -250,7 +264,6 @@ export class MetaCredentialService {
       .eq('user_id', userId)
       .eq('provider', provider);
 
-    // 4. Log security event
     await AuditLoggerService.log({
       eventType: 'META_DISCONNECT',
       eventCategory: 'META',
@@ -268,16 +281,14 @@ export class MetaCredentialService {
    */
   static async deleteUserData(metaUserId: string): Promise<{ confirmationCode: string; deletedAt: string }> {
     const supabase = getServiceSupabase();
-    const confirmationCode = `del_${metaUserId}_${Date.now()}`;
+    const confirmationCode = `del_${cryptoSafeIdentifier(metaUserId)}_${Date.now()}`;
     const deletedAt = new Date().toISOString();
 
-    // 1. Delete or purge all connection records for this Meta User ID
     await supabase
       .from('meta_connections')
       .delete()
       .eq('meta_user_id', metaUserId);
 
-    // 2. Record compliance audit entry (retained for 90+ days without private payload)
     await AuditLoggerService.log({
       eventType: 'META_DISCONNECT',
       eventCategory: 'DATA_ACCESS',
@@ -294,4 +305,8 @@ export class MetaCredentialService {
 
     return { confirmationCode, deletedAt };
   }
+}
+
+function cryptoSafeIdentifier(value: string): string {
+  return value.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) || 'unknown';
 }
