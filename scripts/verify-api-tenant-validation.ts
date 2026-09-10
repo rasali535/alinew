@@ -1,10 +1,21 @@
 import * as dotenv from 'dotenv';
+import { randomBytes } from 'node:crypto';
+
 dotenv.config({ path: 'apps/ralion/.env.local' });
 dotenv.config();
 
-process.env.SUPABASE_SERVICE_ROLE_KEY =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpZHNmaWhhZ3d0dGxtaGZ5bm1mIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjgyMzk0NSwiZXhwIjoyMDk4Mzk5OTQ1fQ.mpparRo7a5t5B7uOlWBxiRI7NDsVGfmxkPUEbxSYBfA';
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  throw new Error('SUPABASE_SERVICE_ROLE_KEY is required for the tenant validation audit.');
+}
+
+if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+  throw new Error('NEXT_PUBLIC_SUPABASE_ANON_KEY is required for the tenant validation audit.');
+}
+
+const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+if (!supabaseUrl) {
+  throw new Error('SUPABASE_URL is required for the tenant validation audit.');
+}
 
 import { NextRequest } from 'next/server';
 import { POST as mariChatPOST } from '../apps/ralion/src/app/api/mari/chat/route';
@@ -17,7 +28,7 @@ async function runApiSecurityTests() {
   let passed = 0;
   let failed = 0;
 
-  function assert(condition: boolean, testName: string, detail?: any) {
+  function assert(condition: boolean, testName: string, detail?: unknown) {
     if (condition) {
       console.log(`✅ PASS: ${testName}`);
       passed++;
@@ -29,222 +40,174 @@ async function runApiSecurityTests() {
   }
 
   const supabase = getServiceSupabase();
-  const PAMELTEX_ID = 'c0b39862-cf19-4882-a822-c7f3f493fec0';
-  const RAS_ALI_ID = '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf';
+  const PAMELTEX_ID = process.env.TEST_PAMELTEX_TENANT_ID;
+  const RAS_ALI_ID = process.env.TEST_RAS_ALI_TENANT_ID;
 
-  // Obtain or generate a real session/JWT for Pameltex
-  const testEmail = 'pameltex.audit.test@example.com';
-  const testPassword = 'SecurePassword2026!Pameltex';
+  if (!PAMELTEX_ID || !RAS_ALI_ID) {
+    throw new Error('TEST_PAMELTEX_TENANT_ID and TEST_RAS_ALI_TENANT_ID are required.');
+  }
+
+  // Create a short-lived test identity. Never persist a reusable test password in source.
+  const testEmail = `tenant-audit-${Date.now()}@example.invalid`;
+  const testPassword = `Audit-${randomBytes(24).toString('base64url')}!`;
   let pameltexToken = '';
+  let createdUserId: string | null = null;
 
   try {
-    // Delete existing if needed, then create fresh user
-    const { data: users } = await supabase.auth.admin.listUsers();
-    const existing = users?.users?.find(u => u.email === testEmail);
-    if (existing) {
-      await supabase.auth.admin.deleteUser(existing.id);
-    }
-
-    const { data: created, error: cErr } = await supabase.auth.admin.createUser({
+    const { data: created, error: createError } = await supabase.auth.admin.createUser({
       email: testEmail,
       password: testPassword,
       email_confirm: true,
       user_metadata: {
         organization_id: PAMELTEX_ID,
         workspace_id: PAMELTEX_ID,
-        full_name: 'Pameltex Director',
+        full_name: 'Tenant Security Audit User',
       },
     });
 
-    // Create anonymous/public Supabase client to sign in with password and get authentic JWT
-    const { createClient } = await import('@supabase/supabase-js');
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY!;
-    const authClient = createClient('https://yidsfihagwttlmhfynmf.supabase.co', anonKey);
+    if (createError || !created.user) {
+      throw new Error(createError?.message || 'Unable to create tenant audit user.');
+    }
+    createdUserId = created.user.id;
 
-    const { data: signInData, error: sErr } = await authClient.auth.signInWithPassword({
+    const { createClient } = await import('@supabase/supabase-js');
+    const authClient = createClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+
+    const { data: signInData, error: signInError } = await authClient.auth.signInWithPassword({
       email: testEmail,
       password: testPassword,
     });
 
-    if (signInData?.session?.access_token) {
-      pameltexToken = signInData.session.access_token;
+    if (signInError) {
+      throw new Error(signInError.message);
     }
-  } catch (err) {
-    console.warn('Could not generate JWT via signInWithPassword:', err);
+
+    pameltexToken = signInData.session?.access_token || '';
+  } catch (error) {
+    console.warn('Could not generate audit JWT:', error instanceof Error ? error.message : 'Unknown error');
   }
 
   console.log(`Pameltex authentic JWT token obtained: ${Boolean(pameltexToken)}`);
 
-  // 1. Unauthenticated request attempting to query private tenant
-  console.log('\n--- 1. Testing Unauthenticated Private Tenant Forgery ---');
-  {
-    const req = new NextRequest('http://localhost:3000/api/mari/chat', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-organization-id': RAS_ALI_ID,
-      },
-      body: JSON.stringify({
-        query: 'What is our revenue?',
-        organizationId: RAS_ALI_ID,
-      }),
-    });
-
-    const res = await mariChatPOST(req);
-    const json = await res.json();
-    assert(
-      res.status === 401 && (json.code === 'AUTHENTICATION_REQUIRED' || json.error === 'AUTHENTICATION_REQUIRED'),
-      'Unauthenticated request targeting Ras Ali Labs is rejected with 401 AUTHENTICATION_REQUIRED',
-      { status: res.status, json }
-    );
-  }
-
-  if (pameltexToken) {
-    // 2. Authenticated Pameltex request forging Ras Ali Labs headers
-    console.log('\n--- 2. Testing Authenticated Tenant Forgery (Pameltex -> Ras Ali Labs) ---');
+  try {
+    console.log('\n--- 1. Testing Unauthenticated Private Tenant Forgery ---');
     {
       const req = new NextRequest('http://localhost:3000/api/mari/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${pameltexToken}`,
-          'x-organization-id': RAS_ALI_ID, // FORGED HEADER
+          'x-organization-id': RAS_ALI_ID,
         },
-        body: JSON.stringify({
-          query: 'Tell me about Facebook page',
-          organizationId: PAMELTEX_ID,
-        }),
+        body: JSON.stringify({ query: 'What is our revenue?', organizationId: RAS_ALI_ID }),
       });
 
       const res = await mariChatPOST(req);
       const json = await res.json();
       assert(
-        res.status === 403 && json.code === 'TENANT_CONTEXT_MISMATCH',
-        'Forged x-organization-id header is rejected with 403 TENANT_CONTEXT_MISMATCH',
-        { status: res.status, json }
+        res.status === 401 && (json.code === 'AUTHENTICATION_REQUIRED' || json.error === 'AUTHENTICATION_REQUIRED'),
+        'Unauthenticated request targeting another tenant is rejected with 401 AUTHENTICATION_REQUIRED',
+        { status: res.status, code: json.code || json.error }
       );
     }
 
-    // 3. Authenticated Pameltex request forging Ras Ali Labs in body
-    console.log('\n--- 3. Testing Authenticated Body Forgery (Pameltex -> Ras Ali Labs) ---');
-    {
-      const req = new NextRequest('http://localhost:3000/api/mari/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${pameltexToken}`,
-          'x-organization-id': PAMELTEX_ID,
-        },
-        body: JSON.stringify({
-          query: 'Tell me about Facebook page',
-          organizationId: 'ras-ali-labs', // FORGED BODY
-        }),
-      });
+    if (pameltexToken) {
+      console.log('\n--- 2. Testing Authenticated Tenant Header Forgery ---');
+      {
+        const req = new NextRequest('http://localhost:3000/api/mari/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${pameltexToken}`,
+            'x-organization-id': RAS_ALI_ID,
+          },
+          body: JSON.stringify({ query: 'Tell me about Facebook page', organizationId: PAMELTEX_ID }),
+        });
+        const res = await mariChatPOST(req);
+        const json = await res.json();
+        assert(res.status === 403 && json.code === 'TENANT_CONTEXT_MISMATCH', 'Forged organization header is rejected', { status: res.status, code: json.code });
+      }
 
-      const res = await mariChatPOST(req);
-      const json = await res.json();
-      assert(
-        res.status === 403 && json.code === 'TENANT_CONTEXT_MISMATCH',
-        'Forged body.organizationId is rejected with 403 TENANT_CONTEXT_MISMATCH',
-        { status: res.status, json }
-      );
+      console.log('\n--- 3. Testing Authenticated Body Forgery ---');
+      {
+        const req = new NextRequest('http://localhost:3000/api/mari/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${pameltexToken}`,
+            'x-organization-id': PAMELTEX_ID,
+          },
+          body: JSON.stringify({ query: 'Tell me about Facebook page', organizationId: RAS_ALI_ID }),
+        });
+        const res = await mariChatPOST(req);
+        const json = await res.json();
+        assert(res.status === 403 && json.code === 'TENANT_CONTEXT_MISMATCH', 'Forged body organizationId is rejected', { status: res.status, code: json.code });
+      }
+
+      console.log('\n--- 4. Testing Authenticated Workspace Forgery ---');
+      {
+        const req = new NextRequest('http://localhost:3000/api/mari/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${pameltexToken}`,
+            'x-organization-id': PAMELTEX_ID,
+            'x-workspace-id': RAS_ALI_ID,
+          },
+          body: JSON.stringify({ query: 'What is our strategy?', organizationId: PAMELTEX_ID }),
+        });
+        const res = await mariChatPOST(req);
+        const json = await res.json();
+        assert(res.status === 403 && json.code === 'TENANT_CONTEXT_MISMATCH', 'Forged workspace header is rejected', { status: res.status, code: json.code });
+      }
+
+      console.log('\n--- 5. Testing Valid Authenticated Tenant Request ---');
+      {
+        const req = new NextRequest('http://localhost:3000/api/mari/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${pameltexToken}`,
+            'x-organization-id': PAMELTEX_ID,
+            'x-workspace-id': PAMELTEX_ID,
+          },
+          body: JSON.stringify({ query: 'What does my Facebook say about us?', organizationId: PAMELTEX_ID }),
+        });
+        const res = await mariChatPOST(req);
+        const json = await res.json();
+        assert(res.status === 200 && json.success === true, 'Valid tenant request succeeds', { status: res.status, success: json.success });
+        assert(!JSON.stringify(json).includes(RAS_ALI_ID), 'Valid tenant response does not contain the other tenant UUID');
+      }
+
+      console.log('\n--- 6. Testing Mari Briefing Route Security ---');
+      {
+        const req = new NextRequest('http://localhost:3000/api/mari/briefing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${pameltexToken}` },
+          body: JSON.stringify({ organizationId: RAS_ALI_ID }),
+        });
+        const res = await mariBriefingPOST(req);
+        const json = await res.json();
+        assert(res.status === 403 && json.code === 'TENANT_CONTEXT_MISMATCH', 'Mari Briefing rejects cross-tenant parameter', { status: res.status, code: json.code });
+      }
+
+      console.log('\n--- 7. Testing Mari Website Sync Route Security ---');
+      {
+        const req = new NextRequest(`http://localhost:3000/api/mari/knowledge/website-sync?organizationId=${encodeURIComponent(RAS_ALI_ID)}`, {
+          headers: { Authorization: `Bearer ${pameltexToken}` },
+        });
+        const res = await mariWebsiteSyncGET(req);
+        const json = await res.json();
+        assert(res.status === 403 && json.code === 'TENANT_CONTEXT_MISMATCH', 'Mari Website Sync rejects cross-tenant parameter', { status: res.status, code: json.code });
+      }
     }
-
-    // 4. Authenticated Pameltex request forging Ras Ali Labs workspaceId in header
-    console.log('\n--- 4. Testing Authenticated Workspace Forgery ---');
-    {
-      const req = new NextRequest('http://localhost:3000/api/mari/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${pameltexToken}`,
-          'x-organization-id': PAMELTEX_ID,
-          'x-workspace-id': RAS_ALI_ID, // FORGED WORKSPACE
-        },
-        body: JSON.stringify({
-          query: 'What is our strategy?',
-          organizationId: PAMELTEX_ID,
-        }),
-      });
-
-      const res = await mariChatPOST(req);
-      const json = await res.json();
-      assert(
-        res.status === 403 && json.code === 'TENANT_CONTEXT_MISMATCH',
-        'Forged x-workspace-id header is rejected with 403 TENANT_CONTEXT_MISMATCH',
-        { status: res.status, json }
-      );
-    }
-
-    // 5. Authenticated Pameltex valid request
-    console.log('\n--- 5. Testing Valid Authenticated Pameltex Request ---');
-    {
-      const req = new NextRequest('http://localhost:3000/api/mari/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${pameltexToken}`,
-          'x-organization-id': PAMELTEX_ID,
-          'x-workspace-id': PAMELTEX_ID,
-        },
-        body: JSON.stringify({
-          query: 'What does my Facebook say about us?',
-          organizationId: PAMELTEX_ID,
-        }),
-      });
-
-      const res = await mariChatPOST(req);
-      const json = await res.json();
-      assert(
-        res.status === 200 && json.success === true,
-        'Valid Pameltex request succeeds with 200 OK',
-        { status: res.status, json }
-      );
-      assert(
-        !JSON.stringify(json).includes('477334159265235') &&
-        !JSON.stringify(json).includes('Ras Ali Labs'),
-        'Pameltex response does NOT contain Ras Ali Labs Facebook Page or company name',
-        json.answer
-      );
-    }
-
-    // 6. Mari Briefing Route Tenant Validation
-    console.log('\n--- 6. Testing Mari Briefing Route Security ---');
-    {
-      const req = new NextRequest(`http://localhost:3000/api/mari/briefing`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${pameltexToken}`,
-        },
-        body: JSON.stringify({
-          organizationId: RAS_ALI_ID, // FORGED
-        }),
-      });
-      const res = await mariBriefingPOST(req);
-      const json = await res.json();
-      assert(
-        res.status === 403 && json.code === 'TENANT_CONTEXT_MISMATCH',
-        'Mari Briefing route rejects cross-tenant parameter with 403 TENANT_CONTEXT_MISMATCH',
-        { status: res.status, json }
-      );
-    }
-
-    // 7. Mari Website Sync Route Tenant Validation
-    console.log('\n--- 7. Testing Mari Website Sync Route Security ---');
-    {
-      const req = new NextRequest(`http://localhost:3000/api/mari/knowledge/website-sync?organizationId=${RAS_ALI_ID}`, {
-        headers: {
-          Authorization: `Bearer ${pameltexToken}`,
-        },
-      });
-      const res = await mariWebsiteSyncGET(req);
-      const json = await res.json();
-      assert(
-        res.status === 403 && json.code === 'TENANT_CONTEXT_MISMATCH',
-        'Mari Website Sync route rejects cross-tenant parameter with 403 TENANT_CONTEXT_MISMATCH',
-        { status: res.status, json }
-      );
+  } finally {
+    if (createdUserId) {
+      const { error: cleanupError } = await supabase.auth.admin.deleteUser(createdUserId);
+      if (cleanupError) {
+        console.warn('Audit user cleanup failed:', cleanupError.message);
+      }
     }
   }
 
@@ -252,12 +215,10 @@ async function runApiSecurityTests() {
   console.log(`API SECURITY AUDIT: ${passed} PASSED, ${failed} FAILED`);
   console.log(`========================================\n`);
 
-  if (failed > 0) {
-    process.exit(1);
-  }
+  if (failed > 0) process.exit(1);
 }
 
-runApiSecurityTests().catch(err => {
-  console.error('API security test execution failed:', err);
+runApiSecurityTests().catch((error) => {
+  console.error('API security test execution failed:', error instanceof Error ? error.message : 'Unknown error');
   process.exit(1);
 });

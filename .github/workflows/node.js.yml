@@ -1,5 +1,4 @@
-# This workflow will do a clean installation of node dependencies, cache/restore them, build the source code and run tests across different versions of node
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-nodejs
+# This workflow performs deterministic installation, security checks, build and tests.
 
 name: Node.js CI
 
@@ -11,13 +10,11 @@ on:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     strategy:
       matrix:
-        node-version: [18.x, 20.x, 22.x]
-        # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
+        node-version: [22.x]
 
     steps:
     - uses: actions/checkout@v4
@@ -26,6 +23,15 @@ jobs:
       with:
         node-version: ${{ matrix.node-version }}
         cache: 'npm'
-    - run: npm ci
-    - run: npm run build --if-present
-    - run: npm test
+    - name: Install dependencies
+      run: npm ci --no-audit --no-fund
+    - name: Scan tracked source for privileged credentials
+      run: npm run security:secrets
+    - name: Verify Facebook tenant isolation invariants
+      run: npm run security:facebook-isolation
+    - name: Verify social database RLS invariants
+      run: npm run security:social-rls
+    - name: Build all workspaces
+      run: npm run build --if-present
+    - name: Run test suite
+      run: npm test

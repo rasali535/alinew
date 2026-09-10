@@ -1,49 +1,48 @@
 # Dockerization and Cloud Run Deployment Script
 
 param (
-    [string]$ProjectID = "gen-lang-client-0940432200", # Set default Project ID
-
+    [string]$ProjectID = "gen-lang-client-0940432200",
     [string]$Region = "us-central1",
     [string]$ServiceName = "chatbot-backend",
-    [string]$DB_URL = "", # Optional: Pass DB URL as argument or rely on env
-    [string]$GEMINI_API_KEY = "" # Optional: Pass API key if using it
+    [string]$DatabaseSecretName = "chatbot-database-url"
 )
+
+$ErrorActionPreference = "Stop"
 
 Write-Host "Starting Deployment Process..." -ForegroundColor Green
 
 # 1. Enable Required Google Cloud APIs
 Write-Host "Enabling Google Cloud APIs..."
 gcloud services enable run.googleapis.com
-gcloud services enable containerregistry.googleapis.com
+gcloud services enable artifactregistry.googleapis.com
 gcloud services enable cloudbuild.googleapis.com
 gcloud services enable secretmanager.googleapis.com
 
-# 2. Build Docker Image locally or with Cloud Build (using Cloud Build here for minimal local deps)
+# Require database credentials to come from Secret Manager. Never pass a raw
+# database URL or API key as a script parameter or --set-env-vars value.
+gcloud secrets describe $DatabaseSecretName --project $ProjectID *> $null
+if ($LASTEXITCODE -ne 0) {
+    throw "Secret Manager secret '$DatabaseSecretName' does not exist. Create it securely before deployment."
+}
+
+# 2. Build Docker Image with Cloud Build
 Write-Host "Submitting build to Cloud Build..."
-gcloud builds submit --tag gcr.io/$ProjectID/$ServiceName
+gcloud builds submit --tag "gcr.io/$ProjectID/$ServiceName"
 
 # 3. Deploy to Cloud Run
 Write-Host "Deploying to Cloud Run..."
-# Use --set-env-vars to pass runtime config
 $envVars = "NODE_ENV=production,GOOGLE_CLOUD_PROJECT=$ProjectID,VERTEX_AI_LOCATION=$Region"
+$secretBinding = "DATABASE_URL=$DatabaseSecretName`:latest"
 
-if ($DB_URL) {
-    $envVars += ",DATABASE_URL=$DB_URL"
-}
-
-if ($GEMINI_API_KEY) {
-    $envVars += ",API_KEY=$GEMINI_API_KEY"
-}
-
-# Deploy command
 gcloud run deploy $ServiceName `
-    --image gcr.io/$ProjectID/$ServiceName `
+    --image "gcr.io/$ProjectID/$ServiceName" `
     --platform managed `
     --region $Region `
     --allow-unauthenticated `
     --memory 512Mi `
     --timeout 300 `
     --set-env-vars $envVars `
+    --set-secrets $secretBinding `
     --max-instances 10 `
     --min-instances 0
 

@@ -1,15 +1,39 @@
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
+
 dotenv.config();
 
-const url = 'https://yidsfihagwttlmhfynmf.supabase.co';
-const key = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpZHNmaWhhZ3d0dGxtaGZ5bm1mIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjgyMzk0NSwiZXhwIjoyMDk4Mzk5OTQ1fQ.mpparRo7a5t5B7uOlWBxiRI7NDsVGfmxkPUEbxSYBfA';
+const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const supabase = createClient(url, key);
+if (!url) {
+  throw new Error('SUPABASE_URL is not configured.');
+}
+
+if (!key) {
+  throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured.');
+}
+
+const supabase = createClient(url, key, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false,
+  },
+});
+
+const SEARCH_TERMS = ['multi-disciplinary', 'creative & technologist'];
+
+function summarizeMatch(row: Record<string, unknown>) {
+  const safeKeys = ['id', 'user_id', 'organization_id', 'workspace_id', 'name', 'business_name', 'company_name', 'title'];
+  return Object.fromEntries(
+    safeKeys.filter((key) => row[key] !== undefined).map((key) => [key, row[key]])
+  );
+}
 
 async function check() {
-  console.log('--- Checking tables for Multi-Disciplinary or Ras Ali ---');
-  
+  console.log('--- Checking tenant/business identity records ---');
+
   const tables = [
     'business_knowledge',
     'business_profiles',
@@ -25,29 +49,39 @@ async function check() {
     'onboarding_data',
     'chat_sessions',
     'website_crawls',
-    'workspace_knowledge'
+    'workspace_knowledge',
   ];
 
-  for (const t of tables) {
+  for (const table of tables) {
     try {
-      const { data, error } = await supabase.from(t).select('*').limit(50);
+      const { data, error } = await supabase.from(table).select('*').limit(50);
       if (error) {
-        console.log(`Table ${t}: error: ${error.message}`);
-      } else {
-        console.log(`Table ${t}: count = ${data?.length || 0}`);
-        if (data && data.length > 0) {
-          const matched = data.filter(row => {
-            const str = JSON.stringify(row).toLowerCase();
-            return str.includes('multi-disciplinary') || str.includes('creative & technologist');
-          });
-          if (matched.length > 0) {
-            console.log(`  FOUND MATCH IN ${t}:`, JSON.stringify(matched, null, 2));
-          }
+        console.log(`Table ${table}: error: ${error.message}`);
+        continue;
+      }
+
+      console.log(`Table ${table}: count = ${data?.length || 0}`);
+      if (!data?.length) continue;
+
+      const matches = data.filter((row) => {
+        const searchable = JSON.stringify(row).toLowerCase();
+        return SEARCH_TERMS.some((term) => searchable.includes(term));
+      });
+
+      if (matches.length > 0) {
+        console.log(`  FOUND ${matches.length} MATCH(ES) IN ${table}:`);
+        for (const match of matches) {
+          console.log(' ', summarizeMatch(match));
         }
       }
-    } catch (e: any) {
-      console.log(`Table ${t}: exception: ${e.message}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.log(`Table ${table}: exception: ${message}`);
     }
   }
 }
-check();
+
+check().catch((error) => {
+  console.error('[search-supabase-identity] Failed:', error instanceof Error ? error.message : 'Unknown error');
+  process.exitCode = 1;
+});
