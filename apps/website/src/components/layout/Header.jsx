@@ -105,12 +105,12 @@ const Header = () => {
             Book Demo
           </Link>
 
-          <Link
-            to="/ralion/register"
+          <a
+            href="/ralion/register"
             className="px-4 py-2 rounded-full bg-gradient-to-r from-brand-gold to-amber-500 text-black text-xs font-bold hover:shadow-lg hover:shadow-brand-gold/20 hover:scale-105 transition-all duration-300 flex items-center gap-1.5"
           >
             Start Ralion <ArrowRight size={12} />
-          </Link>
+          </a>
 
           {/* User Account Dropdown */}
           {user ? (
@@ -132,13 +132,13 @@ const Header = () => {
                     <p className="text-white font-medium text-xs truncate">{user.email}</p>
                     <span className="text-[10px] text-brand-gold">Enterprise SSO Account</span>
                   </div>
-                  <Link
-                    to="/ralion/dashboard"
+                  <a
+                    href="/ralion/dashboard"
                     onClick={() => setIsUserDropdownOpen(false)}
                     className="flex items-center gap-2 px-3 py-2 text-xs text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
                   >
                     <Sparkles size={14} className="text-brand-gold" /> Launch Ralion OS
-                  </Link>
+                  </a>
                   <Link
                     to="/onboarding"
                     onClick={() => setIsUserDropdownOpen(false)}
