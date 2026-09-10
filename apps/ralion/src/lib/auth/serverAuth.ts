@@ -109,9 +109,17 @@ export async function getCurrentRalionContext(
 
   const requestedWorkspaceRaw = request.headers.get('x-workspace-id');
   const requestedOrgRaw = request.headers.get('x-organization-id');
-  const requestedWorkspaceId = requestedWorkspaceRaw ? canonicalUuid(requestedWorkspaceRaw) : null;
+  let requestedWorkspaceId = requestedWorkspaceRaw ? canonicalUuid(requestedWorkspaceRaw) : null;
   const requestedOrgId = requestedOrgRaw ? canonicalUuid(requestedOrgRaw) : null;
   if ((requestedWorkspaceRaw && !requestedWorkspaceId) || (requestedOrgRaw && !requestedOrgId)) return null;
+
+  // Backward compatibility for older Ralion clients that accidentally copied
+  // organizationId into x-workspace-id. Never treat that org UUID as a
+  // workspace grant: discard only the duplicate workspace hint, derive the
+  // workspace from the authenticated user, then verify requestedOrgId below.
+  if (requestedWorkspaceId && requestedOrgId && requestedWorkspaceId === requestedOrgId) {
+    requestedWorkspaceId = null;
+  }
 
   let workspaceRow: any = null;
   let membershipRow: any = null;
