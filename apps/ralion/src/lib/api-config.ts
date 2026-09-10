@@ -3,7 +3,7 @@
  * Ras Ali Labs (Pty) Ltd
  *
  * Ensures all dynamic API requests from the frontend are routed to the
- * canonical Ralion API endpoint.
+ * canonical Ralion API endpoint and share one recoverable Supabase session.
  */
 
 export const MARI_BUILD_VERSION = '2026.09.06-v2';
@@ -44,38 +44,84 @@ export function getRalionApiUrl(path: string): string {
   return `${base}${normalizedPath}`;
 }
 
-/**
- * Authentication headers only. Tenant identity is resolved authoritatively by
- * the server and must never fall back to the authenticated user ID.
- *
- * Legacy workspace/org IDs written by OrganizationProvider are included only
- * as routing hints; server-side membership validation remains authoritative.
- */
-export async function getRalionAuthHeaders(): Promise<Record<string, string>> {
-  const headers: Record<string, string> = {};
-
-  if (typeof window !== 'undefined') {
-    try {
-      const { createClient } = await import('@/lib/supabase/client');
-      const supabase = createClient();
-      const { data } = await supabase.auth.getSession();
-      const token = data?.session?.access_token;
-      if (token) headers.Authorization = `Bearer ${token}`;
-      if (data?.session?.user?.id) headers['x-user-id'] = data.session.user.id;
-
-      const metadata = data?.session?.user?.user_metadata || {};
-      const storedWorkspaceId = window.localStorage?.getItem('ralion_active_workspace_id') || window.localStorage?.getItem('ralion_workspace_id');
-      const storedOrgId = window.localStorage?.getItem('ralion_organization_id') || window.localStorage?.getItem('ralion_active_org_id') || window.localStorage?.getItem('ralion_org_id');
-
-      const activeWs = metadata.workspace_id || storedWorkspaceId || null;
-      const activeOrg = metadata.org_id || metadata.organization_id || storedOrgId || null;
-
-      if (activeWs) headers['x-workspace-id'] = activeWs;
-      if (activeOrg) headers['x-organization-id'] = activeOrg;
-    } catch {}
+async function getBrowserSession(refresh = false) {
+  if (typeof window === 'undefined') return null;
+  try {
+    const { createClient } = await import('@/lib/supabase/client');
+    const supabase = createClient();
+    if (refresh) {
+      const { data, error } = await supabase.auth.refreshSession();
+      if (error) return null;
+      return data.session || null;
+    }
+    const { data, error } = await supabase.auth.getSession();
+    if (error) return null;
+    return data.session || null;
+  } catch {
+    return null;
   }
+}
+
+function appendTenantHints(headers: Record<string, string>, session: any) {
+  if (typeof window === 'undefined' || !session) return;
+  const metadata = session.user?.user_metadata || {};
+  const storedWorkspaceId = window.localStorage?.getItem('ralion_active_workspace_id') || window.localStorage?.getItem('ralion_workspace_id');
+  const storedOrgId = window.localStorage?.getItem('ralion_organization_id') || window.localStorage?.getItem('ralion_active_org_id') || window.localStorage?.getItem('ralion_org_id');
+
+  const activeWs = metadata.workspace_id || storedWorkspaceId || null;
+  const activeOrg = metadata.org_id || metadata.organization_id || storedOrgId || null;
+
+  if (activeWs) headers['x-workspace-id'] = activeWs;
+  if (activeOrg) headers['x-organization-id'] = activeOrg;
+}
+
+export async function getRalionAuthHeaders(options: { refresh?: boolean } = {}): Promise<Record<string, string>> {
+  const headers: Record<string, string> = {};
+  const session = await getBrowserSession(Boolean(options.refresh));
+
+  if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+  if (session?.user?.id) headers['x-user-id'] = session.user.id;
+  appendTenantHints(headers, session);
 
   return headers;
+}
+
+function mergeAuthHeaders(initHeaders: HeadersInit | undefined, authHeaders: Record<string, string>, replaceAuthorization = false) {
+  const headers = new Headers(initHeaders);
+  if (authHeaders.Authorization && (replaceAuthorization || !headers.has('Authorization'))) {
+    headers.set('Authorization', authHeaders.Authorization);
+  }
+  if (!headers.has('x-user-id') && authHeaders['x-user-id']) headers.set('x-user-id', authHeaders['x-user-id']);
+  if (!headers.has('x-workspace-id') && authHeaders['x-workspace-id']) headers.set('x-workspace-id', authHeaders['x-workspace-id']);
+  if (!headers.has('x-organization-id') && authHeaders['x-organization-id']) headers.set('x-organization-id', authHeaders['x-organization-id']);
+  return headers;
+}
+
+async function parseApiResponse<T>(res: Response): Promise<{ ok: boolean; status: number; data: T; error?: string }> {
+  const contentType = res.headers.get('content-type') || '';
+  let data: any = null;
+
+  if (contentType.includes('application/json')) {
+    data = await res.json();
+  } else {
+    const text = await res.text();
+    if (text.trim().startsWith('<!doctype') || text.trim().startsWith('<html')) {
+      return {
+        ok: false,
+        status: res.status,
+        data: null as any,
+        error: `API endpoint returned HTML instead of JSON (${res.status}). Ensure dynamic backend is reachable.`,
+      };
+    }
+    data = { raw: text };
+  }
+
+  return {
+    ok: res.ok,
+    status: res.status,
+    data,
+    error: res.ok ? undefined : (data?.error || data?.message || `HTTP ${res.status}`),
+  };
 }
 
 export async function fetchRalionApi<T = any>(
@@ -85,45 +131,37 @@ export async function fetchRalionApi<T = any>(
   const url = getRalionApiUrl(path);
 
   try {
-    const authHeaders = await getRalionAuthHeaders();
-    const headers = new Headers(init?.headers);
+    const initialAuth = await getRalionAuthHeaders();
+    const hadSession = Boolean(initialAuth.Authorization);
+    let headers = mergeAuthHeaders(init?.headers, initialAuth);
+    if (!headers.has('Content-Type') && init?.body && typeof init.body === 'string') {
+      headers.set('Content-Type', 'application/json');
+    }
 
-    if (!headers.has('Authorization') && authHeaders.Authorization) headers.set('Authorization', authHeaders.Authorization);
-    if (!headers.has('x-user-id') && authHeaders['x-user-id']) headers.set('x-user-id', authHeaders['x-user-id']);
-    if (!headers.has('x-workspace-id') && authHeaders['x-workspace-id']) headers.set('x-workspace-id', authHeaders['x-workspace-id']);
-    if (!headers.has('x-organization-id') && authHeaders['x-organization-id']) headers.set('x-organization-id', authHeaders['x-organization-id']);
-    if (!headers.has('Content-Type') && init?.body && typeof init.body === 'string') headers.set('Content-Type', 'application/json');
-
-    const res = await fetch(url, {
+    let res = await fetch(url, {
       ...init,
       headers,
       credentials: init?.credentials || 'include',
     });
 
-    const contentType = res.headers.get('content-type') || '';
-    let data: any = null;
-
-    if (contentType.includes('application/json')) {
-      data = await res.json();
-    } else {
-      const text = await res.text();
-      if (text.trim().startsWith('<!doctype') || text.trim().startsWith('<html')) {
-        return {
-          ok: false,
-          status: res.status,
-          data: null as any,
-          error: `API endpoint returned HTML instead of JSON (${res.status}). Ensure dynamic backend is reachable.`,
-        };
+    // Recover once from an expired/revoked access token. The server still
+    // validates the refreshed JWT and tenant membership; this is not a bypass.
+    if (res.status === 401 && hadSession && typeof window !== 'undefined') {
+      const refreshedAuth = await getRalionAuthHeaders({ refresh: true });
+      if (refreshedAuth.Authorization) {
+        headers = mergeAuthHeaders(init?.headers, refreshedAuth, true);
+        if (!headers.has('Content-Type') && init?.body && typeof init.body === 'string') {
+          headers.set('Content-Type', 'application/json');
+        }
+        res = await fetch(url, {
+          ...init,
+          headers,
+          credentials: init?.credentials || 'include',
+        });
       }
-      data = { raw: text };
     }
 
-    return {
-      ok: res.ok,
-      status: res.status,
-      data,
-      error: res.ok ? undefined : (data?.error || data?.message || `HTTP ${res.status}`),
-    };
+    return await parseApiResponse<T>(res);
   } catch (err: any) {
     return {
       ok: false,
