@@ -9,11 +9,16 @@ import { encryptToken, decryptToken, SocialPlatformType, SocialProviderRegistry 
 import { AuditLoggerService } from '../auditLogger.service';
 
 function getServiceSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co';
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url) {
+    throw new Error('[SocialTokenManager] Missing SUPABASE_URL environment variable.');
+  }
   if (!key) {
     throw new Error('[SocialTokenManager] Missing SUPABASE_SERVICE_ROLE_KEY environment variable.');
   }
+
   return createClient(url, key, {
     auth: {
       persistSession: false,
@@ -41,8 +46,14 @@ export class SocialTokenManager {
     const encryptedRefreshToken = params.refreshToken ? encryptToken(params.refreshToken) : null;
     const expiresAt = params.expiresIn ? new Date(Date.now() + params.expiresIn * 1000).toISOString() : null;
 
+    if (!encryptedAccessToken.startsWith('enc_gcm_v2_')) {
+      throw new Error('[SocialTokenManager] Refusing to persist an unencrypted access token.');
+    }
+    if (params.refreshToken && (!encryptedRefreshToken || !encryptedRefreshToken.startsWith('enc_gcm_v2_'))) {
+      throw new Error('[SocialTokenManager] Refusing to persist an unencrypted refresh token.');
+    }
+
     try {
-      // 1. Save into isolated social_connections metadata vault
       const { data: existingConn } = await supabase
         .from('social_connections')
         .select('metadata')
@@ -57,7 +68,14 @@ export class SocialTokenManager {
         token_expires_at: expiresAt,
       };
 
-      await supabase.from('social_connections').update({
+      // Explicitly strip any legacy plaintext token fields while saving.
+      delete (mergedMeta as any).access_token;
+      delete (mergedMeta as any).accessToken;
+      delete (mergedMeta as any).pageAccessToken;
+      delete (mergedMeta as any).refresh_token;
+      delete (mergedMeta as any).refreshToken;
+
+      const { error: updateError } = await supabase.from('social_connections').update({
         metadata: mergedMeta,
         token_status: 'TOKEN_VALID',
         connection_status: 'CONNECTED',
@@ -65,7 +83,10 @@ export class SocialTokenManager {
         updated_at: new Date().toISOString(),
       }).eq('id', params.connectionId);
 
-      // 2. Log audit event
+      if (updateError) {
+        throw new Error(`[SocialTokenManager] Credential update failed: ${updateError.message}`);
+      }
+
       if (params.userId && params.provider) {
         await AuditLoggerService.log({
           eventType: 'META_TOKEN_CREATED',
@@ -80,13 +101,14 @@ export class SocialTokenManager {
 
       return true;
     } catch (err: any) {
-      console.error('[SocialTokenManager] Save error:', err.message);
+      console.error('[SocialTokenManager] Save error:', err instanceof Error ? err.message : 'Unknown credential storage error');
       throw err;
     }
   }
 
   /**
-   * Retrieve and decrypt valid token in server memory, auto-refreshing if expiring
+   * Retrieve and decrypt valid token in server memory, auto-refreshing if expiring.
+   * Unknown/plaintext token envelopes are rejected by decryptToken().
    */
   static async getValidToken(connectionId: string, provider: SocialPlatformType): Promise<string | null> {
     const supabase = getServiceSupabase();
@@ -95,31 +117,30 @@ export class SocialTokenManager {
     let encryptedRefreshToken: string | null = null;
     let expiresAt: number | null = null;
 
-    // 2. Fallback to social_connections metadata
-    if (!encryptedAccessToken) {
-      try {
-        const { data: conn, error: connErr } = await supabase
-          .from('social_connections')
-          .select('id, metadata, connection_status')
-          .eq('id', connectionId)
-          .maybeSingle();
+    try {
+      const { data: conn, error: connErr } = await supabase
+        .from('social_connections')
+        .select('id, metadata, connection_status')
+        .eq('id', connectionId)
+        .maybeSingle();
 
-        if (!connErr && conn && conn.connection_status !== 'DISCONNECTED' && conn.metadata?.encrypted_access_token) {
-          encryptedAccessToken = conn.metadata.encrypted_access_token;
-          encryptedRefreshToken = conn.metadata.encrypted_refresh_token || null;
-          expiresAt = conn.metadata.token_expires_at ? new Date(conn.metadata.token_expires_at).getTime() : null;
-        }
-      } catch {}
-    }
+      if (!connErr && conn && conn.connection_status !== 'DISCONNECTED' && conn.metadata?.encrypted_access_token) {
+        encryptedAccessToken = conn.metadata.encrypted_access_token;
+        encryptedRefreshToken = conn.metadata.encrypted_refresh_token || null;
+        expiresAt = conn.metadata.token_expires_at ? new Date(conn.metadata.token_expires_at).getTime() : null;
+      }
+    } catch {}
 
     if (!encryptedAccessToken) {
       return null;
     }
 
     const decryptedAccessToken = decryptToken(encryptedAccessToken);
-    const decryptedRefreshToken = encryptedRefreshToken ? decryptToken(encryptedRefreshToken) : null;
+    if (!decryptedAccessToken) {
+      return null;
+    }
 
-    // Check if token is expired or expiring within 5 minutes
+    const decryptedRefreshToken = encryptedRefreshToken ? decryptToken(encryptedRefreshToken) : null;
     const isExpiringSoon = expiresAt ? expiresAt - Date.now() < 5 * 60 * 1000 : false;
 
     if (isExpiringSoon && decryptedRefreshToken) {
@@ -138,12 +159,13 @@ export class SocialTokenManager {
           return refreshed.accessToken;
         }
       } catch (refreshErr: any) {
-        console.warn(`[SocialTokenManager] Auto-refresh failed for ${provider}:`, refreshErr.message);
+        console.warn(`[SocialTokenManager] Auto-refresh failed for ${provider}:`, refreshErr instanceof Error ? refreshErr.message : 'Unknown refresh error');
         await supabase.from('social_connections').update({
           token_status: 'REAUTH_REQUIRED',
           connection_status: 'RECONNECT_REQUIRED',
           health_error_message: 'Token expired. Reconnection required.',
         }).eq('id', connectionId);
+        return null;
       }
     }
 
@@ -151,7 +173,7 @@ export class SocialTokenManager {
   }
 
   /**
-   * Revoke token remotely and purge from database
+   * Revoke token remotely and purge encrypted credential material from database.
    */
   static async revokeAndDestroy(connectionId: string, provider: SocialPlatformType, userId?: string): Promise<boolean> {
     const token = await this.getValidToken(connectionId, provider);
@@ -160,14 +182,28 @@ export class SocialTokenManager {
         const adapter = SocialProviderRegistry.getProvider(provider);
         await adapter.revokeAccess(token);
       } catch (err: any) {
-        console.warn(`[SocialTokenManager] Remote revoke warning for ${provider}:`, err.message);
+        console.warn(`[SocialTokenManager] Remote revoke warning for ${provider}:`, err instanceof Error ? err.message : 'Unknown revoke error');
       }
     }
 
     const supabase = getServiceSupabase();
+    const { data: existingConn } = await supabase
+      .from('social_connections')
+      .select('metadata')
+      .eq('id', connectionId)
+      .maybeSingle();
 
-    // Mark connection disconnected
+    const cleanedMeta = { ...(existingConn?.metadata || {}) } as Record<string, unknown>;
+    delete cleanedMeta.encrypted_access_token;
+    delete cleanedMeta.encrypted_refresh_token;
+    delete cleanedMeta.access_token;
+    delete cleanedMeta.accessToken;
+    delete cleanedMeta.pageAccessToken;
+    delete cleanedMeta.refresh_token;
+    delete cleanedMeta.refreshToken;
+
     await supabase.from('social_connections').update({
+      metadata: cleanedMeta,
       connection_status: 'DISCONNECTED',
       token_status: 'TOKEN_REVOKED',
       disconnected_at: new Date().toISOString(),
