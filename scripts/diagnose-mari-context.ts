@@ -1,63 +1,87 @@
 import { createClient } from '@supabase/supabase-js';
-import { MariUniversalCore, BusinessIdentityResolver, BusinessKnowledgeProfileService } from '@ralion/ai';
+import { MariUniversalCore } from '@ralion/ai';
 import { FacebookConnectionStateService } from '../apps/ralion/src/lib/services/social/facebookConnectionState.service';
 import { FacebookPageManagementService } from '../apps/ralion/src/lib/services/social/facebookPageManagement.service';
 import * as dotenv from 'dotenv';
+
 dotenv.config();
 
-const url = 'https://yidsfihagwttlmhfynmf.supabase.co';
-const key = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpZHNmaWhhZ3d0dGxtaGZ5bm1mIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjgyMzk0NSwiZXhwIjoyMDk4Mzk5OTQ1fQ.mpparRo7a5t5B7uOlWBxiRI7NDsVGfmxkPUEbxSYBfA';
-const supabase = createClient(url, key);
+const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const organizationId = process.env.DIAG_ORGANIZATION_ID;
+const workspaceId = process.env.DIAG_WORKSPACE_ID;
+const userId = process.env.DIAG_USER_ID;
+const companyName = process.env.DIAG_COMPANY_NAME;
+
+if (!url || !key) {
+  throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.');
+}
+if (!organizationId || !workspaceId || !userId) {
+  throw new Error('DIAG_ORGANIZATION_ID, DIAG_WORKSPACE_ID and DIAG_USER_ID are required.');
+}
+
+const supabase = createClient(url, key, {
+  auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+});
 
 async function diagnose() {
   console.log('====================================================');
   console.log('MARI RUNTIME CONTEXT & FACEBOOK INTEGRATION DIAGNOSIS');
   console.log('====================================================');
 
-  // 1. Fetch Supabase profiles
-  const { data: profs } = await supabase.from('profiles').select('*');
+  // Do not dump full rows: social/token metadata can contain credentials or customer data.
+  const { count: profileCount, error: profileError } = await supabase
+    .from('profiles')
+    .select('id', { count: 'exact', head: true });
   console.log('\n--- SUPABASE PROFILES ---');
-  console.log(JSON.stringify(profs, null, 2));
+  console.log({ count: profileCount, error: profileError?.message || null });
 
-  // 2. Fetch Supabase social_connections
-  const { data: socs } = await supabase.from('social_connections').select('*');
-  console.log('\n--- SUPABASE SOCIAL CONNECTIONS ---');
-  console.log(JSON.stringify(socs, null, 2));
+  const { data: socialRows, error: socialError } = await supabase
+    .from('social_connections')
+    .select('id, provider, provider_account_id, connection_status, organization_id, workspace_id, user_id')
+    .or(`workspace_id.eq.${workspaceId},organization_id.eq.${organizationId},user_id.eq.${userId}`);
+  console.log('\n--- TENANT-SCOPED SOCIAL CONNECTIONS ---');
+  console.log({ count: socialRows?.length || 0, error: socialError?.message || null });
 
-  // 3. Check FacebookConnectionStateService (The authoritative Growth Studio service)
-  const growthStudioState = await FacebookConnectionStateService.getConnectionState({
-    organizationId: 'ras-ali-labs',
-    workspaceId: '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf',
-    userId: '8872b380-6072-466d-8ff1-7607a7e8fce4'
+  const growthStudioState = await FacebookConnectionStateService.resolveFacebookConnectionState({
+    tenantId: organizationId,
+    workspaceId,
+    userId,
   });
   console.log('\n--- GROWTH STUDIO FACEBOOK CONNECTION STATE ---');
-  console.log(JSON.stringify(growthStudioState, null, 2));
+  console.log({
+    state: growthStudioState.state,
+    selectedPageId: growthStudioState.selectedPageId || null,
+    availablePages: growthStudioState.availablePages?.map((p: any) => ({ pageId: p.pageId, name: p.name })) || [],
+  });
 
-  // 4. Check FacebookPageManagementService active page
-  const activePage = await FacebookPageManagementService.getActivePage({
-    organizationId: 'ras-ali-labs',
-    workspaceId: '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf',
-    userId: '8872b380-6072-466d-8ff1-7607a7e8fce4'
+  const activePage = await FacebookPageManagementService.getPrimaryPage({
+    organizationId,
+    workspaceId,
+    userId,
   });
   console.log('\n--- FACEBOOK PAGE MANAGEMENT ACTIVE PAGE ---');
-  console.log(JSON.stringify(activePage, null, 2));
+  console.log(activePage ? { pageId: activePage.pageId, name: activePage.name, status: activePage.status } : null);
 
-  // 5. Test Mari Universal Core query directly
   console.log('\n--- TESTING MARI UNIVERSAL CORE ---');
   const mariResponse = await MariUniversalCore.processQuery({
     prompt: 'What does my Facebook say about us?',
-    organizationId: 'ras-ali-labs',
-    workspaceId: '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf',
-    userId: '8872b380-6072-466d-8ff1-7607a7e8fce4',
-    companyName: 'Ras Ali Labs',
+    organizationId,
+    workspaceId,
+    userId,
+    companyName,
   });
 
-  console.log('\n--- MARI RESPONSE ---');
-  console.log('Answer:\n', mariResponse.answer);
-  console.log('Detected Intent:', mariResponse.detectedIntent);
-  console.log('Capability Mode:', mariResponse.capabilityMode);
-  console.log('Tenant ID:', mariResponse.tenantId);
-  console.log('Company Name:', mariResponse.companyName);
+  console.log('\n--- MARI RESPONSE METADATA ---');
+  console.log({
+    detectedIntent: mariResponse.detectedIntent,
+    capabilityMode: mariResponse.capabilityMode,
+    tenantId: mariResponse.tenantId,
+    companyName: mariResponse.companyName,
+  });
 }
 
-diagnose().catch(console.error);
+diagnose().catch((error) => {
+  console.error('Mari diagnostic failed:', error instanceof Error ? error.message : 'Unknown error');
+  process.exitCode = 1;
+});
