@@ -1,4 +1,4 @@
-# This workflow performs installation, security scan, build and tests.
+# This workflow performs installation, security checks, build and tests.
 # NOTE: package-lock.json is currently out of sync with the workspace manifests.
 # Use npm install temporarily so security/build validation can continue; restore
 # npm ci once the lockfile is regenerated and committed deterministically.
@@ -30,5 +30,9 @@ jobs:
       run: npm install --no-audit --no-fund
     - name: Scan tracked source for privileged credentials
       run: npm run security:secrets
-    - run: npm run build --if-present
-    - run: npm test
+    - name: Verify Facebook tenant isolation invariants
+      run: npm run security:facebook-isolation
+    - name: Build all workspaces
+      run: npm run build --if-present
+    - name: Run test suite
+      run: npm test
