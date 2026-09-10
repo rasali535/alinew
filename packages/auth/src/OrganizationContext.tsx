@@ -3,9 +3,18 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { UserProfile, Organization, Branch, LicenseTier } from './types';
 
+export interface WorkspaceContextSummary {
+  id: string;
+  name: string;
+  slug: string;
+  ownerId: string;
+  organizationId: string;
+}
+
 export interface OrganizationContextType {
   user: UserProfile | null;
   organization: Organization | null;
+  workspace: WorkspaceContextSummary | null;
   activeBranch: Branch | null;
   isLoading: boolean;
   isContextResolved: boolean;
@@ -18,6 +27,7 @@ export interface OrganizationContextType {
 const OrganizationContext = createContext<OrganizationContextType>({
   user: null,
   organization: null,
+  workspace: null,
   activeBranch: null,
   isLoading: true,
   isContextResolved: false,
@@ -96,21 +106,33 @@ async function readCurrentSession(forceRefresh = false): Promise<{ accessToken: 
   return readStoredSessionFallback();
 }
 
-async function fetchAuthoritativeContext(accessToken: string) {
+async function fetchAuthoritativeContext(accessToken: string, method: 'GET' | 'POST' = 'GET') {
   return fetch(`${getContextApiBase()}/api/auth/context`, {
-    method: 'GET',
+    method,
     headers: {
       Authorization: `Bearer ${accessToken}`,
       Accept: 'application/json',
+      ...(method === 'POST' ? { 'Content-Type': 'application/json' } : {}),
     },
     credentials: 'include',
     cache: 'no-store',
+    ...(method === 'POST' ? { body: '{}' } : {}),
   });
+}
+
+async function readResponseCode(res: Response): Promise<string | null> {
+  try {
+    const payload = await res.clone().json();
+    return payload?.code || payload?.error || null;
+  } catch {
+    return null;
+  }
 }
 
 export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [organization, setOrganization] = useState<Organization | null>(null);
+  const [workspace, setWorkspace] = useState<WorkspaceContextSummary | null>(null);
   const [activeBranch, setActiveBranch] = useState<Branch | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isContextResolved, setIsContextResolved] = useState(false);
@@ -119,6 +141,7 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const clearResolvedContext = useCallback(() => {
     setUser(null);
     setOrganization(null);
+    setWorkspace(null);
     setActiveBranch(null);
     setIsContextResolved(true);
   }, []);
@@ -137,21 +160,34 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
 
       let res = await fetchAuthoritativeContext(accessToken);
+      let responseCode = await readResponseCode(res);
 
-      // A 401 commonly means the browser still has an expired access token while
-      // a valid refresh token exists. Refresh through the canonical Supabase client
-      // once, then retry with the newly issued JWT. Never weaken server validation.
-      if (res.status === 401) {
+      // Refresh exactly once only when the server says the authentication token
+      // itself is invalid. A missing workspace is not an authentication failure.
+      if (res.status === 401 && (responseCode === 'AUTH_TOKEN_INVALID' || responseCode === 'AUTHENTICATION_REQUIRED')) {
         const refreshed = await readCurrentSession(true);
         if (refreshed.accessToken && refreshed.accessToken !== accessToken) {
           accessToken = refreshed.accessToken;
           supabaseUser = refreshed.user || supabaseUser;
           res = await fetchAuthoritativeContext(accessToken);
+          responseCode = await readResponseCode(res);
         }
       }
 
+      // Legacy/current accounts may be authenticated but have no canonical
+      // workspace records because older registration flows only created auth.users.
+      // Repair is explicit POST, idempotent, and still fully server-authenticated.
+      if (res.status === 409 && responseCode === 'WORKSPACE_CONTEXT_MISSING') {
+        console.info('[AuthContext] Authenticated session has no workspace; requesting canonical provisioning');
+        res = await fetchAuthoritativeContext(accessToken, 'POST');
+        responseCode = await readResponseCode(res);
+      }
+
       if (!res.ok) {
-        console.warn('[AuthContext] Server context resolution failed:', res.status);
+        console.warn('[AuthContext] Server context resolution failed:', {
+          status: res.status,
+          code: responseCode || 'UNKNOWN',
+        });
         clearResolvedContext();
         return;
       }
@@ -168,6 +204,14 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         name: supabaseUser?.user_metadata?.branch_name || 'Main HQ Branch',
         code: 'HQ-01',
         isMain: true,
+      };
+
+      const resolvedWorkspace: WorkspaceContextSummary = {
+        id: data.workspace.id,
+        name: data.workspace.name,
+        slug: data.workspace.slug,
+        ownerId: data.workspace.ownerId,
+        organizationId: data.workspace.organizationId || data.organization.id,
       };
 
       const resolvedOrg: Organization = {
@@ -199,20 +243,21 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       setUser(profile);
       setOrganization(resolvedOrg);
+      setWorkspace(resolvedWorkspace);
       setActiveBranch(branch);
       setIsContextResolved(true);
 
       try {
-        localStorage.setItem('ralion_active_workspace_id', data.workspace.id);
-        localStorage.setItem('ralion_organization_id', data.organization.id);
-        if (data.organization.name) localStorage.setItem('ralion_org_name', data.organization.name);
+        localStorage.setItem('ralion_active_workspace_id', resolvedWorkspace.id);
+        localStorage.setItem('ralion_organization_id', resolvedOrg.id);
+        if (resolvedOrg.name) localStorage.setItem('ralion_org_name', resolvedOrg.name);
       } catch {}
 
       console.log('[AuthContext]', {
         hasSession: true,
-        resolvedWorkspaceId: data.workspace.id,
-        resolvedOrganizationId: data.organization.id,
-        source: 'SERVER_VERIFIED',
+        resolvedWorkspaceId: resolvedWorkspace.id,
+        resolvedOrganizationId: resolvedOrg.id,
+        source: data.provisioned ? 'SERVER_PROVISIONED' : 'SERVER_VERIFIED',
       });
     } catch (err) {
       console.warn('[AuthContext] Context resolution error:', err);
@@ -258,6 +303,7 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const logout = () => {
     setUser(null);
     setOrganization(null);
+    setWorkspace(null);
     setActiveBranch(null);
     setIsContextResolved(false);
     if (typeof window !== 'undefined') {
@@ -274,7 +320,7 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   };
 
   return (
-    <OrganizationContext.Provider value={{ user, organization, activeBranch, isLoading, isContextResolved, setOrganization, setActiveBranch, refreshOrganization: resolveAuthoritativeContext, logout }}>
+    <OrganizationContext.Provider value={{ user, organization, workspace, activeBranch, isLoading, isContextResolved, setOrganization, setActiveBranch, refreshOrganization: resolveAuthoritativeContext, logout }}>
       {children}
     </OrganizationContext.Provider>
   );
