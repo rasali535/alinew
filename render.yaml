@@ -9,8 +9,9 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # Privileged credentials must be configured in Render, never committed.
       - key: DATABASE_URL
-        value: postgresql://postgres.yidsfihagwttlmhfynmf:wkE1E3Be1G7UYUXT@aws-0-eu-west-1.pooler.supabase.com:6543/postgres
+        sync: false
       - key: GOOGLE_CLOUD_PROJECT
         value: gen-lang-client-0940432200
       - key: VERTEX_AI_LOCATION
@@ -21,6 +22,7 @@ services:
         generateValue: true
       - key: SUPABASE_URL
         value: https://yidsfihagwttlmhfynmf.supabase.co
+      # Supabase anon key is intentionally public; privileged service-role keys are not.
       - key: SUPABASE_KEY
         value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpZHNmaWhhZ3d0dGxtaGZ5bm1mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4MjM5NDUsImV4cCI6MjA5ODM5OTk0NX0.r-hhC-BT3WCf9JLq-HeTHXIFkulM5XkorUEfkqMhc-g
       - key: DATABASE_SSL
@@ -28,7 +30,7 @@ services:
       - key: RUN_MIGRATIONS
         value: "true"
       - key: CORS_ORIGINS
-        value: https://rasalilabs.com,http://localhost:5173,http://localhost:6509
+        value: https://rasalilabs.com
 
   # 2. Ralion Next.js Standalone Backend (Dynamic Social API & OAuth)
   - type: web
@@ -45,7 +47,7 @@ services:
       - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
         value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpZHNmaWhhZ3d0dGxtaGZ5bm1mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4MjM5NDUsImV4cCI6MjA5ODM5OTk0NX0.r-hhC-BT3WCf9JLq-HeTHXIFkulM5XkorUEfkqMhc-g
       - key: SUPABASE_SERVICE_ROLE_KEY
-        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpZHNmaWhhZ3d0dGxtaGZ5bm1mIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjgyMzk0NSwiZXhwIjoyMDk4Mzk5OTQ1fQ.mpparRo7a5t5B7uOlWBxiRI7NDsVGfmxkPUEbxSYBfA
+        sync: false
       - key: NEXT_PUBLIC_APP_URL
         value: https://rasalilabs.com/ralion
       - key: NEXT_PUBLIC_RASALI_PLATFORM_URL
