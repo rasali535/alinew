@@ -1,0 +1,120 @@
+name: One-shot Mari Auth Hotfix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/one-shot-mari-auth-hotfix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Apply Mari tenant/auth hotfix
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new, label):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly 1 match, found {count}')
+              p.write_text(text.replace(old, new, 1))
+              print('patched', label)
+
+          page = 'apps/ralion/src/app/(dashboard)/mari-ai/page.tsx'
+          replace_once(page,
+              "  const { organization, user } = useOrganization();",
+              "  const { organization, user, isLoading: isOrganizationLoading } = useOrganization();",
+              'Mari useOrganization loading state')
+
+          replace_once(page,
+              "  const activeOrgId = organization?.id || organization?.slug || (user as any)?.id || (user as any)?.userId || 'unconfigured-tenant';",
+              "  const activeOrgId = organization?.id || '';\n  const hasCanonicalTenant = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(activeOrgId);",
+              'canonical Mari tenant id')
+
+          replace_once(page,
+              "  const loadGrowthIntelligence = async (forceRefresh = false) => {\n    setIsLoading(true);",
+              "  const loadGrowthIntelligence = async (forceRefresh = false) => {\n    if (!hasCanonicalTenant) {\n      setIsLoading(isOrganizationLoading);\n      return;\n    }\n    setIsLoading(true);",
+              'Mari load tenant gate')
+
+          replace_once(page,
+              "          const apiUrl = getRalionApiUrl(`/api/mari/knowledge/website-sync?organizationId=${encodeURIComponent(activeOrgId)}`);\n          const syncRes = await fetch(apiUrl);",
+              "          const apiUrl = getRalionApiUrl(`/api/mari/knowledge/website-sync?organizationId=${encodeURIComponent(activeOrgId)}`);\n          const authHeaders = await getRalionAuthHeaders();\n          const syncRes = await fetch(apiUrl, {\n            headers: {\n              ...authHeaders,\n              'x-organization-id': activeOrgId,\n              'x-workspace-id': activeOrgId,\n            },\n            credentials: 'include',\n          });",
+              'authenticated Mari website knowledge GET')
+
+          replace_once(page,
+              "  useEffect(() => {\n    import('@/lib/services/auth.service').then(({ AuthService }) => {\n      AuthService.getCurrentUser().then((user) => {\n        if (user?.fullName) setUserName(user.fullName);\n        if (user?.tier) setUserTier(user.tier.toUpperCase() as any);\n      });\n    });\n\n    loadGrowthIntelligence();\n  }, []);",
+              "  useEffect(() => {\n    if (isOrganizationLoading || !hasCanonicalTenant) return;\n\n    import('@/lib/services/auth.service').then(({ AuthService }) => {\n      AuthService.getCurrentUser().then((currentUser) => {\n        if (currentUser?.fullName) setUserName(currentUser.fullName);\n        if (currentUser?.tier) setUserTier(currentUser.tier.toUpperCase() as any);\n      });\n    });\n\n    loadGrowthIntelligence();\n  }, [isOrganizationLoading, activeOrgId]);",
+              'Mari boot after tenant resolution')
+
+          replace_once(page,
+              "        const effectiveOrgId = (activeOrgId && activeOrgId !== 'unconfigured-tenant')\n          ? activeOrgId\n          : ((user as any)?.id || (user as any)?.userId || '');",
+              "        if (!hasCanonicalTenant) {\n          throw new Error('Your organization workspace is still loading. Please retry in a moment.');\n        }\n        const effectiveOrgId = activeOrgId;",
+              'Mari chat canonical tenant only')
+
+          replace_once(page,
+              "        MARI_RESPONSE_ANSWER: answerText,",
+              "        MARI_RESPONSE_HAS_ANSWER: Boolean(answerText),",
+              'Mari telemetry privacy')
+
+          replace_once(page,
+              "      const orgId = businessContext?.organizationId || activeOrgId || '';\n      const url = businessContext?.layer1.websiteUrl?.value || (orgId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf' ? 'https://www.rasalilabs.com' : '');",
+              "      const orgId = businessContext?.organizationId || activeOrgId || '';\n      if (!hasCanonicalTenant || !orgId) {\n        setWebsiteSyncSuccess('Organization workspace is not ready yet.');\n        return;\n      }\n      const url = businessContext?.layer1.websiteUrl?.value || '';",
+              'Mari sync no hardcoded tenant website')
+
+          replace_once(page,
+              "        const res = await fetch(apiUrl, {\n          method: 'POST',\n          headers: { 'Content-Type': 'application/json' },\n          body: JSON.stringify({\n            organizationId: orgId,\n            websiteUrl: url,\n          }),\n        });",
+              "        const authHeaders = await getRalionAuthHeaders();\n        const res = await fetch(apiUrl, {\n          method: 'POST',\n          headers: {\n            'Content-Type': 'application/json',\n            ...authHeaders,\n            'x-organization-id': orgId,\n            'x-workspace-id': orgId,\n          },\n          credentials: 'include',\n          body: JSON.stringify({\n            organizationId: orgId,\n            websiteUrl: url,\n          }),\n        });",
+              'authenticated Mari website sync POST')
+
+          replace_once(page,
+              "                        const targetOrgId = activeOrgId || 'org_default';\n                        const normalizedUrl = websiteInputUrl.trim();",
+              "                        if (!hasCanonicalTenant) {\n                          setWebsiteSyncSuccess('Organization workspace is not ready yet.');\n                          return;\n                        }\n                        const targetOrgId = activeOrgId;\n                        const normalizedUrl = websiteInputUrl.trim();",
+              'Mari ingest canonical tenant only')
+
+          replace_once(page,
+              "                          const res = await fetch(apiUrl, {\n                            method: 'POST',\n                            headers: { 'Content-Type': 'application/json' },\n                            body: JSON.stringify({\n                              organizationId: targetOrgId,\n                              websiteUrl: normalizedUrl,\n                            }),\n                          });",
+              "                          const authHeaders = await getRalionAuthHeaders();\n                          const res = await fetch(apiUrl, {\n                            method: 'POST',\n                            headers: {\n                              'Content-Type': 'application/json',\n                              ...authHeaders,\n                              'x-organization-id': targetOrgId,\n                              'x-workspace-id': targetOrgId,\n                            },\n                            credentials: 'include',\n                            body: JSON.stringify({\n                              organizationId: targetOrgId,\n                              websiteUrl: normalizedUrl,\n                            }),\n                          });",
+              'authenticated Mari inline ingest POST')
+
+          orgctx = 'packages/auth/src/OrganizationContext.tsx'
+          replace_once(orgctx,
+              "      // 1. Try to read active user from Supabase auth token in localStorage\n      let authUser: any = null;\n      try {\n        for (let i = 0; i < localStorage.length; i++) {",
+              "      // 1. Resolve the active Supabase user from Ralion's canonical storage key first.\n      let authUser: any = null;\n      try {\n        const directSession = localStorage.getItem('ralion-app-auth-token');\n        if (directSession) {\n          const parsed = JSON.parse(directSession);\n          authUser = parsed?.user || parsed?.currentSession?.user || null;\n        }\n        for (let i = 0; !authUser && i < localStorage.length; i++) {",
+              'OrganizationContext canonical Supabase session')
+
+          route = 'apps/ralion/src/app/api/mari/knowledge/website-sync/route.ts'
+          rp = Path(route)
+          r = rp.read_text()
+          old = "    const serverCtx = await getCurrentRalionContext(request, { requireAuth: false });"
+          if r.count(old) != 2:
+              raise SystemExit(f'website-sync require auth: expected 2 matches, found {r.count(old)}')
+          r = r.replace(old, "    const serverCtx = await getCurrentRalionContext(request, { requireAuth: true });")
+          r = r.replace("    let canonicalOrgId = 'unconfigured-tenant';\n    if (serverCtx) {", "    if (!serverCtx) {\n      return corsJsonResponse(\n        { success: false, code: 'AUTHENTICATION_REQUIRED', error: 'Authentication required' },\n        { status: 401 },\n        request\n      );\n    }\n\n    let canonicalOrgId = serverCtx.organization?.id || serverCtx.workspace.organization_id || serverCtx.workspace.id;\n    {")
+          r = r.replace("      canonicalOrgId = serverCtx.organization?.id || serverCtx.workspace.organization_id || serverCtx.workspace.id;\n      if (requestedOrgId && requestedOrgId !== canonicalOrgId && requestedOrgId !== serverCtx.workspace.id && requestedOrgId !== serverCtx.user.id) {", "      if (requestedOrgId && requestedOrgId !== canonicalOrgId && requestedOrgId !== serverCtx.workspace.id) {")
+          # Remove the now-obsolete unauthenticated demo/default branch in both handlers.
+          demo = "      }\n    } else if (requestedOrgId && requestedOrgId !== 'org_demo' && requestedOrgId !== 'default') {\n      return corsJsonResponse(\n        { success: false, code: 'AUTHENTICATION_REQUIRED', error: 'Authentication required' },\n        { status: 401 },\n        request\n      );\n    }"
+          if r.count(demo) != 2:
+              raise SystemExit(f'website-sync demo fallback: expected 2 matches, found {r.count(demo)}')
+          r = r.replace(demo, "      }\n    }")
+          rp.write_text(r)
+          print('patched website-sync server auth')
+          PY
+
+          git config user.name 'Ralion Security Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add 'apps/ralion/src/app/(dashboard)/mari-ai/page.tsx' 'packages/auth/src/OrganizationContext.tsx' 'apps/ralion/src/app/api/mari/knowledge/website-sync/route.ts'
+          git diff --cached --check
+          git commit -m 'fix(mari): wait for canonical tenant and authenticate knowledge sync'
+          git push origin main
