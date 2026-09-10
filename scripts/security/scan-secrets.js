@@ -33,6 +33,10 @@ const placeholderFragments = [
   'fake',
   'test-only',
   'test_only',
+  'generate_a_',
+  'generate-a-',
+  '[project-ref]',
+  '[password]',
 ];
 
 const detectors = [
@@ -113,11 +117,19 @@ function scanJwtSecrets(text, findings, file) {
 }
 
 function scanAssignedSecrets(text, findings, file) {
-  const assignmentRegex = /\b(?:SUPABASE_SERVICE_ROLE_KEY|FACEBOOK_APP_SECRET|META_APP_SECRET|OAUTH_ENCRYPTION_KEY|JWT_SECRET|PAYPAL_CLIENT_SECRET|STRIPE_SECRET_KEY|RESEND_API_KEY|SMTP_PASS(?:WORD)?|DATABASE_URL)\s*[:=]\s*['\"]?([^'\"\s,;]+)/gi;
+  // Deliberately do not use \s here: crossing line boundaries makes empty example
+  // assignments look like they contain the next variable name/value.
+  const assignmentRegex = /\b(?:SUPABASE_SERVICE_ROLE_KEY|FACEBOOK_APP_SECRET|META_APP_SECRET|OAUTH_ENCRYPTION_KEY|JWT_SECRET|PAYPAL_CLIENT_SECRET|STRIPE_SECRET_KEY|RESEND_API_KEY|SMTP_PASS(?:WORD)?|DATABASE_URL)[ \t]*[:=][ \t]*['\"]?([^'\"\s,;]+)/gi;
 
   for (const match of text.matchAll(assignmentRegex)) {
     const value = (match[1] || '').trim();
-    if (!value || isPlaceholder(value) || value.startsWith('process.env.') || value.startsWith('${')) {
+    if (
+      !value ||
+      isPlaceholder(value) ||
+      value.startsWith('process.env.') ||
+      value.startsWith('${') ||
+      value.startsWith('$')
+    ) {
       continue;
     }
 
