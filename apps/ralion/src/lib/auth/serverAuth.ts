@@ -113,10 +113,6 @@ export async function getCurrentRalionContext(
   const requestedOrgId = requestedOrgRaw ? canonicalUuid(requestedOrgRaw) : null;
   if ((requestedWorkspaceRaw && !requestedWorkspaceId) || (requestedOrgRaw && !requestedOrgId)) return null;
 
-  // Backward compatibility for older Ralion clients that accidentally copied
-  // organizationId into x-workspace-id. Never treat that org UUID as a
-  // workspace grant: discard only the duplicate workspace hint, derive the
-  // workspace from the authenticated user, then verify requestedOrgId below.
   if (requestedWorkspaceId && requestedOrgId && requestedWorkspaceId === requestedOrgId) {
     requestedWorkspaceId = null;
   }
@@ -147,7 +143,7 @@ export async function getCurrentRalionContext(
       membershipRow = member;
     }
   } else {
-    const { data: ownedWorkspace } = await supabase
+    const { data: ownedWorkspace, error: ownedWorkspaceError } = await supabase
       .from('workspaces')
       .select('id, name, slug, owner_id, organization_id, created_at')
       .eq('owner_id', authUser.id)
@@ -155,17 +151,26 @@ export async function getCurrentRalionContext(
       .limit(1)
       .maybeSingle();
 
+    if (ownedWorkspaceError) {
+      console.warn('[ServerAuth] Owned workspace lookup failed', { code: ownedWorkspaceError.code });
+      return null;
+    }
+
     if (ownedWorkspace) {
       workspaceRow = ownedWorkspace;
       membershipRow = { id: `owner_${authUser.id}_${ownedWorkspace.id}`, workspace_id: ownedWorkspace.id, user_id: authUser.id, role: 'owner' };
     } else {
-      const { data: membership } = await supabase
+      const { data: membership, error: membershipError } = await supabase
         .from('workspace_members')
         .select('id, workspace_id, user_id, role, workspaces ( id, name, slug, owner_id, organization_id, created_at )')
         .eq('user_id', authUser.id)
         .order('joined_at', { ascending: true })
         .limit(1)
         .maybeSingle();
+      if (membershipError) {
+        console.warn('[ServerAuth] Workspace membership lookup failed', { code: membershipError.code });
+        return null;
+      }
       if (membership?.workspaces) {
         workspaceRow = (membership as any).workspaces;
         membershipRow = { id: membership.id, workspace_id: membership.workspace_id, user_id: authUser.id, role: membership.role };
@@ -182,7 +187,7 @@ export async function getCurrentRalionContext(
 
   const { data: organizationRow, error: orgError } = await supabase
     .from('organizations')
-    .select('id, name, slug, plan')
+    .select('id, name, slug')
     .eq('id', organizationId)
     .maybeSingle();
   if (orgError || !organizationRow) return null;
@@ -215,7 +220,7 @@ export async function getCurrentRalionContext(
     organization: {
       id: organizationId,
       name: organizationRow.name || workspace.name,
-      tier: organizationRow.plan || authUser.user_metadata?.tier || 'STANDARD',
+      tier: authUser.user_metadata?.tier || 'STANDARD',
     },
   };
 }
