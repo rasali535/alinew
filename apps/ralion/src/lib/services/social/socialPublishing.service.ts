@@ -22,6 +22,8 @@ import { SocialTokenManager } from './socialTokenManager.service';
 import { SocialProviderRouter } from './socialProviderRouter.service';
 import { AuditLoggerService } from '../auditLogger.service';
 
+import { resolvePageAccessToken } from './facebookPageManagement.service';
+
 function getServiceSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co';
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -63,7 +65,32 @@ export interface MultiPublishResult {
   errors: string[];
 }
 
+// Global in-memory registry for isomorphic Next.js server & runtime dev support
+const globalPublishStore = globalThis as unknown as {
+  __ralion_published_posts?: Array<{
+    id: string;
+    userId: string;
+    workspaceId?: string;
+    organizationId?: string;
+    body: string;
+    platforms: string[];
+    idempotencyKey?: string;
+    status: string;
+    platformResults: any;
+    platformPostIds: any;
+    createdAt: number;
+  }>;
+};
+
+if (!globalPublishStore.__ralion_published_posts) {
+  globalPublishStore.__ralion_published_posts = [];
+}
+
 export class SocialPublishingService {
+  private static get publishedPosts() {
+    return globalPublishStore.__ralion_published_posts!;
+  }
+
   /**
    * Process media items: Convert base64 data URLs to public Supabase Storage URLs
    */
@@ -137,25 +164,104 @@ export class SocialPublishingService {
     const supabase = getServiceSupabase();
     const idempotencyKey = params.idempotencyKey || `pub_${crypto.randomUUID()}`;
 
+    // 1.5. Idempotency & 24h Duplicate Conflict Check (In-Memory + Database)
+    const normalizedBody = params.body.trim();
+    const cutoff24h = Date.now() - 24 * 60 * 60 * 1000;
+
+    const memoryDup = this.publishedPosts.find(
+      (p) =>
+        p.userId === params.userId &&
+        (p.workspaceId === params.workspaceId || p.organizationId === params.organizationId) &&
+        (p.body === normalizedBody || (params.idempotencyKey && p.idempotencyKey === params.idempotencyKey)) &&
+        p.createdAt > cutoff24h &&
+        (p.status === 'PUBLISHED' || p.status === 'QUEUED' || p.status === 'SCHEDULED')
+    );
+
+    if (memoryDup) {
+      console.log('[SocialPublishing] In-memory duplicate post conflict detected:', {
+        existingPostId: memoryDup.id,
+        userId: params.userId,
+        workspaceId: params.workspaceId,
+      });
+
+      return {
+        postId: memoryDup.id,
+        overallStatus: memoryDup.status as any,
+        platformResults: memoryDup.platformResults || {},
+        statusCode: 409,
+        conflict: true,
+        conflictDetails: {
+          existingPostId: memoryDup.id,
+          reason: 'This exact content was already published or scheduled for this account within the last 24 hours.',
+        },
+        errors: ['Publish conflict: This content was already posted to this account within the last 24 hours.'],
+      };
+    }
+
+    try {
+      let dupQuery = supabase
+        .from('social_posts')
+        .select('id, status, platform_results, platform_post_ids, created_at')
+        .eq('user_id', params.userId)
+        .eq('body', normalizedBody)
+        .gt('created_at', new Date(cutoff24h).toISOString())
+        .limit(1);
+
+      if (params.workspaceId) {
+        dupQuery = dupQuery.eq('workspace_id', params.workspaceId);
+      }
+
+      const { data: existingPost } = await dupQuery.maybeSingle();
+
+      if (existingPost && (existingPost.status === 'PUBLISHED' || existingPost.status === 'QUEUED' || existingPost.status === 'SCHEDULED')) {
+        console.log('[SocialPublishing] Database duplicate post conflict detected:', {
+          existingPostId: existingPost.id,
+          userId: params.userId,
+          workspaceId: params.workspaceId,
+        });
+
+        return {
+          postId: existingPost.id,
+          overallStatus: existingPost.status as any,
+          platformResults: existingPost.platform_results || {},
+          statusCode: 409,
+          conflict: true,
+          conflictDetails: {
+            existingPostId: existingPost.id,
+            reason: 'This exact content was already published or scheduled for this account within the last 24 hours.',
+          },
+          errors: ['Publish conflict: This content was already posted to this account within the last 24 hours.'],
+        };
+      }
+    } catch (dupErr: any) {
+      // Ignored if table doesn't exist in Supabase
+    }
+
     // 2. Pre-process media URLs (turn base64 data URLs into persistent public storage URLs)
     const normalizedMediaUrls = await this.processMediaUrls(params.mediaUrls);
 
-    // 3. Find active connections for requested platforms strictly matching user or workspace
+    // 3. Find active connections for requested platforms strictly matching canonical tenant & user
     let connections: any[] = [];
     try {
       let connQuery = supabase
         .from('social_connections')
-        .select('id, provider, provider_account_id, connection_status, infrastructure_provider, zernio_account_id, zernio_profile_id, user_id, workspace_id, organization_id')
+        .select('id, provider, provider_account_id, account_name, account_type, connection_status, token_status, infrastructure_provider, zernio_account_id, zernio_profile_id, user_id, workspace_id, organization_id, metadata, disconnected_at, last_health_check_at, health_error_message, created_at, updated_at')
         .in('provider', params.platforms)
-        .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected', 'active']);
+        .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected', 'active'])
+        .is('disconnected_at', null);
 
-      if (params.workspaceId && params.workspaceId !== 'default' && params.workspaceId !== 'default-org') {
-        connQuery = connQuery.or(`workspace_id.eq.${params.workspaceId},user_id.eq.${params.userId || params.workspaceId}`);
+      if (params.organizationId && params.organizationId !== 'default-org') {
+        connQuery = connQuery.or(`organization_id.eq.${params.organizationId},workspace_id.eq.${params.workspaceId || params.organizationId}`);
+      } else if (params.workspaceId && params.workspaceId !== 'default') {
+        connQuery = connQuery.eq('workspace_id', params.workspaceId);
       } else if (params.userId && params.userId !== 'default-user') {
         connQuery = connQuery.eq('user_id', params.userId);
       }
 
-      const { data } = await connQuery;
+      const { data, error } = await connQuery;
+      if (error) {
+        console.warn('[SocialPublishing] Connection fetch error:', error);
+      }
       connections = data || [];
     } catch (dbErr: any) {
       console.warn('[SocialPublishing] Connection fetch notice:', dbErr.message);
@@ -201,6 +307,7 @@ export class SocialPublishingService {
         platformResults[platform] = {
           success: false,
           error: `No active ${platform} connection found for this user/workspace.`,
+          statusCode: 403,
           platform,
           publishedAt: new Date().toISOString(),
         };
@@ -220,6 +327,7 @@ export class SocialPublishingService {
           platformResults[platform] = {
             success: false,
             error: `Access denied: Page ${params.pageId} is not authorized for this connection.`,
+            statusCode: 403,
             platform,
             publishedAt: new Date().toISOString(),
           };
@@ -247,6 +355,7 @@ export class SocialPublishingService {
           platformResults[platform] = {
             success: false,
             error: authErr.message || '403 Forbidden: Master platform assets are restricted to PLATFORM_ADMIN.',
+            statusCode: 403,
             platform,
             publishedAt: new Date().toISOString(),
           };
@@ -255,7 +364,11 @@ export class SocialPublishingService {
         }
       }
 
-      const infraProvider = (conn.infrastructure_provider || 'native') as InfrastructureProviderType;
+      // Determine infrastructure: if connection has direct native access token and lacks zernio binding, route natively
+      let infraProvider = (conn.infrastructure_provider || 'native') as InfrastructureProviderType;
+      if (conn.metadata?.encrypted_access_token && !conn.zernio_account_id) {
+        infraProvider = 'native';
+      }
 
       // Resolve routing decision
       const routing = await SocialProviderRouter.resolveRouting({
@@ -308,6 +421,7 @@ export class SocialPublishingService {
             platformResults[platform] = {
               success: false,
               error: `Authentication token for ${platform} has expired. Please reconnect.`,
+              statusCode: 401,
               platform,
               publishedAt: new Date().toISOString(),
             };
@@ -315,12 +429,23 @@ export class SocialPublishingService {
             return;
           }
 
-          res = await routing.adapter.publish(token, {
+          const targetPageId = params.pageId || conn.metadata?.pageId || conn.page_id || conn.provider_account_id;
+          let publishToken = token;
+
+          // For Facebook Pages, resolve authentic Page Access Token
+          if (platform === 'facebook' && targetPageId && targetPageId !== 'me') {
+            const pageToken = await resolvePageAccessToken(token, targetPageId, conn.metadata);
+            if (pageToken) {
+              publishToken = pageToken;
+            }
+          }
+
+          res = await routing.adapter.publish(publishToken, {
             title: params.title,
             body: params.body,
             mediaUrls: normalizedMediaUrls,
             mediaTypes: params.mediaTypes,
-            pageId: params.pageId || conn.provider_account_id,
+            pageId: targetPageId,
             options: {
               scheduledFor: params.scheduledFor ? params.scheduledFor.toISOString() : undefined,
             },
@@ -334,9 +459,11 @@ export class SocialPublishingService {
           errors.push(`${platform}: ${res.error}`);
         }
       } catch (err: any) {
+        const errorStatusCode = err.statusCode || 500;
         platformResults[platform] = {
           success: false,
           error: err.message || `Failed to publish to ${platform}`,
+          statusCode: errorStatusCode,
           platform,
           publishedAt: new Date().toISOString(),
         };
@@ -404,7 +531,6 @@ export class SocialPublishingService {
           scheduled_for: isScheduled ? params.scheduledFor?.toISOString() : null,
           published_at: isScheduled ? null : new Date().toISOString(),
           author_name: params.authorName || 'Ralion User',
-          // Tag every post with its explicit social connection so reads can be scoped per-account
           social_connection_id: explicitConnection?.id || params.socialConnectionId || null,
         })
         .select()
@@ -438,8 +564,25 @@ export class SocialPublishingService {
       console.warn('[SocialPublishing] Audit log notice:', auditErr.message);
     }
 
+    const finalPostId = postRecord?.id || `post_${Date.now()}`;
+    if (overallStatus === 'PUBLISHED' || overallStatus === 'QUEUED') {
+      this.publishedPosts.push({
+        id: finalPostId,
+        userId: params.userId,
+        workspaceId: params.workspaceId,
+        organizationId: params.organizationId,
+        body: normalizedBody,
+        platforms: params.platforms,
+        idempotencyKey,
+        status: overallStatus,
+        platformResults,
+        platformPostIds,
+        createdAt: Date.now(),
+      });
+    }
+
     return {
-      postId: postRecord?.id || `post_${Date.now()}`,
+      postId: finalPostId,
       overallStatus,
       platformResults: platformResults as Record<SocialPlatformType, PublishResponse>,
       statusCode: calculatedStatusCode,

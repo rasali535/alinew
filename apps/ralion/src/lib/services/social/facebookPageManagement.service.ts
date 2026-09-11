@@ -13,14 +13,15 @@ import { AuditLoggerService } from '../auditLogger.service';
 import { SocialTokenManager } from './socialTokenManager.service';
 import { FacebookCommentsService } from './facebookComments.service';
 import { FacebookConnectionStateService } from './facebookConnectionState.service';
+import { META_GRAPH_API_VERSION } from '@ralion/integrations';
 
-export const META_GRAPH_API_VERSION = 'v20.0';
+export { META_GRAPH_API_VERSION };
 
 /**
  * Resolves an authentic Page Access Token for the requested Facebook Page.
  * Checks metadata for encrypted_page_access_token, then queries /me/accounts via user token.
  */
-async function resolvePageAccessToken(userToken: string, targetPageId: string, connMetadata?: any): Promise<string | null> {
+export async function resolvePageAccessToken(userToken: string, targetPageId: string, connMetadata?: any): Promise<string | null> {
   if (connMetadata?.encrypted_page_access_token) {
     try {
       const { decryptToken } = require('@ralion/integrations');

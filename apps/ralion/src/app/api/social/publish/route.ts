@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
 
     const actualUserId = context.user.id;
     const actualWorkspaceId = context.workspace.id;
-    const actualOrgId = context.workspace.id;
+    const actualOrgId = context.organization?.id || context.workspace.organization_id || context.workspace.id;
 
     const actualContent = content || postBody;
 
@@ -61,8 +61,10 @@ export async function POST(request: NextRequest) {
       isScheduled: Boolean(scheduledFor),
       hasPageId: Boolean(pageId),
       hasSocialConnectionId: Boolean(socialConnectionId),
+      organizationId: actualOrgId,
       workspaceId: actualWorkspaceId,
       userId: actualUserId,
+      idempotencyKey: idempotencyKey || null,
       timestamp: new Date().toISOString(),
     });
 
@@ -102,6 +104,12 @@ export async function POST(request: NextRequest) {
     const isPartial = result.overallStatus === 'PARTIALLY_PUBLISHED';
     const httpStatus = result.statusCode || (isSuccess ? 200 : isPartial ? 200 : 422);
 
+    const primaryError =
+      result.errors?.[0] ||
+      (result.platformResults?.facebook as any)?.error ||
+      (result.platformResults?.facebook as any)?.details?.sanitizedMessage ||
+      (isSuccess || isPartial ? undefined : 'Social publishing failed');
+
     console.log('[SocialPublishAPI] Dispatch result:', {
       requestId,
       overallStatus: result.overallStatus,
@@ -110,6 +118,7 @@ export async function POST(request: NextRequest) {
       success: isSuccess || isPartial,
       conflict: result.conflict || false,
       errorsCount: result.errors?.length || 0,
+      primaryError,
     });
 
     return corsJsonResponse({
@@ -117,8 +126,9 @@ export async function POST(request: NextRequest) {
       postId: result.postId,
       overallStatus: result.overallStatus,
       statusCode: httpStatus,
-      ...(result.conflict ? { conflict: true, error: result.errors?.[0] || 'Publishing conflict' } : {}),
+      ...(result.conflict ? { conflict: true, error: primaryError || 'Publishing conflict' } : {}),
       ...(result.conflictDetails ? { conflictDetails: result.conflictDetails } : {}),
+      ...(!isSuccess && !isPartial && primaryError ? { error: primaryError } : {}),
       platformResults: result.platformResults,
       result,
       requestId,

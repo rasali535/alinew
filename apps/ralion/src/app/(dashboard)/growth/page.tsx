@@ -2067,6 +2067,7 @@ Rules:
            || availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || null)
         : null;
 
+      const publishIdempotencyKey = `pub_post_${postId}_${Date.now()}`;
       const payload = {
         title: post.title,
         body: `${post.body}\n\n${post.hashtags?.join(' ') || ''}`.trim(),
@@ -2076,6 +2077,7 @@ Rules:
         authorName: targetConn.label || activeFbPage?.name || organization?.name || user?.displayName || 'Social Account',
         socialConnectionId: targetConn.id,
         pageId: isFacebookTarget ? (activeFbPage?.pageId || targetConn.providerAccountId || undefined) : undefined,
+        idempotencyKey: publishIdempotencyKey,
       };
 
       const res = await authFetch('/api/social/publish', {
@@ -2088,29 +2090,37 @@ Rules:
 
       if (!res.ok || data.success === false) {
         const status = res.status;
+        const primaryError =
+          data.error ||
+          data.errors?.[0] ||
+          data.platformResults?.facebook?.error ||
+          data.platformResults?.facebook?.details?.sanitizedMessage ||
+          data.platformResults?.facebook?.details?.message ||
+          '';
+
         let alertMessage: string;
         let allowRetry = false;
 
         if (status === 409 || data.conflict === true) {
           // Duplicate content — do NOT show retry, user must change content
-          alertMessage = `⚠️ Publish conflict: This content was already posted to this account within the last 24 hours. Please edit the post before publishing again.`;
+          alertMessage = `⚠️ Publish conflict: ${primaryError || 'This content was already posted to this account within the last 24 hours. Please edit the post before publishing again.'}`;
           if (data.conflictDetails?.existingPostId) {
             alertMessage += ` (existing post ID: ${data.conflictDetails.existingPostId})`;
           }
         } else if (status === 400) {
-          alertMessage = `✕ Validation error: ${data.error || 'The publish request was invalid. Please check your post content.'}. Please correct the content and try again.`;
+          alertMessage = `✕ Validation error: ${primaryError || 'The publish request was invalid. Please check your post content.'}. Please correct the content and try again.`;
           allowRetry = false;
         } else if (status === 401) {
-          alertMessage = `✕ Authentication required: Your Facebook session has expired. Please reconnect your account in the Accounts tab.`;
+          alertMessage = `✕ Authentication required: ${primaryError || 'Your Facebook session has expired. Please reconnect your account in the Accounts tab.'}`;
         } else if (status === 403) {
-          alertMessage = `✕ Authorization error: Ralion does not have permission to publish to this Facebook Page. Please reconnect your account.`;
+          alertMessage = `✕ Authorization error: ${primaryError || 'Ralion does not have permission to publish to this Facebook Page. Please reconnect your account.'}`;
         } else if (status === 422) {
-          alertMessage = `✕ Platform error: ${data.error || 'Facebook could not process this post. Please check your media or content.'}. The platform rejected the content.`;
+          alertMessage = `✕ Platform error: ${primaryError || 'Facebook could not process this post. Please check your media or content.'}`;
         } else if (status === 500) {
-          alertMessage = `✕ Unexpected server error — please try again in a moment. If the problem persists, contact support. (Request ID: ${data.requestId || 'N/A'})`;
+          alertMessage = `✕ Unexpected server error (${primaryError || 'please try again in a moment'}). (Request ID: ${data.requestId || 'N/A'})`;
           allowRetry = true;
         } else {
-          alertMessage = `✕ Facebook publishing failed (HTTP ${status}): ${data.error || 'Unknown error'}.`;
+          alertMessage = `✕ Facebook publishing failed (HTTP ${status}): ${primaryError || 'Unknown error'}.`;
           allowRetry = true;
         }
 
@@ -6302,6 +6312,7 @@ Rules:
                      || availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || null)
                   : null;
 
+                const publishIdempotencyKey = `pub_modal_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
                 const payload = {
                   title: topic || 'Social Post',
                   body: `${contentBody}\n\n${newPost.hashtags}`.trim(),
@@ -6312,6 +6323,7 @@ Rules:
                   authorName: targetConn.label || activeFbPage?.name || organization?.name || user?.displayName || 'Social Account',
                   socialConnectionId: targetConn.id,
                   pageId: isFacebookTarget ? (activeFbPage?.pageId || targetConn.providerAccountId || undefined) : undefined,
+                  idempotencyKey: publishIdempotencyKey,
                 };
 
                 try {
@@ -6325,25 +6337,33 @@ Rules:
 
                   if (!res.ok || data.success === false) {
                     const status = res.status;
+                    const primaryError =
+                      data.error ||
+                      data.errors?.[0] ||
+                      data.platformResults?.facebook?.error ||
+                      data.platformResults?.facebook?.details?.sanitizedMessage ||
+                      data.platformResults?.facebook?.details?.message ||
+                      '';
+
                     let alertMessage: string;
 
                     if (status === 409 || data.conflict === true) {
-                      alertMessage = `⚠️ Publish conflict: This exact content is already scheduled or was posted to this account within the last 24 hours. Please edit the post text before publishing again.`;
+                      alertMessage = `⚠️ Publish conflict: ${primaryError || 'This exact content is already scheduled or was posted to this account within the last 24 hours. Please edit the post text before publishing again.'}`;
                       if (data.conflictDetails?.existingPostId) {
                         alertMessage += ` (existing post ID: ${data.conflictDetails.existingPostId})`;
                       }
                     } else if (status === 400) {
-                      alertMessage = `✕ Validation error: ${data.error || 'The publish request was invalid. Please check your post content.'}. Please correct the content and try again.`;
+                      alertMessage = `✕ Validation error: ${primaryError || 'The publish request was invalid. Please check your post content.'}. Please correct the content and try again.`;
                     } else if (status === 401) {
-                      alertMessage = `✕ Authentication required: Your Facebook session has expired. Please reconnect your account in the Accounts tab.`;
+                      alertMessage = `✕ Authentication required: ${primaryError || 'Your Facebook session has expired. Please reconnect your account in the Accounts tab.'}`;
                     } else if (status === 403) {
-                      alertMessage = `✕ Authorization error: Ralion does not have permission to publish to this Facebook Page. Please reconnect your account.`;
+                      alertMessage = `✕ Authorization error: ${primaryError || 'Ralion does not have permission to publish to this Facebook Page. Please reconnect your account.'}`;
                     } else if (status === 422) {
-                      alertMessage = `✕ Platform error: ${data.error || 'Facebook could not process this post.'}. Please check your media or content format.`;
+                      alertMessage = `✕ Platform error: ${primaryError || 'Facebook could not process this post.'}. Please check your media or content format.`;
                     } else if (status === 500) {
-                      alertMessage = `✕ Unexpected server error — please try again in a moment. (Request ID: ${data.requestId || 'N/A'})`;
+                      alertMessage = `✕ Unexpected server error (${primaryError || 'please try again in a moment'}). (Request ID: ${data.requestId || 'N/A'})`;
                     } else {
-                      alertMessage = `✕ Facebook publishing failed (HTTP ${status}): ${data.error || 'Unknown error'}.`;
+                      alertMessage = `✕ Facebook publishing failed (HTTP ${status}): ${primaryError || 'Unknown error'}.`;
                     }
 
                     setOauthAlert({
