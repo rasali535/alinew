@@ -7,6 +7,7 @@ import Footer from './components/layout/Footer';
 import Home from './pages/Home';
 import Products from './pages/Products';
 import ProductDetail from './pages/ProductDetail';
+import RalionOSProduct from './pages/RalionOSProduct';
 import RalionCRMProduct from './pages/RalionCRMProduct';
 import RalionGrowthIntelligenceProduct from './pages/RalionGrowthIntelligenceProduct';
 import RalionMariAIProduct from './pages/RalionMariAIProduct';
@@ -32,6 +33,10 @@ import Releases from './pages/Releases';
 import AdminReleases from './pages/AdminReleases';
 import About from './pages/About';
 import Services from './pages/Services';
+import FilmVideoService from './pages/FilmVideoService';
+import WebAppDevService from './pages/WebAppDevService';
+import MusicAudioService from './pages/MusicAudioService';
+import AIAutomationService from './pages/AIAutomationService';
 import Work from './pages/Work';
 import ProjectDetails from './pages/ProjectDetails';
 import AILabs from './pages/AILabs';
@@ -85,10 +90,23 @@ function App() {
             <Header />
             <main>
               <Routes>
-                {/* Enterprise Main Navigation */}
+                {/* Parent Brand & Company Main Navigation */}
                 <Route path="/" element={<Home />} />
-                <Route path="/solutions" element={<Solutions />} />
-                <Route path="/industries" element={<Industries />} />
+                <Route path="/about" element={<About />} />
+                <Route path="/services" element={<Services />} />
+                <Route path="/services/film-video" element={<FilmVideoService />} />
+                <Route path="/services/web-app-development" element={<WebAppDevService />} />
+                <Route path="/services/music-audio" element={<MusicAudioService />} />
+                <Route path="/services/ai-automation" element={<AIAutomationService />} />
+                <Route path="/work" element={<Work />} />
+                <Route path="/work/:id" element={<ProjectDetails />} />
+                <Route path="/contact" element={<Contact />} />
+                <Route path="/request-demo" element={<RequestDemo />} />
+                <Route path="/booking" element={<Booking />} />
+
+                {/* Ralion OS Flagship Product Marketing Routes */}
+                <Route path="/products/ralion-os" element={<RalionOSProduct />} />
+                <Route path="/products/ralion" element={<RalionOSProduct />} />
                 <Route path="/products" element={<Products />} />
                 <Route path="/products/ralion-crm" element={<RalionCRMProduct />} />
                 <Route path="/products/ralion-growth-intelligence" element={<RalionGrowthIntelligenceProduct />} />
@@ -96,10 +114,14 @@ function App() {
                 <Route path="/products/ralion-automation" element={<RalionAutomationProduct />} />
                 <Route path="/products/ralion-analytics" element={<RalionAnalyticsProduct />} />
                 <Route path="/products/:slug" element={<ProductDetail />} />
-                <Route path="/about" element={<About />} />
-                <Route path="/request-demo" element={<RequestDemo />} />
 
-                {/* Ralion Platform & Dashboard Redirects */}
+                {/* Solutions & Industry OS */}
+                <Route path="/solutions" element={<Solutions />} />
+                <Route path="/industries" element={<Industries />} />
+                <Route path="/ai-labs" element={<AILabs />} />
+                <Route path="/case-study/ussd-web-gap" element={<USSDCaseStudy />} />
+
+                {/* Ralion Platform Application & Dashboard Redirects (PRESERVED) */}
                 <Route path="/ralion/community" element={<CommunityEdition />} />
                 <Route path="/ralion" element={<ExternalRedirect to="/ralion/dashboard" />} />
                 <Route path="/ralion/*" element={<ExternalRedirect />} />
@@ -144,19 +166,10 @@ function App() {
                 <Route path="/downloads/releases" element={<Releases />} />
                 <Route path="/admin/releases" element={<AdminReleases />} />
 
-                {/* Redirects */}
-                <Route path="/developers" element={<Navigate to="/products/ralion" replace />} />
-                <Route path="/developer" element={<Navigate to="/products/ralion" replace />} />
+                {/* Aliases & Redirects */}
+                <Route path="/developers" element={<Navigate to="/products/ralion-os" replace />} />
+                <Route path="/developer" element={<Navigate to="/products/ralion-os" replace />} />
                 <Route path="/products/ralion-social-intelligence" element={<Navigate to="/products/ralion-growth-intelligence" replace />} />
-
-                {/* Company Pages */}
-                <Route path="/services" element={<Services />} />
-                <Route path="/work" element={<Work />} />
-                <Route path="/work/:id" element={<ProjectDetails />} />
-                <Route path="/ai-labs" element={<AILabs />} />
-                <Route path="/booking" element={<Booking />} />
-                <Route path="/contact" element={<Contact />} />
-                <Route path="/case-study/ussd-web-gap" element={<USSDCaseStudy />} />
 
                 {/* Legal & Regulatory Compliance (BOCRA & Botswana DPA) */}
                 <Route path="/privacy" element={<PrivacyPolicy />} />

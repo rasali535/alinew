@@ -1,87 +1,173 @@
-// Enterprise Production Navigation & Content Data for Ras Ali Labs (Pty) Ltd
-// Official Brand Hierarchy:
-// RAS ALI LABS — Building intelligent business operating systems
-// RALION OS — Empowered to Prosper | Your AI Business Operating System.
-// MARI AI — Your AI Business Growth Partner
+// Authoritative Navigation, Brand Hierarchy & Content Data for Ras Ali Labs (Pty) Ltd
+// Official Brand Architecture:
+// RAS ALI LABS — Parent Company & Primary Public Brand ("We Build Intelligent Technology and Powerful Stories.")
+// ├── Technology & Digital Development (Web, Mobile, Cloud, Custom Platforms)
+// ├── Film & Creative Production (Cinematic Video, Corporate Storytelling, Commercials, Motion Graphics)
+// ├── Music & Audio (Original Production, Studio Recording, Sound Design, Live Performance)
+// ├── AI & Automation (Intelligent Workflows, Reasoning Systems, Enterprise Integration)
+// └── Ralion OS — Flagship Product Innovation ("Empowered to Prosper | Your AI Business Operating System")
 
 export const navLinks = [
   { name: 'Home', href: '/' },
   {
-    name: 'Ralion OS',
-    href: '/products/ralion',
+    name: 'Services',
+    href: '/services',
     dropdown: [
       {
-        title: 'Core Platform & Ecosystem',
+        title: 'Creative & Media',
         items: [
-          { name: 'Ralion OS Overview', href: '/products/ralion' },
-          { name: 'Mari AI Growth Partner', href: '/products/ralion-mari-ai' },
-          { name: 'CRM & Pipeline Intelligence', href: '/products/ralion-crm' },
-          { name: 'Growth Studio & Creatives', href: '/products/ralion-growth-intelligence' },
-          { name: 'Social Intelligence & Publishing', href: '/products/ralion-growth-intelligence#social' },
-          { name: 'Enterprise AI & Automation', href: '/products/ralion-automation' },
+          { name: 'Film & Creative Production', href: '/services/film-video' },
+          { name: 'Music Production & Audio', href: '/services/music-audio' },
         ]
       },
       {
-        title: 'Industry Operating Systems',
+        title: 'Technology & AI',
         items: [
-          { name: 'Funeral OS', href: '/industries#funeral' },
-          { name: 'Logistics OS', href: '/industries#logistics' },
-          { name: 'Healthcare OS', href: '/industries#healthcare' },
-          { name: 'Trade OS', href: '/industries#trade' },
-          { name: 'Government OS', href: '/industries#government' }
+          { name: 'Web & App Development', href: '/services/web-app-development' },
+          { name: 'AI & Automation Systems', href: '/services/ai-automation' },
         ]
       }
     ]
   },
-  { name: 'Mari AI', href: '/products/ralion-mari-ai' },
-  { name: 'Industry OS', href: '/industries' },
-  { name: 'Pricing', href: '/pricing' },
-  { name: 'Enterprise', href: '/solutions' },
+  { name: 'Ralion OS', href: '/products/ralion-os' },
+  { name: 'Our Work', href: '/work' },
   { name: 'About', href: '/about' },
-  { name: 'Support', href: '/support' }
+  { name: 'Contact', href: '/contact' }
 ];
 
-export const heroWords = ['EMPOWERED TO PROSPER.', 'INTELLIGENT SYSTEMS.', 'BUSINESS OS.', 'ENTERPRISE AI.'];
+export const heroWords = [
+  'INTELLIGENT TECHNOLOGY.',
+  'POWERFUL STORIES.',
+  'CINEMATIC PRODUCTION.',
+  'ORIGINAL SOUND.',
+  'AI INNOVATION.'
+];
 
 export const companyInfo = {
   name: 'Ras Ali Labs (Pty) Ltd',
-  flagship: 'RALION OS',
-  primaryTagline: 'Empowered to Prosper',
-  descriptivePositioning: 'Your AI Business Operating System.',
-  mariPositioning: 'Mari AI — Your AI Business Growth Partner',
-  headline: 'AI Business Operating Systems for the Next Generation of Companies',
-  subheadline: 'Ras Ali Labs builds AI-powered business operating systems that combine intelligent automation, data, business workflows, social intelligence, growth tools and enterprise infrastructure.',
-  description: 'Ras Ali Labs is an African enterprise AI technology company headquartered in Gaborone, Botswana. We engineer sovereign business operating systems that integrate operations, customer intelligence, AI reasoning, and multi-channel growth.',
+  shortName: 'Ras Ali Labs',
+  headline: 'We Build Intelligent Technology and Powerful Stories.',
+  tagline: 'Technology. Film. Sound. Innovation.',
+  subheadline: 'Ras Ali Labs is a Botswana-based multidisciplinary technology and creative company delivering intelligent platforms, cinematic productions, digital experiences and original sound.',
+  aboutSummary: 'Ras Ali Labs is a Botswana-based multidisciplinary technology and creative company working at the intersection of software, artificial intelligence, film, visual storytelling and music. We develop digital products, produce memorable creative work and build practical technology that helps organizations communicate, operate and grow.',
+  flagship: 'Ralion OS',
+  flagshipTagline: 'Empowered to Prosper',
+  flagshipPositioning: 'Your AI Business Operating System',
+  mariPositioning: 'Mari — Your AI Business Growth Partner',
   email: 'contact@rasalilabs.com',
+  phone: '+267 72 113 009',
+  address: 'Plot 18680 Khuhurutse Drive, Phase 2, Gaborone, Botswana',
   location: 'Gaborone, Botswana',
-  founded: '2023',
-  philosophy: 'Empowered to Prosper',
-  aiLabsDescription: 'Explore sovereign AI prototypes, cross-border supply chain sentinels, and vector reasoning research from the Ras Ali Labs engineering team in Gaborone.'
+  founded: '2014',
+  philosophy: 'Empowered to Prosper'
 };
 
-export const aiLabsImages = [
-  'https://images.unsplash.com/photo-1586528116311-ad8ed7c508c0?q=80&w=2070&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop'
-];
-
-export const aiPrototypes = [
+export const capabilityPillars = [
   {
-    title: 'Supply Chain Sentinel AI',
-    image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=2015&auto=format&fit=crop',
-    status: 'Live Enterprise OS'
+    id: 'film-video',
+    title: 'Film & Creative Production',
+    tagline: 'Cinematic Visuals & Strategic Storytelling',
+    description: 'Cinematic films, corporate storytelling, commercials, interviews, event coverage, photography, motion graphics and post-production.',
+    icon: 'Video',
+    image: '/assets/images/service-video.png',
+    href: '/services/film-video',
+    items: [
+      'Corporate Storytelling & Commercials',
+      'High-End Videography & Cinematic Documentaries',
+      'Multi-Camera Live & Event Coverage',
+      'Professional Photography & Visual Content',
+      'Motion Graphics, Grading & Audio Post-Production'
+    ]
   },
   {
-    title: 'Mari AI Reasoning Engine',
-    image: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop',
-    status: 'Core System'
+    id: 'web-app-development',
+    title: 'Web & App Development',
+    tagline: 'Modern Digital Experiences & Custom Platforms',
+    description: 'Modern websites, mobile applications, business platforms, portals, e-commerce systems and custom digital products.',
+    icon: 'Code',
+    image: '/assets/images/service-dev.png',
+    href: '/services/web-app-development',
+    items: [
+      'Modern High-Performance Web Applications',
+      'iOS & Android Mobile Applications',
+      'Custom Business Portals & Dashboards',
+      'Enterprise E-Commerce Systems',
+      'UI/UX Architecture & Interaction Design'
+    ]
   },
   {
-    title: 'TradeGrid SADC Corridor',
-    image: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop',
-    status: 'B2B Network'
+    id: 'music-audio',
+    title: 'Music & Audio',
+    tagline: 'Original Sound, Composition & Sonic Identity',
+    description: 'Music production, arrangement, recording, sound design, audio post-production and live creative performance.',
+    icon: 'Music',
+    image: '/assets/images/service-sound.png',
+    href: '/services/music-audio',
+    items: [
+      'Original Music Production & Arrangement',
+      'Studio Recording & Session Musicianship',
+      'Commercial Sound Design & Sonic Branding',
+      'Audio Post-Production, Mixing & Mastering',
+      'Live Creative & Technical Audio Production'
+    ]
+  },
+  {
+    id: 'ai-automation',
+    title: 'AI & Automation',
+    tagline: 'Intelligent Systems & Business Transformation',
+    description: 'AI-powered business systems, workflow automation, intelligent integrations and enterprise digital transformation.',
+    icon: 'Bot',
+    image: '/assets/images/service-branding.png',
+    href: '/services/ai-automation',
+    items: [
+      'AI-Powered Enterprise Workflow Systems',
+      'Intelligent Reasoning Agents & LLM Integration',
+      'API Integration & Process Automation',
+      'Data Pipelines & Custom Business Telemetry',
+      'Sovereign Data Governance & BOCRA Compliance'
+    ]
   }
 ];
+
+export const howWeWork = [
+  {
+    step: '01',
+    title: 'Discover',
+    tagline: 'Strategic Immersion',
+    description: 'We understand your core objectives, audience, technical architecture, and creative goals through rigorous discovery.'
+  },
+  {
+    step: '02',
+    title: 'Design',
+    tagline: 'Architecture & Visual Language',
+    description: 'We craft comprehensive UI/UX blueprints, creative storyboards, sound palettes, and technical specifications.'
+  },
+  {
+    step: '03',
+    title: 'Create',
+    tagline: 'Engineering & Production',
+    description: 'Our multidisciplinary team builds the software, shoots the cinematic footage, engineers the audio, and develops the AI workflows.'
+  },
+  {
+    step: '04',
+    title: 'Deliver',
+    tagline: 'Deployment & Scaling',
+    description: 'We test, polish, deploy, broadcast, and provide ongoing operational support to ensure lasting impact and growth.'
+  }
+];
+
+export const ralionOSOverview = {
+  badge: 'A Flagship Innovation by Ras Ali Labs',
+  name: 'Ralion OS',
+  tagline: 'Empowered to Prosper',
+  headline: 'Your AI Business Operating System',
+  description: 'Ralion OS brings business intelligence, Mari AI, growth, social media, customer management and operational tools into one connected platform.',
+  mariTagline: 'Mari — Your AI Business Growth Partner',
+  mariDescription: 'Embedded executive AI that provides strategic growth recommendations, automates creative workflows, and orchestrates multi-channel publishing.',
+  launchHref: '/ralion',
+  exploreHref: '/products/ralion-os',
+  demoHref: '/request-demo'
+};
 
 export const ralionModules = [
   {
@@ -136,112 +222,70 @@ export const ralionModules = [
 
 export const featuredProjects = [
   {
-    id: 1,
+    id: 'pula-pitch-2024',
+    title: 'Pula Pitch',
+    subtitle: 'Television & Digital Enterprise Series',
+    category: 'Film & Creative Production',
+    roles: ['Set Design', 'Pre-Production', 'Principal Videography', 'Post-Production'],
+    date: '2024',
+    verifiedNote: 'Lead videographer responsible for set design and pre-production, production and post-production across 13 episodes.',
+    image: '/assets/images/pula-pitch-logo.jpg',
+    description: 'Lead videographer responsible for set design, lighting architecture, multi-camera shoot direction, pre-production, and full post-production across 13 complete episodes of the televised enterprise series.'
+  },
+  {
+    id: 'dedications-2020',
+    title: 'Dedications',
+    subtitle: 'Broadcast Music Production & Studio Sessions',
+    category: 'Music & Audio Production',
+    roles: ['Bass Guitarist', 'Studio Setup', 'Artist Management'],
+    date: '2020',
+    verifiedNote: 'Bass guitarist, studio setup and artist management across the programme’s shoots.',
+    image: '/assets/images/ras-ali-bass-1.jpg',
+    description: 'Live musical execution as bass guitarist, studio recording setup, sound monitoring, and artist management throughout all broadcast production shoots.'
+  },
+  {
+    id: 'ralion-os-flagship',
     title: 'Ralion OS',
-    subtitle: 'AI Business Operating System',
+    subtitle: 'AI Business Operating System (Flagship Product)',
+    category: 'Software & Technology',
+    roles: ['Enterprise Architecture', 'Mari AI Engine', 'Multi-Tenant Security', 'Full-Stack Engineering'],
+    date: '2026',
+    verifiedNote: 'Flagship innovation engineered and built by Ras Ali Labs.',
     image: '/assets/images/logo.png',
-    category: 'Flagship SaaS',
-    roles: ['Enterprise Architecture', 'Mari AI Engine', 'Multi-Tenant Security'],
-    date: '2026',
-    description: "The AI Operating System for Business. Combines core operations, pipeline management, and Mari AI reasoning agents into a single unified workspace."
+    description: 'The flagship AI operating system by Ras Ali Labs. Unifies CRM, operations, Mari AI reasoning, campaign generation, and multi-platform social management for modern businesses.'
   },
   {
-    id: 2,
-    title: 'Ralion Funeral OS',
-    subtitle: 'Mortuary & Policyholder Platform',
-    image: 'https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=2070&auto=format&fit=crop',
-    category: 'Industry OS',
-    roles: ['Dignified Case Intake', 'Policyholder Vault', 'Fleet Logistics'],
-    date: '2026',
-    description: "Comprehensive operating system managing policyholders, mortuary case intake, fleet scheduling, and automated claims for funeral homes."
+    id: 'lebville-platform',
+    title: 'Lebville Digital Platform',
+    subtitle: 'Modern Web Application & Digital Presence',
+    category: 'Web & App Development',
+    roles: ['Full-Stack Engineering', 'UI/UX Architecture', 'Cloud Deployment'],
+    date: '2024',
+    verifiedNote: 'Custom web application engineered by Ras Ali Labs.',
+    image: '/assets/images/lebville-logo.png',
+    description: 'High-performance responsive digital platform engineered with modern web frameworks, dynamic components, and optimized cloud delivery.'
   },
   {
-    id: 3,
-    title: 'Ralion Logistics OS',
-    subtitle: 'Cross-Border Fleet Telemetry',
-    image: 'https://images.unsplash.com/photo-1586528116311-ad8ed7c508c0?q=80&w=2070&auto=format&fit=crop',
-    category: 'Industry OS',
-    roles: ['Vehicle Telemetry', 'Digital Waybills', 'SADC Border Workflows'],
-    date: '2026',
-    description: "Cross-border logistics and freight management platform powering transport operators with digital waybills and real-time border clearance."
+    id: 'peregrine-systems',
+    title: 'Peregrine Brand & Web Portal',
+    subtitle: 'Enterprise Digital Identity & Web Interface',
+    category: 'Web & App Development',
+    roles: ['Visual Identity', 'Web Development', 'Interface Design'],
+    date: '2024',
+    verifiedNote: 'Brand identity and digital web portal designed and developed by Ras Ali Labs.',
+    image: '/assets/images/peregrine-logo.png',
+    description: 'Clean, modern digital identity and web portal engineered for high performance, accessibility, and clear corporate communications.'
   },
   {
-    id: 4,
-    title: 'Ralion Trade OS',
-    subtitle: 'Sovereign SADC B2B Network',
-    image: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop',
-    category: 'Industry OS',
-    roles: ['B2B Trade Catalog', 'Automated Invoicing', 'Trade Finance'],
-    date: '2026',
-    description: "Cross-border B2B trade infrastructure platform connecting suppliers, buyers, and freight forwarders across the SADC trade corridor."
-  },
-  {
-    id: 5,
-    title: 'Ralion Healthcare OS',
-    subtitle: 'Clinical Practice & EMR Platform',
-    image: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?q=80&w=2070&auto=format&fit=crop',
-    category: 'Industry OS',
-    roles: ['Electronic Health Records', 'Doctor Scheduling', 'Medical Billing'],
-    date: '2026',
-    description: "Clinical practice operating system managing patient records, doctor appointments, electronic prescriptions, and medical billing."
-  },
-  {
-    id: 6,
-    title: 'Ralion Government OS',
-    subtitle: 'Sovereign Public Sector Infrastructure',
-    image: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=2070&auto=format&fit=crop',
-    category: 'Industry OS',
-    roles: ['Citizen Portal', 'USSD Gateway', 'Regulatory Audit Vault'],
-    date: '2026',
-    description: "Sovereign digital public infrastructure providing citizen registry automation, USSD access, and inter-departmental workflows."
-  }
-];
-
-export const industryOperatingSystems = [
-  {
-    id: 'funeral',
-    name: 'Ralion Funeral OS',
-    tagline: 'Dignified End-to-End Mortuary & Claims Management',
-    description: 'Specialized operating system managing policyholder registers, repatriation logistics, fleet scheduling, mortuary tracking, and automated client notifications.',
-    href: '/industries#funeral',
-    metrics: '99.8% Policy Accuracy',
-    capabilities: ['Policyholder Vault', 'Body Intake & QR Tracking', 'Fleet & Mortuary Schedule', 'Automated Claims Workflows']
-  },
-  {
-    id: 'logistics',
-    name: 'Ralion Logistics OS',
-    tagline: 'Cross-Border Fleet Telemetry & Waybill Automation',
-    description: 'Freight routing, driver dispatching, border clearance document generation, fuel monitoring, and live cross-border tracking across the SADC corridor.',
-    href: '/industries#logistics',
-    metrics: '40% Route Efficiency',
-    capabilities: ['Live Fleet Telemetry', 'Digital Waybills & PODs', 'Customs Document Engine', 'Fuel & Maintenance Logs']
-  },
-  {
-    id: 'healthcare',
-    name: 'Ralion Healthcare OS',
-    tagline: 'Clinical Practice Operations & Patient Records',
-    description: 'Patient scheduling, electronic medical records, consultation billing, automated pharmacy dispensing alerts, and sovereign health data protection.',
-    href: '/industries#healthcare',
-    metrics: 'HIPAA & DPA Compliant',
-    capabilities: ['Electronic Health Records', 'Clinical Billing Gateway', 'Patient Consultation Portal', 'Prescription Tracking']
-  },
-  {
-    id: 'trade',
-    name: 'Ralion Trade OS',
-    tagline: 'B2B SADC Corridor Procurement & Settlement',
-    description: 'Cross-border B2B trade network connecting suppliers, verified buyers, and logistics providers with automated invoicing and trade finance tracking.',
-    href: '/industries#trade',
-    metrics: '$12M+ Managed Volume',
-    capabilities: ['Supplier Verification', 'B2B Order Catalog', 'Cross-Border Invoicing', 'Trade Settlement Tracking']
-  },
-  {
-    id: 'government',
-    name: 'Ralion Government OS',
-    tagline: 'Citizen Services & Secure Public Infrastructure',
-    description: 'Sovereign digital public infrastructure, registry automation, citizen identity verification, and inter-departmental record exchange with full auditability.',
-    href: '/industries#government',
-    metrics: 'Zero-Trust Sovereign Arch',
-    capabilities: ['Citizen Portal & USSD', 'Inter-Agency Ledger', 'Document Verification Vault', 'Audit & Compliance Telemetry']
+    id: 'sonic-branding-suite',
+    title: 'Sonic Branding & Studio Sound Suite',
+    subtitle: 'Original Composition & Audio Post-Production',
+    category: 'Music & Audio',
+    roles: ['Original Composition', 'Sound Design', 'Audio Mastering'],
+    date: '2024 - 2025',
+    verifiedNote: 'Original sound design and audio engineering by Ras Ali Labs.',
+    image: '/assets/images/service-sound.png',
+    description: 'Original music arrangements, commercial sound design, Foley, dialogue post-production, and master audio engineering for corporate and creative media.'
   }
 ];
 
@@ -335,64 +379,175 @@ export const pricingPlans = [
 export const services = [
   {
     id: 1,
-    title: 'Enterprise AI Systems',
-    description: 'Bespoke AI architectures and reasoning agents embedded directly into enterprise operational workflows.',
-    items: ['Embedded Mari AI Reasoning Engines', 'Document Ingestion & Knowledge Graphs', 'Predictive Pipeline Analytics', 'Tenant-Scoped Model Fine-Tuning']
+    title: 'Film & Creative Production',
+    description: 'Cinematic films, corporate storytelling, commercials, interviews, event coverage, photography, motion graphics and post-production.',
+    href: '/services/film-video',
+    items: [
+      'Commercials & Brand Storytelling',
+      'High-Definition Multi-Camera Filming',
+      'Post-Production, Color Grading & Sound',
+      'Event & Conference Visual Coverage'
+    ]
   },
   {
     id: 2,
-    title: 'AI Automation & Workflows',
-    description: 'Automating high-volume business operations with verifiable data pipelines and event-driven triggers.',
-    items: ['Automated Regulatory Reporting', 'Document & Invoice Generation', 'Cross-Platform Data Synchronization', 'USSD & Web Gateway Integration']
+    title: 'Web & App Development',
+    description: 'Modern websites, mobile applications, business platforms, portals, e-commerce systems and custom digital products.',
+    href: '/services/web-app-development',
+    items: [
+      'Custom Web Applications & Portals',
+      'Cross-Platform iOS & Android Apps',
+      'High-Speed UI/UX & Responsive Layouts',
+      'API Architecture & Cloud Infrastructure'
+    ]
   },
   {
     id: 3,
-    title: 'Custom Business Operating Systems',
-    description: 'End-to-end industry operating systems engineered from the ground up for high-trust sectors.',
-    items: ['Sovereign Cloud Hosting', 'PostgreSQL & Supabase Security Architecture', 'Micro-Frontend Desktop & Web Shells', 'Offline-First Edge Sync']
+    title: 'Music & Audio Production',
+    description: 'Music production, arrangement, recording, sound design, audio post-production and live creative performance.',
+    href: '/services/music-audio',
+    items: [
+      'Original Music Composition & Arrangement',
+      'Studio Recording & Session Instrumentation',
+      'Sonic Branding & Commercial Audio Design',
+      'Audio Post-Production & Mastering'
+    ]
   },
   {
     id: 4,
-    title: 'Ralion OS Implementation & Training',
-    description: 'Complete deployment, data migration, and enterprise onboarding for Ralion OS suites.',
-    items: ['Funeral OS Rollouts', 'Logistics Fleet Telemetry Setup', 'Healthcare EMR Deployment', 'SADC Trade Network Integration']
+    title: 'AI & Automation Systems',
+    description: 'AI-powered business systems, workflow automation, intelligent integrations and enterprise digital transformation.',
+    href: '/services/ai-automation',
+    items: [
+      'Autonomous Workflow Automation',
+      'Embedded AI Reasoning & LLM Systems',
+      'Enterprise System Integration & APIs',
+      'Sovereign Data Governance & Security'
+    ]
   }
 ];
 
-export const clients = [
-  'Enterprise Logistics Networks',
-  'Healthcare Consultation Groups',
-  'Mortuary & Funeral Services',
-  'SADC B2B Trade Corridors'
+export const industryOperatingSystems = [
+  {
+    id: 'funeral',
+    name: 'Ralion Funeral OS',
+    tagline: 'Dignified End-to-End Mortuary & Claims Management',
+    description: 'Specialized operating system managing policyholder registers, repatriation logistics, fleet scheduling, mortuary tracking, and automated client notifications.',
+    href: '/industries#funeral',
+    metrics: '99.8% Policy Accuracy',
+    capabilities: ['Policyholder Vault', 'Body Intake & QR Tracking', 'Fleet & Mortuary Schedule', 'Automated Claims Workflows']
+  },
+  {
+    id: 'logistics',
+    name: 'Ralion Logistics OS',
+    tagline: 'Cross-Border Fleet Telemetry & Waybill Automation',
+    description: 'Freight routing, driver dispatching, border clearance document generation, fuel monitoring, and live cross-border tracking across the SADC corridor.',
+    href: '/industries#logistics',
+    metrics: '40% Route Efficiency',
+    capabilities: ['Live Fleet Telemetry', 'Digital Waybills & PODs', 'Customs Document Engine', 'Fuel & Maintenance Logs']
+  },
+  {
+    id: 'healthcare',
+    name: 'Ralion Healthcare OS',
+    tagline: 'Clinical Practice Operations & Patient Records',
+    description: 'Patient scheduling, electronic medical records, consultation billing, automated pharmacy dispensing alerts, and sovereign health data protection.',
+    href: '/industries#healthcare',
+    metrics: 'HIPAA & DPA Compliant',
+    capabilities: ['Electronic Health Records', 'Clinical Billing Gateway', 'Patient Consultation Portal', 'Prescription Tracking']
+  },
+  {
+    id: 'trade',
+    name: 'Ralion Trade OS',
+    tagline: 'B2B SADC Corridor Procurement & Settlement',
+    description: 'Cross-border B2B trade network connecting suppliers, verified buyers, and logistics providers with automated invoicing and trade finance tracking.',
+    href: '/industries#trade',
+    metrics: '$12M+ Managed Volume',
+    capabilities: ['Supplier Verification', 'B2B Order Catalog', 'Cross-Border Invoicing', 'Trade Settlement Tracking']
+  },
+  {
+    id: 'government',
+    name: 'Ralion Government OS',
+    tagline: 'Citizen Services & Secure Public Infrastructure',
+    description: 'Sovereign digital public infrastructure, registry automation, citizen identity verification, and inter-departmental record exchange with full auditability.',
+    href: '/industries#government',
+    metrics: 'Zero-Trust Sovereign Arch',
+    capabilities: ['Citizen Portal & USSD', 'Inter-Agency Ledger', 'Document Verification Vault', 'Audit & Compliance Telemetry']
+  }
 ];
 
 export const faqs = [
   {
-    question: 'What is Ralion OS and how is it different from traditional software?',
-    answer: 'Ralion OS is an AI Business Operating System that unifies operations, CRM, growth strategy, social intelligence, and creative generation into one cohesive platform powered by Mari AI, rather than forcing you to stitch together dozens of disconnected SaaS tools.'
+    question: 'What is Ras Ali Labs?',
+    answer: 'Ras Ali Labs is a Botswana-based multidisciplinary technology and creative company. We build intelligent software systems, develop web and mobile applications, produce cinematic films and visual content, and create original music and audio.'
   },
   {
-    question: 'What is Mari AI and what can it do for my business?',
-    answer: 'Mari AI is your embedded AI Business Growth Partner. Working with your tenant-scoped business context, Mari analyzes opportunities, formulates campaign strategies, directs creative generation, and continuously learns from social performance to drive revenue.'
+    question: 'What is Ralion OS and how does it relate to Ras Ali Labs?',
+    answer: 'Ralion OS is the flagship technology product created and engineered by Ras Ali Labs. It is an AI Business Operating System that unifies CRM, business operations, growth intelligence, and Mari AI into one connected platform.'
   },
   {
-    question: 'How do monthly AI credits work?',
-    answer: 'Every plan includes a monthly credit allocation used for AI-powered operations (such as generating FLUX commercial posters, CogVideoX video reels, automated market research, or strategic analysis). Credits replenish every billing cycle.'
+    question: 'What creative and media production services do you provide?',
+    answer: 'We offer full-cycle film and video production (commercials, documentaries, corporate storytelling, multicam live coverage), professional photography, motion graphics, original music composition, studio recording, and sound design.'
   },
   {
-    question: 'Is my business data isolated and secure?',
-    answer: 'Yes. Ralion OS enforces strict multi-tenant isolation, row-level database security, encrypted token storage, and server-side secret management. Your proprietary business data is never shared across organizations or used to train public AI models.'
+    question: 'What technology and software services do you build?',
+    answer: 'We build modern web applications, mobile apps (iOS & Android), custom enterprise portals, business automation workflows, AI reasoning integrations, and sovereign digital infrastructure.'
   },
   {
-    question: 'Can I connect my social media channels?',
-    answer: 'Yes. Ralion connects seamlessly to Facebook, Instagram, LinkedIn, X, TikTok, and YouTube, allowing you to compose, schedule, publish, and track engagement from a single command center.'
+    question: 'Where is Ras Ali Labs located and how can we collaborate?',
+    answer: 'Ras Ali Labs is headquartered in Gaborone, Botswana (Plot 18680 Khuhurutse Drive, Phase 2). You can start a project by contacting us through our website, emailing contact@rasalilabs.com, or calling +267 72 113 009.'
+  }
+];
+
+export const aiLabsImages = [
+  'https://images.unsplash.com/photo-1586528116311-ad8ed7c508c0?q=80&w=2070&auto=format&fit=crop',
+  'https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop',
+  'https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop'
+];
+
+export const aiPrototypes = [
+  {
+    title: 'Supply Chain Sentinel AI',
+    image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=2015&auto=format&fit=crop',
+    status: 'Live Enterprise OS'
+  },
+  {
+    title: 'Mari AI Reasoning Engine',
+    image: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop',
+    status: 'Core System'
+  },
+  {
+    title: 'TradeGrid SADC Corridor',
+    image: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop',
+    status: 'B2B Network'
+  }
+];
+
+export const clients = [
+  'Broadcasting & Television Productions',
+  'Enterprise Logistics Networks',
+  'Commercial Enterprises & Startups',
+  'Creative & Performing Arts Studios'
+];
+
+export const awards = [
+  {
+    year: '2024',
+    title: 'Pula Pitch Broadcast Production',
+    organization: 'Television Enterprise Series',
+    category: 'Full Cycle Videography & Post-Production'
+  },
+  {
+    year: '2020',
+    title: 'Dedications Music Broadcast',
+    organization: 'Live Music Series',
+    category: 'Studio Instrumentation & Sound Setup'
   }
 ];
 
 export const socialLinks = [
   { name: 'YouTube', url: 'https://youtube.com', icon: 'Youtube' },
-  { name: 'Facebook', url: 'https://facebook.com', icon: 'Facebook' },
-  { name: 'Instagram', url: 'https://instagram.com', icon: 'Instagram' },
-  { name: 'Phone', url: 'tel:+26770000000', icon: 'Phone' },
+  { name: 'Facebook', url: 'https://facebook.com/rasalilabs', icon: 'Facebook' },
+  { name: 'Instagram', url: 'https://instagram.com/rasalilabs', icon: 'Instagram' },
+  { name: 'Phone', url: 'tel:+26772113009', icon: 'Phone' },
   { name: 'Mail', url: 'mailto:contact@rasalilabs.com', icon: 'Mail' }
 ];
