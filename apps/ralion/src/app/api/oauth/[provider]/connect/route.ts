@@ -7,7 +7,7 @@ import {
 import { generateOAuthState, ZernioSocialService } from '@ralion/integrations';
 import { SocialProviderRouter } from '@/lib/services/social/socialProviderRouter.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
-import { getCurrentRalionContext, authRequiredResponse } from '@/lib/auth/serverAuth';
+import { requireRalionContext } from '@/lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,9 +36,9 @@ export async function GET(
     const intent = (searchParams.get('intent') || 'login') as 'login' | 'page_connection';
 
     // Verify user is authenticated with server-authoritative context
-    const context = await getCurrentRalionContext(request, { requireAuth: true });
-    if (!context) {
-      return authRequiredResponse(request);
+    const { context, response: authErrorResponse } = await requireRalionContext(request);
+    if (authErrorResponse) {
+      return authErrorResponse;
     }
 
     const userId = context.user.id;

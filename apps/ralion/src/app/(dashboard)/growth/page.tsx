@@ -46,11 +46,25 @@ async function authFetch(pathOrUrl: string, init?: RequestInit, opName?: string)
       headers.set('Content-Type', 'application/json');
     }
 
-    const res = await fetch(url, {
+    let res = await fetch(url, {
       ...init,
       headers,
       credentials: init?.credentials || 'include',
     });
+
+    if (res.status === 401 && authHeaders.Authorization && typeof window !== 'undefined') {
+      const refreshedAuth = await getRalionAuthHeaders({ refresh: true }).catch(() => ({} as Record<string, string>));
+      if (refreshedAuth.Authorization) {
+        headers.set('Authorization', refreshedAuth.Authorization);
+        if (refreshedAuth['x-workspace-id']) headers.set('x-workspace-id', refreshedAuth['x-workspace-id']);
+        if (refreshedAuth['x-organization-id']) headers.set('x-organization-id', refreshedAuth['x-organization-id']);
+        res = await fetch(url, {
+          ...init,
+          headers,
+          credentials: init?.credentials || 'include',
+        });
+      }
+    }
 
     console.debug(`[Ralion Growth Telemetry] Op: ${operation} | URL: ${url} | Status: ${res.status} | Tenant: ${tenantUuid}`);
     return res;

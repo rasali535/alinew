@@ -31,28 +31,46 @@ import { getRalionApiUrl, getRalionAuthHeaders } from '@/lib/api-config';
 
 async function authFetch(pathOrUrl: string, init?: RequestInit): Promise<Response> {
   const url = pathOrUrl.startsWith('http') ? pathOrUrl : getRalionApiUrl(pathOrUrl);
-  const authHeaders = await getRalionAuthHeaders();
+  const initialAuth = await getRalionAuthHeaders();
+  const hadSession = Boolean(initialAuth.Authorization);
   const headers = new Headers(init?.headers);
-  if (!headers.has('Authorization') && authHeaders.Authorization) {
-    headers.set('Authorization', authHeaders.Authorization);
+  if (!headers.has('Authorization') && initialAuth.Authorization) {
+    headers.set('Authorization', initialAuth.Authorization);
   }
-  if (!headers.has('x-user-id') && authHeaders['x-user-id']) {
-    headers.set('x-user-id', authHeaders['x-user-id']);
+  if (!headers.has('x-user-id') && initialAuth['x-user-id']) {
+    headers.set('x-user-id', initialAuth['x-user-id']);
   }
-  if (!headers.has('x-workspace-id') && authHeaders['x-workspace-id']) {
-    headers.set('x-workspace-id', authHeaders['x-workspace-id']);
+  if (!headers.has('x-workspace-id') && initialAuth['x-workspace-id']) {
+    headers.set('x-workspace-id', initialAuth['x-workspace-id']);
   }
-  if (!headers.has('x-organization-id') && authHeaders['x-organization-id']) {
-    headers.set('x-organization-id', authHeaders['x-organization-id']);
+  if (!headers.has('x-organization-id') && initialAuth['x-organization-id']) {
+    headers.set('x-organization-id', initialAuth['x-organization-id']);
   }
   if (!headers.has('Content-Type') && init?.body && typeof init.body === 'string') {
     headers.set('Content-Type', 'application/json');
   }
-  return fetch(url, {
+
+  let res = await fetch(url, {
     ...init,
     headers,
     credentials: init?.credentials || 'include',
   });
+
+  if (res.status === 401 && hadSession && typeof window !== 'undefined') {
+    const refreshedAuth = await getRalionAuthHeaders({ refresh: true });
+    if (refreshedAuth.Authorization) {
+      headers.set('Authorization', refreshedAuth.Authorization);
+      if (refreshedAuth['x-workspace-id']) headers.set('x-workspace-id', refreshedAuth['x-workspace-id']);
+      if (refreshedAuth['x-organization-id']) headers.set('x-organization-id', refreshedAuth['x-organization-id']);
+      res = await fetch(url, {
+        ...init,
+        headers,
+        credentials: init?.credentials || 'include',
+      });
+    }
+  }
+
+  return res;
 }
 
 export default function IntegrationHubPage() {

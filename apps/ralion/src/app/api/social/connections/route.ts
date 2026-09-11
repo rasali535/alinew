@@ -5,7 +5,7 @@ import { FacebookConnectionStateService } from '@/lib/services/social/facebookCo
 import { SocialConnectionHealthService } from '@/lib/services/social/socialConnectionHealth.service';
 import { AuditLoggerService } from '@/lib/services/auditLogger.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
-import { getCurrentRalionContext, getServiceSupabase, authRequiredResponse } from '@/lib/auth/serverAuth';
+import { requireRalionContext, getServiceSupabase } from '@/lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,8 +17,8 @@ export async function GET(request: NextRequest) {
   const supabase = getServiceSupabase();
 
   try {
-    const context = await getCurrentRalionContext(request, { requireAuth: true });
-    if (!context) return authRequiredResponse(request);
+    const { context, response } = await requireRalionContext(request);
+    if (response) return response;
 
     const { data: rawConnections, error } = await supabase
       .from('social_connections')
@@ -55,8 +55,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const context = await getCurrentRalionContext(request, { requireAuth: true });
-    if (!context) return authRequiredResponse(request);
+    const { context, response } = await requireRalionContext(request);
+    if (response) return response;
 
     const body = await request.json();
     const { action, connectionId, provider } = body;

@@ -98,8 +98,8 @@ function appendTenantHints(headers: Record<string, string>, session: any) {
   const storedWorkspaceId = window.localStorage?.getItem('ralion_active_workspace_id') || window.localStorage?.getItem('ralion_workspace_id');
   const storedOrgId = window.localStorage?.getItem('ralion_organization_id') || window.localStorage?.getItem('ralion_active_org_id') || window.localStorage?.getItem('ralion_org_id');
 
-  const activeWs = metadata.workspace_id || storedWorkspaceId || null;
-  const activeOrg = metadata.org_id || metadata.organization_id || storedOrgId || null;
+  const activeWs = storedWorkspaceId || metadata.workspace_id || null;
+  const activeOrg = storedOrgId || metadata.organization_id || metadata.org_id || null;
 
   if (activeWs) headers['x-workspace-id'] = activeWs;
   if (activeOrg) headers['x-organization-id'] = activeOrg;
