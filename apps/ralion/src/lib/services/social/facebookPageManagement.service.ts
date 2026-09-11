@@ -380,13 +380,20 @@ export class FacebookPageManagementService {
       updated_at: new Date().toISOString(),
     };
 
-    const { data: destination, error: destinationError } = await supabase
-      .from('social_destinations')
-      .upsert(destinationPayload, { onConflict: 'organization_id,platform,provider_page_id' })
-      .select()
-      .maybeSingle();
+    let destination: any = null;
+    try {
+      const { data: dest, error: destinationError } = await supabase
+        .from('social_destinations')
+        .upsert(destinationPayload, { onConflict: 'organization_id,platform,provider_page_id' })
+        .select()
+        .maybeSingle();
 
-    if (destinationError) throw destinationError;
+      if (!destinationError && dest) {
+        destination = dest;
+      }
+    } catch {
+      // social_destinations table may be absent; social_connections is authoritative
+    }
 
     const { data: allUserConns } = await supabase
       .from('social_connections')
@@ -422,7 +429,7 @@ export class FacebookPageManagementService {
       avatarUrl: params.pageData.avatarUrl || null,
       provider_account_type: 'FACEBOOK_PAGE',
       tenantId,
-      workspaceId: tenantId,
+      workspaceId,
       organizationId: tenantId,
       facebookUserId,
       encrypted_access_token: encryptedAccessToken,
@@ -441,7 +448,7 @@ export class FacebookPageManagementService {
         .from('social_connections')
         .update({
           organization_id: tenantId,
-          workspace_id: tenantId,
+          workspace_id: workspaceId,
           user_id: userId,
           account_name: params.pageData.name || existingPageConn.account_name || 'Facebook Page',
           username: pageHandle,
@@ -463,7 +470,7 @@ export class FacebookPageManagementService {
         .upsert({
           user_id: userId,
           organization_id: tenantId,
-          workspace_id: tenantId,
+          workspace_id: workspaceId,
           provider: 'facebook',
           provider_account_id: params.pageId,
           account_name: params.pageData.name || 'Facebook Page',

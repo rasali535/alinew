@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { FacebookPageManagementService } from '@/lib/services/social/facebookPageManagement.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
-import { getCurrentRalionContext, authRequiredResponse } from '@/lib/auth/serverAuth';
+import { requireRalionContext } from '@/lib/auth/serverAuth';
 import { tenantCache, buildTenantCacheKey } from '@/lib/cache/tenantCache';
 
 export const dynamic = 'force-dynamic';
@@ -12,10 +12,8 @@ export async function OPTIONS(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const context = await getCurrentRalionContext(request, { requireAuth: true });
-    if (!context) {
-      return authRequiredResponse(request);
-    }
+    const { context, response } = await requireRalionContext(request);
+    if (response) return response;
 
     const cacheKey = buildTenantCacheKey(context.user.id, context.workspace.id, 'facebook_pages', 'list');
     const cached = tenantCache.get<any>(cacheKey);
@@ -24,7 +22,7 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await FacebookPageManagementService.discoverAvailablePages({
-      organizationId: context.workspace.id,
+      organizationId: context.organization.id,
       workspaceId: context.workspace.id,
       userId: context.user.id,
     });
@@ -41,6 +39,7 @@ export async function GET(request: NextRequest) {
 
     return corsJsonResponse(payload, undefined, request);
   } catch (err: any) {
+    console.error('[FacebookPagesAPI] Discovery error:', err);
     return corsJsonResponse(
       { success: false, error: err.message || 'Failed to discover Facebook Pages' },
       { status: 500 },
@@ -51,10 +50,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const context = await getCurrentRalionContext(request, { requireAuth: true });
-    if (!context) {
-      return authRequiredResponse(request);
-    }
+    const { context, response } = await requireRalionContext(request);
+    if (response) return response;
 
     const body = await request.json();
 
@@ -67,7 +64,7 @@ export async function POST(request: NextRequest) {
     tenantCache.invalidate(buildTenantCacheKey(context.user.id, context.workspace.id, 'mari_growth', 'plan'));
 
     const result = await FacebookPageManagementService.connectPage({
-      organizationId: context.workspace.id,
+      organizationId: context.organization.id,
       workspaceId: context.workspace.id,
       userId: context.user.id,
       pageId: body.pageId,
@@ -84,6 +81,7 @@ export async function POST(request: NextRequest) {
       entitlement: result.entitlement,
     }, undefined, request);
   } catch (err: any) {
+    console.error('[FacebookPagesAPI] Connect page error:', err);
     if (err.code === 'FEATURE_LIMIT_REACHED' || err.statusCode === 403) {
       return corsJsonResponse(
         {
