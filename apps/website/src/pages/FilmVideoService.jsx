@@ -9,7 +9,7 @@ const FilmVideoService = () => {
       <SEO
         title="Film & Creative Production | Ras Ali Labs"
         description="Cinematic films, corporate storytelling, commercials, interviews, event coverage, photography, motion graphics and post-production by Ras Ali Labs in Botswana."
-        url="/services/film-video"
+        canonical="https://rasalilabs.com/services/film-video"
       />
 
       <div className="max-w-7xl mx-auto px-6 lg:px-12">
@@ -36,8 +36,8 @@ const FilmVideoService = () => {
             </p>
             <ul className="space-y-2 text-xs text-white/75">
               <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-brand-gold" /> Scriptwriting & Storyboarding</li>
-              <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-brand-gold" /> Cinematic 4K Camera Packages</li>
-              <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-brand-gold" /> Professional Studio Lighting</li>
+              <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-brand-gold" /> Cinematic 4K Filming</li>
+              <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-brand-gold" /> Studio & Location Production</li>
             </ul>
           </div>
 
@@ -48,8 +48,8 @@ const FilmVideoService = () => {
               End-to-end set design, pre-production, principal videography, and multi-episode post-production (such as our 13-episode production for Pula Pitch).
             </p>
             <ul className="space-y-2 text-xs text-white/75">
-              <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-brand-gold" /> Set Design & Stage Direction</li>
-              <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-brand-gold" /> Multi-Camera Shoot Management</li>
+              <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-brand-gold" /> Set Design & Stage Layout</li>
+              <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-brand-gold" /> Multi-Episode Shoot Coordination</li>
               <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-brand-gold" /> Broadcast Quality Delivery</li>
             </ul>
           </div>
@@ -58,7 +58,7 @@ const FilmVideoService = () => {
             <Camera className="w-10 h-10 text-brand-gold mb-4" />
             <h3 className="text-xl font-bold text-white mb-2">Photography & Visual Content</h3>
             <p className="text-white/60 text-xs leading-relaxed mb-4">
-              Editorial photography, executive headshots, event visual journalism, and motion graphics tailored for multi-channel digital campaigns.
+              Editorial photography, executive portraits, event visual journalism, and motion graphics tailored for multi-channel digital campaigns.
             </p>
             <ul className="space-y-2 text-xs text-white/75">
               <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-brand-gold" /> Executive & Editorial Portraits</li>
@@ -82,19 +82,19 @@ const FilmVideoService = () => {
             </div>
             <div className="lg:col-span-8 space-y-4">
               <span className="text-brand-gold text-xs font-bold uppercase tracking-wider">
-                Featured Production Case • 2024
+                Confirmed Experience • 2024
               </span>
               <h3 className="text-2xl md:text-3xl font-extrabold text-white">
-                Pula Pitch — 13-Episode Broadcast Series
+                Pula Pitch — Television & Digital Enterprise Series
               </h3>
               <p className="text-white/70 text-sm leading-relaxed">
-                Lead videographer responsible for set design and pre-production, lighting architecture, multi-camera shoot direction, and full post-production across all 13 episodes of the enterprise broadcast series.
+                Lead videographer responsible for set design, pre-production, production and post-production across 13 episodes.
               </p>
               <Link
-                to="/work"
+                to="/work/pula-pitch-2024"
                 className="inline-flex items-center gap-2 text-brand-gold font-bold text-xs hover:underline"
               >
-                View in Work Archive →
+                View Project Details →
               </Link>
             </div>
           </div>
@@ -106,12 +106,20 @@ const FilmVideoService = () => {
           <p className="text-white/70 text-sm mb-6">
             Let's discuss your film, corporate documentary, commercial, or event coverage.
           </p>
-          <Link
-            to="/contact"
-            className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl bg-gradient-to-r from-brand-gold to-amber-500 text-black font-extrabold text-xs hover:scale-105 transition-all shadow-lg shadow-brand-gold/20"
-          >
-            Start a Production Inquire <ArrowRight size={14} />
-          </Link>
+          <div className="flex flex-wrap items-center justify-center gap-4">
+            <Link
+              to="/booking/film-video"
+              className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl bg-gradient-to-r from-brand-gold to-amber-500 text-black font-extrabold text-xs hover:scale-105 transition-all shadow-lg shadow-brand-gold/20"
+            >
+              Book Film & Video Production <ArrowRight size={14} />
+            </Link>
+            <Link
+              to="/contact"
+              className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl bg-white/10 text-white font-bold text-xs hover:bg-white/15 transition-all border border-white/15"
+            >
+              General Inquiry
+            </Link>
+          </div>
         </div>
       </div>
     </div>

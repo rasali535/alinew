@@ -10,7 +10,7 @@ const About = () => {
       <SEO
         title="About Ras Ali Labs | Multidisciplinary Technology & Creative Company"
         description="Ras Ali Labs is a Botswana-based multidisciplinary technology and creative company working at the intersection of software, artificial intelligence, film, visual storytelling and music."
-        url="/about"
+        canonical="https://rasalilabs.com/about"
       />
 
       <div className="max-w-7xl mx-auto px-6 lg:px-12">
@@ -70,7 +70,7 @@ const About = () => {
               <div className="p-5 rounded-2xl bg-[#181818] border border-white/10">
                 <Video className="w-7 h-7 text-brand-gold mb-3" />
                 <h4 className="font-bold text-sm text-white mb-1">Creative Craftsmanship</h4>
-                <p className="text-xs text-white/60">Cinematic visual storytelling, multi-camera television series, and studio music production.</p>
+                <p className="text-xs text-white/60">Cinematic visual storytelling, television series production, and studio music production.</p>
               </div>
               <div className="p-5 rounded-2xl bg-[#181818] border border-white/10">
                 <Code className="w-7 h-7 text-emerald-400 mb-3" />

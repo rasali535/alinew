@@ -9,7 +9,7 @@ const AIAutomationService = () => {
       <SEO
         title="AI & Automation Systems | Ras Ali Labs"
         description="AI-powered business systems, workflow automation, intelligent integrations and enterprise digital transformation by Ras Ali Labs in Botswana."
-        url="/services/ai-automation"
+        canonical="https://rasalilabs.com/services/ai-automation"
       />
 
       <div className="max-w-7xl mx-auto px-6 lg:px-12">

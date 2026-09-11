@@ -154,14 +154,14 @@ const Footer = () => {
             </Link>
           </div>
           <div className="text-[11px] text-white/40 font-mono text-center md:text-right">
-            Headquartered in Gaborone, Botswana • BOCRA ICT Compliant
+            Headquartered in Gaborone, Botswana • Data Protection & Security Aligned
           </div>
         </div>
 
         {/* Bottom Strip */}
         <div className="flex flex-col sm:flex-row items-center justify-between pt-6 border-t border-white/5 gap-4 text-xs text-white/50">
           <div>
-            © {companyInfo.founded} - 2026 {companyInfo.name}. All rights reserved.
+            © 2026 {companyInfo?.name || 'Ras Ali Labs (Pty) Ltd'}. All rights reserved.
           </div>
           <div className="flex gap-3">
             {socialLinks.map((social) => {

@@ -25,9 +25,9 @@ const DataProtection = () => {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 relative overflow-hidden pt-32 pb-24">
       <SEO
-        title="BOCRA & Botswana Data Protection Act Compliance Center | Ras Ali Labs"
-        description="Comprehensive compliance declaration and Data Subject Rights portal aligned with the Botswana Data Protection Act (Act No. 32 of 2018) and BOCRA ICT directives."
-        url="/data-protection"
+        title="Data Protection & Regulatory Standards | Ras Ali Labs"
+        description="Data Protection and Privacy Standards of Ras Ali Labs aligned with the Botswana Data Protection Act (Act No. 32 of 2018)."
+        canonical="https://rasalilabs.com/data-protection"
       />
 
       {/* Ambient Lighting */}
@@ -41,18 +41,18 @@ const DataProtection = () => {
         <div className="flex flex-col items-center text-center max-w-3xl mx-auto mb-16">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-950/70 border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase tracking-wider mb-6">
             <Scale className="w-4 h-4" />
-            <span>Republic of Botswana • BOCRA & DPA Portal</span>
+            <span>Republic of Botswana • Data Privacy & Standards</span>
           </div>
 
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tight text-white mb-6">
             Data Protection &{' '}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-400 to-blue-400">
-              BOCRA Compliance
+              Privacy Standards
             </span>
           </h1>
 
           <p className="text-zinc-400 text-sm md:text-base leading-relaxed">
-            Welcome to the Ras Ali Labs Regulatory & Data Protection Governance Center. We ensure that your business, customer records, and AI workflows strictly adhere to statutory Botswana laws and BOCRA communications regulations.
+            Welcome to the Ras Ali Labs Data Protection and Governance Center. We engineer our systems and creative workflows with strict adherence to data privacy principles and Botswana data protection standards.
           </p>
         </div>
 
@@ -61,13 +61,13 @@ const DataProtection = () => {
           <div className="p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800 backdrop-blur-xl">
             <div className="text-3xl font-black text-emerald-400 font-mono mb-1">Act 32</div>
             <div className="text-xs font-bold text-white mb-1">Botswana DPA (2018)</div>
-            <p className="text-[11px] text-zinc-400">Full statutory alignment with Information Commissioner requirements.</p>
+            <p className="text-[11px] text-zinc-400">Engineered in alignment with Data Protection Act principles.</p>
           </div>
 
           <div className="p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800 backdrop-blur-xl">
-            <div className="text-3xl font-black text-blue-400 font-mono mb-1">BOCRA</div>
-            <div className="text-xs font-bold text-white mb-1">ICT Telecom Directives</div>
-            <p className="text-[11px] text-zinc-400">Electronic transactions, network integrity & cybersecurity standards.</p>
+            <div className="text-3xl font-black text-blue-400 font-mono mb-1">Security</div>
+            <div className="text-xs font-bold text-white mb-1">Network & Data Directives</div>
+            <p className="text-[11px] text-zinc-400">Electronic transactions, network integrity & cybersecurity practices.</p>
           </div>
 
           <div className="p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800 backdrop-blur-xl">
@@ -79,7 +79,7 @@ const DataProtection = () => {
           <div className="p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800 backdrop-blur-xl">
             <div className="text-3xl font-black text-amber-400 font-mono mb-1">72 Hrs</div>
             <div className="text-xs font-bold text-white mb-1">Incident Escalation</div>
-            <p className="text-[11px] text-zinc-400">Mandatory regulatory breach disclosure window under national law.</p>
+            <p className="text-[11px] text-zinc-400">Proactive breach notification protocol in line with statutory best practices.</p>
           </div>
         </div>
 

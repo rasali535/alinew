@@ -21,7 +21,7 @@ const RalionOSProduct = () => {
       <SEO
         title="Ralion OS — Empowered to Prosper | Ras Ali Labs"
         description="Ralion OS is the flagship AI business operating system created by Ras Ali Labs. Unifies CRM, operations, Mari AI, growth intelligence and social workflows."
-        url="/products/ralion-os"
+        canonical="https://rasalilabs.com/products/ralion-os"
       />
 
       <div className="max-w-7xl mx-auto px-6 lg:px-12">

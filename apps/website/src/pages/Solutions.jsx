@@ -18,7 +18,7 @@ const Solutions = () => {
       <SEO
         title="Ralion Industry Operating Systems | Ras Ali Labs"
         description="Specialized industry operating systems built on the Ralion architecture: Funeral OS, Logistics OS, Healthcare OS, Trade OS, and Government OS."
-        url="/solutions"
+        canonical="https://rasalilabs.com/solutions"
       />
 
       <div className="max-w-7xl mx-auto">

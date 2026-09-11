@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import SEO from '../components/common/SEO';
-import { Mail, MapPin, Phone, Send, Loader2, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Mail, MapPin, Phone, Send, Loader2, Sparkles, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
 import { companyInfo } from '../data/mock';
 
 const Contact = () => {
@@ -14,6 +14,7 @@ const Contact = () => {
     message: ''
   });
   const [status, setStatus] = useState('idle'); // idle, loading, success, error
+  const [errorMessage, setErrorMessage] = useState('');
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -22,6 +23,7 @@ const Contact = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setStatus('loading');
+    setErrorMessage('');
 
     try {
       const apiUrl = '/send_mail.php';
@@ -29,9 +31,10 @@ const Contact = () => {
         headers: {
           'Content-Type': 'application/json',
         },
+        timeout: 10000,
       });
 
-      if (response.data.success) {
+      if (response && response.data && (response.data.success === true || response.data.status === 'success')) {
         setStatus('success');
         setFormData({
           name: '',
@@ -42,12 +45,18 @@ const Contact = () => {
           message: ''
         });
       } else {
-        throw new Error(response.data.message || 'Server error');
+        const serverMsg = response?.data?.message || 'Server did not acknowledge enquiry.';
+        setErrorMessage(serverMsg);
+        setStatus('error');
       }
     } catch (error) {
       console.error('Error sending message:', error);
-      // Even if PHP backend is not running locally, indicate graceful completion for UI testing
-      setStatus('success');
+      const failureMsg =
+        error.response?.data?.message ||
+        (error.code === 'ECONNABORTED' ? 'Request timed out after 10 seconds.' : error.message) ||
+        'Unable to send message at this time.';
+      setErrorMessage(`${failureMsg} Please check your connection or contact us directly at contact@rasalilabs.com or +267 72 113 009.`);
+      setStatus('error');
     }
   };
 
@@ -56,7 +65,7 @@ const Contact = () => {
       <SEO
         title="Contact Ras Ali Labs | Gaborone, Botswana"
         description="Contact Ras Ali Labs for film and video production, web and app development, music production, sound design, and Ralion OS inquiries in Gaborone, Botswana."
-        url="/contact"
+        canonical="https://rasalilabs.com/contact"
       />
 
       <div className="max-w-7xl mx-auto px-6 lg:px-12">
@@ -81,7 +90,7 @@ const Contact = () => {
                 Technology. Film. Sound. Innovation.
               </p>
               <p className="text-white/65 text-xs leading-relaxed">
-                Headquartered in Gaborone, Botswana. We collaborate with domestic and international clients on creative, technical, and enterprise projects.
+                Headquartered in Gaborone, Botswana. We collaborate with clients on creative, technical, and enterprise projects.
               </p>
             </div>
 
@@ -132,8 +141,8 @@ const Contact = () => {
             </div>
 
             <div className="p-5 rounded-2xl bg-black/40 border border-white/5 space-y-2 text-xs text-white/60">
-              <div className="text-brand-gold font-bold text-xs">Response Time</div>
-              <p>Our team typically responds to new project briefs and consultation requests within 24 business hours.</p>
+              <div className="text-brand-gold font-bold text-xs">Response Commitment</div>
+              <p>Our team reviews and responds to project briefs and inquiries promptly.</p>
             </div>
           </div>
 
@@ -145,13 +154,13 @@ const Contact = () => {
             </p>
 
             {status === 'success' ? (
-              <div className="p-8 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-center space-y-4">
+              <div className="p-8 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-center space-y-4 animate-fadeIn">
                 <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center">
                   <CheckCircle2 size={24} />
                 </div>
                 <h4 className="text-xl font-bold text-white">Thank You for Reaching Out!</h4>
                 <p className="text-white/70 text-xs max-w-md mx-auto">
-                  Your project message has been received by the Ras Ali Labs team. We will review your brief and get back to you shortly.
+                  Your project message has been successfully received by the Ras Ali Labs team. We will review your brief and get back to you shortly.
                 </p>
                 <button
                   onClick={() => setStatus('idle')}
@@ -162,6 +171,16 @@ const Contact = () => {
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-6">
+                {status === 'error' && (
+                  <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 flex items-start gap-3 text-xs text-red-300">
+                    <AlertCircle size={18} className="text-red-400 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <strong className="block font-bold text-red-200 mb-1">Transmission Failed</strong>
+                      <p>{errorMessage}</p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-white/70 mb-2">
@@ -239,7 +258,7 @@ const Contact = () => {
                     required
                     value={formData.subject}
                     onChange={handleChange}
-                    placeholder="e.g. Corporate Documentary & Brand Film 2026"
+                    placeholder="e.g. Corporate Documentary & Brand Film"
                     className="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/10 text-white text-xs placeholder:text-white/30 focus:border-brand-gold focus:outline-none transition-colors"
                   />
                 </div>
@@ -262,11 +281,15 @@ const Contact = () => {
                 <button
                   type="submit"
                   disabled={status === 'loading'}
-                  className="w-full py-4 rounded-xl bg-gradient-to-r from-brand-gold to-amber-500 text-black font-extrabold text-xs hover:scale-[1.01] transition-all shadow-lg shadow-brand-gold/20 flex items-center justify-center gap-2"
+                  className="w-full py-4 rounded-xl bg-gradient-to-r from-brand-gold to-amber-500 text-black font-extrabold text-xs hover:scale-[1.01] transition-all shadow-lg shadow-brand-gold/20 flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {status === 'loading' ? (
                     <>
                       <Loader2 size={16} className="animate-spin" /> Submitting Project Brief...
+                    </>
+                  ) : status === 'error' ? (
+                    <>
+                      <RefreshCw size={15} /> Retry Submitting Project Brief
                     </>
                   ) : (
                     <>

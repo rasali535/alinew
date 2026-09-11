@@ -62,7 +62,7 @@ const HeroSection = () => {
               </span>
               <span className="text-white/30 text-xs group-hover:text-brand-gold transition-colors">→</span>
             </div>
-            <div className="text-white/65 text-xs leading-relaxed">Cinematic films, commercials, multi-camera shoots and post-production.</div>
+            <div className="text-white/65 text-xs leading-relaxed">Cinematic films, commercials, television productions and post-production.</div>
           </Link>
 
           <Link

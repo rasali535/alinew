@@ -25,7 +25,7 @@ const Work = () => {
       <SEO
         title="Our Work & Portfolio | Ras Ali Labs"
         description="Selected work across film & video production, web & app development, music production, sound design, and intelligent software platforms by Ras Ali Labs."
-        url="/work"
+        canonical="https://rasalilabs.com/work"
       />
 
       <div className="max-w-7xl mx-auto px-6 lg:px-12">

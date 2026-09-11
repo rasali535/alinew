@@ -1,28 +1,49 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
 import SEO from '../components/common/SEO';
-import { services, companyInfo } from '../data/mock';
-import { Loader2, CheckCircle, AlertCircle, Sparkles, ArrowRight } from 'lucide-react';
+import { services } from '../data/mock';
+import { Loader2, CheckCircle, AlertCircle, Sparkles, RefreshCw, ArrowRight } from 'lucide-react';
+
+const serviceIdMap = {
+  'film-video': 'Film & Creative Production',
+  'web-app-development': 'Web & App Development',
+  'music-audio': 'Music & Audio Production',
+  'ai-automation': 'AI & Automation Systems',
+  'ralion': 'Ralion OS Enterprise Deployment',
+  'ralion-os': 'Ralion OS Enterprise Deployment',
+  '1': 'Film & Creative Production',
+  '2': 'Web & App Development',
+  '3': 'Music & Audio Production',
+  '4': 'AI & Automation Systems'
+};
 
 const Booking = () => {
   const { serviceId } = useParams();
+  const [searchParams] = useSearchParams();
+  const queryService = searchParams.get('service');
+
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     service: '',
     message: ''
   });
-  const [status, setStatus] = useState('idle');
+  const [status, setStatus] = useState('idle'); // idle, loading, success, error
   const [errorMessage, setErrorMessage] = useState('');
 
-  const preSelectedService = serviceId ? services.find((s) => String(s.id) === String(serviceId)) : null;
-
   useEffect(() => {
-    if (preSelectedService) {
-      setFormData((prev) => ({ ...prev, service: preSelectedService.title }));
+    const rawIdentifier = (serviceId || queryService || '').toLowerCase().trim();
+    if (rawIdentifier && serviceIdMap[rawIdentifier]) {
+      setFormData((prev) => ({ ...prev, service: serviceIdMap[rawIdentifier] }));
+    } else {
+      // Find by title match in services data if passed directly
+      const match = services.find((s) => s.title.toLowerCase() === rawIdentifier || s.id === rawIdentifier);
+      if (match) {
+        setFormData((prev) => ({ ...prev, service: match.title }));
+      }
     }
-  }, [preSelectedService]);
+  }, [serviceId, queryService]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -39,23 +60,32 @@ const Booking = () => {
         headers: {
           'Content-Type': 'application/json',
         },
+        timeout: 10000,
       });
 
-      if (response.data.success) {
+      if (response && response.data && (response.data.success === true || response.data.status === 'success')) {
         setStatus('success');
         setFormData({ name: '', email: '', service: '', message: '' });
       } else {
-        throw new Error(response.data.message || 'Server error');
+        const serverMsg = response?.data?.message || 'Server did not acknowledge booking request.';
+        setErrorMessage(serverMsg);
+        setStatus('error');
       }
     } catch (error) {
       console.error('Error sending booking:', error);
-      setStatus('success');
+      const failureMsg =
+        error.response?.data?.message ||
+        (error.code === 'ECONNABORTED' ? 'Request timed out after 10 seconds.' : error.message) ||
+        'Unable to send booking request at this time.';
+      setErrorMessage(`${failureMsg} Please verify your connection or contact us directly at contact@rasalilabs.com or +267 72 113 009.`);
+      setStatus('error');
     }
   };
 
-  const pageTitle = preSelectedService ? `Book ${preSelectedService.title}` : 'Start a Project';
-  const pageDesc = preSelectedService
-    ? `Ready to commission a ${preSelectedService.title} engagement with Ras Ali Labs? Fill out your brief below.`
+  const selectedTitle = formData.service;
+  const pageTitle = selectedTitle ? `Book ${selectedTitle}` : 'Start a Project';
+  const pageDesc = selectedTitle
+    ? `Ready to commission a ${selectedTitle} engagement with Ras Ali Labs? Fill out your brief below.`
     : 'Ready to collaborate on a film, web platform, audio project, or AI workflow? Let us know your goals.';
 
   return (
@@ -63,7 +93,7 @@ const Booking = () => {
       <SEO
         title={`${pageTitle} | Ras Ali Labs`}
         description="Book a consultation with Ras Ali Labs for film production, web development, music production, sound design, and AI automation."
-        url="/booking"
+        canonical="https://rasalilabs.com/booking"
       />
       <div className="max-w-4xl mx-auto w-full">
         <div className="text-center mb-14">
@@ -97,6 +127,16 @@ const Booking = () => {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-6 relative z-10">
+              {status === 'error' && (
+                <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 flex items-start gap-3 text-xs text-red-300">
+                  <AlertCircle size={18} className="text-red-400 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <strong className="block font-bold text-red-200 mb-1">Transmission Failed</strong>
+                    <p>{errorMessage}</p>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-white/70 mb-2">Your Name *</label>
@@ -139,7 +179,7 @@ const Booking = () => {
                   <option value="" disabled>Select a capability</option>
                   <option value="Film & Creative Production">Film & Creative Production</option>
                   <option value="Web & App Development">Web & App Development</option>
-                  <option value="Music Production & Audio">Music Production & Audio</option>
+                  <option value="Music & Audio Production">Music & Audio Production</option>
                   <option value="AI & Automation Systems">AI & Automation Systems</option>
                   <option value="Ralion OS Enterprise Deployment">Ralion OS Enterprise Deployment</option>
                   <option value="Other">Other Multidisciplinary Inquiries</option>
@@ -160,25 +200,20 @@ const Booking = () => {
                 ></textarea>
               </div>
 
-              {status === 'error' && (
-                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="text-red-500 font-bold text-xs">Submission Error</h4>
-                    <p className="text-red-400 text-xs mt-1">{errorMessage}</p>
-                  </div>
-                </div>
-              )}
-
               <button
                 type="submit"
                 disabled={status === 'loading'}
-                className="w-full py-4 rounded-xl bg-gradient-to-r from-brand-gold to-amber-500 text-black font-extrabold text-xs hover:scale-[1.01] transition-all shadow-lg shadow-brand-gold/20 flex items-center justify-center gap-2"
+                className="w-full py-4 rounded-xl bg-gradient-to-r from-brand-gold to-amber-500 text-black font-extrabold text-xs hover:scale-[1.01] transition-all shadow-lg shadow-brand-gold/20 flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {status === 'loading' ? (
                   <>
                     <Loader2 size={16} className="animate-spin" />
                     <span>Sending Booking Brief...</span>
+                  </>
+                ) : status === 'error' ? (
+                  <>
+                    <RefreshCw size={15} />
+                    <span>Retry Sending Project Brief</span>
                   </>
                 ) : (
                   <>

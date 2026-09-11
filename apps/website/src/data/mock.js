@@ -58,7 +58,6 @@ export const companyInfo = {
   phone: '+267 72 113 009',
   address: 'Plot 18680 Khuhurutse Drive, Phase 2, Gaborone, Botswana',
   location: 'Gaborone, Botswana',
-  founded: '2014',
   philosophy: 'Empowered to Prosper'
 };
 
@@ -71,12 +70,13 @@ export const capabilityPillars = [
     icon: 'Video',
     image: '/assets/images/service-video.png',
     href: '/services/film-video',
+    bookingId: 'film-video',
     items: [
       'Corporate Storytelling & Commercials',
-      'High-End Videography & Cinematic Documentaries',
-      'Multi-Camera Live & Event Coverage',
+      'High-End Videography & Documentary Projects',
+      'Event & Production Coverage',
       'Professional Photography & Visual Content',
-      'Motion Graphics, Grading & Audio Post-Production'
+      'Motion Graphics, Color Grading & Audio Post-Production'
     ]
   },
   {
@@ -87,6 +87,7 @@ export const capabilityPillars = [
     icon: 'Code',
     image: '/assets/images/service-dev.png',
     href: '/services/web-app-development',
+    bookingId: 'web-app-development',
     items: [
       'Modern High-Performance Web Applications',
       'iOS & Android Mobile Applications',
@@ -103,9 +104,10 @@ export const capabilityPillars = [
     icon: 'Music',
     image: '/assets/images/service-sound.png',
     href: '/services/music-audio',
+    bookingId: 'music-audio',
     items: [
       'Original Music Production & Arrangement',
-      'Studio Recording & Session Musicianship',
+      'Studio Recording & Session Instrumentation',
       'Commercial Sound Design & Sonic Branding',
       'Audio Post-Production, Mixing & Mastering',
       'Live Creative & Technical Audio Production'
@@ -119,12 +121,13 @@ export const capabilityPillars = [
     icon: 'Bot',
     image: '/assets/images/service-branding.png',
     href: '/services/ai-automation',
+    bookingId: 'ai-automation',
     items: [
       'AI-Powered Enterprise Workflow Systems',
       'Intelligent Reasoning Agents & LLM Integration',
       'API Integration & Process Automation',
       'Data Pipelines & Custom Business Telemetry',
-      'Sovereign Data Governance & BOCRA Compliance'
+      'Data Privacy Governance & Security Practices'
     ]
   }
 ];
@@ -226,11 +229,11 @@ export const featuredProjects = [
     title: 'Pula Pitch',
     subtitle: 'Television & Digital Enterprise Series',
     category: 'Film & Creative Production',
-    roles: ['Set Design', 'Pre-Production', 'Principal Videography', 'Post-Production'],
+    roles: ['Set Design', 'Pre-Production', 'Production', 'Post-Production'],
     date: '2024',
-    verifiedNote: 'Lead videographer responsible for set design and pre-production, production and post-production across 13 episodes.',
+    verifiedNote: 'Lead videographer responsible for set design, pre-production, production and post-production across 13 episodes.',
     image: '/assets/images/pula-pitch-logo.jpg',
-    description: 'Lead videographer responsible for set design, lighting architecture, multi-camera shoot direction, pre-production, and full post-production across 13 complete episodes of the televised enterprise series.'
+    description: 'Lead videographer responsible for set design, pre-production, production and post-production across 13 episodes.'
   },
   {
     id: 'dedications-2020',
@@ -239,20 +242,19 @@ export const featuredProjects = [
     category: 'Music & Audio Production',
     roles: ['Bass Guitarist', 'Studio Setup', 'Artist Management'],
     date: '2020',
-    verifiedNote: 'Bass guitarist, studio setup and artist management across the programme’s shoots.',
+    verifiedNote: 'Bass guitarist, studio setup and artist management during all shoots.',
     image: '/assets/images/ras-ali-bass-1.jpg',
-    description: 'Live musical execution as bass guitarist, studio recording setup, sound monitoring, and artist management throughout all broadcast production shoots.'
+    description: 'Bass guitarist, studio setup and artist management during all shoots.'
   },
   {
     id: 'ralion-os-flagship',
     title: 'Ralion OS',
     subtitle: 'AI Business Operating System (Flagship Product)',
     category: 'Software & Technology',
-    roles: ['Enterprise Architecture', 'Mari AI Engine', 'Multi-Tenant Security', 'Full-Stack Engineering'],
-    date: '2026',
-    verifiedNote: 'Flagship innovation engineered and built by Ras Ali Labs.',
+    roles: ['Software Architecture', 'Mari AI Engine', 'Full-Stack Development'],
+    verifiedNote: 'Developed by Ras Ali Labs.',
     image: '/assets/images/logo.png',
-    description: 'The flagship AI operating system by Ras Ali Labs. Unifies CRM, operations, Mari AI reasoning, campaign generation, and multi-platform social management for modern businesses.'
+    description: 'Developed by Ras Ali Labs. The flagship AI operating system uniting CRM, business operations, Mari AI reasoning, and multi-channel growth.'
   },
   {
     id: 'lebville-platform',
@@ -260,7 +262,6 @@ export const featuredProjects = [
     subtitle: 'Modern Web Application & Digital Presence',
     category: 'Web & App Development',
     roles: ['Full-Stack Engineering', 'UI/UX Architecture', 'Cloud Deployment'],
-    date: '2024',
     verifiedNote: 'Custom web application engineered by Ras Ali Labs.',
     image: '/assets/images/lebville-logo.png',
     description: 'High-performance responsive digital platform engineered with modern web frameworks, dynamic components, and optimized cloud delivery.'
@@ -271,21 +272,9 @@ export const featuredProjects = [
     subtitle: 'Enterprise Digital Identity & Web Interface',
     category: 'Web & App Development',
     roles: ['Visual Identity', 'Web Development', 'Interface Design'],
-    date: '2024',
     verifiedNote: 'Brand identity and digital web portal designed and developed by Ras Ali Labs.',
     image: '/assets/images/peregrine-logo.png',
     description: 'Clean, modern digital identity and web portal engineered for high performance, accessibility, and clear corporate communications.'
-  },
-  {
-    id: 'sonic-branding-suite',
-    title: 'Sonic Branding & Studio Sound Suite',
-    subtitle: 'Original Composition & Audio Post-Production',
-    category: 'Music & Audio',
-    roles: ['Original Composition', 'Sound Design', 'Audio Mastering'],
-    date: '2024 - 2025',
-    verifiedNote: 'Original sound design and audio engineering by Ras Ali Labs.',
-    image: '/assets/images/service-sound.png',
-    description: 'Original music arrangements, commercial sound design, Foley, dialogue post-production, and master audio engineering for corporate and creative media.'
   }
 ];
 
@@ -367,7 +356,7 @@ export const pricingPlans = [
       'Custom Industry OS Modules',
       'Sovereign Cloud Deployment',
       'Enterprise SSO & Advanced RBAC',
-      '24/7 Dedicated Engineering Support',
+      'Dedicated Engineering Support',
       'Custom SLA & Audit Telemetry'
     ],
     ctaText: 'Talk to Sales',
@@ -378,31 +367,34 @@ export const pricingPlans = [
 
 export const services = [
   {
-    id: 1,
+    id: 'film-video',
+    numericId: 1,
     title: 'Film & Creative Production',
     description: 'Cinematic films, corporate storytelling, commercials, interviews, event coverage, photography, motion graphics and post-production.',
     href: '/services/film-video',
     items: [
       'Commercials & Brand Storytelling',
-      'High-Definition Multi-Camera Filming',
+      'Broadcast & Production Filming',
       'Post-Production, Color Grading & Sound',
-      'Event & Conference Visual Coverage'
+      'Event Visual Coverage'
     ]
   },
   {
-    id: 2,
+    id: 'web-app-development',
+    numericId: 2,
     title: 'Web & App Development',
     description: 'Modern websites, mobile applications, business platforms, portals, e-commerce systems and custom digital products.',
     href: '/services/web-app-development',
     items: [
       'Custom Web Applications & Portals',
       'Cross-Platform iOS & Android Apps',
-      'High-Speed UI/UX & Responsive Layouts',
+      'Responsive Layouts & Interface Systems',
       'API Architecture & Cloud Infrastructure'
     ]
   },
   {
-    id: 3,
+    id: 'music-audio',
+    numericId: 3,
     title: 'Music & Audio Production',
     description: 'Music production, arrangement, recording, sound design, audio post-production and live creative performance.',
     href: '/services/music-audio',
@@ -414,7 +406,8 @@ export const services = [
     ]
   },
   {
-    id: 4,
+    id: 'ai-automation',
+    numericId: 4,
     title: 'AI & Automation Systems',
     description: 'AI-powered business systems, workflow automation, intelligent integrations and enterprise digital transformation.',
     href: '/services/ai-automation',
@@ -422,7 +415,7 @@ export const services = [
       'Autonomous Workflow Automation',
       'Embedded AI Reasoning & LLM Systems',
       'Enterprise System Integration & APIs',
-      'Sovereign Data Governance & Security'
+      'Data Privacy Governance & Security'
     ]
   }
 ];
@@ -434,7 +427,6 @@ export const industryOperatingSystems = [
     tagline: 'Dignified End-to-End Mortuary & Claims Management',
     description: 'Specialized operating system managing policyholder registers, repatriation logistics, fleet scheduling, mortuary tracking, and automated client notifications.',
     href: '/industries#funeral',
-    metrics: '99.8% Policy Accuracy',
     capabilities: ['Policyholder Vault', 'Body Intake & QR Tracking', 'Fleet & Mortuary Schedule', 'Automated Claims Workflows']
   },
   {
@@ -443,7 +435,6 @@ export const industryOperatingSystems = [
     tagline: 'Cross-Border Fleet Telemetry & Waybill Automation',
     description: 'Freight routing, driver dispatching, border clearance document generation, fuel monitoring, and live cross-border tracking across the SADC corridor.',
     href: '/industries#logistics',
-    metrics: '40% Route Efficiency',
     capabilities: ['Live Fleet Telemetry', 'Digital Waybills & PODs', 'Customs Document Engine', 'Fuel & Maintenance Logs']
   },
   {
@@ -452,7 +443,6 @@ export const industryOperatingSystems = [
     tagline: 'Clinical Practice Operations & Patient Records',
     description: 'Patient scheduling, electronic medical records, consultation billing, automated pharmacy dispensing alerts, and sovereign health data protection.',
     href: '/industries#healthcare',
-    metrics: 'HIPAA & DPA Compliant',
     capabilities: ['Electronic Health Records', 'Clinical Billing Gateway', 'Patient Consultation Portal', 'Prescription Tracking']
   },
   {
@@ -461,7 +451,6 @@ export const industryOperatingSystems = [
     tagline: 'B2B SADC Corridor Procurement & Settlement',
     description: 'Cross-border B2B trade network connecting suppliers, verified buyers, and logistics providers with automated invoicing and trade finance tracking.',
     href: '/industries#trade',
-    metrics: '$12M+ Managed Volume',
     capabilities: ['Supplier Verification', 'B2B Order Catalog', 'Cross-Border Invoicing', 'Trade Settlement Tracking']
   },
   {
@@ -470,8 +459,7 @@ export const industryOperatingSystems = [
     tagline: 'Citizen Services & Secure Public Infrastructure',
     description: 'Sovereign digital public infrastructure, registry automation, citizen identity verification, and inter-departmental record exchange with full auditability.',
     href: '/industries#government',
-    metrics: 'Zero-Trust Sovereign Arch',
-    capabilities: ['Citizen Portal & USSD', 'Inter-Agency Ledger', 'Document Verification Vault', 'Audit & Compliance Telemetry']
+    capabilities: ['Citizen Portal & USSD', 'Inter-Agency Ledger', 'Document Verification Vault', 'Audit Telemetry']
   }
 ];
 
@@ -482,11 +470,11 @@ export const faqs = [
   },
   {
     question: 'What is Ralion OS and how does it relate to Ras Ali Labs?',
-    answer: 'Ralion OS is the flagship technology product created and engineered by Ras Ali Labs. It is an AI Business Operating System that unifies CRM, business operations, growth intelligence, and Mari AI into one connected platform.'
+    answer: 'Ralion OS is the flagship technology product created and developed by Ras Ali Labs. It is an AI Business Operating System that unifies CRM, business operations, growth intelligence, and Mari AI into one connected platform.'
   },
   {
     question: 'What creative and media production services do you provide?',
-    answer: 'We offer full-cycle film and video production (commercials, documentaries, corporate storytelling, multicam live coverage), professional photography, motion graphics, original music composition, studio recording, and sound design.'
+    answer: 'We offer full-cycle film and video production (commercials, documentaries, corporate storytelling, event coverage), professional photography, motion graphics, original music composition, studio recording, and sound design.'
   },
   {
     question: 'What technology and software services do you build?',
@@ -494,7 +482,7 @@ export const faqs = [
   },
   {
     question: 'Where is Ras Ali Labs located and how can we collaborate?',
-    answer: 'Ras Ali Labs is headquartered in Gaborone, Botswana (Plot 18680 Khuhurutse Drive, Phase 2). You can start a project by contacting us through our website, emailing contact@rasalilabs.com, or calling +267 72 113 009.'
+    answer: 'Ras Ali Labs is located in Gaborone, Botswana (Plot 18680 Khuhurutse Drive, Phase 2). You can start a project by contacting us through our website, emailing contact@rasalilabs.com, or calling +267 72 113 009.'
   }
 ];
 
@@ -508,7 +496,7 @@ export const aiPrototypes = [
   {
     title: 'Supply Chain Sentinel AI',
     image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=2015&auto=format&fit=crop',
-    status: 'Live Enterprise OS'
+    status: 'Enterprise System'
   },
   {
     title: 'Mari AI Reasoning Engine',
@@ -534,13 +522,13 @@ export const awards = [
     year: '2024',
     title: 'Pula Pitch Broadcast Production',
     organization: 'Television Enterprise Series',
-    category: 'Full Cycle Videography & Post-Production'
+    category: 'Videography & Post-Production'
   },
   {
     year: '2020',
     title: 'Dedications Music Broadcast',
     organization: 'Live Music Series',
-    category: 'Studio Instrumentation & Sound Setup'
+    category: 'Studio Instrumentation & Setup'
   }
 ];
 

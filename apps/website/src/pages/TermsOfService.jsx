@@ -11,7 +11,7 @@ const TermsOfService = () => {
       <SEO
         title="Terms of Service | Ras Ali Labs"
         description="Terms of Service and Master Subscription Agreement for Ras Ali Labs products, Ralion Business Operating System, and Mari AI platform under the laws of the Republic of Botswana."
-        url="/terms"
+        canonical="https://rasalilabs.com/terms"
       />
 
       {/* Ambient Glow */}
@@ -52,7 +52,7 @@ const TermsOfService = () => {
               <span>1. Acceptance of Terms & Eligibility</span>
             </h2>
             <p>
-              By accessing, downloading, registering for, or using the <strong>Ralion Platform</strong>, <strong>Mari AI Workspace</strong>, or any services provided by <strong>Ras Ali Labs (Pty) Ltd</strong>, you confirm that you have read, understood, and agreed to be bound by these Terms of Service, our <Link to="/privacy" className="text-blue-400 underline">Privacy Policy</Link>, and our <Link to="/data-protection" className="text-blue-400 underline">BOCRA & Data Protection Standards</Link>.
+              By accessing, downloading, registering for, or using the <strong>Ralion Platform</strong>, <strong>Mari AI Workspace</strong>, or any services provided by <strong>Ras Ali Labs (Pty) Ltd</strong>, you confirm that you have read, understood, and agreed to be bound by these Terms of Service, our <Link to="/privacy" className="text-blue-400 underline">Privacy Policy</Link>, and our <Link to="/data-protection" className="text-blue-400 underline">Data Protection & Privacy Standards</Link>.
             </p>
           </div>
 
@@ -69,7 +69,7 @@ const TermsOfService = () => {
           <div className="p-8 rounded-3xl bg-zinc-900/50 border border-zinc-800 space-y-4">
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
               <Scale className="w-5 h-5 text-purple-400" />
-              <span>3. BOCRA & Botswana Regulatory Compliance</span>
+              <span>3. Botswana Communications & Regulatory Alignment</span>
             </h2>
             <p>
               All electronic messaging, automated marketing broadcasts, data transmissions, and communications conducted via Ralion Growth, SMS gateways, and WhatsApp Business API must strictly comply with:

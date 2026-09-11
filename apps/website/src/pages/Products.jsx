@@ -29,7 +29,7 @@ const Products = () => {
       <SEO
         title="Ralion OS Product Ecosystem | Ras Ali Labs"
         description="Explore the Ralion OS ecosystem: Ralion OS, Mari AI, Ralion CRM, Growth Studio, and Social Intelligence."
-        url="/products"
+        canonical="https://rasalilabs.com/products"
       />
 
       <div className="max-w-7xl mx-auto">

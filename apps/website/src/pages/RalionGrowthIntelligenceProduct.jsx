@@ -43,7 +43,7 @@ const RalionGrowthIntelligenceProduct = () => {
       <SEO
         title="Growth Studio & Social Intelligence | Ralion OS"
         description="Autonomous AI creative studio (FLUX, CogVideoX), multi-channel social publishing, and closed-loop performance analytics."
-        url="/products/ralion-growth-intelligence"
+        canonical="https://rasalilabs.com/products/ralion-growth-intelligence"
       />
 
       <div className="max-w-7xl mx-auto">

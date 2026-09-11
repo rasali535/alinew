@@ -9,7 +9,7 @@ const RalionMariAIProduct = () => {
       <SEO
         title="Mari AI — Your AI Business Growth Partner | Ralion OS"
         description="Mari AI is the embedded reasoning partner in Ralion OS. Strategic growth recommendations, automated market intelligence, creative direction, and closed-loop learning."
-        url="/products/ralion-mari-ai"
+        canonical="https://rasalilabs.com/products/ralion-mari-ai"
       />
 
       <div className="max-w-7xl mx-auto">

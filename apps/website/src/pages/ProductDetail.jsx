@@ -38,7 +38,7 @@ const ProductDetail = () => {
       <SEO
         title={`${product.name} — ${product.tagline} | Ras Ali Labs`}
         description={product.description}
-        url={`/products/${product.slug}`}
+        canonical={`https://rasalilabs.com/products/${product.slug}`}
       />
 
       {/* Ambient Lighting */}

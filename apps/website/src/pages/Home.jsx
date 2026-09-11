@@ -41,7 +41,7 @@ const Home = () => {
       <SEO
         title="Ras Ali Labs | Technology, Film, Web, Apps, Music & AI"
         description="Ras Ali Labs is a Botswana-based multidisciplinary technology and creative company delivering intelligent platforms, cinematic productions, digital experiences and original sound."
-        url="/"
+        canonical="https://rasalilabs.com/"
       />
 
       {/* 1. HERO SECTION */}

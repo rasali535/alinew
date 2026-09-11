@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { featuredProjects } from '../data/mock';
 import SEO from '../components/common/SEO';
-import { ArrowLeft, ArrowRight, CheckCircle2, Sparkles, Building2, Calendar, Layers } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Sparkles } from 'lucide-react';
 
 const ProjectDetails = () => {
   const { id } = useParams();
@@ -31,7 +31,8 @@ const ProjectDetails = () => {
       <SEO
         title={`${project.title} | Ras Ali Labs Portfolio`}
         description={`Details about ${project.title}, a ${project.subtitle} project by Ras Ali Labs in Botswana.`}
-        image={project.image}
+        canonical={`https://rasalilabs.com/work/${project.id}`}
+        ogImage={project.image}
       />
 
       <div className="max-w-6xl mx-auto">
@@ -55,9 +56,11 @@ const ProjectDetails = () => {
                 {project.title}
               </h1>
             </div>
-            <span className="text-white/60 font-mono text-sm">
-              Production Year: {project.date || '2024'}
-            </span>
+            {project.date && (
+              <span className="text-white/60 font-mono text-sm">
+                Production Year: {project.date}
+              </span>
+            )}
           </div>
           <p className="text-white/70 text-lg md:text-xl font-normal max-w-3xl leading-relaxed">
             {project.subtitle}
@@ -127,10 +130,12 @@ const ProjectDetails = () => {
               <p className="text-white/50 text-[11px]">Gaborone, Botswana</p>
             </div>
 
-            <div className="pt-4 border-t border-white/10">
-              <h4 className="text-white/40 text-xs uppercase tracking-widest font-bold mb-1">Timeline</h4>
-              <p className="text-white text-xs">{project.date}</p>
-            </div>
+            {project.date && (
+              <div className="pt-4 border-t border-white/10">
+                <h4 className="text-white/40 text-xs uppercase tracking-widest font-bold mb-1">Timeline</h4>
+                <p className="text-white text-xs">{project.date}</p>
+              </div>
+            )}
           </div>
         </div>
       </div>

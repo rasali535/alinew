@@ -17,7 +17,7 @@ const Services = () => {
       <SEO
         title="Multidisciplinary Services | Ras Ali Labs"
         description="Explore the full spectrum of creative and technology capabilities from Ras Ali Labs: Film & Video Production, Web & App Development, Music & Audio, and AI & Automation."
-        url="/services"
+        canonical="https://rasalilabs.com/services"
       />
 
       <div className="max-w-7xl mx-auto px-6 lg:px-12">

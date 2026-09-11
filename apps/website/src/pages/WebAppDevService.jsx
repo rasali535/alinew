@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import SEO from '../components/common/SEO';
-import { Code, Smartphone, Globe, Layout, CheckCircle2, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Code, Smartphone, Globe, Layout, CheckCircle2, ArrowRight } from 'lucide-react';
 
 const WebAppDevService = () => {
   return (
@@ -9,7 +9,7 @@ const WebAppDevService = () => {
       <SEO
         title="Web & App Development | Ras Ali Labs"
         description="Modern websites, mobile applications, business platforms, portals, e-commerce systems and custom digital products built by Ras Ali Labs in Botswana."
-        url="/services/web-app-development"
+        canonical="https://rasalilabs.com/services/web-app-development"
       />
 
       <div className="max-w-7xl mx-auto px-6 lg:px-12">
@@ -74,12 +74,20 @@ const WebAppDevService = () => {
           <p className="text-white/70 text-sm mb-6">
             Tell us about your web, mobile, or enterprise platform vision.
           </p>
-          <Link
-            to="/contact"
-            className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl bg-emerald-500 text-black font-extrabold text-xs hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/20"
-          >
-            Start a Software Project <ArrowRight size={14} />
-          </Link>
+          <div className="flex flex-wrap items-center justify-center gap-4">
+            <Link
+              to="/booking/web-app-development"
+              className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl bg-emerald-500 text-black font-extrabold text-xs hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/20"
+            >
+              Book Web & App Development <ArrowRight size={14} />
+            </Link>
+            <Link
+              to="/contact"
+              className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl bg-white/10 text-white font-bold text-xs hover:bg-white/15 transition-all border border-white/15"
+            >
+              General Inquiry
+            </Link>
+          </div>
         </div>
       </div>
     </div>

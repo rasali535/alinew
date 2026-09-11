@@ -43,7 +43,7 @@ const RalionCRMProduct = () => {
       <SEO
         title="Ralion CRM — Customer & Pipeline Intelligence | Ralion OS"
         description="Accelerate deal closing with Ralion CRM. Contextual customer memory, dynamic pipelines, predictive opportunity scoring, and automated follow-ups."
-        url="/products/ralion-crm"
+        canonical="https://rasalilabs.com/products/ralion-crm"
       />
 
       <div className="max-w-7xl mx-auto">

@@ -24,7 +24,8 @@ const USSDCaseStudy = () => {
             <SEO
                 title="Case Study: USSD-Web Gap | Ras Ali"
                 description="Exploring a scalable architecture designed to synchronize USSD interactions with modern web platforms using an AI-driven interface with Supabase & Gemini."
-                image="/assets/images/ussd-bridge.jpg"
+                canonical="https://rasalilabs.com/case-study/ussd-web-gap"
+                ogImage="https://rasalilabs.com/assets/images/ussd-bridge.jpg"
             />
 
             {/* Background Accents */}

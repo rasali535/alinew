@@ -27,7 +27,7 @@ const Pricing = () => {
       <SEO
         title="Ralion OS Pricing | Community Free, Starter, Professional & Enterprise"
         description="Transparent subscription plans for Ralion OS. Start Free Forever with 100 monthly credits or unlock full commercial AI power."
-        url="/pricing"
+        canonical="https://rasalilabs.com/pricing"
       />
 
       <div className="max-w-7xl mx-auto">

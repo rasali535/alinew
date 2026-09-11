@@ -76,7 +76,7 @@ const Support = () => {
       <SEO
         title="Product Support & Help Center | Ralion OS"
         description="Get official product support for Ralion OS, Mari AI, Billing, Credits, Social Integrations, and Enterprise Architecture."
-        url="/support"
+        canonical="https://rasalilabs.com/support"
       />
 
       <div className="max-w-6xl mx-auto">

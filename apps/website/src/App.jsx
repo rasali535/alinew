@@ -103,6 +103,7 @@ function App() {
                 <Route path="/contact" element={<Contact />} />
                 <Route path="/request-demo" element={<RequestDemo />} />
                 <Route path="/booking" element={<Booking />} />
+                <Route path="/booking/:serviceId" element={<Booking />} />
 
                 {/* Ralion OS Flagship Product Marketing Routes */}
                 <Route path="/products/ralion-os" element={<RalionOSProduct />} />

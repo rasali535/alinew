@@ -29,9 +29,9 @@ const PrivacyPolicy = () => {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 relative overflow-hidden pt-32 pb-24">
       <SEO
-        title="Privacy Policy & BOCRA Data Protection | Ras Ali Labs"
-        description="Official Privacy Policy and Data Protection declaration of Ras Ali Labs and Ralion Enterprise OS, fully compliant with the Botswana Data Protection Act (Act No. 32 of 2018) and BOCRA regulations."
-        url="/privacy"
+        title="Privacy Policy & Data Protection | Ras Ali Labs"
+        description="Privacy Policy and Data Protection standards of Ras Ali Labs and Ralion OS, aligned with the Botswana Data Protection Act (Act No. 32 of 2018)."
+        canonical="https://rasalilabs.com/privacy"
       />
 
       {/* Ambient background glow */}
@@ -45,7 +45,7 @@ const PrivacyPolicy = () => {
         <div className="flex flex-col items-center text-center max-w-3xl mx-auto mb-16">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-950/60 border border-emerald-500/30 text-emerald-400 text-xs font-semibold uppercase tracking-wider mb-6">
             <ShieldCheck className="w-4 h-4" />
-            <span>BOCRA & Botswana DPA (Act 32 of 2018) Compliant</span>
+            <span>Botswana DPA (Act 32 of 2018) Aligned</span>
           </div>
 
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tight text-white mb-6">
@@ -56,7 +56,7 @@ const PrivacyPolicy = () => {
           </h1>
 
           <p className="text-zinc-400 text-sm md:text-base leading-relaxed">
-            Ras Ali Labs (Pty) Ltd operates with strict adherence to the laws of Botswana, international privacy conventions, and guidelines issued by the Botswana Communications Regulatory Authority (BOCRA).
+            Ras Ali Labs (Pty) Ltd operates with strict adherence to data protection principles under the laws of Botswana and international privacy best practices.
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-4 mt-6 text-xs text-zinc-500 font-mono">
@@ -74,9 +74,9 @@ const PrivacyPolicy = () => {
             <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-3">
               <Scale className="w-5 h-5" />
             </div>
-            <h3 className="text-sm font-bold text-white mb-1">Botswana DPA Certified</h3>
+            <h3 className="text-sm font-bold text-white mb-1">Botswana DPA Alignment</h3>
             <p className="text-xs text-zinc-400 leading-relaxed">
-              Full alignment with the Botswana Data Protection Act (Act No. 32 of 2018) and the Office of the Information Commissioner.
+              Full alignment with data protection principles under the Botswana Data Protection Act (Act No. 32 of 2018).
             </p>
           </div>
 
@@ -94,9 +94,9 @@ const PrivacyPolicy = () => {
             <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 mb-3">
               <Lock className="w-5 h-5" />
             </div>
-            <h3 className="text-sm font-bold text-white mb-1">BOCRA Telecom Standards</h3>
+            <h3 className="text-sm font-bold text-white mb-1">Communications Security Standards</h3>
             <p className="text-xs text-zinc-400 leading-relaxed">
-              End-to-end encryption (TLS 1.3 in transit, AES-256 at rest) compliant with BOCRA electronic communications and cyber safety directives.
+              End-to-end encryption (TLS 1.3 in transit, AES-256 at rest) for electronic communications and data safety.
             </p>
           </div>
         </div>
