@@ -3,9 +3,18 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { UserProfile, Organization, Branch, LicenseTier } from './types';
 
+export interface WorkspaceContextSummary {
+  id: string;
+  name: string;
+  slug: string;
+  ownerId: string;
+  organizationId: string;
+}
+
 export interface OrganizationContextType {
   user: UserProfile | null;
   organization: Organization | null;
+  workspace: WorkspaceContextSummary | null;
   activeBranch: Branch | null;
   isLoading: boolean;
   isContextResolved: boolean;
@@ -18,6 +27,7 @@ export interface OrganizationContextType {
 const OrganizationContext = createContext<OrganizationContextType>({
   user: null,
   organization: null,
+  workspace: null,
   activeBranch: null,
   isLoading: true,
   isContextResolved: false,
@@ -27,151 +37,181 @@ const OrganizationContext = createContext<OrganizationContextType>({
   logout: () => {},
 });
 
-/**
- * Resolves the API base URL for server context calls.
- * Mirrors the logic in api-config.ts but avoids a cross-package import.
- */
 function getContextApiBase(): string {
   if (typeof window === 'undefined') return '';
-
   const origin = window.location.origin;
   const hostname = window.location.hostname;
-
-  if (hostname.includes('rasalilabs.com')) {
-    return `${origin}/ralion`;
-  }
-
+  if (hostname.includes('rasalilabs.com')) return `${origin}/ralion`;
   const port = window.location.port;
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    if (port === '6509' || port === '3000') {
-      return origin;
-    }
+    if (port === '6509' || port === '3000') return origin;
     return 'http://localhost:6509';
   }
-
   return `${origin}/ralion`;
+}
+
+function getSharedSupabaseClient(): any | null {
+  if (typeof window === 'undefined') return null;
+  return (window as any).__ralion_supabase_instance__ || (globalThis as any).__ralion_supabase_instance__ || null;
+}
+
+function readStoredSessionFallback(): { accessToken: string | null; user: any | null } {
+  let accessToken: string | null = null;
+  let user: any | null = null;
+  try {
+    const directSession = localStorage.getItem('ralion-app-auth-token');
+    if (directSession) {
+      const parsed = JSON.parse(directSession);
+      accessToken = parsed?.access_token || parsed?.currentSession?.access_token || null;
+      user = parsed?.user || parsed?.currentSession?.user || null;
+    }
+    for (let i = 0; !accessToken && i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith('sb-') || !key.endsWith('-auth-token')) continue;
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      accessToken = parsed?.access_token || parsed?.currentSession?.access_token || null;
+      user = user || parsed?.user || parsed?.currentSession?.user || null;
+    }
+  } catch {}
+  return { accessToken, user };
+}
+
+async function readCurrentSession(forceRefresh = false): Promise<{ accessToken: string | null; user: any | null }> {
+  const sharedClient = getSharedSupabaseClient();
+
+  if (sharedClient?.auth) {
+    try {
+      if (forceRefresh && typeof sharedClient.auth.refreshSession === 'function') {
+        const refreshed = await sharedClient.auth.refreshSession();
+        const refreshedSession = refreshed?.data?.session;
+        if (refreshedSession?.access_token) {
+          return { accessToken: refreshedSession.access_token, user: refreshedSession.user || null };
+        }
+      }
+
+      if (typeof sharedClient.auth.getSession === 'function') {
+        const result = await sharedClient.auth.getSession();
+        const session = result?.data?.session;
+        if (session?.access_token) {
+          return { accessToken: session.access_token, user: session.user || null };
+        }
+      }
+    } catch (err) {
+      console.warn('[AuthContext] Supabase session resolution note:', err);
+    }
+  }
+
+  return readStoredSessionFallback();
+}
+
+async function fetchAuthoritativeContext(accessToken: string, method: 'GET' | 'POST' = 'GET') {
+  return fetch(`${getContextApiBase()}/api/auth/context`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+      ...(method === 'POST' ? { 'Content-Type': 'application/json' } : {}),
+    },
+    credentials: 'include',
+    cache: 'no-store',
+    ...(method === 'POST' ? { body: '{}' } : {}),
+  });
+}
+
+async function readResponseCode(res: Response): Promise<string | null> {
+  try {
+    const payload = await res.clone().json();
+    return payload?.code || payload?.error || null;
+  } catch {
+    return null;
+  }
 }
 
 export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [organization, setOrganization] = useState<Organization | null>(null);
+  const [workspace, setWorkspace] = useState<WorkspaceContextSummary | null>(null);
   const [activeBranch, setActiveBranch] = useState<Branch | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isContextResolved, setIsContextResolved] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isContextResolved, setIsContextResolved] = useState(false);
   const isResolvingRef = useRef(false);
 
-  /**
-   * Core resolution: get Supabase session → call /api/auth/context → hydrate state.
-   * This is the ONLY path for tenant resolution. No localStorage guessing.
-   */
+  const clearResolvedContext = useCallback(() => {
+    setUser(null);
+    setOrganization(null);
+    setWorkspace(null);
+    setActiveBranch(null);
+    setIsContextResolved(true);
+  }, []);
+
   const resolveAuthoritativeContext = useCallback(async () => {
-    if (typeof window === 'undefined') return;
-    if (isResolvingRef.current) return;
+    if (typeof window === 'undefined' || isResolvingRef.current) return;
     isResolvingRef.current = true;
+    setIsLoading(true);
+    setIsContextResolved(false);
 
     try {
-      // 1. Get the current Supabase session for the access token
-      let accessToken: string | null = null;
-      let supabaseUser: any = null;
-
-<<<<<<< HEAD
-      try {
-        // Dynamically import to avoid circular deps with the app's supabase client
-        const storageKey = 'ralion-app-auth-token';
-        const raw = localStorage.getItem(storageKey);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          accessToken = parsed?.access_token || null;
-          supabaseUser = parsed?.user || null;
-        }
-
-        // Fallback: scan for any sb-*-auth-token key
-        if (!accessToken) {
-          for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
-              const rawSb = localStorage.getItem(key);
-              if (rawSb) {
-                const parsedSb = JSON.parse(rawSb);
-                if (parsedSb?.access_token) {
-                  accessToken = parsedSb.access_token;
-                  supabaseUser = parsedSb?.user || null;
-                  break;
-                }
-=======
-      // 1. Resolve the active Supabase user from Ralion's canonical storage key first.
-      let authUser: any = null;
-      try {
-        const directSession = localStorage.getItem('ralion-app-auth-token');
-        if (directSession) {
-          const parsed = JSON.parse(directSession);
-          authUser = parsed?.user || parsed?.currentSession?.user || null;
-        }
-        for (let i = 0; !authUser && i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
-            const raw = localStorage.getItem(key);
-            if (raw) {
-              const parsed = JSON.parse(raw);
-              if (parsed?.user) {
-                authUser = parsed.user;
-                break;
->>>>>>> 9eda1a89d238995149d53edf418d6c59a1526b00
-              }
-            }
-          }
-        }
-      } catch {
-        // Storage access failed
-      }
-
+      let { accessToken, user: supabaseUser } = await readCurrentSession(false);
       if (!accessToken) {
-        console.log('[AuthContext] No active session found — user not authenticated');
-        setUser(null);
-        setOrganization(null);
-        setActiveBranch(null);
-        setIsContextResolved(true);
+        clearResolvedContext();
         return;
       }
 
-      // 2. Call the authoritative server endpoint
-      const apiBase = getContextApiBase();
-      const contextUrl = `${apiBase}/api/auth/context`;
+      let res = await fetchAuthoritativeContext(accessToken);
+      let responseCode = await readResponseCode(res);
 
-      const res = await fetch(contextUrl, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Accept': 'application/json',
-        },
-      });
+      // Refresh exactly once only when the server says the authentication token
+      // itself is invalid. A missing workspace is not an authentication failure.
+      if (res.status === 401 && (responseCode === 'AUTH_TOKEN_INVALID' || responseCode === 'AUTHENTICATION_REQUIRED')) {
+        const refreshed = await readCurrentSession(true);
+        if (refreshed.accessToken && refreshed.accessToken !== accessToken) {
+          accessToken = refreshed.accessToken;
+          supabaseUser = refreshed.user || supabaseUser;
+          res = await fetchAuthoritativeContext(accessToken);
+          responseCode = await readResponseCode(res);
+        }
+      }
+
+      // Legacy/current accounts may be authenticated but have no canonical
+      // workspace records because older registration flows only created auth.users.
+      // Repair is explicit POST, idempotent, and still fully server-authenticated.
+      if (res.status === 409 && responseCode === 'WORKSPACE_CONTEXT_MISSING') {
+        console.info('[AuthContext] Authenticated session has no workspace; requesting canonical provisioning');
+        res = await fetchAuthoritativeContext(accessToken, 'POST');
+        responseCode = await readResponseCode(res);
+      }
 
       if (!res.ok) {
-        console.warn('[AuthContext] Server context resolution failed:', res.status);
-        // If 401, session is invalid — clear state
-        if (res.status === 401) {
-          setUser(null);
-          setOrganization(null);
-          setActiveBranch(null);
-        }
-        setIsContextResolved(true);
+        console.warn('[AuthContext] Server context resolution failed:', {
+          status: res.status,
+          code: responseCode || 'UNKNOWN',
+        });
+        clearResolvedContext();
         return;
       }
 
       const data = await res.json();
-
-      if (!data.success || !data.user || !data.workspace || !data.organization) {
-        console.warn('[AuthContext] Server returned incomplete context:', data);
-        setIsContextResolved(true);
+      if (!data.success || !data.user || !data.workspace || !data.organization || !data.membership) {
+        console.warn('[AuthContext] Server returned incomplete context');
+        clearResolvedContext();
         return;
       }
 
-      // 3. Hydrate organization context from verified server response
       const branch: Branch = {
         id: 'b-main',
         name: supabaseUser?.user_metadata?.branch_name || 'Main HQ Branch',
         code: 'HQ-01',
         isMain: true,
+      };
+
+      const resolvedWorkspace: WorkspaceContextSummary = {
+        id: data.workspace.id,
+        name: data.workspace.name,
+        slug: data.workspace.slug,
+        ownerId: data.workspace.ownerId,
+        organizationId: data.workspace.organizationId || data.organization.id,
       };
 
       const resolvedOrg: Organization = {
@@ -193,7 +233,7 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         email: data.user.email || '',
         displayName: data.user.fullName || data.user.email?.split('@')[0] || 'User',
         orgId: resolvedOrg.id,
-        role: (data.user.role?.toUpperCase() as any) || 'ORGANIZATION_OWNER',
+        role: (data.membership.role?.toUpperCase() as any) || 'ORGANIZATION_OWNER',
         permissions: ['org:manage', 'billing:manage', 'crm:read', 'crm:write'],
         branchId: 'b-main',
         isActive: true,
@@ -203,72 +243,67 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       setUser(profile);
       setOrganization(resolvedOrg);
+      setWorkspace(resolvedWorkspace);
       setActiveBranch(branch);
       setIsContextResolved(true);
 
-      // 4. Persist workspace ID for subsidiary reads that still reference localStorage
       try {
-        localStorage.setItem('ralion_active_workspace_id', data.workspace.id);
-        localStorage.setItem('ralion_organization_id', data.organization.id);
-        if (data.organization.name) {
-          localStorage.setItem('ralion_org_name', data.organization.name);
-        }
+        localStorage.setItem('ralion_active_workspace_id', resolvedWorkspace.id);
+        localStorage.setItem('ralion_organization_id', resolvedOrg.id);
+        if (resolvedOrg.name) localStorage.setItem('ralion_org_name', resolvedOrg.name);
       } catch {}
 
-      // 5. Diagnostic logging (non-sensitive)
       console.log('[AuthContext]', {
         hasSession: true,
-        userId: data.user.id,
-        resolvedWorkspaceId: data.workspace.id,
-        resolvedOrganizationId: data.organization.id,
-        organizationName: data.organization.name,
-        tier: data.organization.tier,
-        hasAccessToken: true,
-        source: 'SERVER_VERIFIED',
+        resolvedWorkspaceId: resolvedWorkspace.id,
+        resolvedOrganizationId: resolvedOrg.id,
+        source: data.provisioned ? 'SERVER_PROVISIONED' : 'SERVER_VERIFIED',
       });
-
     } catch (err) {
       console.warn('[AuthContext] Context resolution error:', err);
-      setIsContextResolved(true);
+      clearResolvedContext();
     } finally {
       setIsLoading(false);
       isResolvingRef.current = false;
     }
-  }, []);
+  }, [clearResolvedContext]);
 
   useEffect(() => {
     resolveAuthoritativeContext();
 
-    // Listen for auth state changes via custom events
-    const handleOrgUpdate = () => {
-      resolveAuthoritativeContext();
-    };
-
-    // Listen for Supabase storage changes (session refresh/logout)
+    const handleOrgUpdate = () => resolveAuthoritativeContext();
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key && (e.key === 'ralion-app-auth-token' || (e.key.startsWith('sb-') && e.key.endsWith('-auth-token')))) {
         resolveAuthoritativeContext();
       }
     };
 
-    if (typeof window !== 'undefined') {
-      window.addEventListener('ralion_subscription_updated', handleOrgUpdate);
-      window.addEventListener('ralion_organization_updated', handleOrgUpdate);
-      window.addEventListener('storage', handleStorageChange);
-    }
+    const sharedClient = getSharedSupabaseClient();
+    const authSubscription = sharedClient?.auth?.onAuthStateChange?.((event: string) => {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        resolveAuthoritativeContext();
+      }
+      if (event === 'SIGNED_OUT') {
+        clearResolvedContext();
+      }
+    });
+
+    window.addEventListener('ralion_subscription_updated', handleOrgUpdate);
+    window.addEventListener('ralion_organization_updated', handleOrgUpdate);
+    window.addEventListener('storage', handleStorageChange);
 
     return () => {
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('ralion_subscription_updated', handleOrgUpdate);
-        window.removeEventListener('ralion_organization_updated', handleOrgUpdate);
-        window.removeEventListener('storage', handleStorageChange);
-      }
+      window.removeEventListener('ralion_subscription_updated', handleOrgUpdate);
+      window.removeEventListener('ralion_organization_updated', handleOrgUpdate);
+      window.removeEventListener('storage', handleStorageChange);
+      authSubscription?.data?.subscription?.unsubscribe?.();
     };
-  }, [resolveAuthoritativeContext]);
+  }, [resolveAuthoritativeContext, clearResolvedContext]);
 
   const logout = () => {
     setUser(null);
     setOrganization(null);
+    setWorkspace(null);
     setActiveBranch(null);
     setIsContextResolved(false);
     if (typeof window !== 'undefined') {
@@ -285,19 +320,7 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   };
 
   return (
-    <OrganizationContext.Provider
-      value={{
-        user,
-        organization,
-        activeBranch,
-        isLoading,
-        isContextResolved,
-        setOrganization,
-        setActiveBranch,
-        refreshOrganization: resolveAuthoritativeContext,
-        logout,
-      }}
-    >
+    <OrganizationContext.Provider value={{ user, organization, workspace, activeBranch, isLoading, isContextResolved, setOrganization, setActiveBranch, refreshOrganization: resolveAuthoritativeContext, logout }}>
       {children}
     </OrganizationContext.Provider>
   );
