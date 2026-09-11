@@ -972,26 +972,31 @@ Rules:
   };
 
   const handleRemoveMedia = () => {
+    if (newPost.mediaUrl?.startsWith('blob:')) {
+      URL.revokeObjectURL(newPost.mediaUrl);
+    }
     setNewPost(prev => ({
       ...prev,
       mediaUrl: undefined,
       mediaType: undefined,
       mediaFileName: undefined,
+      fileBlob: undefined,
     }));
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
 
-  // ── Comments Management Handlers ─────────────────────────────────────────
-  const fetchPostComments = useCallback(async (postId?: string) => {
+  // ── Social Post Interactive Handlers (Comments & Direct Messaging) ───────
+  const fetchPostComments = useCallback(async (postId: string) => {
     setIsLoadingComments(true);
     try {
-      const url = postId ? `/api/social/comments?postId=${encodeURIComponent(postId)}` : '/api/social/comments';
-      const res = await authFetch(url);
+      const res = await authFetch(`/api/social/comments?postId=${postId}`);
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
-        setPostComments(data.comments || []);
+        if (data.comments && Array.isArray(data.comments)) {
+          setPostComments(data.comments);
+        }
       }
     } catch (err) {
       console.warn('Comments fetch notice:', err);
@@ -1009,7 +1014,7 @@ Rules:
   const handleSendCommentReply = async (commentId: string, postId: string) => {
     if (!newCommentReplyText.trim()) return;
     setIsSubmittingReply(true);
-    const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
+    const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED');
     const targetPostId = postId || selectedCommentPost?.platformPostId || selectedCommentPost?.id || commentId.split('_')[0];
 
     try {
@@ -1020,7 +1025,7 @@ Rules:
           commentId,
           postId: targetPostId,
           replyText: newCommentReplyText.trim(),
-          authorName: activeFbPage?.name || 'Ras Ali Labs',
+          authorName: activeFbPage?.name || organization?.name || user?.displayName || 'Support',
           pageId: activeFbPage?.pageId || undefined,
         }),
       });
@@ -1035,27 +1040,26 @@ Rules:
         setPostComments(prev =>
           prev.map(c =>
             c.id === commentId
-              ? { ...c, replies: [...(c.replies || []), data.reply] }
+              ? {
+                  ...c,
+                  replies: [...(c.replies || []), data.reply],
+                }
               : c
           )
         );
-        setNewCommentReplyText('');
-        setOauthAlert({
-          type: 'success',
-          message: `✓ Reply published to Facebook! (ID: ${data.replyId || data.reply.id})`,
-        });
-        setTimeout(() => setOauthAlert(null), 5000);
-
-        // Reconcile with live thread
-        setTimeout(() => {
-          if (targetPostId) fetchPostComments(targetPostId);
-        }, 1500);
       }
-    } catch (e: any) {
-      const errMsg = e instanceof Error ? e.message : String(e);
+
+      setNewCommentReplyText('');
+      setOauthAlert({
+        type: 'success',
+        message: '✓ Reply successfully published to Facebook Page post!',
+      });
+      setTimeout(() => setOauthAlert(null), 5000);
+    } catch (err: any) {
+      const errMsg = err instanceof Error ? err.message : String(err);
       setOauthAlert({
         type: 'error',
-        message: `✕ Failed to post comment reply to Facebook: ${errMsg}`,
+        message: `✕ Failed to reply: ${errMsg}`,
       });
     } finally {
       setIsSubmittingReply(false);
@@ -1071,7 +1075,7 @@ Rules:
         const data = await res.json().catch(() => ({}));
         if (data.conversations && Array.isArray(data.conversations)) {
           setInboxConversations(data.conversations);
-          if (!activeConversationId && data.conversations.length > 0) {
+          if (data.conversations.length > 0 && !activeConversationId) {
             setActiveConversationId(data.conversations[0].conversationId);
           }
         }
@@ -1089,7 +1093,7 @@ Rules:
 
     const activeConv = inboxConversations.find(c => c.conversationId === activeConversationId);
     const recipientId = activeConv?.participantId || '';
-    const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
+    const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED');
     const activeConn = connectedAccounts.find(a => a.provider === 'facebook');
 
     try {
@@ -1113,7 +1117,7 @@ Rules:
       const newMsg = {
         id: data.result?.messageId || `msg_${Date.now()}`,
         direction: 'OUTBOUND',
-        sender_name: activeFbPage?.name || 'Support',
+        sender_name: activeFbPage?.name || organization?.name || user?.displayName || 'Support',
         message_text: inboxReplyText.trim(),
         timestamp: 'Just now',
       };
@@ -1150,8 +1154,9 @@ Rules:
 
   const fetchMariGrowthData = useCallback(async () => {
     try {
-      const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
-      const pageId = activeFbPage?.pageId || selectedPageForConnect || 'default';
+      const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED');
+      const pageId = activeFbPage?.pageId || selectedPageForConnect;
+      if (!pageId) return;
       const res = await authFetch(`/api/social/facebook/pages/${pageId}/mari-growth`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1173,8 +1178,9 @@ Rules:
 
   const fetchMarketResearchData = useCallback(async () => {
     try {
-      const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
-      const pageId = activeFbPage?.pageId || selectedPageForConnect || 'default';
+      const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED');
+      const pageId = activeFbPage?.pageId || selectedPageForConnect;
+      if (!pageId) return;
       const res = await authFetch(`/api/social/facebook/pages/${pageId}/market-research`);
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -1189,8 +1195,9 @@ Rules:
 
   const fetchBusinessLearningData = useCallback(async () => {
     try {
-      const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0];
-      const pageId = activeFbPage?.pageId || selectedPageForConnect || 'default';
+      const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED');
+      const pageId = activeFbPage?.pageId || selectedPageForConnect;
+      if (!pageId) return;
       const res = await authFetch(`/api/social/facebook/pages/${pageId}/business-learning`);
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -1315,11 +1322,11 @@ Rules:
 
   useEffect(() => {
     // 3. Lazy load comments when Comments modal or interaction is opened
-    if (isCommentsModalOpen && !loadedTabsRef.current.has('COMMENTS')) {
+    if (isCommentsModalOpen && selectedCommentPost?.id && !loadedTabsRef.current.has('COMMENTS')) {
       loadedTabsRef.current.add('COMMENTS');
-      fetchPostComments();
+      fetchPostComments(selectedCommentPost.id);
     }
-  }, [isCommentsModalOpen, fetchPostComments]);
+  }, [isCommentsModalOpen, selectedCommentPost, fetchPostComments]);
 
   // ── Handle redirect back from OAuth callback (?connected=provider or ?code=) ────────
   useEffect(() => {
@@ -1977,17 +1984,25 @@ Rules:
 
     if (publishingPostId) return; // Prevent double-submission
 
+    const targetConn = (selectedAccountId && connectedAccounts.find(a => a.id === selectedAccountId))
+      || (post.platform && connectedAccounts.find(a => a.provider === post.platform))
+      || (connectedAccounts.length === 1 ? connectedAccounts[0] : null);
+
+    if (!targetConn) {
+      setOauthAlert({
+        type: 'error',
+        message: 'Please select a connected social channel destination before publishing.',
+      });
+      return;
+    }
+
     setPublishingPostId(postId);
     try {
-      const targetConn = (selectedAccountId && connectedAccounts.find(a => a.id === selectedAccountId))
-        || (post.platform && connectedAccounts.find(a => a.provider === post.platform))
-        || connectedAccounts[0];
-      const targetPlatform = post.platform || targetConn?.provider || 'facebook';
+      const targetPlatform = post.platform || targetConn.provider || 'facebook';
       const isFacebookTarget = targetPlatform === 'facebook';
       const activeFbPage = isFacebookTarget
-        ? (availableFacebookPages.find(p => p.pageId === targetConn?.providerAccountId || p.id === targetConn?.id || p.pageId === targetConn?.id)
-           || availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') 
-           || availableFacebookPages[0])
+        ? (availableFacebookPages.find(p => p.pageId === targetConn.providerAccountId || p.id === targetConn.id || p.pageId === targetConn.id)
+           || availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || null)
         : null;
 
       const payload = {
@@ -1996,9 +2011,9 @@ Rules:
         platforms: [targetPlatform],
         mediaUrls: post.mediaUrl ? [post.mediaUrl] : undefined,
         mediaTypes: post.mediaType ? [post.mediaType] : undefined,
-        authorName: targetConn?.label || activeFbPage?.name || 'Social Account',
-        socialConnectionId: targetConn?.id,
-        pageId: isFacebookTarget ? (activeFbPage?.pageId || targetConn?.providerAccountId || undefined) : undefined,
+        authorName: targetConn.label || activeFbPage?.name || organization?.name || user?.displayName || 'Social Account',
+        socialConnectionId: targetConn.id,
+        pageId: isFacebookTarget ? (activeFbPage?.pageId || targetConn.providerAccountId || undefined) : undefined,
       };
 
       const res = await authFetch('/api/social/publish', {
@@ -6204,17 +6219,25 @@ Rules:
                   return;
                 }
 
-                setIsConnecting(true);
-
                 const targetConn = (selectedAccountId && connectedAccounts.find(a => a.id === selectedAccountId))
                   || (newPost.platform && connectedAccounts.find(a => a.provider === newPost.platform))
-                  || connectedAccounts[0];
-                const targetPlatform = newPost.platform || targetConn?.provider || 'facebook';
+                  || (connectedAccounts.length === 1 ? connectedAccounts[0] : null);
+
+                if (!targetConn) {
+                  setOauthAlert({
+                    type: 'error',
+                    message: 'Please select a connected social channel destination before publishing.',
+                  });
+                  return;
+                }
+
+                setIsConnecting(true);
+
+                const targetPlatform = newPost.platform || targetConn.provider || 'facebook';
                 const isFacebookTarget = targetPlatform === 'facebook';
                 const activeFbPage = isFacebookTarget
-                  ? (availableFacebookPages.find(p => p.pageId === targetConn?.providerAccountId || p.id === targetConn?.id || p.pageId === targetConn?.id)
-                     || availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') 
-                     || availableFacebookPages[0])
+                  ? (availableFacebookPages.find(p => p.pageId === targetConn.providerAccountId || p.id === targetConn.id || p.pageId === targetConn.id)
+                     || availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || null)
                   : null;
 
                 const payload = {
@@ -6224,9 +6247,9 @@ Rules:
                   mediaUrls: newPost.mediaUrl ? [newPost.mediaUrl] : undefined,
                   mediaTypes: newPost.mediaType ? [newPost.mediaType] : undefined,
                   scheduledFor: newPost.scheduledAt || undefined,
-                  authorName: targetConn?.label || activeFbPage?.name || 'Social Account',
-                  socialConnectionId: targetConn?.id,
-                  pageId: isFacebookTarget ? (activeFbPage?.pageId || targetConn?.providerAccountId || undefined) : undefined,
+                  authorName: targetConn.label || activeFbPage?.name || organization?.name || user?.displayName || 'Social Account',
+                  socialConnectionId: targetConn.id,
+                  pageId: isFacebookTarget ? (activeFbPage?.pageId || targetConn.providerAccountId || undefined) : undefined,
                 };
 
                 try {

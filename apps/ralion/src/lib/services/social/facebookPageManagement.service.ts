@@ -273,7 +273,7 @@ export class FacebookPageManagementService {
 
     const stateResult = await FacebookConnectionStateService.resolveFacebookConnectionState({
       tenantId,
-      workspaceId: tenantId,
+      workspaceId: params.workspaceId || tenantId,
       userId,
     });
 
@@ -329,6 +329,7 @@ export class FacebookPageManagementService {
     pageData: Partial<FacebookPageDescriptor>;
   }): Promise<{ success: boolean; destination: any; entitlement: EntitlementStatus }> {
     const tenantId = requireTenantId(params.organizationId, params.workspaceId);
+    const workspaceId = params.workspaceId || tenantId;
     const userId = requireUserId(params.userId);
     if (!params.pageId) throw new Error('Facebook Page ID is required.');
 
@@ -364,7 +365,7 @@ export class FacebookPageManagementService {
 
     const destinationPayload = {
       organization_id: tenantId,
-      workspace_id: tenantId,
+      workspace_id: workspaceId,
       user_id: userId,
       platform: 'facebook',
       provider_page_id: params.pageId,

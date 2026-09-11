@@ -122,6 +122,8 @@ async function runLiveTwoAccountValidation() {
   // 5. Test harmless destination resolution for Account A
   const pagesDiscovered = await FacebookPageManagementService.discoverAvailablePages({
     userId: LIVE_USER_ID,
+    organizationId: LIVE_ORG_ID,
+    workspaceId: LIVE_ORG_ID,
     profileId: accountARow.zernio_profile_id || '6a82deac1a69158ef81cb2cd',
   });
   const pageA = pagesDiscovered.pages.find((p: any) => p.pageId === accountA_PageId || p.pageId === '477334159265235');
@@ -203,7 +205,7 @@ async function runLiveTwoAccountValidation() {
   const viewAccountA = hydratedTwoAccounts.find(a => a.id === activeSelection);
   check(
     'Active View Selection: Account A',
-    viewAccountA?.account_label === 'Ras Ali Labs' && viewAccountA?.followers_count === 108,
+    viewAccountA?.account_label === 'Ras Ali Labs' && Number(viewAccountA?.followers_count) === Number(accountA_Followers),
     `Selected: "${viewAccountA?.account_label}", Followers: ${viewAccountA?.followers_count}`
   );
 
@@ -211,7 +213,7 @@ async function runLiveTwoAccountValidation() {
   const viewAccountB = hydratedTwoAccounts.find(a => a.id === activeSelection);
   check(
     'Active View Selection: Account B',
-    viewAccountB?.account_label === 'The Maplin' && viewAccountB?.followers_count === 188,
+    viewAccountB?.account_label === 'The Maplin' && Number(viewAccountB?.followers_count) === Number(accountB_Followers),
     `Selected: "${viewAccountB?.account_label}", Followers: ${viewAccountB?.followers_count}`
   );
 
@@ -219,7 +221,7 @@ async function runLiveTwoAccountValidation() {
   const returnToA = hydratedTwoAccounts.find(a => a.id === activeSelection);
   check(
     'Active View Selection Return: Account A',
-    returnToA?.account_label === 'Ras Ali Labs' && returnToA?.followers_count === 108,
+    returnToA?.account_label === 'Ras Ali Labs' && Number(returnToA?.followers_count) === Number(accountA_Followers),
     `Returned to: "${returnToA?.account_label}", Followers: ${returnToA?.followers_count} (zero state leak)`
   );
 

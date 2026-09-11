@@ -89,6 +89,7 @@ interface MetricsData {
     profileName: string;
     status: string;
     updatedAt: string;
+    organizationId?: string;
   };
   allConnections?: Array<{
     id: string;
@@ -140,7 +141,7 @@ export default function PlatformAdminPortal() {
   const [actionErrorMessage, setActionErrorMessage] = useState<string | null>(null);
   const [platformError, setPlatformError] = useState<string | null>(null);
 
-  // Authenticated Platform Admin Token / Secret
+  // Authenticated Platform Admin Token / Session
   const getAuthHeaders = async (): Promise<Record<string, string>> => {
     let sessionToken = '';
     try {
@@ -172,8 +173,6 @@ export default function PlatformAdminPortal() {
     if (sessionToken) {
       headers['Authorization'] = `Bearer ${sessionToken}`;
     }
-    // Master admin key bypass
-    headers['x-admin-key'] = 'platform-admin-master-key-verified';
     return headers;
   };
 
@@ -557,48 +556,52 @@ export default function PlatformAdminPortal() {
   };
 
   const renderWorkspaceBusinessArchitecture = () => {
+    const adminFb = metrics?.adminFacebook;
+    const adminZ = metrics?.adminZernio;
+    const activeConns = metrics?.allConnections || [];
+
     return (
       <div className="p-5 rounded-2xl bg-zinc-900/80 border border-zinc-800 space-y-3">
         <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
           <div>
             <h4 className="text-sm font-bold text-white flex items-center gap-2">
               <Building2 className="w-4 h-4 text-purple-400" />
-              Workspace Business Architecture: Ras Ali Labs
+              Platform Workspace Architecture & Infrastructure
             </h4>
             <p className="text-xs text-zinc-400 mt-0.5">
-              Decoupled independent business sources belonging to the workspace
+              Authoritative business channels and provider bindings managed under Platform Scope
             </p>
           </div>
           <span className="px-2 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[10px] font-bold">
-            Workspace Root
+            Platform Root
           </span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
           <div className="p-3.5 rounded-xl bg-zinc-950/70 border border-zinc-800">
-            <span className="text-zinc-500 text-[10px] block uppercase font-bold tracking-wider mb-1">Business Website</span>
+            <span className="text-zinc-500 text-[10px] block uppercase font-bold tracking-wider mb-1">Platform Host & Domain</span>
             <div className="font-semibold text-white">Ras Ali Labs (Pty) Ltd</div>
-            <div className="text-indigo-400 font-mono text-[11px] truncate mt-0.5">https://www.rasalilabs.com</div>
+            <div className="text-indigo-400 font-mono text-[11px] truncate mt-0.5">https://rasalilabs.com</div>
             <span className="inline-block mt-2 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold">
-              ● Connected Workspace Source
+              ● Authoritative Production Host
             </span>
           </div>
 
           <div className="p-3.5 rounded-xl bg-zinc-950/70 border border-zinc-800">
-            <span className="text-zinc-500 text-[10px] block uppercase font-bold tracking-wider mb-1">Social Channel A</span>
-            <div className="font-semibold text-white">Ras Ali Labs</div>
-            <div className="text-zinc-400 text-[11px] mt-0.5">Facebook Business Page</div>
+            <span className="text-zinc-500 text-[10px] block uppercase font-bold tracking-wider mb-1">Platform Facebook Page</span>
+            <div className="font-semibold text-white">{adminFb?.pageName || 'Ras Ali Labs'}</div>
+            <div className="text-zinc-400 text-[11px] mt-0.5">{adminFb?.pageUsername ? `@${adminFb.pageUsername}` : 'Facebook Business Page'}</div>
             <span className="inline-block mt-2 px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 text-[10px] font-bold">
-              ● Business Page Source
+              ● {adminFb?.connectionStatus === 'CONNECTED' ? 'Live Connected Page' : 'Platform Channel'}
             </span>
           </div>
 
           <div className="p-3.5 rounded-xl bg-zinc-950/70 border border-zinc-800">
-            <span className="text-zinc-500 text-[10px] block uppercase font-bold tracking-wider mb-1">Social Channel B</span>
-            <div className="font-semibold text-white">Kutlwano B Pule</div>
-            <div className="text-zinc-400 text-[11px] mt-0.5">Facebook Personal Profile</div>
-            <span className="inline-block mt-2 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 text-[10px] font-bold">
-              ● Personal Profile (No Website Attached)
+            <span className="text-zinc-500 text-[10px] block uppercase font-bold tracking-wider mb-1">Multi-Tenant Social Channels</span>
+            <div className="font-semibold text-white">{activeConns.length} Total Registered Binding{activeConns.length === 1 ? '' : 's'}</div>
+            <div className="text-zinc-400 text-[11px] mt-0.5">{metrics?.activeSocialConnections ?? 0} Active Channels</div>
+            <span className="inline-block mt-2 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold">
+              ● Tenant-Isolated Social Mesh
             </span>
           </div>
         </div>
@@ -1227,7 +1230,7 @@ export default function PlatformAdminPortal() {
                       )}
 
                       <div className="pt-2 flex items-center justify-between border-t border-zinc-800 text-[11px] text-zinc-500">
-                        <span>Org: <code>{conn.organizationId || 'ras-ali-labs'}</code></span>
+                        <span>Org: <code>{conn.organizationId || conn.workspaceId || 'Platform Scope'}</code></span>
                         <span className="text-emerald-400 font-medium">Auto-Sync Active</span>
                       </div>
                     </div>
@@ -1283,7 +1286,7 @@ export default function PlatformAdminPortal() {
                 </div>
 
                 <div className="pt-2 flex items-center justify-between border-t border-zinc-800 text-[11px] text-zinc-500">
-                  <span>Bound to Organization: <code>ras-ali-labs</code></span>
+                  <span>Bound to Organization: <code>{metrics?.adminZernio?.organizationId || 'Platform Scope'}</code></span>
                   <span className="text-purple-400 font-medium">Automated Webhooks OK</span>
                 </div>
               </div>

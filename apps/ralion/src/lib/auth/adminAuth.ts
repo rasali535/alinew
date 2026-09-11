@@ -26,38 +26,7 @@ export async function verifyPlatformAdminRequest(request: NextRequest): Promise<
     });
   }
 
-  // 1. Server-side platform secret for trusted administrative automation.
-  // Never allow a hardcoded/default bypass value.
-  const platformSecret = process.env.RALION_PLATFORM_ADMIN_SECRET;
-  if (adminKey) {
-    if (!platformSecret) {
-      return {
-        authorized: false,
-        statusCode: 500,
-        error: 'Platform admin secret is not configured.',
-      };
-    }
-
-    if (adminKey === platformSecret) {
-      return {
-        authorized: true,
-        user: {
-          id: 'platform-system-admin',
-          email: 'ali@rasalilabs.com',
-          role: 'PLATFORM_ADMIN',
-          organizationId: 'ras-ali-labs',
-        },
-      };
-    }
-
-    return {
-      authorized: false,
-      statusCode: 403,
-      error: 'Forbidden: Invalid platform administrator key.',
-    };
-  }
-
-  // 2. Extract Bearer token from Authorization header or Supabase cookies.
+  // 1. Extract Bearer token from Authorization header or Supabase cookies.
   let token = authHeader.replace(/^Bearer\s+/i, '').trim();
   if (token.startsWith('{')) {
     try {
@@ -74,76 +43,91 @@ export async function verifyPlatformAdminRequest(request: NextRequest): Promise<
     } catch {}
   }
 
-  if (!token) {
-    return {
-      authorized: false,
-      statusCode: 401,
-      error: 'Unauthorized: Authentication token is required for platform admin access.',
-    };
-  }
+  // 2. Validate Supabase user session token if present
+  if (token) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || '';
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || '';
-
-  if (!supabaseUrl || !serviceKey) {
-    return {
-      authorized: false,
-      statusCode: 500,
-      error: 'Platform auth configuration unavailable.',
-    };
-  }
-
-  try {
-    const supabase = createClient(supabaseUrl, serviceKey);
-    const { data: userData, error: userErr } = await supabase.auth.getUser(token);
-
-    if (userErr || !userData.user) {
+    if (!supabaseUrl || !serviceKey) {
       return {
         authorized: false,
-        statusCode: 401,
-        error: 'Invalid or expired session token.',
+        statusCode: 500,
+        error: 'Platform auth configuration unavailable.',
       };
     }
 
-    const user = userData.user;
-    const isAuthorized = PlatformAdminService.verifyAdminAuthorization(
-      user.user_metadata,
-      user.email
-    );
+    try {
+      const supabase = createClient(supabaseUrl, serviceKey);
+      const { data: userData, error: userErr } = await supabase.auth.getUser(token);
 
-    if (!isAuthorized) {
-      PlatformAdminService.recordAuditLog({
-        adminUserId: user.id,
-        adminEmail: user.email,
-        action: 'SECURITY_EVENT',
-        targetType: 'SYSTEM',
-        targetId: 'admin_portal_access',
-        result: 'DENIED',
-        reason: `Customer/unauthorized tenant '${user.id}' attempted to access Platform Admin endpoint.`,
-        ipAddress: request.headers.get('x-forwarded-for') || undefined,
-      });
+      if (userErr || !userData.user) {
+        return {
+          authorized: false,
+          statusCode: 401,
+          error: 'Invalid or expired session token.',
+        };
+      }
+
+      const user = userData.user;
+      const isAuthorized = PlatformAdminService.verifyAdminAuthorization(
+        user.user_metadata,
+        user.email
+      );
+
+      if (!isAuthorized) {
+        PlatformAdminService.recordAuditLog({
+          adminUserId: user.id,
+          adminEmail: user.email,
+          action: 'SECURITY_EVENT',
+          targetType: 'SYSTEM',
+          targetId: 'admin_portal_access',
+          result: 'DENIED',
+          reason: `Customer/unauthorized tenant '${user.id}' attempted to access Platform Admin endpoint.`,
+          ipAddress: request.headers.get('x-forwarded-for') || undefined,
+        });
+
+        return {
+          authorized: false,
+          statusCode: 403,
+          error: 'Forbidden: Platform Administrator privileges required.',
+        };
+      }
 
       return {
+        authorized: true,
+        user: {
+          id: user.id,
+          email: user.email || 'ali@rasalilabs.com',
+          role: 'PLATFORM_ADMIN',
+          organizationId: 'ras-ali-labs',
+        },
+      };
+    } catch (err: any) {
+      return {
         authorized: false,
-        statusCode: 403,
-        error: 'Forbidden: Platform Administrator privileges required.',
+        statusCode: 500,
+        error: `Admin authorization check failure: ${err?.message}`,
       };
     }
+  }
 
+  // 3. Fallback: Server-side platform secret for trusted administrative automation.
+  const platformSecret = process.env.RALION_PLATFORM_ADMIN_SECRET;
+  if (adminKey && platformSecret && adminKey === platformSecret) {
     return {
       authorized: true,
       user: {
-        id: user.id,
-        email: user.email || 'ali@rasalilabs.com',
+        id: 'platform-system-admin',
+        email: 'ali@rasalilabs.com',
         role: 'PLATFORM_ADMIN',
         organizationId: 'ras-ali-labs',
       },
     };
-  } catch (err: any) {
-    return {
-      authorized: false,
-      statusCode: 500,
-      error: `Admin authorization check failure: ${err?.message}`,
-    };
   }
+
+  return {
+    authorized: false,
+    statusCode: 401,
+    error: 'Unauthorized: Authentication token is required for platform admin access.',
+  };
 }

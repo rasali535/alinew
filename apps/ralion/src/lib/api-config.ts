@@ -49,10 +49,10 @@ async function getBrowserSession(forceRefresh = false) {
   try {
     const { createClient } = await import('@/lib/supabase/client');
     const supabase = createClient();
-    let { data, error } = await supabase.auth.getSession();
-    if (error) return null;
+    const { data, error } = await supabase.auth.getSession();
 
-    const session = data.session;
+    let session = !error ? data.session : null;
+
     const expiresSoon = Boolean(
       session?.expires_at && session.expires_at * 1000 <= Date.now() + 60_000
     );
@@ -60,13 +60,36 @@ async function getBrowserSession(forceRefresh = false) {
     if ((forceRefresh || expiresSoon) && session?.refresh_token) {
       const refreshed = await supabase.auth.refreshSession();
       if (!refreshed.error && refreshed.data.session) return refreshed.data.session;
-      if (forceRefresh) return null;
+      if (forceRefresh) session = null;
     }
 
-    return session || null;
+    if (session) return session;
   } catch {
-    return null;
+    // Supabase client instance error, proceed to storage fallback
   }
+
+  // Fallback to direct storage parsing if supabase client has not finished rehydrating
+  try {
+    const directSession = localStorage.getItem('ralion-app-auth-token');
+    if (directSession) {
+      const parsed = JSON.parse(directSession);
+      const token = parsed?.access_token || parsed?.currentSession?.access_token;
+      const user = parsed?.user || parsed?.currentSession?.user;
+      if (token) return { access_token: token, user } as any;
+    }
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith('sb-') || !key.endsWith('-auth-token')) continue;
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      const token = parsed?.access_token || parsed?.currentSession?.access_token;
+      const user = parsed?.user || parsed?.currentSession?.user;
+      if (token) return { access_token: token, user } as any;
+    }
+  } catch {}
+
+  return null;
 }
 
 function appendTenantHints(headers: Record<string, string>, session: any) {
