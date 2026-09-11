@@ -81,17 +81,21 @@ const Work = () => {
                       {project.category}
                     </span>
                   </div>
-                  <div className="absolute top-4 right-4">
-                    <span className="px-2.5 py-1 rounded-full bg-white/10 backdrop-blur-md text-[10px] font-mono text-white/80">
-                      {project.date}
-                    </span>
-                  </div>
+                  {project.date && (
+                    <div className="absolute top-4 right-4">
+                      <span className="px-2.5 py-1 rounded-full bg-white/10 backdrop-blur-md text-[10px] font-mono text-white/80">
+                        {project.date}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="p-6">
-                  <h3 className="text-xl font-bold text-white mb-1 group-hover:text-brand-gold transition-colors">
-                    {project.title}
-                  </h3>
+                  <Link to={`/work/${project.id}`}>
+                    <h3 className="text-xl font-bold text-white mb-1 group-hover:text-brand-gold transition-colors">
+                      {project.title}
+                    </h3>
+                  </Link>
                   <div className="text-xs font-medium text-brand-gold/90 mb-3">
                     {project.subtitle}
                   </div>
@@ -101,7 +105,7 @@ const Work = () => {
 
                   {project.verifiedNote && (
                     <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white/65 mb-4">
-                      <strong className="text-white/85 font-semibold block mb-0.5">Verified Role:</strong>
+                      <strong className="text-white/85 font-semibold block mb-0.5">Verified Execution:</strong>
                       {project.verifiedNote}
                     </div>
                   )}
@@ -119,13 +123,24 @@ const Work = () => {
                 </div>
               </div>
 
-              <div className="p-6 pt-0">
+              <div className="p-6 pt-0 flex gap-2">
                 <Link
-                  to="/contact"
-                  className="w-full py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 hover:text-white font-semibold text-xs transition-colors border border-white/10 flex items-center justify-center gap-1.5"
+                  to={`/work/${project.id}`}
+                  className="flex-1 py-2.5 rounded-xl bg-brand-gold/10 hover:bg-brand-gold text-brand-gold hover:text-black font-semibold text-xs transition-colors border border-brand-gold/20 flex items-center justify-center gap-1.5"
                 >
-                  Start a Similar Project <ArrowRight size={13} />
+                  View Details <ArrowRight size={13} />
                 </Link>
+                {project.url && (
+                  <a
+                    href={project.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white font-mono text-[11px] transition-colors border border-white/10 flex items-center justify-center"
+                    title={project.domain || 'Visit website'}
+                  >
+                    ↗
+                  </a>
+                )}
               </div>
             </div>
           ))}

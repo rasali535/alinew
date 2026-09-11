@@ -225,6 +225,88 @@ export const ralionModules = [
 
 export const featuredProjects = [
   {
+    id: 'eagletouchtours',
+    title: 'Eagle Touch Tours',
+    subtitle: 'Safari & Tour Booking Management Platform',
+    category: 'Web & App Development',
+    roles: ['Web Development', 'Tour Management System', 'UI/UX Design', 'Cloud Deployment'],
+    url: 'https://eagletouchtours.com',
+    domain: 'eagletouchtours.com',
+    verifiedNote: 'Full-stack safari tour and booking management web platform engineered by Ras Ali Labs.',
+    image: '/assets/images/eagle-touch-logo.png',
+    description: 'A full-stack booking and tour management platform engineered for Eagle Touch Tours, featuring tour itineraries, inquiry workflows, and responsive travel booking capabilities.'
+  },
+  {
+    id: 'pameltex',
+    title: 'Pameltex',
+    subtitle: 'Textile Manufacturing & Industrial Web Platform',
+    category: 'Web & App Development',
+    roles: ['Web Engineering', 'Product Catalog Architecture', 'UI/UX Design'],
+    url: 'https://pameltex.com',
+    domain: 'pameltex.com',
+    verifiedNote: 'Corporate web platform and industrial catalog showcase engineered by Ras Ali Labs.',
+    image: '/assets/images/pameltex-logo.png',
+    description: 'Corporate web platform engineered for Pameltex Industrial Fabrics, delivering structured product catalog showcase, business inquiry pipelines, and responsive performance.'
+  },
+  {
+    id: 'bbtraveltours',
+    title: 'BB Travel & Tours',
+    subtitle: 'Travel Booking & Tour Operations Portal',
+    category: 'Web & App Development',
+    roles: ['Web Development', 'Tour Package Architecture', 'Responsive UI/UX'],
+    url: 'https://bbtraveltours.com',
+    domain: 'bbtraveltours.com',
+    verifiedNote: 'Digital travel and tour package platform engineered by Ras Ali Labs.',
+    image: '/assets/images/bb-travel-logo.jpg',
+    description: 'A dedicated travel and tour booking platform for BB Travel & Tours, enabling seamless package discovery, itinerary showcase, and streamlined traveler contact.'
+  },
+  {
+    id: 'academyfoundations',
+    title: 'Academy Foundations',
+    subtitle: 'Educational Platform & Foundation Web Portal',
+    category: 'Web & App Development',
+    roles: ['Web Development', 'Content Architecture', 'UI/UX Design'],
+    url: 'https://academyfoundations.com',
+    domain: 'academyfoundations.com',
+    verifiedNote: 'Official educational and institutional web portal engineered by Ras Ali Labs.',
+    image: '/assets/images/service-dev.png',
+    description: 'A modern, responsive web portal engineered for Academy Foundations, supporting curriculum presentation, institutional communication, and stakeholder engagement.'
+  },
+  {
+    id: 'lebvilleboutique',
+    title: 'Lebville Boutique',
+    subtitle: 'Fashion E-Commerce Storefront & Payment Integration',
+    category: 'Web & App Development',
+    roles: ['E-Commerce Development', 'Storefront Architecture', 'Payment Integration'],
+    url: 'https://lebvilleboutique.com',
+    domain: 'lebvilleboutique.com',
+    verifiedNote: 'Boutique e-commerce platform and digital storefront engineered by Ras Ali Labs.',
+    image: '/assets/images/lebville-logo.png',
+    description: 'Boutique e-commerce storefront designed and deployed for Lebville Boutique, featuring product catalogs, responsive shopping experience, and online payment gateway integration.'
+  },
+  {
+    id: 'the-melody-gospel-tv-show',
+    title: 'The Melody Gospel TV Show',
+    subtitle: 'Broadcast Television Series & Studio Production',
+    category: 'Film & Creative Production',
+    roles: ['Television Production', 'Videography', 'Studio Setup', 'Audiovisual Post-Production'],
+    verifiedNote: 'Television series production, videography, and audiovisual post-production by Ras Ali Labs.',
+    image: '/assets/images/melody-logo.jpg',
+    description: 'Broadcast television production and audiovisual engineering for The Melody Gospel TV Show, delivering studio filming, visual capture, and broadcast post-production.'
+  },
+  {
+    id: 'pameltechlabs',
+    title: 'Pameltech Labs',
+    subtitle: 'Technology Solutions & Software Engineering Platform',
+    category: 'Web & App Development',
+    roles: ['Full-Stack Development', 'Software Engineering', 'Cloud Architecture'],
+    url: 'https://pameltechlabs.com',
+    domain: 'pameltechlabs.com',
+    verifiedNote: 'Technology and software solutions web platform engineered by Ras Ali Labs.',
+    image: '/assets/images/service-dev.png',
+    description: 'Technology web platform and software solutions portal engineered for Pameltech Labs, showcasing enterprise digital products and technical infrastructure capabilities.'
+  },
+  {
     id: 'pula-pitch-2024',
     title: 'Pula Pitch',
     subtitle: 'Television & Digital Enterprise Series',
@@ -255,16 +337,6 @@ export const featuredProjects = [
     verifiedNote: 'Developed by Ras Ali Labs.',
     image: '/assets/images/logo.png',
     description: 'Developed by Ras Ali Labs. The flagship AI operating system uniting CRM, business operations, Mari AI reasoning, and multi-channel growth.'
-  },
-  {
-    id: 'lebville-platform',
-    title: 'Lebville Digital Platform',
-    subtitle: 'Modern Web Application & Digital Presence',
-    category: 'Web & App Development',
-    roles: ['Full-Stack Engineering', 'UI/UX Architecture', 'Cloud Deployment'],
-    verifiedNote: 'Custom web application engineered by Ras Ali Labs.',
-    image: '/assets/images/lebville-logo.png',
-    description: 'High-performance responsive digital platform engineered with modern web frameworks, dynamic components, and optimized cloud delivery.'
   },
   {
     id: 'peregrine-systems',
