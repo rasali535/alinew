@@ -40,19 +40,21 @@ export async function GET(request: NextRequest) {
 
     const supabase = getServiceSupabase();
 
-    // 1. Validate the connection belongs to this workspace/user (tenant boundary)
+    // 1. Validate the connection belongs strictly to this workspace & organization
     const { data: conn } = await supabase
       .from('social_connections')
-      .select('id, provider, provider_account_id, workspace_id, user_id, account_type, zernio_profile_id, zernio_account_id, metadata, connection_status')
+      .select('id, provider, provider_account_id, workspace_id, organization_id, user_id, account_type, zernio_profile_id, zernio_account_id, metadata, connection_status')
       .eq('id', socialConnectionId)
-      .or(`workspace_id.eq.${context.workspace.id},user_id.eq.${context.user.id}`)
+      .eq('workspace_id', context.workspace.id)
+      .eq('organization_id', context.organization.id)
+      .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected', 'active'])
       .maybeSingle();
 
     if (!conn) {
       return corsJsonResponse(
         {
           success: false,
-          error: `Access denied: Connection ${socialConnectionId} does not belong to this workspace/user.`,
+          error: `Access denied: Connection ${socialConnectionId} does not belong to this workspace/organization.`,
         },
         { status: 403 },
         request
@@ -85,7 +87,7 @@ export async function GET(request: NextRequest) {
     // 3. Facebook Business Page: delegate to full service (Zernio + Graph API + DB)
     if (provider === 'facebook') {
       const posts = await FacebookPageManagementService.getPagePosts({
-        organizationId: context.workspace.id,
+        organizationId: context.organization.id,
         workspaceId: context.workspace.id,
         userId: context.user.id,
         pageId: conn.provider_account_id || conn.metadata?.pageId,
@@ -99,6 +101,9 @@ export async function GET(request: NextRequest) {
         provider,
         posts,
         total: posts.length,
+        dataAvailable: true,
+        source: 'FACEBOOK_DIRECT',
+        lastSyncedAt: new Date().toISOString(),
       };
       tenantCache.set(cacheKey, respPayload, 60);
 

@@ -583,6 +583,31 @@ Rules:
   };
 
 
+  const [pageAnalytics, setPageAnalytics] = useState<any | null>(null);
+  const [isLoadingPageAnalytics, setIsLoadingPageAnalytics] = useState(false);
+
+  // Helper: Fetch Authoritative Facebook Page Analytics
+  const fetchPageAnalytics = useCallback(async (pageId?: string) => {
+    setIsLoadingPageAnalytics(true);
+    try {
+      const targetPageId = pageId || selectedPageForConnect || 'default';
+      const res = await authFetch(`/api/social/facebook/pages/${targetPageId}/analytics`);
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.success && data.analytics) {
+          setPageAnalytics(data.analytics);
+          return data.analytics;
+        }
+      }
+      return null;
+    } catch (e) {
+      console.warn('[Growth] Page analytics fetch notice:', e);
+      return null;
+    } finally {
+      setIsLoadingPageAnalytics(false);
+    }
+  }, [selectedPageForConnect]);
+
   // Helper: Fetch Facebook Pages
   const fetchFacebookPages = useCallback(async () => {
     setIsLoadingPages(true);
@@ -878,7 +903,7 @@ Rules:
   // Backward-compatible wrapper for existing facebook callers
   const fetchLiveFacebookPosts = useCallback(async (pagesOverride?: any[]) => {
     const pages = pagesOverride || availableFacebookPages;
-    const activeFbPage = pages.find((p: any) => p.isCurrentDestination || p.status === 'CONNECTED') || pages[0];
+    const activeFbPage = pages.find((p: any) => p.isCurrentDestination || p.status === 'CONNECTED');
     const fbConn = connectedAccounts.find(a => a.id === selectedAccountId && a.provider === 'facebook')
       || connectedAccounts.find(a => a.provider === 'facebook');
     const targetConnId = activeFbPage?.id || fbConn?.id;
@@ -1240,10 +1265,11 @@ Rules:
       const initialAccount = accounts.find(a => a.id === selectedAccountId) || accounts[0];
 
       if (initialAccount?.id) {
-        // Step 2: Concurrently launch posts fetch & Facebook page discovery without blocking
+        // Step 2: Concurrently launch posts fetch, Facebook page discovery, and analytics without blocking
         Promise.allSettled([
           fetchPostsForConnection(initialAccount.id),
           hasFacebook ? fetchFacebookPages() : Promise.resolve([]),
+          hasFacebook ? fetchPageAnalytics() : Promise.resolve(null),
         ]);
       } else if (accounts.length === 0) {
         // Clean empty state when no accounts connected
@@ -1252,6 +1278,7 @@ Rules:
         setPostComments([]);
         setInboxConversations([]);
         setAvailableFacebookPages([]);
+        setPageAnalytics(null);
         setMarketResearchReport(null);
         setMariGrowthScore(null);
         setMariInsights([]);
@@ -1666,7 +1693,10 @@ Rules:
   const handleSyncAccount = async (providerKey: string) => {
     setIsSyncing(providerKey);
     try {
-      const res = await authFetch(`/api/oauth/${providerKey}/sync/`, { method: 'POST' });
+      const targetConn = connectedAccounts.find(a => a.id === selectedAccountId && a.provider === providerKey)
+        || connectedAccounts.find(a => a.provider === providerKey);
+      const queryParam = targetConn?.id ? `?socialConnectionId=${encodeURIComponent(targetConn.id)}` : '';
+      const res = await authFetch(`/api/oauth/${providerKey}/sync${queryParam}`, { method: 'POST' });
       const contentType = res.headers.get('content-type') || '';
       if (res.ok && contentType.includes('application/json')) {
         const data = await res.json().catch(() => ({}));
@@ -1689,13 +1719,25 @@ Rules:
               }));
             return [...newPosts, ...prev];
           });
+          if (providerKey === 'facebook') {
+            await fetchPageAnalytics();
+            await loadConnectedAccounts();
+          }
           setOauthAlert({ type: 'success', message: `✅ Synced ${data.posts.length} posts from ${providerKey}` });
           setTimeout(() => setOauthAlert(null), 5000);
         } else {
-          setOauthAlert({ type: 'error', message: data.error || `No recent posts found on ${providerKey}` });
+          if (providerKey === 'facebook') {
+            await fetchPageAnalytics();
+            await loadConnectedAccounts();
+          }
+          setOauthAlert({ type: 'info', message: data.error || `Synced latest state for ${providerKey}` });
           setTimeout(() => setOauthAlert(null), 5000);
         }
       } else {
+        if (providerKey === 'facebook') {
+          await fetchPageAnalytics();
+          await loadConnectedAccounts();
+        }
         setOauthAlert({ type: 'success', message: `✅ ${providerKey} status refreshed.` });
         setTimeout(() => setOauthAlert(null), 4000);
       }
@@ -2225,7 +2267,7 @@ Rules:
   const currentAccountHandle = activeAcc?.handle || activeFbPage?.username || '';
   const currentAccountId = activeAcc?.providerAccountId || activeFbPage?.pageId || activeAcc?.id || '';
   const fbFollowersCount = isFacebookPage 
-    ? (Number(activeFbPage?.followersCount) || (activeAcc?.followers ? Number(String(activeAcc.followers).replace(/,/g, '')) : 0))
+    ? (Number(pageAnalytics?.followers) || Number(activeFbPage?.followersCount) || (activeAcc?.followers ? Number(String(activeAcc.followers).replace(/,/g, '')) : 0))
     : 0;
 
   // Dynamic Spline Series & Timeframe Bucketed Computation
@@ -3200,28 +3242,28 @@ Rules:
                     <div className="flex flex-col gap-3">
                       <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800">
                         <div className="text-[10px] uppercase font-bold text-zinc-400 flex items-center gap-1">
-                          <Flame className="w-3 h-3 text-amber-400" /> Trending Regional Hashtags
+                          <Flame className="w-3 h-3 text-amber-400" /> Recommended Strategic Hashtags
                         </div>
                         <div className="text-xs font-mono text-indigo-300 mt-1">
-                          #{pageDisplayName.replace(/\s+/g, '')} #EnterpriseGrowth #SADCTradeTech #BusinessIntelligence
+                          #{pageDisplayName.replace(/\s+/g, '')} #Innovation #BusinessGrowth #Technology
                         </div>
                       </div>
 
                       <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800">
                         <div className="text-[10px] uppercase font-bold text-zinc-400 flex items-center gap-1">
-                          <Zap className="w-3 h-3 text-emerald-400" /> Best Time to Post Today
+                          <Zap className="w-3 h-3 text-emerald-400" /> Optimal Publishing Window
                         </div>
                         <div className="text-xs text-zinc-200 mt-1 font-sans">
-                          Today at <strong className="text-white">03:30 PM CAT</strong> (+34% expected engagement spike for business audiences).
+                          Audience activity peak window: <strong className="text-white">03:30 PM CAT</strong>
                         </div>
                       </div>
 
                       <div className="p-3 rounded-xl bg-zinc-950 border border-indigo-500/30">
                         <div className="text-[10px] uppercase font-bold text-indigo-400 flex items-center gap-1">
-                          <Compass className="w-3 h-3 text-indigo-400" /> High-Impact Strategic Opportunity
+                          <Compass className="w-3 h-3 text-indigo-400" /> High-Impact Content Opportunity
                         </div>
                         <div className="text-xs text-zinc-300 mt-1">
-                          {pageDisplayName} Commercial Leadership Spotlight (<span className="text-amber-400 font-bold">89% Engagement Potential</span>)
+                          {pageDisplayName} Strategic Operations & Leadership Update
                         </div>
                         <Button
                           variant="primary"

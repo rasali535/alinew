@@ -97,11 +97,11 @@ export class SocialAnalyticsService {
 
     return {
       totals: {
-        reach: totalReach || 42800,
-        impressions: totalImpressions || 64500,
-        engagement: totalEngagement || 5240,
-        followers: totalFollowers || 18450,
-        postsPublished: postsCount || 34,
+        reach: totalReach,
+        impressions: totalImpressions,
+        engagement: totalEngagement,
+        followers: totalFollowers,
+        postsPublished: postsCount || 0,
       },
       platforms: platformResults as Record<SocialPlatformType, SocialAnalyticsResult | null>,
     };

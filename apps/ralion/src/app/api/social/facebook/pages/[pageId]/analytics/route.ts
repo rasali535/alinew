@@ -32,7 +32,9 @@ export async function GET(
         .from('social_connections')
         .select('provider_account_id, zernio_account_id, account_type, metadata')
         .eq('provider', 'facebook')
-        .or(`workspace_id.eq.${context.workspace.id},user_id.eq.${context.user.id}`)
+        .eq('workspace_id', context.workspace.id)
+        .eq('organization_id', context.organization.id)
+        .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected', 'active'])
         .maybeSingle();
 
       const pageMatched =
@@ -64,7 +66,7 @@ export async function GET(
     }
 
     const analytics = await FacebookPageManagementService.getPageAnalytics({
-      organizationId: context.workspace.id,
+      organizationId: context.organization.id,
       workspaceId: context.workspace.id,
       userId: context.user.id,
       pageId: pageId,

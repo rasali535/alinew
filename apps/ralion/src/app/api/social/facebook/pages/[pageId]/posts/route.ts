@@ -33,14 +33,16 @@ export async function GET(
       return corsJsonResponse(cached, undefined, request);
     }
 
-    // 2. If a specific non-default pageId is requested, verify tenant ownership
+    // 2. If a specific non-default pageId is requested, verify strict tenant ownership
     if (pageId && pageId !== 'default') {
       const supabase = getServiceSupabase();
       const { data: conn } = await supabase
         .from('social_connections')
         .select('provider_account_id, zernio_account_id, metadata')
         .eq('provider', 'facebook')
-        .or(`workspace_id.eq.${context.workspace.id},user_id.eq.${context.user.id}`)
+        .eq('workspace_id', context.workspace.id)
+        .eq('organization_id', context.organization.id)
+        .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected', 'active'])
         .maybeSingle();
 
       const pageMatched =
@@ -56,7 +58,7 @@ export async function GET(
     }
 
     const posts = await FacebookPageManagementService.getPagePosts({
-      organizationId: context.workspace.id,
+      organizationId: context.organization.id,
       workspaceId: context.workspace.id,
       userId: context.user.id,
       pageId,

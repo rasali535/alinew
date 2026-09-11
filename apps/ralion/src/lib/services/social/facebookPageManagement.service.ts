@@ -14,6 +14,42 @@ import { SocialTokenManager } from './socialTokenManager.service';
 import { FacebookCommentsService } from './facebookComments.service';
 import { FacebookConnectionStateService } from './facebookConnectionState.service';
 
+export const META_GRAPH_API_VERSION = 'v20.0';
+
+/**
+ * Resolves an authentic Page Access Token for the requested Facebook Page.
+ * Checks metadata for encrypted_page_access_token, then queries /me/accounts via user token.
+ */
+async function resolvePageAccessToken(userToken: string, targetPageId: string, connMetadata?: any): Promise<string | null> {
+  if (connMetadata?.encrypted_page_access_token) {
+    try {
+      const { decryptToken } = require('@ralion/integrations');
+      const decrypted = decryptToken(connMetadata.encrypted_page_access_token);
+      if (decrypted) return decrypted;
+    } catch {}
+  }
+
+  if (!userToken || !targetPageId) return null;
+
+  try {
+    const res = await fetch(`https://graph.facebook.com/${META_GRAPH_API_VERSION}/me/accounts?limit=100`, {
+      headers: { Authorization: `Bearer ${userToken}` },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const page = (data.data || []).find((p: any) => p.id === targetPageId);
+      if (page?.access_token) {
+        return page.access_token;
+      }
+    }
+  } catch (err: any) {
+    console.warn('[FacebookPageManagement] Failed to resolve Page Access Token from /me/accounts:', err?.message || err);
+  }
+
+  return userToken;
+}
+
 function getServiceSupabase() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -76,6 +112,8 @@ function emptyAnalytics(pageId = 'none', pageName = 'No Connected Page'): Normal
     totalShares30d: 0,
     topContentType: 'text',
     lastSyncedAt: new Date().toISOString(),
+    analyticsAvailable: false,
+    provenance: 'UNAVAILABLE',
   };
 }
 
@@ -147,6 +185,8 @@ export interface NormalizedPageAnalytics {
   totalShares30d: number;
   topContentType: 'video' | 'image' | 'text';
   lastSyncedAt: string;
+  analyticsAvailable?: boolean;
+  provenance?: string;
 }
 
 export class FacebookPageManagementService {
@@ -646,7 +686,9 @@ export class FacebookPageManagementService {
     let fbToken: string | null = null;
     try {
       fbToken = await SocialTokenManager.getValidToken(conn.id, 'facebook');
-    } catch {}
+    } catch (err: any) {
+      console.warn('[FacebookPageManagement] Token resolution notice:', err?.message || err);
+    }
 
     if (!fbToken && conn.metadata?.encrypted_access_token) {
       try {
@@ -657,9 +699,11 @@ export class FacebookPageManagementService {
 
     if (fbToken && targetPageId) {
       try {
-        const fields = 'id,message,created_time,full_picture,shares,reactions.summary(total_count).limit(0).as(likes),comments.summary(total_count).limit(0).as(comments)';
+        const pageToken = await resolvePageAccessToken(fbToken, targetPageId, conn.metadata);
+        if (pageToken) fbToken = pageToken;
+        const fields = 'id,message,created_time,full_picture,permalink_url,shares,reactions.summary(total_count).limit(0).as(reactions_summary),comments.summary(total_count).limit(0).as(comments_summary)';
         const fbRes = await fetch(
-          `https://graph.facebook.com/v19.0/${targetPageId}/posts?fields=${fields}&limit=25`,
+          `https://graph.facebook.com/${META_GRAPH_API_VERSION}/${targetPageId}/posts?fields=${fields}&limit=${params.limit || 25}`,
           {
             headers: { Authorization: `Bearer ${fbToken}` },
             signal: AbortSignal.timeout(8000),
@@ -678,18 +722,23 @@ export class FacebookPageManagementService {
               mediaType: fp.full_picture ? 'image' : 'text',
               publishedAt: fp.created_time || new Date().toISOString(),
               status: 'published',
-              permalink: `https://www.facebook.com/${fp.id}`,
+              permalink: fp.permalink_url || `https://www.facebook.com/${fp.id}`,
               source: 'FACEBOOK_DIRECT',
               engagement: {
-                likes: Number(fp.likes?.summary?.total_count || 0),
-                comments: Number(fp.comments?.summary?.total_count ?? commentCountsByPostId[fp.id] ?? 0),
+                likes: Number(fp.reactions_summary?.summary?.total_count || 0),
+                comments: Number(fp.comments_summary?.summary?.total_count ?? commentCountsByPostId[fp.id] ?? 0),
                 shares: Number(fp.shares?.count || 0),
                 reach: 0,
               },
             });
           }
+        } else {
+          const fbErr = await fbRes.json().catch(() => ({}));
+          console.warn('[FacebookPageManagement] Meta Graph API posts notice:', fbErr?.error?.message || fbRes.status);
         }
-      } catch {}
+      } catch (err: any) {
+        console.warn('[FacebookPageManagement] Network error fetching Meta posts:', err?.message || err);
+      }
     }
 
     if (accountId && profileId) {
@@ -779,7 +828,7 @@ export class FacebookPageManagementService {
 
     let query = supabase
       .from('social_connections')
-      .select('id, zernio_profile_id, zernio_account_id, provider_account_id, account_name, account_type, followers_count, metadata')
+      .select('id, provider, workspace_id, organization_id, user_id, zernio_profile_id, zernio_account_id, provider_account_id, account_name, account_type, followers_count, metadata')
       .eq('provider', 'facebook')
       .eq('organization_id', tenantId)
       .eq('user_id', userId)
@@ -799,7 +848,51 @@ export class FacebookPageManagementService {
     }
 
     const pageName = conn.account_name || conn.metadata?.pageName || 'Facebook Page';
-    const followers = Number(conn.followers_count) || Number(conn.metadata?.followers_count) || Number(conn.metadata?.followers) || 0;
+    const targetPageId = conn.provider_account_id || conn.metadata?.pageId || params.pageId;
+    let liveFollowers: number | null = null;
+    let fbToken: string | null = null;
+
+    try {
+      fbToken = await SocialTokenManager.getValidToken(conn.id, 'facebook');
+    } catch (err: any) {
+      console.warn('[FacebookPageManagement] Analytics token resolution notice:', err?.message || err);
+    }
+
+    if (!fbToken && conn.metadata?.encrypted_access_token) {
+      try {
+        const { decryptToken } = require('@ralion/integrations');
+        fbToken = decryptToken(conn.metadata.encrypted_access_token);
+      } catch {}
+    }
+
+    if (fbToken && targetPageId) {
+      try {
+        const pageToken = await resolvePageAccessToken(fbToken, targetPageId, conn.metadata);
+        if (pageToken) fbToken = pageToken;
+        const pageRes = await fetch(
+          `https://graph.facebook.com/${META_GRAPH_API_VERSION}/${targetPageId}?fields=id,name,fan_count,followers_count`,
+          {
+            headers: { Authorization: `Bearer ${fbToken}` },
+            signal: AbortSignal.timeout(8000),
+          }
+        );
+        if (pageRes.ok) {
+          const pageData = await pageRes.json();
+          if (typeof pageData.followers_count === 'number') {
+            liveFollowers = pageData.followers_count;
+          } else if (typeof pageData.fan_count === 'number') {
+            liveFollowers = pageData.fan_count;
+          }
+        }
+      } catch (err: any) {
+        console.warn('[FacebookPageManagement] Live followers query notice:', err?.message || err);
+      }
+    }
+
+    const followers = liveFollowers !== null
+      ? liveFollowers
+      : (Number(conn.followers_count) || Number(conn.metadata?.followers_count) || Number(conn.metadata?.followers) || 0);
+
     let totalPosts = 0;
     let totalLikes = 0;
     let totalComments = 0;
@@ -817,8 +910,8 @@ export class FacebookPageManagementService {
     }
 
     const livePosts = await this.getPagePosts({
-      organizationId: tenantId,
-      workspaceId: tenantId,
+      organizationId: params.organizationId || tenantId,
+      workspaceId: params.workspaceId || tenantId,
       userId,
       socialConnectionId: conn.id,
       limit: 50,
@@ -850,6 +943,8 @@ export class FacebookPageManagementService {
       totalShares30d: totalShares,
       topContentType: 'text',
       lastSyncedAt: new Date().toISOString(),
+      analyticsAvailable: true,
+      provenance: liveFollowers !== null ? 'LIVE_META_GRAPH_API' : 'STORED_PROFILE',
     };
   }
 }

@@ -1,10 +1,11 @@
 import { NextRequest } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import {
-  loadOAuthTokens, updateLastSynced, markTokenExpired,
-  linkedinAdapter, metaAdapter, xAdapter, tiktokAdapter, youtubeAdapter,
+  linkedinAdapter, xAdapter, tiktokAdapter, youtubeAdapter,
 } from '@/lib/services/social.service';
+import { SocialTokenManager } from '@/lib/services/social/socialTokenManager.service';
+import { FacebookPageManagementService } from '@/lib/services/social/facebookPageManagement.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
+import { requireRalionContext, getServiceSupabase } from '@/lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,44 +30,94 @@ export async function POST(
 ) {
   try {
     const { provider } = await params;
+    const { context, response } = await requireRalionContext(request);
+    if (response) return response;
 
-    // Get authenticated user
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-        global: { headers: { cookie: request.headers.get('cookie') || '' } },
-      }
-    );
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return corsJsonResponse({ success: false, error: 'Not authenticated' }, { status: 401 }, request);
+    const body = await request.json().catch(() => ({}));
+    const { searchParams } = new URL(request.url);
+    const socialConnectionId = body.socialConnectionId || searchParams.get('socialConnectionId');
+
+    const supabase = getServiceSupabase();
+
+    let query = supabase
+      .from('social_connections')
+      .select('id, provider, provider_account_id, workspace_id, organization_id, user_id, metadata, connection_status')
+      .eq('provider', provider)
+      .eq('organization_id', context.organization.id)
+      .eq('workspace_id', context.workspace.id)
+      .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected', 'active']);
+
+    if (socialConnectionId) {
+      query = query.eq('id', socialConnectionId);
     }
 
-    // Load token from Supabase
-    const tokenData = await loadOAuthTokens(user.id, provider);
-    if (!tokenData?.accessToken) {
-      return corsJsonResponse({ success: false, error: `No connected token found for provider: ${provider}` }, { status: 404 }, request);
+    const { data: conns } = await query;
+    if (!conns || conns.length === 0) {
+      return corsJsonResponse(
+        { success: false, error: `No active ${provider} connection found in this workspace.` },
+        { status: 404 },
+        request
+      );
     }
 
-    const { accessToken, record } = tokenData;
+    if (!socialConnectionId && conns.length > 1) {
+      return corsJsonResponse(
+        {
+          success: false,
+          error: `Multiple ${provider} accounts exist for this workspace. Please specify an explicit socialConnectionId.`,
+        },
+        { status: 400 },
+        request
+      );
+    }
 
-    // Fetch real posts from platform
+    const targetConn = conns[0];
+
+    // Delegate Facebook syncing to FacebookPageManagementService
+    if (provider === 'facebook') {
+      const posts = await FacebookPageManagementService.getPagePosts({
+        organizationId: context.organization.id,
+        workspaceId: context.workspace.id,
+        userId: context.user.id,
+        pageId: targetConn.provider_account_id,
+        socialConnectionId: targetConn.id,
+        limit: 25,
+      });
+
+      await supabase
+        .from('social_connections')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', targetConn.id);
+
+      return corsJsonResponse({
+        success: true,
+        provider,
+        socialConnectionId: targetConn.id,
+        postsCount: posts.length,
+        posts,
+        syncedAt: new Date().toISOString(),
+      }, undefined, request);
+    }
+
+    // Resolve token via SocialTokenManager
+    let accessToken: string | null = null;
+    try {
+      accessToken = await SocialTokenManager.getValidToken(targetConn.id, provider as any);
+    } catch {}
+
+    if (!accessToken) {
+      return corsJsonResponse(
+        { success: false, error: `Token unavailable or expired for ${provider}. Please reconnect.`, tokenExpired: true },
+        { status: 401 },
+        request
+      );
+    }
+
     let posts: any[] = [];
     try {
       switch (provider) {
         case 'linkedin':
           posts = await linkedinAdapter.fetchPosts(accessToken);
-          break;
-        case 'facebook':
-          if (record.page_id && record.extra_meta?.pageAccessToken) {
-            posts = await metaAdapter.fetchFacebookPosts(record.page_id, record.extra_meta.pageAccessToken);
-          }
-          break;
-        case 'instagram':
-          // Instagram media insights require a business account
-          posts = [];
           break;
         case 'x':
         case 'twitter':
@@ -83,20 +134,21 @@ export async function POST(
           posts = [];
       }
     } catch (fetchError: any) {
-      // Token might be expired — mark it
       if (fetchError.message?.includes('401') || fetchError.message?.includes('unauthorized')) {
-        await markTokenExpired(user.id, provider);
         return corsJsonResponse({ success: false, error: 'Token expired — please reconnect this account.', tokenExpired: true }, { status: 401 }, request);
       }
       throw fetchError;
     }
 
-    // Update last synced timestamp
-    await updateLastSynced(user.id, provider);
+    await supabase
+      .from('social_connections')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', targetConn.id);
 
     return corsJsonResponse({
       success: true,
       provider,
+      socialConnectionId: targetConn.id,
       postsCount: posts.length,
       posts,
       syncedAt: new Date().toISOString(),
