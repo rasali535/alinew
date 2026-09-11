@@ -17,8 +17,14 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const orgId = searchParams.get('orgId') || request.headers.get('x-organization-id') || 'org_demo';
+    const workspaceId = searchParams.get('workspaceId') || request.headers.get('x-workspace-id') || undefined;
+    const userId = searchParams.get('userId') || request.headers.get('x-user-id') || undefined;
 
-    const context = await BusinessContextService.assembleContext(orgId);
+    const context = await BusinessContextService.assembleContext(orgId, {
+      organizationId: orgId,
+      workspaceId,
+      userId,
+    });
     const websiteKnowledge = WebsiteIngestionService.getWebsiteKnowledge(orgId);
 
     const sources = [

@@ -260,7 +260,7 @@ const platformConfig: Record<string, { label: string; color: string; bg: string;
 const splineChartDates = ['Day 1', 'Day 5', 'Day 10', 'Day 15', 'Day 20', 'Day 25', 'Today'];
 
 function GrowthPageContent() {
-  const { organization, user } = useOrganization();
+  const { organization, workspace, user } = useOrganization();
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -390,12 +390,18 @@ function GrowthPageContent() {
     try {
       const { callMariAiApi, BusinessContextService } = await import('@ralion/ai');
       let activeOrgId = organization?.id || user?.orgId || user?.uid || '';
+      const activeWorkspaceId = workspace?.id || '';
+      const activeUserId = user?.uid || (user as any)?.id || '';
       if (typeof window !== 'undefined') {
         activeOrgId = activeOrgId || localStorage.getItem('ralion_org_id') || localStorage.getItem('ralion_workspace_id') || '';
       }
       let context = null;
       try {
-        context = await BusinessContextService.assembleContext(activeOrgId);
+        context = await BusinessContextService.assembleContext(activeOrgId, {
+          organizationId: activeOrgId,
+          workspaceId: activeWorkspaceId,
+          userId: activeUserId,
+        });
       } catch {}
 
       const orgName = context?.layer1?.companyName?.value || 'Your Business';

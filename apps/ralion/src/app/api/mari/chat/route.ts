@@ -4,6 +4,7 @@ import {
   MariUniversalCore,
   ChatHistoryTurn,
   BusinessContextService,
+  classifyCapabilityMode,
 } from '@ralion/ai';
 import { getCurrentRalionContext } from '../../../../lib/auth/serverAuth';
 
@@ -81,6 +82,8 @@ export async function POST(request: NextRequest) {
       return corsJsonResponse({ success: false, error: 'Query prompt is required' }, { status: 400 }, request);
     }
 
+    const cleanQuery = query.trim();
+
     const canonicalWorkspaceId = serverCtx.workspace.id;
     const canonicalTenantId = serverCtx.organization?.id || serverCtx.workspace.organization_id || serverCtx.workspace.id;
     const authenticatedUserId = serverCtx.user.id;
@@ -135,6 +138,46 @@ export async function POST(request: NextRequest) {
     });
     const companyName = resolvedIdentity.companyName || serverCtx.organization?.name || serverCtx.workspace?.name || '';
 
+    const requestId = body.requestId || `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // STEP 1: INTENT CLASSIFICATION ON EXACT ORIGINAL USER MESSAGE
+    // ─────────────────────────────────────────────────────────────────────────
+    const { mode: capabilityMode, intent: detectedIntent } = classifyCapabilityMode(cleanQuery);
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // STEP 2: GREETING SHORT-CIRCUIT (Before context, RAG, Facebook, Gemini, or credit deduction)
+    // ─────────────────────────────────────────────────────────────────────────
+    if (detectedIntent === 'GREETING') {
+      const greetingResult = await MariUniversalCore.processQuery({
+        prompt: cleanQuery,
+        originalUserPrompt: cleanQuery,
+        organizationId: orgId,
+        workspaceId,
+        userId: authenticatedUserId,
+        companyName,
+        activeScreen: body.activeScreen,
+        requestId,
+      });
+
+      return corsJsonResponse({
+        success: true,
+        answer: greetingResult.answer,
+        actionsSuggested: greetingResult.suggestedActions || [],
+        ragContext: null,
+        modelUsed: greetingResult.modelUsed,
+        detectedIntent: greetingResult.detectedIntent,
+        capabilityMode: greetingResult.capabilityMode,
+        responseSource: greetingResult.responseSource,
+        contextSources: greetingResult.contextSources || ['BusinessIdentityResolver'],
+        usage: greetingResult.usage,
+        usageRecordId: greetingResult.usageRecordId,
+        requestId: greetingResult.requestId,
+        tenantId: greetingResult.tenantId,
+        companyName: greetingResult.companyName,
+      }, undefined, request);
+    }
+
     console.log(JSON.stringify({
       level: 'INFO',
       type: 'TENANT_RESOLUTION',
@@ -145,9 +188,8 @@ export async function POST(request: NextRequest) {
       companyName: companyName || 'Unconfigured',
       isVerified: resolvedIdentity.isVerified,
       businessKnowledgeSource: resolvedIdentity.source,
+      detectedIntent,
     }));
-
-    const requestId = body.requestId || `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
     const rawHistory = body.messages || body.conversationHistory || [];
     const conversationHistory: ChatHistoryTurn[] = Array.isArray(rawHistory)
@@ -217,11 +259,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Assemble the tenant's verified business context for every conversation, including
-    // general/casual conversations. The prompt explicitly tells Mari to use it only when relevant.
+    // Assemble the tenant's verified business context with explicit canonical org, workspace, and user parameters
     let partnerContext: any = null;
     try {
       partnerContext = await BusinessContextService.assembleContext(orgId, {
+        organizationId: orgId,
+        workspaceId,
+        userId: authenticatedUserId,
         companyName,
         activeScreen: body.activeScreen,
         localOverrides,
@@ -230,10 +274,13 @@ export async function POST(request: NextRequest) {
       console.warn('[Mari Chat API] Partner context assembly notice:', ctxErr?.message);
     }
 
-    const partnerPrompt = buildPartnerPrompt(query.trim(), partnerContext, companyName);
+    const partnerPrompt = buildPartnerPrompt(cleanQuery, partnerContext, companyName);
 
     const result = await MariUniversalCore.processQuery({
-      prompt: partnerPrompt,
+      prompt: cleanQuery,
+      originalUserPrompt: cleanQuery,
+      contextualPrompt: partnerPrompt,
+      businessContext: partnerContext,
       organizationId: orgId,
       workspaceId,
       userId: authenticatedUserId,

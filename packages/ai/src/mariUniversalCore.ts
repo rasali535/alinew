@@ -53,6 +53,9 @@ export interface ChatHistoryTurn {
 
 export interface MariQueryRequest {
   prompt: string;
+  originalUserPrompt?: string;
+  contextualPrompt?: string;
+  businessContext?: BusinessContext;
   organizationId?: string;
   workspaceId?: string;
   userId?: string;
@@ -922,21 +925,25 @@ export class MariUniversalCore {
    * Universal query processor across ALL Ralion OS surfaces.
    */
   static async processQuery(request: MariQueryRequest): Promise<MariQueryResponse> {
-    const { prompt, organizationId, companyName: passedCompanyName, activeScreen, conversationHistory = [], localOverrides } = request;
-    const cleanPrompt = (prompt || '').trim();
+    const { prompt, originalUserPrompt, contextualPrompt, businessContext, organizationId, workspaceId, userId, companyName: passedCompanyName, activeScreen, conversationHistory = [], localOverrides } = request;
+
+    // Always preserve clean original prompt for classification, RAG, and short-circuit routing
+    const cleanOriginalPrompt = (originalUserPrompt || prompt || '').trim();
+    const cleanPromptForReasoning = (contextualPrompt || prompt || '').trim();
     const requestId = request.requestId || `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const orgId = organizationId || 'unconfigured-tenant';
 
     // 1. Resolve Canonical Business Identity
     const resolvedIdentity = BusinessIdentityResolver.resolveIdentity(orgId, {
+      workspaceId,
       sessionCompanyName: passedCompanyName,
     });
 
     let resolvedCompanyName = resolvedIdentity.companyName;
     let isVerified = resolvedIdentity.isVerified;
 
-    // 2. Classify Capability Mode & Semantic Intent
-    const { mode: capabilityMode, intent: detectedIntent } = classifyCapabilityMode(cleanPrompt);
+    // 2. Classify Capability Mode & Semantic Intent on original clean user prompt
+    const { mode: capabilityMode, intent: detectedIntent } = classifyCapabilityMode(cleanOriginalPrompt);
 
     // 2.5. Deterministic Greeting Short-Circuit (Zero Gemini calls, Zero credit deduction, Zero technical metadata)
     if (detectedIntent === 'GREETING') {
@@ -958,21 +965,34 @@ export class MariUniversalCore {
         companyName: resolvedCompanyName,
         isBusinessContextVerified: isVerified,
         usage: {
-          promptTokens: estimateTokenCount(cleanPrompt),
+          promptTokens: estimateTokenCount(cleanOriginalPrompt),
           completionTokens: estimateTokenCount(greetingText),
-          totalTokens: estimateTokenCount(cleanPrompt) + estimateTokenCount(greetingText),
+          totalTokens: estimateTokenCount(cleanOriginalPrompt) + estimateTokenCount(greetingText),
         },
         requestId,
       };
     }
 
-    // 3. Context Orchestration (Selective & Lazy)
-    let context: BusinessContext | null = null;
+    // 3. Context Orchestration (Selective & Lazy - Avoid duplicate assembly)
+    let context: BusinessContext | null = businessContext || null;
     let contextSourcesLoaded: string[] = [];
 
-    if (capabilityMode === 'BUSINESS' || capabilityMode === 'ACTION') {
+    if (context) {
+      if (context.layer1?.companyName?.value) {
+        resolvedCompanyName = context.layer1.companyName.value;
+        contextSourcesLoaded.push('BusinessIdentityResolver');
+      }
+      if (context.layer1?.websiteKnowledge?.value) contextSourcesLoaded.push('WebsiteKnowledge');
+      if (context.layer2?.crm?.isConnected) contextSourcesLoaded.push('CRM_Deals');
+      if (context.layer2?.social?.isConnected) contextSourcesLoaded.push('Facebook_Social');
+      if (context.layer2?.operations) contextSourcesLoaded.push('Workspace_Operations');
+      isVerified = Boolean(context.layer1?.companyName?.provenance === 'VERIFIED');
+    } else if (capabilityMode === 'BUSINESS' || capabilityMode === 'ACTION') {
       try {
         context = await BusinessContextService.assembleContext(orgId, {
+          organizationId: orgId,
+          workspaceId,
+          userId,
           companyName: resolvedCompanyName,
           activeScreen,
           localOverrides,
@@ -996,7 +1016,7 @@ export class MariUniversalCore {
     // 4. RAG Knowledge Search (strictly scoped to tenant orgId)
     let ragContext: string | null = null;
     try {
-      const rag = mariKnowledgeManager.searchKnowledgeBase(cleanPrompt, orgId);
+      const rag = mariKnowledgeManager.searchKnowledgeBase(cleanOriginalPrompt, orgId);
       if (rag && !rag.includes('No matching')) {
         ragContext = rag;
       }
@@ -1008,7 +1028,7 @@ export class MariUniversalCore {
         TenantCreditsService.deductCredits(
           orgId,
           CREDIT_COSTS.MARI_STRATEGY,
-          `Mari AI Reasoning: ${cleanPrompt.substring(0, 32)}...`,
+          `Mari AI Reasoning: ${cleanOriginalPrompt.substring(0, 32)}...`,
           {
             sourceFeature: 'MARI_CHAT',
             correlationId: requestId,
@@ -1050,7 +1070,7 @@ export class MariUniversalCore {
 
     if (!request.forceLocalOnly) {
       const geminiResult = await callGeminiNeuralCore(
-        cleanPrompt,
+        cleanPromptForReasoning,
         context,
         conversationHistory,
         capabilityMode,
@@ -1084,13 +1104,13 @@ export class MariUniversalCore {
 
     // 6. Fallback if Gemini is not available or returned empty
     if (!answerText) {
-      const fallback = generateLocalStrategicFallback(cleanPrompt, context, capabilityMode, detectedIntent);
+      const fallback = generateLocalStrategicFallback(cleanOriginalPrompt, context, capabilityMode, detectedIntent);
       answerText = fallback.text;
       suggestedActions = fallback.suggestedActions;
       responseSource = 'local_grounded';
       modelUsed = 'Mari Strategic Growth Engine (mari-growth-partner)';
 
-      const pTokens = estimateTokenCount(cleanPrompt);
+      const pTokens = estimateTokenCount(cleanOriginalPrompt);
       const cTokens = estimateTokenCount(answerText);
       usage = {
         promptTokens: pTokens,

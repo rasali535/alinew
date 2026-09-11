@@ -87,7 +87,7 @@ interface ChatMessage {
 export default function MariAiPage() {
   const router = useRouter();
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { organization, user, isLoading: isOrganizationLoading } = useOrganization();
+  const { organization, workspace, user, isLoading: isOrganizationLoading } = useOrganization();
 
   // Active view tab
   const [activeTab, setActiveTab] = useState<'GROWTH_PARTNER' | 'KNOWLEDGE' | 'ADMIN_INFRA'>('GROWTH_PARTNER');
@@ -123,6 +123,8 @@ export default function MariAiPage() {
   const [websiteInputUrl, setWebsiteInputUrl] = useState('');
 
   const activeOrgId = organization?.id || '';
+  const activeWorkspaceId = workspace?.id || '';
+  const activeUserId = user?.uid || (user as any)?.id || '';
   const hasCanonicalTenant = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(activeOrgId);
 
   // Load Business Context, Growth Profile, and Briefing on Mount
@@ -149,7 +151,9 @@ export default function MariAiPage() {
         const rawD = localStorage.getItem(`ralion:${activeOrgId}:documents`) || localStorage.getItem('ralion_documents');
         if (rawD) savedDocs = JSON.parse(rawD);
 
-        const rawP = activeOrgId ? localStorage.getItem(`ralion:${activeOrgId}:selected_fb_page`) : null;
+        const rawP = activeWorkspaceId
+          ? localStorage.getItem(`ralion:${activeOrgId}:${activeWorkspaceId}:selected_fb_page`) || localStorage.getItem(`ralion:${activeOrgId}:selected_fb_page`)
+          : (activeOrgId ? localStorage.getItem(`ralion:${activeOrgId}:selected_fb_page`) : null);
         if (rawP) savedFbPage = JSON.parse(rawP);
       }
 
@@ -162,7 +166,7 @@ export default function MariAiPage() {
             headers: {
               ...authHeaders,
               'x-organization-id': activeOrgId,
-              'x-workspace-id': activeOrgId,
+              'x-workspace-id': activeWorkspaceId || activeOrgId,
             },
             credentials: 'include',
           });
@@ -176,6 +180,9 @@ export default function MariAiPage() {
       }
 
       const context = await BusinessContextService.assembleContext(activeOrgId, {
+        organizationId: activeOrgId,
+        workspaceId: activeWorkspaceId,
+        userId: activeUserId,
         activeScreen: { route: '/mari-ai', label: 'Mari Business Growth Partner' },
         forceRefresh,
         localOverrides: {
@@ -467,7 +474,12 @@ export default function MariAiPage() {
 
         let activeCtx = businessContext;
         if (!activeCtx || !activeCtx.layer1.websiteKnowledge?.value || !activeCtx.layer2.social?.isConnected) {
-          activeCtx = await BusinessContextService.assembleContext(activeOrgId, { forceRefresh: true });
+          activeCtx = await BusinessContextService.assembleContext(activeOrgId, {
+            organizationId: activeOrgId,
+            workspaceId: activeWorkspaceId,
+            userId: activeUserId,
+            forceRefresh: true,
+          });
           setBusinessContext(activeCtx);
         }
 

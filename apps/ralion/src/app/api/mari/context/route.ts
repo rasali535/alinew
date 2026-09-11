@@ -41,10 +41,15 @@ export async function POST(request: NextRequest) {
     }
 
     const orgId = canonicalOrgId;
+    const workspaceId = serverCtx?.workspace?.id || body.workspaceId;
+    const userId = serverCtx?.user?.id || body.userId;
     const activeScreen = body.activeScreen;
     const forceRefresh = Boolean(body.forceRefresh);
 
     const context = await BusinessContextService.assembleContext(orgId, {
+      organizationId: orgId,
+      workspaceId,
+      userId,
       activeScreen,
       forceRefresh,
       localOverrides: body.localOverrides,

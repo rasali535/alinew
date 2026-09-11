@@ -97,6 +97,8 @@ export interface MariCreditsUsage {
 
 export interface BusinessContext {
   organizationId: string;
+  workspaceId?: string;
+  userId?: string;
   organizationName: string;
   isTestTenant: boolean;
   version: string;
@@ -161,7 +163,7 @@ export class BusinessContextService {
    */
   static registerTenantProfile(orgId: string, profile: TenantProfileOverride) {
     tenantProfileRegistry.set(orgId, profile);
-    delete contextCache[orgId];
+    this.invalidateContext(orgId);
   }
 
   /**
@@ -173,11 +175,30 @@ export class BusinessContextService {
 
   /**
    * Invalidates cached business context for a tenant or purges all caches.
+   * Safely supports composite tenant keys (organizationId + workspaceId + userId).
    */
-  static invalidateContext(orgId?: string) {
+  static invalidateContext(orgId?: string, workspaceId?: string, userId?: string) {
     if (orgId) {
-      delete contextCache[orgId];
-      delete contextCache[orgId.toLowerCase()];
+      const targetOrg = orgId.toLowerCase().trim();
+      const targetWs = workspaceId ? workspaceId.toLowerCase().trim() : null;
+      const targetUser = userId ? userId.toLowerCase().trim() : null;
+
+      for (const k of Object.keys(contextCache)) {
+        const parts = k.toLowerCase().split('::');
+        const kOrg = parts[0];
+        const kWs = parts[1] || '';
+        const kUser = parts[2] || '';
+
+        if (kOrg === targetOrg || k.toLowerCase() === targetOrg) {
+          if (targetWs && kWs !== targetWs && kWs !== 'no-workspace') {
+            continue;
+          }
+          if (targetUser && kUser !== targetUser && kUser !== 'no-user') {
+            continue;
+          }
+          delete contextCache[k];
+        }
+      }
     } else {
       Object.keys(contextCache).forEach((k) => delete contextCache[k]);
     }
@@ -216,9 +237,13 @@ export class BusinessContextService {
       };
     }
   ): Promise<BusinessContext> {
-    const cleanOrgId = (orgId || '').trim() || 'unconfigured-tenant';
+    const cleanOrgId = (options?.organizationId || orgId || '').trim() || 'unconfigured-tenant';
+    const effectiveWsId = (options?.workspaceId || '').trim() || 'no-workspace';
+    const effectiveUserId = (options?.userId || '').trim() || 'no-user';
+    const cacheKey = `${cleanOrgId}::${effectiveWsId}::${effectiveUserId}`;
+
     const now = Date.now();
-    const cached = contextCache[cleanOrgId];
+    const cached = contextCache[cacheKey];
 
     if (!options?.forceRefresh && !options?.localOverrides && cached && (now - cached.cachedAt < CACHE_TTL_MS)) {
       if (options?.activeScreen) {
@@ -247,16 +272,23 @@ export class BusinessContextService {
     let fbPage = options?.localOverrides?.fbPage;
 
     // Tenant-isolated localStorage validation. Never read a global Facebook-page key.
+    // Requires exact canonical organization and workspace match.
     if (!fbPage && typeof window !== 'undefined' && window.localStorage) {
       try {
-        const rawP = window.localStorage.getItem(`ralion:${cleanOrgId}:selected_fb_page`);
+        const wsId = options?.workspaceId;
+        const wsStorageKey = wsId ? `ralion:${cleanOrgId}:${wsId}:selected_fb_page` : null;
+        const orgStorageKey = `ralion:${cleanOrgId}:selected_fb_page`;
+
+        const rawP = (wsStorageKey ? window.localStorage.getItem(wsStorageKey) : null) || window.localStorage.getItem(orgStorageKey);
         if (rawP) {
           const parsedP = JSON.parse(rawP);
-          // STRICT SECURITY: Only accept if explicitly tagged for this organization / workspace
-          if (
-            parsedP &&
-            (parsedP.organizationId === cleanOrgId || parsedP.workspaceId === cleanOrgId || parsedP.userId === cleanOrgId)
-          ) {
+          // STRICT SECURITY: Require exact canonical organization and workspace match.
+          // Do not compare every identifier only against cleanOrgId.
+          const orgMatches = !parsedP.organizationId || parsedP.organizationId === cleanOrgId;
+          const wsMatches = !wsId || !parsedP.workspaceId || parsedP.workspaceId === wsId;
+          const userMatches = !options?.userId || !parsedP.userId || parsedP.userId === options.userId;
+
+          if (parsedP && orgMatches && wsMatches && userMatches) {
             fbPage = parsedP;
           }
         }
@@ -704,6 +736,8 @@ export class BusinessContextService {
 
     const context: BusinessContext = {
       organizationId: cleanOrgId,
+      workspaceId: options?.workspaceId,
+      userId: options?.userId,
       organizationName: orgName,
       isTestTenant: isTest,
       version: versionStr,
@@ -720,7 +754,7 @@ export class BusinessContextService {
     };
 
     if (!options?.localOverrides) {
-      contextCache[cleanOrgId] = {
+      contextCache[cacheKey] = {
         context,
         cachedAt: now,
         version: this.versionCounter,

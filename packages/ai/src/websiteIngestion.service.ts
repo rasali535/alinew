@@ -121,7 +121,7 @@ const RAS_ALI_LABS_VERIFIED_WEBSITE: IngestedWebsiteKnowledge = {
         'Delivering intelligent platforms, cinematic productions, digital experiences and original sound',
         'Developer of flagship product Ralion OS',
       ],
-      ingestedAt: new Date().toISOString(),
+      ingestedAt: '2026-09-01T00:00:00.000Z',
     },
     {
       id: 'ws-2',
@@ -135,7 +135,7 @@ const RAS_ALI_LABS_VERIFIED_WEBSITE: IngestedWebsiteKnowledge = {
         'AI & Automation Systems: Intelligent business automation, custom AI integrations, workflow automation',
         'Ralion OS: Flagship AI business operating system with CRM, documents, task orchestration, and Mari AI',
       ],
-      ingestedAt: new Date().toISOString(),
+      ingestedAt: '2026-09-01T00:00:00.000Z',
     },
     {
       id: 'ws-3',
@@ -147,7 +147,7 @@ const RAS_ALI_LABS_VERIFIED_WEBSITE: IngestedWebsiteKnowledge = {
         'High production quality across film, audio, web, and AI systems',
         'Flagship software Ralion OS empowering modern business operations',
       ],
-      ingestedAt: new Date().toISOString(),
+      ingestedAt: '2026-09-01T00:00:00.000Z',
     },
     {
       id: 'ws-4',
@@ -159,7 +159,7 @@ const RAS_ALI_LABS_VERIFIED_WEBSITE: IngestedWebsiteKnowledge = {
         'Mari AI strategic growth partner and intelligence engine',
         'Growth Studio for automated creative production and multichannel broadcasting',
       ],
-      ingestedAt: new Date().toISOString(),
+      ingestedAt: '2026-09-01T00:00:00.000Z',
     },
     {
       id: 'ws-5',
@@ -172,7 +172,7 @@ const RAS_ALI_LABS_VERIFIED_WEBSITE: IngestedWebsiteKnowledge = {
         'Email: contact@rasalilabs.com',
         'Website: https://www.rasalilabs.com',
       ],
-      ingestedAt: new Date().toISOString(),
+      ingestedAt: '2026-09-01T00:00:00.000Z',
     },
   ],
 };

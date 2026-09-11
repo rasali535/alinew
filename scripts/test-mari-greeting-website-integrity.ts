@@ -193,65 +193,169 @@ async function main() {
     assert(!JSON.stringify(pameltexCtx.layer1.productsAndServices).includes('Film & Creative Production'), 'Pameltex must not contain Ras Ali products');
   });
 
-  await runTest('Two UUID-backed workspaces cannot retrieve each other\'s website or Facebook context', async () => {
-    const wsA = 'aaaaaaaa-1111-4000-8000-aaaaaaaaaaaa';
-    const wsB = 'bbbbbbbb-2222-4000-8000-bbbbbbbbbbbb';
-    const orgA = 'org-tenant-alpha-uuid';
-    const orgB = 'org-tenant-beta-uuid';
+  await runTest('Workspace-level isolation within single organization & user prevents website, Facebook, product, and cache leakage', async () => {
+    // 1 Organization, 1 User, 2 distinct UUID Workspaces
+    const canonicalOrgId = 'e4a91b2c-3333-4444-8888-123456789abc';
+    const canonicalUserId = 'u_canonical_user_9999_8888_7777';
+    const wsAlpha = 'aaaaaaaa-1111-4000-8000-aaaaaaaaaaaa';
+    const wsBeta = 'bbbbbbbb-2222-4000-8000-bbbbbbbbbbbb';
 
-    // Ingest custom website knowledge for Workspace A
-    WebsiteIngestionService.registerLiveWebsiteKnowledge(wsA, {
-      url: 'https://alpha-security.example.com',
-      companyName: 'Alpha Security Systems',
-      description: 'CCTV and biometrics specialist',
-      headings: ['Home', 'Surveillance Systems'],
-      services: ['CCTV Installation', 'Biometric Access'],
-      products: ['AlphaCam 4K'],
-      contactEmail: 'info@alpha-security.example.com',
-      source: 'LIVE_INGESTED',
-    });
+    // Mock browser localStorage to hold workspace-scoped Facebook Page fixtures
+    const mockStorage: Record<string, string> = {};
+    const originalWindow = (global as any).window;
+    (global as any).window = {
+      localStorage: {
+        getItem: (k: string) => mockStorage[k] || null,
+        setItem: (k: string, v: string) => { mockStorage[k] = v; },
+        removeItem: (k: string) => { delete mockStorage[k]; },
+      },
+    };
 
-    // Ingest custom website knowledge for Workspace B
-    WebsiteIngestionService.registerLiveWebsiteKnowledge(wsB, {
-      url: 'https://beta-bakery.example.com',
-      companyName: 'Beta Artisan Bakery',
-      description: 'Handcrafted sourdough and pastries',
-      headings: ['Menu', 'Pastries'],
-      services: ['Custom Wedding Cakes'],
-      products: ['Sourdough Loaf'],
-      contactEmail: 'order@beta-bakery.example.com',
-      source: 'LIVE_INGESTED',
-    });
+    try {
+      // Ingest distinct website knowledge for Workspace Alpha
+      WebsiteIngestionService.registerLiveWebsiteKnowledge(wsAlpha, {
+        url: 'https://alpha-solar.example.com',
+        companyName: 'Alpha Solar Dynamics',
+        description: 'Commercial solar engineering and battery storage solutions',
+        headings: ['Home', 'Solar Arrays', 'Industrial Inverters'],
+        services: ['Commercial Solar EPC', 'Microgrid Deployment'],
+        products: ['SolarMax 500W Array', 'InverterGrid 50kVA'],
+        contactEmail: 'energy@alpha-solar.example.com',
+        source: 'LIVE_INGESTED',
+      });
 
-    // Assemble context for Workspace A
-    const ctxA = await BusinessContextService.assembleContext(orgA, {
-      workspaceId: wsA,
-      organizationId: orgA,
-    });
+      // Ingest distinct website knowledge for Workspace Beta
+      WebsiteIngestionService.registerLiveWebsiteKnowledge(wsBeta, {
+        url: 'https://beta-logistics.example.com',
+        companyName: 'Beta Cold Logistics',
+        description: 'Refrigerated logistics and cold storage freight transport',
+        headings: ['Services', 'Cold Storage Fleet'],
+        services: ['Cold Chain Freight', 'Temperature Controlled Warehousing'],
+        products: ['ColdBox 20ft Reefer', 'ThermoTracker Sensor'],
+        contactEmail: 'dispatch@beta-logistics.example.com',
+        source: 'LIVE_INGESTED',
+      });
 
-    // Assemble context for Workspace B
-    const ctxB = await BusinessContextService.assembleContext(orgB, {
-      workspaceId: wsB,
-      organizationId: orgB,
-    });
+      // Store distinct Facebook Page fixtures keyed to each canonical workspace
+      mockStorage[`ralion:${canonicalOrgId}:${wsAlpha}:selected_fb_page`] = JSON.stringify({
+        id: 'fb-page-alpha',
+        pageId: '1001001001',
+        name: 'Alpha Solar Official',
+        username: '@alphasolar',
+        category: 'Solar Energy Company',
+        followersCount: 12500,
+        about: 'Clean solar power for commercial enterprises across Southern Africa.',
+        description: 'Clean solar power for commercial enterprises across Southern Africa.',
+        website: 'https://alpha-solar.example.com',
+        status: 'CONNECTED',
+        organizationId: canonicalOrgId,
+        workspaceId: wsAlpha,
+        userId: canonicalUserId,
+      });
 
-    // Verify Workspace A gets ONLY Alpha data and zero Beta data
-    assert.strictEqual(ctxA.layer1.companyName.value, 'Alpha Security Systems');
-    assert.strictEqual(ctxA.layer1.websiteUrl?.value, 'https://alpha-security.example.com');
-    assert(JSON.stringify(ctxA.layer1.productsAndServices).includes('AlphaCam 4K'));
-    assert(!JSON.stringify(ctxA.layer1.productsAndServices).includes('Sourdough Loaf'), 'Workspace A must not contain Beta products');
-    assert(!JSON.stringify(ctxA).includes('beta-bakery.example.com'), 'Workspace A must not contain Beta domain');
+      mockStorage[`ralion:${canonicalOrgId}:${wsBeta}:selected_fb_page`] = JSON.stringify({
+        id: 'fb-page-beta',
+        pageId: '2002002002',
+        name: 'Beta Freight Solutions',
+        username: '@betafreight',
+        category: 'Freight & Logistics',
+        followersCount: 4300,
+        about: 'Cold chain refrigerated delivery and regional freight forwarding.',
+        description: 'Cold chain refrigerated delivery and regional freight forwarding.',
+        website: 'https://beta-logistics.example.com',
+        status: 'CONNECTED',
+        organizationId: canonicalOrgId,
+        workspaceId: wsBeta,
+        userId: canonicalUserId,
+      });
 
-    // Verify Workspace B gets ONLY Beta data and zero Alpha data
-    assert.strictEqual(ctxB.layer1.companyName.value, 'Beta Artisan Bakery');
-    assert.strictEqual(ctxB.layer1.websiteUrl?.value, 'https://beta-bakery.example.com');
-    assert(JSON.stringify(ctxB.layer1.productsAndServices).includes('Sourdough Loaf'));
-    assert(!JSON.stringify(ctxB.layer1.productsAndServices).includes('AlphaCam 4K'), 'Workspace B must not contain Alpha products');
-    assert(!JSON.stringify(ctxB).includes('alpha-security.example.com'), 'Workspace B must not contain Alpha domain');
+      // Clear any prior caches
+      BusinessContextService.invalidateContext(canonicalOrgId);
 
-    // Verify Source Tagging on Live Ingested
-    assert.strictEqual(ctxA.layer1.websiteUrl?.source, 'LIVE_INGESTED');
-    assert.strictEqual(ctxB.layer1.websiteUrl?.source, 'LIVE_INGESTED');
+      // ── TURN 1: Request Workspace Alpha (Populates Alpha Cache) ─────────────────
+      const ctxAlphaTurn1 = await BusinessContextService.assembleContext(canonicalOrgId, {
+        organizationId: canonicalOrgId,
+        workspaceId: wsAlpha,
+        userId: canonicalUserId,
+      });
+
+      // Assert Workspace Alpha has Alpha data only
+      assert.strictEqual(ctxAlphaTurn1.workspaceId, wsAlpha);
+      assert.strictEqual(ctxAlphaTurn1.layer1.companyName.value, 'Alpha Solar Dynamics');
+      assert.strictEqual(ctxAlphaTurn1.layer1.websiteUrl?.value, 'https://alpha-solar.example.com');
+      assert.strictEqual(ctxAlphaTurn1.layer2.social.connectedPageName.value, 'Alpha Solar Official');
+      assert(JSON.stringify(ctxAlphaTurn1.layer1.productsAndServices).includes('SolarMax 500W Array'));
+      assert(!JSON.stringify(ctxAlphaTurn1).includes('beta-logistics.example.com'), 'Alpha context must NOT leak Beta website');
+      assert(!JSON.stringify(ctxAlphaTurn1).includes('Beta Freight Solutions'), 'Alpha context must NOT leak Beta Facebook page');
+      assert(!JSON.stringify(ctxAlphaTurn1).includes('ColdBox 20ft Reefer'), 'Alpha context must NOT leak Beta products');
+
+      // ── TURN 2: Request Workspace Beta (Populates Beta Cache) ──────────────────
+      const ctxBetaTurn1 = await BusinessContextService.assembleContext(canonicalOrgId, {
+        organizationId: canonicalOrgId,
+        workspaceId: wsBeta,
+        userId: canonicalUserId,
+      });
+
+      // Assert Workspace Beta has Beta data only
+      assert.strictEqual(ctxBetaTurn1.workspaceId, wsBeta);
+      assert.strictEqual(ctxBetaTurn1.layer1.companyName.value, 'Beta Cold Logistics');
+      assert.strictEqual(ctxBetaTurn1.layer1.websiteUrl?.value, 'https://beta-logistics.example.com');
+      assert.strictEqual(ctxBetaTurn1.layer2.social.connectedPageName.value, 'Beta Freight Solutions');
+      assert(JSON.stringify(ctxBetaTurn1.layer1.productsAndServices).includes('ColdBox 20ft Reefer'));
+      assert(!JSON.stringify(ctxBetaTurn1).includes('alpha-solar.example.com'), 'Beta context must NOT leak Alpha website');
+      assert(!JSON.stringify(ctxBetaTurn1).includes('Alpha Solar Official'), 'Beta context must NOT leak Alpha Facebook page');
+      assert(!JSON.stringify(ctxBetaTurn1).includes('SolarMax 500W Array'), 'Beta context must NOT leak Alpha products');
+
+      // ── TURN 3: Alternating Request Workspace Alpha WITHOUT forceRefresh (Cache Hit) ──
+      const ctxAlphaTurn2 = await BusinessContextService.assembleContext(canonicalOrgId, {
+        organizationId: canonicalOrgId,
+        workspaceId: wsAlpha,
+        userId: canonicalUserId,
+      });
+
+      // Assert Alpha cache hit returns intact Alpha context with zero Beta contamination
+      assert.strictEqual(ctxAlphaTurn2.version, ctxAlphaTurn1.version, 'Alpha must be served from composite cache');
+      assert.strictEqual(ctxAlphaTurn2.layer1.companyName.value, 'Alpha Solar Dynamics');
+      assert.strictEqual(ctxAlphaTurn2.layer2.social.connectedPageName.value, 'Alpha Solar Official');
+      assert(!JSON.stringify(ctxAlphaTurn2).includes('beta-logistics.example.com'), 'Cached Alpha context must NOT contain Beta website');
+      assert(!JSON.stringify(ctxAlphaTurn2).includes('Beta Freight Solutions'), 'Cached Alpha context must NOT contain Beta Facebook page');
+      assert(!JSON.stringify(ctxAlphaTurn2).includes('ColdBox 20ft Reefer'), 'Cached Alpha context must NOT contain Beta products');
+
+      // ── TURN 4: Alternating Request Workspace Beta WITHOUT forceRefresh (Cache Hit) ──
+      const ctxBetaTurn2 = await BusinessContextService.assembleContext(canonicalOrgId, {
+        organizationId: canonicalOrgId,
+        workspaceId: wsBeta,
+        userId: canonicalUserId,
+      });
+
+      // Assert Beta cache hit returns intact Beta context with zero Alpha contamination
+      assert.strictEqual(ctxBetaTurn2.version, ctxBetaTurn1.version, 'Beta must be served from composite cache');
+      assert.strictEqual(ctxBetaTurn2.layer1.companyName.value, 'Beta Cold Logistics');
+      assert.strictEqual(ctxBetaTurn2.layer2.social.connectedPageName.value, 'Beta Freight Solutions');
+      assert(!JSON.stringify(ctxBetaTurn2).includes('alpha-solar.example.com'), 'Cached Beta context must NOT contain Alpha website');
+      assert(!JSON.stringify(ctxBetaTurn2).includes('Alpha Solar Official'), 'Cached Beta context must NOT contain Alpha Facebook page');
+      assert(!JSON.stringify(ctxBetaTurn2).includes('SolarMax 500W Array'), 'Cached Beta context must NOT contain Alpha products');
+
+      // ── TURN 5: Invalidate only Workspace Alpha, verify Workspace Beta remains cached ──
+      BusinessContextService.invalidateContext(canonicalOrgId, wsAlpha, canonicalUserId);
+
+      const ctxBetaTurn3 = await BusinessContextService.assembleContext(canonicalOrgId, {
+        organizationId: canonicalOrgId,
+        workspaceId: wsBeta,
+        userId: canonicalUserId,
+      });
+      assert.strictEqual(ctxBetaTurn3.version, ctxBetaTurn1.version, 'Beta cache must remain intact when Alpha is invalidated');
+
+      const ctxAlphaTurn3 = await BusinessContextService.assembleContext(canonicalOrgId, {
+        organizationId: canonicalOrgId,
+        workspaceId: wsAlpha,
+        userId: canonicalUserId,
+      });
+      assert.notStrictEqual(ctxAlphaTurn3.version, ctxAlphaTurn1.version, 'Alpha must be reassembled after invalidation');
+      assert.strictEqual(ctxAlphaTurn3.layer1.companyName.value, 'Alpha Solar Dynamics');
+    } finally {
+      (global as any).window = originalWindow;
+    }
   });
 
   // ─────────────────────────────────────────────────────────────────────────
