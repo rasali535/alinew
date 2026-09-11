@@ -193,10 +193,12 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
                   onClick={() => {
                     if (typeof window !== 'undefined') {
                       const cleanPrompt = msg.text
+                        .replace(/<svg[\s\S]*?<\/svg>/gi, '')
                         .replace(/!\[.*?\]\(.*?\)/g, '')
                         .replace(/[*#_`]/g, '')
                         .replace(/^(Social & Channel Intelligence|Good day!|Based on your|Here is|I recommend)[^\n]*\n+/gi, '')
                         .replace(/\[.*?\]/g, '')
+                        .replace(/\bsvg[A-Za-z0-9 ]*/gi, '')
                         .replace(/\s+/g, ' ')
                         .trim()
                         .substring(0, 280);

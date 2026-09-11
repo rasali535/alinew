@@ -73,13 +73,17 @@ export class BusinessIdentityResolver {
     if (isRasAli) {
       const rawProducts = [
         ...(profile?.products?.value || [
-          { name: 'Ralion OS Core', category: 'Platform' },
-          { name: 'Mari AI Command Center', category: 'AI Intelligence' },
-          { name: 'Ralion Growth Studio', category: 'Marketing' },
+          { name: 'Film & Creative Production', category: 'Creative & Video Production' },
+          { name: 'Web & App Development', category: 'Software & Digital Platforms' },
+          { name: 'Music Production & Audio', category: 'Audio Engineering & Composition' },
+          { name: 'AI & Automation Systems', category: 'Artificial Intelligence & Workflow Automation' },
+          { name: 'Ralion OS', category: 'Flagship AI Business Operating System' },
         ]),
         ...(profile?.services?.value || [
-          { name: 'Enterprise Cloud Deployment', category: 'Infrastructure' },
-          { name: 'Custom AI Agent Engineering', category: 'AI Services' },
+          { name: 'Film & Creative Production', category: 'Creative Production' },
+          { name: 'Web & App Development', category: 'Software Engineering' },
+          { name: 'Music Production & Audio', category: 'Sound Design & Scoring' },
+          { name: 'AI & Automation Systems', category: 'Automation Engineering' },
         ]),
       ];
 
@@ -88,17 +92,17 @@ export class BusinessIdentityResolver {
         workspaceId: options?.workspaceId || '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf',
         companyName: 'Ras Ali Labs',
         isVerified: true,
-        industry: profile?.industry?.value || 'Enterprise Software, B2B SaaS & Industrial Intelligence',
+        industry: profile?.industry?.value || 'Technology, Creative Production & Intelligent Software',
         targetMarket: (profile?.targetMarkets?.value && profile.targetMarkets.value.length > 0)
           ? profile.targetMarkets.value.join(', ')
-          : 'SADC Mid-Market & Enterprise B2B, Healthcare Providers, Freight & Logistics Corridors',
+          : 'Businesses, Brands, Creative Organizations, and Growth Enterprises',
         valueProposition: (profile?.valuePropositions?.value && profile.valuePropositions.value.length > 0)
           ? profile.valuePropositions.value.join('; ')
-          : 'Sovereign business automation and enterprise intelligence OS',
-        tagline: profile?.tagline?.value || 'Sovereign Business Operating Intelligence for Modern Enterprises',
+          : 'Multidisciplinary fusion of creative production, cinematic media, and intelligent software engineering',
+        tagline: profile?.tagline?.value || 'Intelligent Platforms, Cinematic Productions, Digital Experiences and Original Sound',
         websiteUrl: 'https://www.rasalilabs.com',
         productsAndServices: rawProducts,
-        brandVoice: profile?.brandVoice?.value || 'Authoritative, innovative, precise, enterprise-grade',
+        brandVoice: profile?.brandVoice?.value || 'Visionary, Creative, Authoritative, Technologically Sophisticated',
         source: 'REGISTERED_PROFILE',
       };
     }

@@ -36,9 +36,16 @@ export function normalizeMarkdownText(raw: string): string {
     .replace(/<\/?path[^>]*>/gi, '')
     .replace(/<\/?rect[^>]*>/gi, '')
     .replace(/<\/?circle[^>]*>/gi, '')
+    .replace(/\bsvgSend to Studio\b/gi, '')
     .replace(/svgSend to Studio/gi, '')
     .replace(/svg[A-Za-z0-9 ]*Send to Studio/gi, '')
-    .replace(/\bsvg[A-Z][a-zA-Z0-9 ]*/g, '');
+    .replace(/\bsvg[A-Z][a-zA-Z0-9 ]*/g, '')
+    .replace(/(?:^|\s)svg(?:\s|$)/g, ' ');
+
+  // 2.5. Normalize malformed bold bullet tokens like "**•**Source**" or "**•**"
+  text = text.replace(/\*\*•\*\*\s*([^*\n]+?)\*\*/g, '• **$1**');
+  text = text.replace(/\*\*•\*\*/g, '•');
+  text = text.replace(/\*\*([-•*])\*\*/g, '$1');
 
   // 3. Fix malformed bold markers:
   // Normalize "**:**" -> "**:"
@@ -56,25 +63,25 @@ export function normalizeMarkdownText(raw: string): string {
     let l = line.trimEnd();
 
     // Matches: "- **•**", "- •", "* •", "• •", "- *", "- -", "• -", "• **•**", etc.
-    if (/^\s*(?:[-*•]\s*)*(?:\*\*[•\-*]\*\*\s*)+/i.test(l)) {
-      l = l.replace(/^\s*(?:[-*•]\s*)*(?:\*\*[•\-*]\*\*\s*)+/i, '• ');
-    } else if (/^\s*(?:[•\-*]\s*){2,}/.test(l)) {
-      l = l.replace(/^\s*(?:[•\-*]\s*){2,}/, '• ');
-    } else if (/^\s*[-*]\s+/.test(l)) {
-      l = l.replace(/^\s*[-*]\s+/, '• ');
+    if (/^\s*(?:(?:•|-|\*(?!\*))\s*)*(?:\*\*(?:•|-|\*(?!\*))\*\*\s*)+/i.test(l)) {
+      l = l.replace(/^\s*(?:(?:•|-|\*(?!\*))\s*)*(?:\*\*(?:•|-|\*(?!\*))\*\*\s*)+/i, '• ');
+    } else if (/^\s*(?:(?:•|-|\*(?!\*))\s*){2,}/.test(l)) {
+      l = l.replace(/^\s*(?:(?:•|-|\*(?!\*))\s*){2,}/, '• ');
+    } else if (/^\s*(?:-|\*(?!\*))\s+/.test(l)) {
+      l = l.replace(/^\s*(?:-|\*(?!\*))\s+/, '• ');
     }
 
     // Clean up single unclosed bold at line start like "• Key**: Value" -> "• **Key**: Value"
-    if (/^(\s*•\s*)([A-Za-z0-9 /_&–-]+)\*\*:\s*/.test(l)) {
-      l = l.replace(/^(\s*•\s*)([A-Za-z0-9 /_&–-]+)\*\*:\s*/, '$1**$2**: ');
-    } else if (/^([A-Za-z0-9 /_&–-]+)\*\*:\s*/.test(l)) {
-      l = l.replace(/^([A-Za-z0-9 /_&–-]+)\*\*:\s*/, '**$1**: ');
+    if (/^(\s*•\s*)([A-Za-z0-9 /_&–\-]+)\*\*:\s*/.test(l)) {
+      l = l.replace(/^(\s*•\s*)([A-Za-z0-9 /_&–\-]+)\*\*:\s*/, '$1**$2**: ');
+    } else if (/^([A-Za-z0-9 /_&–\-]+)\*\*:\s*/.test(l)) {
+      l = l.replace(/^([A-Za-z0-9 /_&–\-]+)\*\*:\s*/, '**$1**: ');
     }
 
     // Clean up any lingering bullet inside bold right at the start of bullet item:
     // e.g. "• **• Post title**" -> "• **Post title**"
     // e.g. "• **• [8/30/2026]**" -> "• **[8/30/2026]**"
-    l = l.replace(/^•\s*\*\*[•\-*]\s*/, '• **');
+    l = l.replace(/^•\s*\*\*(?:•|-|\*(?!\*))\s*/, '• **');
 
     // Clean date formatting like *[8/30/2026]* -> **[8/30/2026]**
     l = l.replace(/^•\s*\*(\[\d{1,2}\/\d{1,2}\/\d{2,4}\])\*/, '• **$1**');

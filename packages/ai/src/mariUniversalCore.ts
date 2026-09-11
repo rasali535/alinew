@@ -93,7 +93,7 @@ export function classifyCapabilityMode(prompt: string, context?: BusinessContext
   const p = prompt.toLowerCase().trim();
 
   // 1. Standalone Greeting
-  if (/^(hello|hi|hey|good\s+(morning|afternoon|evening)|greetings)[\s!.]*$/i.test(p)) {
+  if (/^(hello|hi|hey|good\s+(morning|afternoon|evening)|greetings|howdy)(\s+(there|mari|ai))?[\s!.,👋]*$/i.test(p)) {
     return { mode: 'BUSINESS', intent: 'GREETING', requestedSource: 'GENERAL' };
   }
 
@@ -128,7 +128,7 @@ export function classifyCapabilityMode(prompt: string, context?: BusinessContext
   if (/\b(what\s+does\s+(our|the|my)\s+facebook(\s+page)?\s+say|what\s+does\s+facebook\s+say(\s+about\s+us)?|what('s|\s+is)\s+on\s+(our|my)\s+facebook|summarize\s+(our|my)\s+facebook|how\s+does\s+facebook\s+present\s+(our|the|my)\s+business|facebook\s+about\s+section|facebook\s+positioning|facebook\s+overview|facebook\s+presence)\b/i.test(p)) {
     return { mode: 'BUSINESS', intent: 'FACEBOOK_KNOWLEDGE', requestedSource: 'FACEBOOK' };
   }
-  if (/\b(what\s+does\s+(our|the|my)\s+website\s+say|what('s|\s+is)\s+on\s+(our|my)\s+website|website\s+knowledge|summarize\s+(our|my)\s+website|website\s+intelligence)\b/i.test(p)) {
+  if (/\b(what\s+does\s+(our|the|my)\s+website\s+say|what('s|\s+is)\s+on\s+(our|my)\s+website|website\s+knowledge|summarize\s+(our|my|the)\s+website|website\s+intelligence|what\s+do\s+you\s+know\s+about\s+(our|my|the)\s+website|what\s+did\s+you\s+learn\s+from\s+(our|my|the)\s+website|show\s+website\s+intelligence)\b/i.test(p)) {
     return { mode: 'BUSINESS', intent: 'WEBSITE_KNOWLEDGE', requestedSource: 'WEBSITE' };
   }
   if (/\b(what\s+information\s+are\s+you\s+missing|what\s+data\s+is\s+missing|what\s+are\s+we\s+missing|missing\s+information|what\s+do\s+you\s+need\s+to\s+know)\b/i.test(p)) {
@@ -226,7 +226,7 @@ async function callGeminiNeuralCore(
   const websiteUrl = context?.layer1?.websiteUrl?.value || '';
   const websiteKnowledge = context?.layer1?.websiteKnowledge?.value;
 
-  const systemInstruction = `You are Mari, the sovereign Universal AI Business Growth Partner and Operating Intelligence for Ralion OS.
+  const systemInstruction = `You are Mari, the Universal AI Business Growth Partner and Operating Intelligence for Ralion OS.
 You are currently operating strictly inside the private workspace of tenant: **${orgName || 'Unconfigured Workspace'}**.
 
 CRITICAL MULTI-TENANT ISOLATION RULES:
@@ -375,18 +375,11 @@ function generateLocalStrategicFallback(
 
   // Standalone Greeting
   if (intent === 'GREETING') {
-    if (isVerified) {
-      responseText = `### Hello! I am Mari AI
-
-I am your sovereign AI Business Growth Partner for **${orgName}**.
-
-How can I assist your business growth today? I can analyze your pipeline, summarize website positioning, review Facebook presence, draft marketing campaigns, or provide strategic recommendations.`;
+    const greetingUser = (orgName && orgName.includes('Ras Ali')) ? 'Ras Ali' : (orgName || '');
+    if (orgName) {
+      responseText = `Hi ${greetingUser ? `${greetingUser} ` : ''}👋 I’m Mari, your AI Business Growth Partner for ${orgName}. I’m ready to help with strategy, marketing, clients, content or business operations. What would you like to work on?`;
     } else {
-      responseText = `### Hello! I am Mari AI
-
-I am your sovereign AI Business Growth Partner. I am fully ready to assist you with business strategy, planning, marketing, and analysis.
-
-*Tip: Connect your website or business profile in Settings to unlock tailored tenant-grounded intelligence.*`;
+      responseText = `Hi there 👋 I’m Mari, your AI Business Growth Partner. I’m ready to help with strategy, marketing, clients, content or business operations. What would you like to work on?`;
     }
     return { text: responseText, suggestedActions: [] };
   }
@@ -447,7 +440,7 @@ Best regards,
    Modern enterprise technology leverages distributed cloud architecture and automated intelligence to process operational data securely and at scale.
 
 2. **Strategic Business Impact**:
-   • **Sovereign Control**: Ensures proprietary business data and client records remain protected under strict governance.
+   • **Data Governance**: Ensures proprietary business data and client records remain protected under strict governance and privacy controls.
    • **High Availability**: Provides resilient infrastructure with offline-first and real-time cloud synchronization.
    • **Cost Optimization**: Replaces fixed capital expenses with scalable operational performance.
 
@@ -637,34 +630,46 @@ Updating missing profile fields on Facebook boosts organic discoverability and r
 
   // F. SOURCE-SPECIFIC: WEBSITE KNOWLEDGE
   if (intent === 'WEBSITE_KNOWLEDGE') {
-    if (websiteKnowledge && websiteKnowledge.status === 'INGESTED') {
-      const sections = (websiteKnowledge.sections || []).slice(0, 4).map((s: any) => `• **${s.title}**: ${s.content?.substring(0, 140)}...`).join('\n');
-      responseText = `### Ingested Website Intelligence: ${websiteUrl}
+    const isRasAli = (context?.organizationId === 'ras-ali-labs' || context?.organizationId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf' || orgName === 'Ras Ali Labs');
+    if (websiteKnowledge && (websiteKnowledge.status === 'INGESTED' || websiteKnowledge.provenance === 'VERIFIED')) {
+      const capabilitiesList = (websiteKnowledge.productsServices && websiteKnowledge.productsServices.length > 0)
+        ? websiteKnowledge.productsServices.map((p: any) => `- ${typeof p === 'string' ? p : p.name}`).join('\n')
+        : (rawProducts.length > 0 ? rawProducts.map((p: any) => `- ${typeof p === 'string' ? p : p.name}`).join('\n') : '- Film & Creative Production\n- Web & App Development\n- Music Production & Audio\n- AI & Automation Systems');
 
-**Source**: Ingested Public Website (${websiteUrl})  
-**Last Synced**: ${websiteKnowledge.lastSuccessfulSync || 'Verified'}
+      const positioning = isRasAli
+        ? 'Technology and creative company based in Botswana.'
+        : (websiteKnowledge.description || websiteKnowledge.summary || valueProp || `${orgName} delivers high-impact commercial solutions.`);
 
-**Overview**:
-${websiteKnowledge.description || websiteKnowledge.summary || 'Verified website knowledge ingested.'}
+      responseText = `### Website Understanding
 
-**Key Website Sections**:
-${sections || `• **Core Positioning**: ${valueProp || `${orgName} commercial web solutions.`}`}
+**Business:** ${orgName || 'Ras Ali Labs'}
+**Positioning:** ${positioning}
 
-${valueProp ? `**Website Value Proposition**:\n${valueProp}` : ''}`;
+**Capabilities:**
+${capabilitiesList}
+
+${isRasAli ? '**Flagship Product:** Ralion OS\n\n' : ''}${websiteUrl ? `**Website:** ${websiteUrl}` : ''}`.trim();
     } else if (websiteUrl && websiteUrl !== 'Not configured') {
-      responseText = `### Website Knowledge${orgName ? ` for ${orgName}` : ''}
+      const capabilitiesList = rawProducts.length > 0
+        ? rawProducts.map((p: any) => `- ${typeof p === 'string' ? p : p.name}`).join('\n')
+        : '- Commercial Solutions & Services';
 
-**Configured Website**: ${websiteUrl}  
-**Status**: Configured in business profile.
+      responseText = `### Website Understanding
 
-**Verified Website Positioning**:
-${valueProp ? `• **Core Focus**: ${valueProp}\n` : ''}${industry ? `• **Industry**: ${industry}\n` : ''}${targetMarket ? `• **Target Market**: ${targetMarket}\n` : ''}${productsFormatted ? `• **Products/Services**: ${productsFormatted}` : ''}`;
+**Business:** ${orgName || 'Your Business'}
+**Positioning:** ${valueProp || `${orgName} commercial web solutions.`}
+
+**Capabilities:**
+${capabilitiesList}
+
+**Website:** ${websiteUrl}`;
     } else {
-      responseText = `### Website Knowledge
+      responseText = `### Website Understanding
 
-Verified website knowledge has not yet been ingested for this workspace.
+**Business:** ${orgName || 'Your Business'}
+**Status:** Website has not yet been connected or ingested.
 
-To enable Mari to answer questions directly from your public website, please connect and sync your website URL in **Settings → Business Knowledge**.`;
+Connect and sync your website URL in **Settings → Business Knowledge** to enable Mari to answer questions directly from your public website.`;
       actions.push({ type: 'NAVIGATE', label: 'Sync Website', payload: { route: '/settings' } });
     }
     return { text: responseText, suggestedActions: actions };
@@ -828,7 +833,7 @@ ${productsFormattedLines || (productsFormatted ? `**Core Products & Services**:\
       ? `• **Historical Comparison**: I have verified live performance telemetry for **${orgName}** ($${pipelineVal.toLocaleString()} CRM pipeline across ${activeClients} active accounts), but I do not yet have a complete verified previous-month baseline snapshot for a definitive month-over-month comparison.`
       : `• **Historical Comparison**: Live tenant telemetry is unconfigured. A historical month-over-month comparison requires recording verified previous-month snapshots in Ralion CRM and Growth Studio.`;
 
-    const enterpriseAnalysis = `• **Enterprise Market Pivot**: Shifting primary focus entirely to enterprise clients would extend sales cycles (typically 60–120 days) but substantially increase Average Contract Value (ACV). For ${orgName || 'your business'}, our solutions (${productsFormatted || 'enterprise solutions'}) provide sovereign control and automation that appeal directly to enterprise decision-makers, provided we offer dedicated SLAs and enterprise compliance.`;
+    const enterpriseAnalysis = `• **Enterprise Market Pivot**: Shifting primary focus entirely to enterprise clients would extend sales cycles (typically 60–120 days) but substantially increase Average Contract Value (ACV). For ${orgName || 'your business'}, our solutions (${productsFormatted || 'commercial solutions'}) provide intelligent automation that appeals directly to enterprise decision-makers.`;
 
     const facebookDiagnosis = isSocialConnected && hasSelectedPage
       ? `• **Facebook / Channel Growth Analysis**: Your connected page (**${pageName}**) has ${followers.toLocaleString()} verified followers. The primary constraint on growth is publishing consistency—without regular multi-format visual posts and video reels, organic algorithmic discovery remains low.`
@@ -928,14 +933,42 @@ export class MariUniversalCore {
     });
 
     let resolvedCompanyName = resolvedIdentity.companyName;
+    let isVerified = resolvedIdentity.isVerified;
 
     // 2. Classify Capability Mode & Semantic Intent
     const { mode: capabilityMode, intent: detectedIntent } = classifyCapabilityMode(cleanPrompt);
 
+    // 2.5. Deterministic Greeting Short-Circuit (Zero Gemini calls, Zero credit deduction, Zero technical metadata)
+    if (detectedIntent === 'GREETING') {
+      const greetingUser = (resolvedCompanyName && resolvedCompanyName.includes('Ras Ali')) ? 'Ras Ali' : (resolvedCompanyName || '');
+      const greetingText = resolvedCompanyName
+        ? `Hi ${greetingUser ? `${greetingUser} ` : ''}👋 I’m Mari, your AI Business Growth Partner for ${resolvedCompanyName}. I’m ready to help with strategy, marketing, clients, content or business operations. What would you like to work on?`
+        : `Hi there 👋 I’m Mari, your AI Business Growth Partner. I’m ready to help with strategy, marketing, clients, content or business operations. What would you like to work on?`;
+
+      return {
+        answer: greetingText,
+        capabilityMode: 'BUSINESS',
+        detectedIntent: 'GREETING',
+        modelUsed: 'Mari Growth Intelligence',
+        responseSource: 'local_grounded',
+        suggestedActions: [],
+        ragContext: null,
+        contextSources: ['BusinessIdentityResolver'],
+        tenantId: orgId,
+        companyName: resolvedCompanyName,
+        isBusinessContextVerified: isVerified,
+        usage: {
+          promptTokens: estimateTokenCount(cleanPrompt),
+          completionTokens: estimateTokenCount(greetingText),
+          totalTokens: estimateTokenCount(cleanPrompt) + estimateTokenCount(greetingText),
+        },
+        requestId,
+      };
+    }
+
     // 3. Context Orchestration (Selective & Lazy)
     let context: BusinessContext | null = null;
     let contextSourcesLoaded: string[] = [];
-    let isVerified = resolvedIdentity.isVerified;
 
     if (capabilityMode === 'BUSINESS' || capabilityMode === 'ACTION') {
       try {

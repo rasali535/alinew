@@ -251,7 +251,7 @@ export function detectSemanticIntent(prompt: string): string {
   const p = prompt.toLowerCase().trim();
 
   // 1. Pure greeting check (Only short standalone greetings)
-  if (/^(hello|hi|hey|good\s+(morning|afternoon|evening)|greetings)[\s!.]*$/i.test(p)) {
+  if (/^(hello|hi|hey|good\s+(morning|afternoon|evening)|greetings|howdy)(\s+(there|mari|ai))?[\s!.,👋]*$/i.test(p)) {
     return 'GREETING';
   }
 
@@ -268,6 +268,9 @@ export function detectSemanticIntent(prompt: string): string {
   }
 
   // 3. Specific Business Sub-intents
+  if (/\b(what\s+does\s+(our|the|my)\s+website\s+say|what('s|\s+is)\s+on\s+(our|my)\s+website|website\s+knowledge|summarize\s+(our|my|the)\s+website|website\s+intelligence|what\s+do\s+you\s+know\s+about\s+(our|my|the)\s+website|what\s+did\s+you\s+learn\s+from\s+(our|my|the)\s+website|show\s+website\s+intelligence)\b/i.test(p)) {
+    return 'WEBSITE_KNOWLEDGE';
+  }
   if (/\b(what\s+is\s+(my|our)\s+business|what\s+does\s+(my|our)\s+business\s+do|what\s+do\s+(we|i)\s+sell|what\s+services\s+do\s+we\s+provide|who\s+are\s+we|tell\s+me\s+about\s+(us|our\s+company|my\s+business|ras\s+ali\s+labs)|about\s+(the|my|our)\s+business|company\s+overview)\b/i.test(p)) {
     return 'BUSINESS_IDENTITY';
   }
@@ -502,16 +505,18 @@ export function generateLocalStrategicResponse(
   const pageName = isSocialConnected ? (context?.layer2?.social?.connectedPageName?.value || 'Connected Facebook Page') : '';
 
   const productsList = context?.layer1?.productsAndServices?.value || profile?.products?.value || (isRasAli ? [
-    { name: 'Ralion OS Core', category: 'Enterprise Operating System' },
-    { name: 'Mari AI Command Center', category: 'Autonomous Business Partner' },
-    { name: 'Growth Studio & Creative Engine', category: 'Marketing & Media Automation' },
+    { name: 'Film & Creative Production', category: 'Creative & Video Production' },
+    { name: 'Web & App Development', category: 'Software & Digital Platforms' },
+    { name: 'Music Production & Audio', category: 'Audio Engineering & Composition' },
+    { name: 'AI & Automation Systems', category: 'Artificial Intelligence & Automation' },
+    { name: 'Ralion OS', category: 'Flagship AI Business Operating System' },
   ] : [
     { name: 'Core Offerings', category: 'Products & Services' },
   ]);
 
-  const industry = profile?.industry?.value || context?.layer1?.industry?.value || (isRasAli ? 'Enterprise Artificial Intelligence & Automation' : 'Commercial Enterprise');
-  const targetMarket = profile?.targetMarkets?.value?.[0] || context?.layer1?.targetMarket?.value || (isRasAli ? 'Founders, Executives, and Commercial Growth Teams' : 'Commercial Clients & Partners');
-  const valueProp = profile?.valuePropositions?.value?.[0] || context?.layer1?.valueProposition?.value || (isRasAli ? 'Autonomous enterprise intelligence, multi-channel growth systems, and sovereign operations.' : 'Quality commercial service delivery and verified client fulfillment.');
+  const industry = profile?.industry?.value || context?.layer1?.industry?.value || (isRasAli ? 'Technology, Creative Production & Intelligent Software' : 'Commercial Enterprise');
+  const targetMarket = profile?.targetMarkets?.value?.[0] || context?.layer1?.targetMarket?.value || (isRasAli ? 'Businesses, Brands, Creative Organizations, and Growth Enterprises' : 'Commercial Clients & Partners');
+  const valueProp = profile?.valuePropositions?.value?.[0] || context?.layer1?.valueProposition?.value || (isRasAli ? 'Multidisciplinary fusion of creative production, cinematic media, and intelligent software engineering.' : 'Quality commercial service delivery and verified client fulfillment.');
   const websiteUrl = wk?.websiteUrl || profile?.websiteUrl?.value || context?.layer1?.websiteUrl?.value || (isRasAli ? 'https://www.rasalilabs.com' : '');
 
   const pipelineVal = context?.layer2?.crm?.totalPipelineValue?.value || 0;
@@ -560,7 +565,7 @@ export function generateLocalStrategicResponse(
     const formatProductName = (p: any) => typeof p === 'string' ? p : (p?.name || String(p));
     const formatProductWithCat = (p: any) => typeof p === 'string' ? `• **${p}**` : `• **${p.name}** (${p.category || 'Solution'})`;
 
-    const enterpriseAnalysis = `• **Enterprise Market Pivot**: Shifting primary focus entirely to enterprise clients would extend sales cycles (typically 60–120 days) but substantially increase Average Contract Value (ACV). For ${orgName}, our solutions (**${productsList.map(formatProductName).join(', ')}**) provide sovereign control and automation that appeal directly to enterprise decision-makers, provided we offer dedicated SLAs and enterprise compliance.`;
+    const enterpriseAnalysis = `• **Enterprise Market Pivot**: Shifting primary focus entirely to enterprise clients would extend sales cycles (typically 60–120 days) but substantially increase Average Contract Value (ACV). For ${orgName}, our solutions (**${productsList.map(formatProductName).join(', ')}**) provide intelligent automation that appeals directly to enterprise decision-makers.`;
 
     const facebookDiagnosis = isSocialConnected
       ? `• **Facebook / Channel Growth Analysis**: Your connected page (**${pageName}**) has ${followers.toLocaleString()} verified followers (+${reachGrowth}% velocity). The primary constraint on growth is publishing consistency—without regular multi-format visual posts and video reels, organic algorithmic discovery remains low.`
@@ -587,13 +592,22 @@ export function generateLocalStrategicResponse(
 
   // 2. Pure Greeting (Strictly only when the user just says hello/hi)
   else if (intent === 'GREETING') {
-    responseText = `Hello! I am Mari, your AI Business Growth Partner for **${orgName}**.\n\n` +
-      `I have loaded your verified business profile in **${industry}** serving **${targetMarket}**.\n\n` +
-      `How can I assist your commercial operations today?\n\n` +
-      `• Ask *"What is my business?"* for your verified profile overview.\n` +
-      `• Ask *"Show my business performance"* to review verified pipeline and reach metrics.\n` +
-      `• Ask *"Summarize our recent activity"* for recent operational updates.\n` +
-      `• Ask *"How can we grow?"* for strategic commercial recommendations.`;
+    const greetingUser = (orgName && orgName.includes('Ras Ali')) ? 'Ras Ali' : (orgName || '');
+    responseText = orgName
+      ? `Hi ${greetingUser ? `${greetingUser} ` : ''}👋 I’m Mari, your AI Business Growth Partner for ${orgName}. I’m ready to help with strategy, marketing, clients, content or business operations. What would you like to work on?`
+      : `Hi there 👋 I’m Mari, your AI Business Growth Partner. I’m ready to help with strategy, marketing, clients, content or business operations. What would you like to work on?`;
+  }
+
+  // 2.5. Website Knowledge
+  else if (intent === 'WEBSITE_KNOWLEDGE') {
+    const capabilitiesList = productsList.map((p: any) => `- ${typeof p === 'string' ? p : p.name}`).join('\n');
+    responseText = `### Website Understanding\n\n` +
+      `**Business:** ${orgName}\n` +
+      `**Positioning:** ${isRasAli ? 'Technology and creative company based in Botswana.' : (wk?.description || valueProp)}\n\n` +
+      `**Capabilities:**\n` +
+      `${capabilitiesList}\n\n` +
+      `${isRasAli ? '**Flagship Product:** Ralion OS\n\n' : ''}` +
+      `${websiteUrl ? `**Website:** ${websiteUrl}` : ''}`.trim();
   }
 
   // 3. Business Identity
@@ -605,7 +619,7 @@ export function generateLocalStrategicResponse(
 
     responseText = `### Your Business: ${orgName}\n\n` +
       `**Business Overview**:\n` +
-      `${orgName} operates in the **${industry}** sector, delivering sovereign enterprise intelligence and automated business growth systems.\n\n` +
+      `${orgName} operates in the **${industry}** sector, delivering intelligent platforms, cinematic media, and automated business growth systems.\n\n` +
       `**Core Value Proposition**:\n` +
       `${valueProp}\n\n` +
       `**Products & Services**:\n` +
@@ -623,7 +637,7 @@ export function generateLocalStrategicResponse(
       `**Primary Market**:\n` +
       `• **${targetMarket}**\n\n` +
       `**Ideal Customer Profile (ICP)**:\n` +
-      `• Commercial decision-makers, agency leaders, and founders seeking sovereign operations, automated pipeline management, and AI-driven growth.\n\n` +
+      `• Decision-makers, brand leaders, and founders seeking intelligent systems, creative production, and AI-driven growth.\n\n` +
       `**Value Alignment**:\n` +
       `• ${valueProp}\n\n` +
       `*Would you like to draft targeted campaign messaging for this audience in Growth Studio?*`;
@@ -732,20 +746,20 @@ export function generateLocalStrategicResponse(
       `**Suggested Creative Concept**:\n` +
       `• **Theme**: "${valueProp}"\n` +
       `• **Format**: Short-form cinematic commercial reel (16:9 / 9:16)\n` +
-      `• **Call to Action**: Explore sovereign AI enterprise solutions at ${websiteUrl}\n\n` +
+      `• **Call to Action**: Discover intelligent platforms and creative experiences at ${websiteUrl}\n\n` +
       `Click below to launch the generator in Creative Studio with this optimized brief:\n\n` +
       `[Create Reel] | [Create Visual] | [Open Growth Studio]`;
   }
 
   // 11. Platform Knowledge
   else if (intent === 'PLATFORM_KNOWLEDGE') {
-    responseText = `### Ralion OS — Sovereign Enterprise Intelligence\n\n` +
+    responseText = `### Ralion OS — Flagship AI Business Operating System\n\n` +
       `**Core Platform Capabilities**:\n` +
       `• **CRM & Sales Pipeline:** Deal tracking, contacts ledger, revenue velocity.\n` +
       `• **Mari AI Command Center:** Autonomous business intelligence, strategy diagnostics, and campaign orchestration.\n` +
       `• **Growth Studio & Creative Engine:** AI image generation (FLUX.1-schnell), commercial video generation (CogVideoX), and unified social scheduling.\n` +
       `• **Social Publishing:** Multi-platform dispatch to Facebook Pages, Instagram, LinkedIn, and X.\n` +
-      `• **Sovereign Architecture:** Dual desktop/web offline resilience, RBAC data isolation, and enterprise audit logging.\n\n` +
+      `• **Architecture & Security:** RBAC data isolation, multi-tenant workspace separation, and enterprise audit logging.\n\n` +
       `*For billing and technical support, visit [Platform Support](https://rasalilabs.com/support).*`;
   }
 

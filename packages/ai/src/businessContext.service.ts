@@ -345,7 +345,14 @@ export class BusinessContextService {
     const tasksList = options?.localOverrides?.tasks || [];
     const hasRealTasks = tasksList.length > 0;
 
-    // 1. Layer 1: Canonical Business Knowledge & Ingested Website (Compositional)
+    // Extract website knowledge fields if ingested
+    const hasIngestedWk = Boolean(websiteKnowledge && websiteKnowledge.status === 'INGESTED');
+    const wkProducts = hasIngestedWk && websiteKnowledge.productsServices && websiteKnowledge.productsServices.length > 0
+      ? websiteKnowledge.productsServices
+      : null;
+    const wkDescription = hasIngestedWk ? (websiteKnowledge.description || websiteKnowledge.summary) : null;
+
+    // 1. Layer 1: Canonical Business Knowledge & Ingested Website (Compositional - Strict Precedence)
     const layer1: Layer1BusinessKnowledge = {
       companyName: {
         value: orgName,
@@ -362,10 +369,12 @@ export class BusinessContextService {
         lastVerifiedAt: timestamp,
       },
       websiteUrl: {
-        value: resolvedIdentity.websiteUrl !== 'Not configured' ? resolvedIdentity.websiteUrl : (websiteKnowledge?.websiteUrl || 'Not configured'),
-        provenance: (resolvedIdentity.websiteUrl !== 'Not configured' || isWkValid) ? 'VERIFIED' : 'UNVERIFIED',
+        value: (websiteKnowledge?.websiteUrl && websiteKnowledge.websiteUrl !== 'Not configured')
+          ? websiteKnowledge.websiteUrl
+          : (resolvedIdentity.websiteUrl !== 'Not configured' ? resolvedIdentity.websiteUrl : (fbPage?.website || 'Not configured')),
+        provenance: (isWkValid || resolvedIdentity.websiteUrl !== 'Not configured') ? 'VERIFIED' : 'UNVERIFIED',
         source: isWkValid ? 'Website Ingestion' : (resolvedIdentity.websiteUrl !== 'Not configured' ? 'Business Profile' : 'Not configured'),
-        confidence: (resolvedIdentity.websiteUrl !== 'Not configured' || isWkValid) ? 1.0 : 0.0,
+        confidence: (isWkValid || resolvedIdentity.websiteUrl !== 'Not configured') ? 1.0 : 0.0,
         lastVerifiedAt: timestamp,
       },
       websiteKnowledge: {
@@ -383,14 +392,14 @@ export class BusinessContextService {
         lastVerifiedAt: timestamp,
       },
       industry: {
-        value: registeredProfile?.industry || resolvedIdentity.industry,
+        value: registeredProfile?.industry || resolvedIdentity.industry || (fbPage?.category ? fbPage.category : ''),
         provenance: isIdentityVerified ? 'VERIFIED' : 'UNVERIFIED',
         source: primarySource,
         confidence: isIdentityVerified ? 1.0 : 0.0,
         lastVerifiedAt: timestamp,
       },
       targetMarket: {
-        value: registeredProfile?.targetMarket || resolvedIdentity.targetMarket,
+        value: registeredProfile?.targetMarket || resolvedIdentity.targetMarket || '',
         provenance: isIdentityVerified ? 'VERIFIED' : 'UNVERIFIED',
         source: primarySource,
         confidence: isIdentityVerified ? 0.95 : 0.0,
@@ -404,17 +413,17 @@ export class BusinessContextService {
         lastVerifiedAt: timestamp,
       },
       valueProposition: {
-        value: registeredProfile?.valueProposition || resolvedIdentity.valueProposition,
-        provenance: isIdentityVerified ? 'VERIFIED' : 'UNVERIFIED',
-        source: primarySource,
-        confidence: isIdentityVerified ? 1.0 : 0.0,
+        value: wkDescription || registeredProfile?.valueProposition || resolvedIdentity.valueProposition || (fbPage?.about ? fbPage.about : ''),
+        provenance: isIdentityVerified || hasIngestedWk ? 'VERIFIED' : 'UNVERIFIED',
+        source: hasIngestedWk ? 'Ingested Public Website' : primarySource,
+        confidence: hasIngestedWk ? 1.0 : (isIdentityVerified ? 0.95 : 0.0),
         lastVerifiedAt: timestamp,
       },
       productsAndServices: {
-        value: registeredProfile?.productsAndServices || resolvedIdentity.productsAndServices || [],
-        provenance: (registeredProfile?.productsAndServices || resolvedIdentity.productsAndServices?.length > 0) ? 'VERIFIED' : 'UNVERIFIED',
-        source: primarySource,
-        confidence: (registeredProfile?.productsAndServices || resolvedIdentity.productsAndServices?.length > 0) ? 1.0 : 0.0,
+        value: wkProducts || registeredProfile?.productsAndServices || resolvedIdentity.productsAndServices || [],
+        provenance: (wkProducts || registeredProfile?.productsAndServices || resolvedIdentity.productsAndServices?.length > 0) ? 'VERIFIED' : 'UNVERIFIED',
+        source: wkProducts ? 'Ingested Public Website' : primarySource,
+        confidence: (wkProducts || registeredProfile?.productsAndServices || resolvedIdentity.productsAndServices?.length > 0) ? 1.0 : 0.0,
         lastVerifiedAt: timestamp,
       },
       strategicGoals: {

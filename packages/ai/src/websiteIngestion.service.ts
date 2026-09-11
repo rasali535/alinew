@@ -77,94 +77,100 @@ const RAS_ALI_LABS_VERIFIED_WEBSITE: IngestedWebsiteKnowledge = {
   status: 'INGESTED',
   ingestedAt: new Date().toISOString(),
   lastSuccessfulSync: new Date().toISOString(),
-  title: 'Ras Ali Labs — Enterprise Operating System',
-  description: 'Ras Ali Labs is a premier African enterprise technology firm creating Ralion OS — the sovereign enterprise operating system for African and global organizations.',
+  title: 'Ras Ali Labs — Technology & Creative Company',
+  description: 'Ras Ali Labs is a Botswana-based technology and creative company delivering intelligent platforms, cinematic productions, digital experiences and original sound.',
   headings: [
-    'Empowering African & Global Enterprises',
-    'Ralion OS Core Platform',
-    'Mari AI Command Center',
-    'Enterprise Cloud & Sovereignty',
+    'Intelligent Platforms & Creative Production',
+    'Ralion OS — Flagship AI Business Operating System',
+    'Film & Creative Production',
+    'Web & App Development',
+    'Music Production & Audio',
+    'AI & Automation Systems',
   ],
   productsServices: [
-    { name: 'Ralion OS Core', category: 'Enterprise Operating System' },
-    { name: 'Mari AI Command Center', category: 'Artificial Intelligence' },
-    { name: 'Ralion Growth Studio', category: 'Marketing Automation' },
+    { name: 'Film & Creative Production', category: 'Creative & Video Production' },
+    { name: 'Web & App Development', category: 'Software & Digital Platforms' },
+    { name: 'Music Production & Audio', category: 'Audio Engineering & Composition' },
+    { name: 'AI & Automation Systems', category: 'Artificial Intelligence & Workflow Automation' },
+    { name: 'Ralion OS', category: 'Flagship AI Business Operating System' },
   ],
   contactInformation: {
-    emails: ['enterprise@rasalilabs.com'],
-    phones: ['+267 390 0000'],
-    addresses: ['Gaborone, Botswana', 'Johannesburg, South Africa'],
+    emails: ['contact@rasalilabs.com'],
+    phones: ['+267 72 113 009'],
+    addresses: ['Plot 18680 Khuhurutse Drive, Phase 2, Gaborone, Botswana'],
   },
   socialLinks: {
     facebook: 'https://facebook.com/rasalilabs',
     linkedin: 'https://linkedin.com/company/rasalilabs',
   },
   source: 'PLATFORM_DEFAULT',
-  contentHash: 'hash-ral-web-2026-v4',
-  version: '2026.4.1',
+  contentHash: 'hash-ral-web-2026-v5',
+  version: '2026.5.0',
   isStale: false,
   syncStatus: 'ACTIVE',
   provenance: 'VERIFIED',
-  summary: 'Ras Ali Labs is a premier African enterprise technology and AI solutions firm headquartered in Botswana and South Africa. Creator of Ralion OS — the sovereign enterprise operating system for African and global organizations.',
+  summary: 'Ras Ali Labs is a Botswana-based technology and creative company delivering intelligent platforms, cinematic productions, digital experiences and original sound. Creator of Ralion OS, the flagship AI business operating system.',
   sections: [
     {
       id: 'ws-1',
-      title: 'Company Overview & Mission',
+      title: 'Company Overview & Positioning',
       category: 'ABOUT',
-      content: 'Ras Ali Labs is an enterprise software and artificial intelligence company dedicated to empowering organizations across Africa and emerging markets with sovereign, high-performance operating software, intelligent workflows, and data sovereignty. Tagline: "Empowered to Prosper".',
+      content: 'Ras Ali Labs is a Botswana-based technology and creative company delivering intelligent platforms, cinematic productions, digital experiences and original sound. We merge artistic excellence with cutting-edge engineering.',
       keyTakeaways: [
-        'African enterprise technology leader with dual presence in Gaborone and Johannesburg',
-        'Developer of Ralion OS: Enterprise CRM, Documents, Task Execution, and Intelligence',
-        'Tagline: Empowered to Prosper',
+        'Technology and creative company headquartered in Gaborone, Botswana',
+        'Delivering intelligent platforms, cinematic productions, digital experiences and original sound',
+        'Developer of flagship product Ralion OS',
       ],
       ingestedAt: new Date().toISOString(),
     },
     {
       id: 'ws-2',
-      title: 'Core Products & Solutions',
+      title: 'Core Capabilities & Solutions',
       category: 'PRODUCTS_SERVICES',
-      content: 'Primary offerings include Ralion OS (Unified Enterprise Operating System), Mari AI (AI Business Command Center & Growth Partner), Ralion Growth Studio (Social Media, Content Studio, and Multichannel Campaign Engine), and Vertical Industry Suites (Ralion Health, Ralion Logistics & Customs, Ralion Funeral, Ralion Trade & Retail).',
+      content: 'Core capabilities include Film & Creative Production, Web & App Development, Music Production & Audio, AI & Automation Systems, and Ralion OS — the flagship AI business operating system.',
       keyTakeaways: [
-        'Ralion OS Core: Integrated CRM, Ledger, Documents, and Tasks',
-        'Mari AI: Proactive AI Business Growth Partner and Strategic Orchestrator',
-        'Ralion Growth Studio: Automated content creation, social scheduling, and audience velocity',
-        'Industry OS Modules: Tailored solutions for Logistics, Healthcare, Mining, and Public Sector',
+        'Film & Creative Production: Cinematic storytelling, corporate video, documentary, commercial visual production',
+        'Web & App Development: Custom web platforms, bespoke web applications, mobile and cloud systems',
+        'Music Production & Audio: Original soundtrack scoring, sound design, mixing, and audio engineering',
+        'AI & Automation Systems: Intelligent business automation, custom AI integrations, workflow automation',
+        'Ralion OS: Flagship AI business operating system with CRM, documents, task orchestration, and Mari AI',
       ],
       ingestedAt: new Date().toISOString(),
     },
     {
       id: 'ws-3',
-      title: 'Value Proposition & Differentiators',
+      title: 'Value Proposition & Creative Technology Excellence',
       category: 'VALUE_PROPOSITION',
-      content: 'Ras Ali Labs provides sovereign business software built with native offline resilience, enterprise-grade RBAC security, zero data loss guarantees, and deep integration with regional African business workflows and payment gateways. Unlike generic SaaS, Ralion OS is engineered specifically for African commercial scale.',
+      content: 'Ras Ali Labs combines world-class creative production with advanced software engineering to deliver end-to-end digital experiences, compelling cinematic media, and intelligent operating platforms that drive business growth.',
       keyTakeaways: [
-        'Sovereign business infrastructure with native offline desktop and web parity',
-        'High SLA uptime rating (99.8%+) and enterprise security posture',
-        'Tailored to SADC commercial regulations, trade corridors, and multi-currency billing (BWP, ZAR, USD)',
+        'Integrated creative and technical multidisciplinary execution',
+        'High production quality across film, audio, web, and AI systems',
+        'Flagship software Ralion OS empowering modern business operations',
       ],
       ingestedAt: new Date().toISOString(),
     },
     {
       id: 'ws-4',
-      title: 'Target Markets & Industries Served',
-      category: 'TARGET_MARKET',
-      content: 'Primary markets encompass mid-market and enterprise B2B companies across the SADC region (Botswana, South Africa, Namibia, Zambia, Zimbabwe), specializing in mining & resources, cross-border logistics, private healthcare networks, financial trade, and public sector digital transformation.',
+      title: 'Flagship Product — Ralion OS',
+      category: 'SOLUTIONS',
+      content: 'Ralion OS is Ras Ali Labs’ flagship AI business operating system featuring Mari AI (AI Business Growth Partner), Growth Studio (multichannel marketing & creative automation), integrated CRM deals ledger, and intelligent document operations.',
       keyTakeaways: [
-        'SADC regional enterprise commercial sector',
-        'Key verticals: Logistics & Freight, Healthcare Providers, Industrial Mining, Funeral Management',
-        'Focus on B2B operational efficiency, revenue expansion, and audience reach',
+        'Ralion OS flagship AI business operating system',
+        'Mari AI strategic growth partner and intelligence engine',
+        'Growth Studio for automated creative production and multichannel broadcasting',
       ],
       ingestedAt: new Date().toISOString(),
     },
     {
       id: 'ws-5',
-      title: 'Headquarters, Contacts & Corporate Governance',
+      title: 'Headquarters & Verified Contact Information',
       category: 'CONTACT_LEGAL',
-      content: 'Ras Ali Labs operates corporate offices in Gaborone, Botswana and Johannesburg, South Africa. Fully compliant with enterprise data protection acts, sovereign hosting standards, and regional business registrations.',
+      content: 'Ras Ali Labs is located at Plot 18680 Khuhurutse Drive, Phase 2, Gaborone, Botswana. Official contact channels: Phone +267 72 113 009, Email contact@rasalilabs.com, Website https://www.rasalilabs.com.',
       keyTakeaways: [
-        'Operating in Gaborone, Botswana & Johannesburg, South Africa',
+        'Physical address: Plot 18680 Khuhurutse Drive, Phase 2, Gaborone, Botswana',
+        'Phone: +267 72 113 009',
+        'Email: contact@rasalilabs.com',
         'Website: https://www.rasalilabs.com',
-        'Contact email: enterprise@rasalilabs.com',
       ],
       ingestedAt: new Date().toISOString(),
     },
@@ -240,13 +246,13 @@ export class WebsiteIngestionService {
       return durable;
     }
 
-    // Strict check: Only the canonical Platform Admin UUID gets the default Ras Ali Labs profile
-    if (orgId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf') {
-      websiteStore['22e61ff6-16fe-44c7-9d67-38e2a2e91ccf'] = {
+    // Strict check: Only the canonical Platform Admin UUID and ras-ali-labs get the default Ras Ali Labs profile
+    if (orgId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf' || orgId === 'ras-ali-labs') {
+      websiteStore[orgId] = {
         ...RAS_ALI_LABS_VERIFIED_WEBSITE,
-        organizationId: '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf',
+        organizationId: orgId,
       };
-      return websiteStore['22e61ff6-16fe-44c7-9d67-38e2a2e91ccf'];
+      return websiteStore[orgId];
     }
 
     return null;
