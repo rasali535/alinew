@@ -87,11 +87,7 @@ interface ChatMessage {
 export default function MariAiPage() {
   const router = useRouter();
   const messagesEndRef = useRef<HTMLDivElement>(null);
-<<<<<<< HEAD
-  const { organization, user, isLoading: isOrgLoading, isContextResolved } = useOrganization();
-=======
   const { organization, user, isLoading: isOrganizationLoading } = useOrganization();
->>>>>>> 9eda1a89d238995149d53edf418d6c59a1526b00
 
   // Active view tab
   const [activeTab, setActiveTab] = useState<'GROWTH_PARTNER' | 'KNOWLEDGE' | 'ADMIN_INFRA'>('GROWTH_PARTNER');
@@ -127,10 +123,7 @@ export default function MariAiPage() {
   const [websiteInputUrl, setWebsiteInputUrl] = useState('');
 
   const activeOrgId = organization?.id || '';
-<<<<<<< HEAD
-=======
   const hasCanonicalTenant = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(activeOrgId);
->>>>>>> 9eda1a89d238995149d53edf418d6c59a1526b00
 
   // Load Business Context, Growth Profile, and Briefing on Mount
   const loadGrowthIntelligence = async (forceRefresh = false) => {
@@ -281,31 +274,7 @@ export default function MariAiPage() {
     }
   };
 
-  // Wait for authoritative organization context before initializing Mari
   useEffect(() => {
-<<<<<<< HEAD
-    if (!isContextResolved) return;
-
-    // Update display name and tier from context
-    if (user?.displayName) setUserName(user.displayName);
-    if (organization?.licenseTier) setUserTier(organization.licenseTier);
-
-    // Also fetch from AuthService for additional profile data
-    import('@/lib/services/auth.service').then(({ AuthService }) => {
-      AuthService.getCurrentUser().then((authUser) => {
-        if (authUser?.fullName) setUserName(authUser.fullName);
-        if (authUser?.tier) setUserTier(authUser.tier.toUpperCase() as any);
-      });
-    });
-
-    if (activeOrgId) {
-      loadGrowthIntelligence();
-    } else {
-      console.warn('[Mari] Organization context resolved but no org ID available');
-      setIsLoading(false);
-    }
-  }, [isContextResolved, activeOrgId]);
-=======
     if (isOrganizationLoading || !hasCanonicalTenant) return;
 
     import('@/lib/services/auth.service').then(({ AuthService }) => {
@@ -317,7 +286,6 @@ export default function MariAiPage() {
 
     loadGrowthIntelligence();
   }, [isOrganizationLoading, activeOrgId]);
->>>>>>> 9eda1a89d238995149d53edf418d6c59a1526b00
 
   // Scroll to bottom when messages update
   useEffect(() => {
@@ -453,14 +421,10 @@ export default function MariAiPage() {
 
       try {
         const authHeaders = await getRalionAuthHeaders();
-<<<<<<< HEAD
-        const effectiveOrgId = activeOrgId || '';
-=======
         if (!hasCanonicalTenant) {
           throw new Error('Your organization workspace is still loading. Please retry in a moment.');
         }
         const effectiveOrgId = activeOrgId;
->>>>>>> 9eda1a89d238995149d53edf418d6c59a1526b00
 
         const res = await fetch(apiUrl, {
           method: 'POST',
