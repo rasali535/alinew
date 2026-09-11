@@ -2,135 +2,140 @@ import React, { useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { featuredProjects } from '../data/mock';
 import SEO from '../components/common/SEO';
+import { ArrowLeft, ArrowRight, CheckCircle2, Sparkles, Building2, Calendar, Layers } from 'lucide-react';
 
 const ProjectDetails = () => {
-    const { id } = useParams();
-    const project = featuredProjects.find(p => p.id === parseInt(id));
+  const { id } = useParams();
+  const project = featuredProjects.find(
+    (p) => String(p.id) === String(id) || p.title.toLowerCase().replace(/\s+/g, '-') === String(id).toLowerCase()
+  );
 
-    useEffect(() => {
-        window.scrollTo(0, 0);
-    }, [id]);
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [id]);
 
-    if (!project) {
-        return (
-            <div className="min-h-screen bg-brand-dark flex flex-col items-center justify-center text-white">
-                <h2 className="text-4xl font-light mb-4">Project Not Found</h2>
-                <Link to="/work" className="text-brand-gold border-b border-brand-gold pb-1 hover:text-white transition-colors">
-                    Back to Work
-                </Link>
-            </div>
-        );
-    }
-
+  if (!project) {
     return (
-        <div className="min-h-screen bg-brand-dark pt-32 pb-20 px-6 lg:px-12">
-            <SEO
-                title={`${project.title} | Ras Ali`}
-                description={`Details about ${project.title}, a ${project.subtitle} project by Ras Ali.`}
-                image={project.image}
-            />
-
-            <div className="max-w-6xl mx-auto">
-                {/* Back Button */}
-                <Link
-                    to="/work"
-                    className="inline-flex items-center gap-2 text-white/50 hover:text-brand-gold mb-12 transition-colors duration-300"
-                >
-                    <span>←</span>
-                    <span>Back to Projects</span>
-                </Link>
-
-                {/* Header */}
-                <div className="mb-16">
-                    <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-8">
-                        <h1 className="text-white text-5xl md:text-7xl lg:text-8xl font-light tracking-tight leading-none">
-                            {project.title}
-                        </h1>
-                        <span className="text-brand-gold text-lg md:text-xl font-light tracking-wide uppercase">
-                            {project.category}
-                        </span>
-                    </div>
-                    <p className="text-white/70 text-xl md:text-2xl font-light max-w-3xl">
-                        {project.subtitle}
-                    </p>
-                </div>
-
-                {/* Main Image */}
-                <div className="aspect-video w-full rounded-2xl overflow-hidden bg-white/5 mb-20 border border-white/10">
-                    <img
-                        src={project.image}
-                        alt={project.title}
-                        className="w-full h-full object-cover"
-                    />
-                </div>
-
-                {/* Project Info & Mock Description */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-16">
-                    <div className="lg:col-span-2 space-y-8">
-                        <h3 className="text-2xl text-white font-light">About the Project</h3>
-                        <div className="text-white/70 text-lg leading-relaxed space-y-6">
-                            {project.description ? (
-                                <p>{project.description}</p>
-                            ) : (
-                                <>
-                                    <p>
-                                        This project represents a synthesis of technical precision and creative vision.
-                                        Executed with a focus on delivering high-impact results, it showcases the
-                                        core capabilities of Ras Ali's multi-disciplinary approach.
-                                    </p>
-                                    <p>
-                                        From initial concept to final delivery, every detail was carefully considered
-                                        to ensure the final output not only met but exceeded expectations. The workflow
-                                        integrated modern tools and methodologies to achieve a polished, professional standard.
-                                    </p>
-                                </>
-                            )}
-                        </div>
-                        {project.link && (
-                            <div className="pt-8">
-                                <a
-                                    href={project.link}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-2 bg-white text-black px-8 py-4 rounded-full font-medium hover:bg-brand-gold transition-colors duration-300"
-                                >
-                                    Visit Live Site
-                                    <span>↗</span>
-                                </a>
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="space-y-12">
-                        <div>
-                            <h4 className="text-white/50 text-sm uppercase tracking-widest mb-4">Services</h4>
-                            <ul className="space-y-2">
-                                {project.roles ? (
-                                    project.roles.map((role, index) => (
-                                        <li key={index} className="text-white">{role}</li>
-                                    ))
-                                ) : (
-                                    <>
-                                        <li className="text-white">{project.category}</li>
-                                        <li className="text-white">Creative Direction</li>
-                                        <li className="text-white">Technical Implementation</li>
-                                    </>
-                                )}
-                            </ul>
-                        </div>
-                        <div>
-                            <h4 className="text-white/50 text-sm uppercase tracking-widest mb-4">Date</h4>
-                            <p className="text-white">{project.date || '2024'}</p>
-                        </div>
-                        <div>
-                            <h4 className="text-white/50 text-sm uppercase tracking-widest mb-4">Client</h4>
-                            <p className="text-white">Confidential</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+      <div className="min-h-screen bg-[#121212] flex flex-col items-center justify-center text-white pt-28 px-6 text-center">
+        <h2 className="text-4xl font-extrabold mb-4">Project Not Found</h2>
+        <p className="text-white/60 text-sm mb-6">The requested portfolio project could not be found in our verified archive.</p>
+        <Link to="/work" className="px-6 py-3 rounded-xl bg-brand-gold text-black font-bold text-xs hover:scale-105 transition-all">
+          ← Back to Portfolio Archive
+        </Link>
+      </div>
     );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#121212] pt-32 pb-20 px-6 lg:px-12 text-white">
+      <SEO
+        title={`${project.title} | Ras Ali Labs Portfolio`}
+        description={`Details about ${project.title}, a ${project.subtitle} project by Ras Ali Labs in Botswana.`}
+        image={project.image}
+      />
+
+      <div className="max-w-6xl mx-auto">
+        {/* Back Button */}
+        <Link
+          to="/work"
+          className="inline-flex items-center gap-2 text-white/60 hover:text-brand-gold mb-10 transition-colors text-xs font-semibold"
+        >
+          <ArrowLeft size={16} />
+          <span>Back to Portfolio Archive</span>
+        </Link>
+
+        {/* Header */}
+        <div className="mb-12">
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-6">
+            <div>
+              <span className="px-3 py-1 rounded-full bg-brand-gold/10 text-brand-gold text-xs font-bold uppercase tracking-wider mb-4 inline-block">
+                {project.category}
+              </span>
+              <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-white leading-tight">
+                {project.title}
+              </h1>
+            </div>
+            <span className="text-white/60 font-mono text-sm">
+              Production Year: {project.date || '2024'}
+            </span>
+          </div>
+          <p className="text-white/70 text-lg md:text-xl font-normal max-w-3xl leading-relaxed">
+            {project.subtitle}
+          </p>
+        </div>
+
+        {/* Main Image */}
+        <div className="aspect-[16/9] w-full rounded-3xl overflow-hidden bg-[#181818] mb-16 border border-white/10 relative shadow-2xl">
+          <img
+            src={project.image}
+            alt={project.title}
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              e.target.src = '/assets/images/service-video.png';
+            }}
+          />
+        </div>
+
+        {/* Project Info & Description */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+          <div className="lg:col-span-2 space-y-8">
+            <h3 className="text-2xl text-white font-bold">About the Production</h3>
+            <div className="text-white/75 text-sm md:text-base leading-relaxed space-y-4">
+              <p>{project.description}</p>
+              {project.verifiedNote && (
+                <div className="p-4 rounded-2xl bg-[#181818] border border-brand-gold/30 text-xs text-white/80">
+                  <strong className="text-brand-gold block font-bold mb-1 uppercase tracking-wider">
+                    Verified Execution Record:
+                  </strong>
+                  {project.verifiedNote}
+                </div>
+              )}
+            </div>
+
+            <div className="pt-6 border-t border-white/10 flex flex-wrap gap-4">
+              <Link
+                to="/contact"
+                className="px-6 py-3 rounded-xl bg-gradient-to-r from-brand-gold to-amber-500 text-black font-extrabold text-xs hover:scale-105 transition-all shadow-lg shadow-brand-gold/20 flex items-center gap-2"
+              >
+                Inquire on Similar Project <ArrowRight size={14} />
+              </Link>
+              <Link
+                to="/services"
+                className="px-6 py-3 rounded-xl bg-white/10 text-white font-bold text-xs hover:bg-white/15 transition-all border border-white/15"
+              >
+                Explore All Capabilities
+              </Link>
+            </div>
+          </div>
+
+          <div className="space-y-8 bg-[#181818] border border-white/10 rounded-3xl p-6 h-fit">
+            <div>
+              <h4 className="text-white/40 text-xs uppercase tracking-widest font-bold mb-3">Roles & Disciplines</h4>
+              <div className="space-y-2">
+                {project.roles && project.roles.map((role, index) => (
+                  <div key={index} className="flex items-center gap-2 text-xs text-white/80">
+                    <CheckCircle2 size={14} className="text-brand-gold shrink-0" />
+                    <span>{role}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-white/10">
+              <h4 className="text-white/40 text-xs uppercase tracking-widest font-bold mb-1">Company</h4>
+              <p className="text-white text-xs font-semibold">Ras Ali Labs (Pty) Ltd</p>
+              <p className="text-white/50 text-[11px]">Gaborone, Botswana</p>
+            </div>
+
+            <div className="pt-4 border-t border-white/10">
+              <h4 className="text-white/40 text-xs uppercase tracking-widest font-bold mb-1">Timeline</h4>
+              <p className="text-white text-xs">{project.date}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default ProjectDetails;
