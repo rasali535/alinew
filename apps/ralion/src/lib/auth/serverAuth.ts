@@ -495,6 +495,12 @@ export async function requireRalionContext(
   };
 }
 
+let contextResolverOverride: ((request: NextRequest, options?: { requireAuth?: boolean }) => Promise<RalionSessionContext | null>) | null = null;
+
+export function __setTestContextResolver(resolver: typeof contextResolverOverride) {
+  contextResolverOverride = resolver;
+}
+
 /**
  * Backward compatibility helper returning context or null.
  */
@@ -502,6 +508,9 @@ export async function getCurrentRalionContext(
   request: NextRequest,
   options: { requireAuth?: boolean } = { requireAuth: true }
 ): Promise<RalionSessionContext | null> {
+  if (contextResolverOverride) {
+    return contextResolverOverride(request, options);
+  }
   const result = await resolveRalionAuthContext(request, options);
   return result.context;
 }

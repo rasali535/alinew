@@ -272,24 +272,37 @@ export class BusinessContextService {
     let fbPage = options?.localOverrides?.fbPage;
 
     // Tenant-isolated localStorage validation. Never read a global Facebook-page key.
-    // Requires exact canonical organization and workspace match.
+    // For workspace-scoped context, require exact canonical organization, workspace, and user match.
+    // Do not accept legacy organization-only Facebook records inside a workspace context.
     if (!fbPage && typeof window !== 'undefined' && window.localStorage) {
       try {
         const wsId = options?.workspaceId;
-        const wsStorageKey = wsId ? `ralion:${cleanOrgId}:${wsId}:selected_fb_page` : null;
-        const orgStorageKey = `ralion:${cleanOrgId}:selected_fb_page`;
+        const userId = options?.userId;
 
-        const rawP = (wsStorageKey ? window.localStorage.getItem(wsStorageKey) : null) || window.localStorage.getItem(orgStorageKey);
-        if (rawP) {
-          const parsedP = JSON.parse(rawP);
-          // STRICT SECURITY: Require exact canonical organization and workspace match.
-          // Do not compare every identifier only against cleanOrgId.
-          const orgMatches = !parsedP.organizationId || parsedP.organizationId === cleanOrgId;
-          const wsMatches = !wsId || !parsedP.workspaceId || parsedP.workspaceId === wsId;
-          const userMatches = !options?.userId || !parsedP.userId || parsedP.userId === options.userId;
+        if (wsId) {
+          const wsStorageKey = `ralion:${cleanOrgId}:${wsId}:selected_fb_page`;
+          const rawP = window.localStorage.getItem(wsStorageKey);
+          if (rawP) {
+            const parsedP = JSON.parse(rawP);
+            const orgMatches = parsedP?.organizationId === cleanOrgId;
+            const wsMatches = parsedP?.workspaceId === wsId;
+            const userMatches = !userId || parsedP?.userId === userId;
 
-          if (parsedP && orgMatches && wsMatches && userMatches) {
-            fbPage = parsedP;
+            if (parsedP && orgMatches && wsMatches && userMatches) {
+              fbPage = parsedP;
+            }
+          }
+        } else {
+          const orgStorageKey = `ralion:${cleanOrgId}:selected_fb_page`;
+          const rawP = window.localStorage.getItem(orgStorageKey);
+          if (rawP) {
+            const parsedP = JSON.parse(rawP);
+            const orgMatches = parsedP?.organizationId === cleanOrgId;
+            const userMatches = !userId || !parsedP?.userId || parsedP?.userId === userId;
+
+            if (parsedP && orgMatches && userMatches) {
+              fbPage = parsedP;
+            }
           }
         }
       } catch {}

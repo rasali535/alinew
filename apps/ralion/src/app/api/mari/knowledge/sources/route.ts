@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../../lib/cors';
 import { BusinessContextService, WebsiteIngestionService } from '@ralion/ai';
+import { getCurrentRalionContext } from '../../../../../lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,20 +13,75 @@ export async function OPTIONS(request: NextRequest) {
  * GET /api/mari/knowledge/sources
  * Returns all active Layer 1-3 Business Knowledge Sources with verification status,
  * sync timestamps, staleness flags, and provenance.
+ * Strictly scoped to authenticated server context. Never trusts query/header IDs.
  */
 export async function GET(request: NextRequest) {
   try {
+    const serverCtx = await getCurrentRalionContext(request, { requireAuth: true });
+    if (!serverCtx) {
+      return corsJsonResponse(
+        { success: false, code: 'AUTHENTICATION_REQUIRED', error: 'Authentication required to view knowledge sources.' },
+        { status: 401 },
+        request
+      );
+    }
+
+    const canonicalOrgId = serverCtx.organization?.id || serverCtx.workspace.organization_id || serverCtx.workspace.id;
+    const canonicalWorkspaceId = serverCtx.workspace.id;
+    const authenticatedUserId = serverCtx.user.id;
+
     const { searchParams } = new URL(request.url);
-    const orgId = searchParams.get('orgId') || request.headers.get('x-organization-id') || 'org_demo';
-    const workspaceId = searchParams.get('workspaceId') || request.headers.get('x-workspace-id') || undefined;
-    const userId = searchParams.get('userId') || request.headers.get('x-user-id') || undefined;
+    const queryOrgId = searchParams.get('orgId');
+    const headerOrgId = request.headers.get('x-organization-id');
+    const queryWsId = searchParams.get('workspaceId');
+    const headerWsId = request.headers.get('x-workspace-id');
+    const queryUserId = searchParams.get('userId');
+    const headerUserId = request.headers.get('x-user-id');
+
+    const suppliedOrgIds = [queryOrgId, headerOrgId].filter(Boolean) as string[];
+    const suppliedWsIds = [queryWsId, headerWsId].filter(Boolean) as string[];
+    const suppliedUserIds = [queryUserId, headerUserId].filter(Boolean) as string[];
+
+    for (const reqOrg of suppliedOrgIds) {
+      if (reqOrg !== canonicalOrgId && reqOrg !== canonicalWorkspaceId) {
+        return corsJsonResponse(
+          { success: false, code: 'TENANT_CONTEXT_MISMATCH', error: 'Forbidden: Cannot access another tenant context' },
+          { status: 403 },
+          request
+        );
+      }
+    }
+
+    for (const reqWs of suppliedWsIds) {
+      if (reqWs !== canonicalWorkspaceId && reqWs !== canonicalOrgId) {
+        return corsJsonResponse(
+          { success: false, code: 'TENANT_CONTEXT_MISMATCH', error: 'Forbidden: Cannot access another workspace context' },
+          { status: 403 },
+          request
+        );
+      }
+    }
+
+    for (const reqUser of suppliedUserIds) {
+      if (reqUser !== authenticatedUserId) {
+        return corsJsonResponse(
+          { success: false, code: 'TENANT_CONTEXT_MISMATCH', error: 'Forbidden: Cannot access another user context' },
+          { status: 403 },
+          request
+        );
+      }
+    }
+
+    const orgId = canonicalOrgId;
+    const workspaceId = canonicalWorkspaceId;
+    const userId = authenticatedUserId;
 
     const context = await BusinessContextService.assembleContext(orgId, {
       organizationId: orgId,
       workspaceId,
       userId,
     });
-    const websiteKnowledge = WebsiteIngestionService.getWebsiteKnowledge(orgId);
+    const websiteKnowledge = WebsiteIngestionService.getWebsiteKnowledge(workspaceId) || WebsiteIngestionService.getWebsiteKnowledge(orgId);
 
     const sources = [
       {
