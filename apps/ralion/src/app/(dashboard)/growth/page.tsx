@@ -561,10 +561,10 @@ Rules:
   const [businessKnowledge, setBusinessKnowledge] = useState<any | null>(null);
   const [isEditBrandVoiceOpen, setIsEditBrandVoiceOpen] = useState(false);
   const [customVoiceTone, setCustomVoiceTone] = useState(
-    'Visionary, Authoritative, Solution-Driven, Technologically Rigorous'
+    'Professional, Authoritative, Solution-Driven, Clear'
   );
   const [customVoiceKeywords, setCustomVoiceKeywords] = useState(
-    'Sovereign AI, Autonomous Orchestration, Enterprise Security'
+    'Business Intelligence, Operations, Innovation, Customer Experience'
   );
 
   const handleSaveBrandVoice = () => {
@@ -4289,7 +4289,7 @@ Rules:
                           </Badge>
                         </div>
                         <p className="text-xs text-zinc-300 mt-1.5 leading-relaxed">
-                          Mari AI analyzes public SADC industry benchmarks, macroeconomic indices, and open market signals—without illegal scraping or privacy violations—to give <strong>{activeFbPage?.name || fbConn?.label || 'your business'}</strong> a competitive growth advantage.
+                          Mari AI analyzes public industry benchmarks, macroeconomic indices, and open market signals—without illegal scraping or privacy violations—to give <strong>{activeFbPage?.name || fbConn?.label || 'your business'}</strong> a competitive growth advantage.
                         </p>
                       </div>
 
@@ -4298,7 +4298,7 @@ Rules:
                         size="sm" 
                         onClick={() => {
                           fetchMarketResearchData();
-                          setOauthAlert({ type: 'success', message: '⚡ Market benchmarks synchronized with latest SADC B2B tech index!' });
+                          setOauthAlert({ type: 'success', message: '⚡ Market benchmarks synchronized with latest industry index!' });
                         }}
                         className="text-xs border-emerald-500/40 text-emerald-300 hover:bg-emerald-950 shrink-0"
                       >
@@ -4312,10 +4312,10 @@ Rules:
                         <div>
                           <p className="text-[11px] text-zinc-400 uppercase font-semibold">Engagement vs Industry Benchmark</p>
                           <div className="flex items-baseline gap-2 mt-1">
-                            <p className="text-2xl font-black text-emerald-400">{marketResearchReport?.benchmarks?.rasAliLabsEngagementRate ?? (totalReach > 0 ? ((totalEngagement/totalReach)*100).toFixed(1) : 0)}%</p>
+                            <p className="text-2xl font-black text-emerald-400">{marketResearchReport?.benchmarks?.clientEngagementRate ?? marketResearchReport?.benchmarks?.rasAliLabsEngagementRate ?? (totalReach > 0 ? ((totalEngagement/totalReach)*100).toFixed(1) : 0)}%</p>
                             <p className="text-xs text-zinc-500 line-through">Avg: {marketResearchReport?.benchmarks?.averageEngagementRate ?? 3.2}%</p>
                           </div>
-                          <p className="text-[11px] text-emerald-400 mt-1 font-semibold">🟢 +81.2% Higher than SADC SaaS average</p>
+                          <p className="text-[11px] text-emerald-400 mt-1 font-semibold">🟢 Stronger than industry average baseline</p>
                         </div>
                         <div className="w-full bg-zinc-900 rounded-full h-1.5 mt-3 overflow-hidden">
                           <div className="bg-emerald-500 h-full rounded-full" style={{ width: '85%' }} />
@@ -4326,10 +4326,10 @@ Rules:
                         <div>
                           <p className="text-[11px] text-zinc-400 uppercase font-semibold">Monthly Audience Growth Rate</p>
                           <div className="flex items-baseline gap-2 mt-1">
-                            <p className="text-2xl font-black text-purple-400">+{marketResearchReport?.benchmarks?.rasAliLabsGrowthMonthly ?? (posts.length > 0 ? (posts.length * 1.5).toFixed(1) : 0)}%</p>
+                            <p className="text-2xl font-black text-purple-400">+{marketResearchReport?.benchmarks?.clientGrowthMonthly ?? marketResearchReport?.benchmarks?.rasAliLabsGrowthMonthly ?? (posts.length > 0 ? (posts.length * 1.5).toFixed(1) : 0)}%</p>
                             <p className="text-xs text-zinc-500 line-through">Avg: +{marketResearchReport?.benchmarks?.averageFollowerGrowthMonthly ?? 4.5}%</p>
                           </div>
-                          <p className="text-[11px] text-purple-400 mt-1 font-semibold">🚀 2.9x faster than industry median</p>
+                          <p className="text-[11px] text-purple-400 mt-1 font-semibold">🚀 Above industry median pace</p>
                         </div>
                         <div className="w-full bg-zinc-900 rounded-full h-1.5 mt-3 overflow-hidden">
                           <div className="bg-purple-500 h-full rounded-full" style={{ width: '92%' }} />
@@ -4434,7 +4434,7 @@ Rules:
                     <Globe className="w-8 h-8 text-emerald-400" />
                     <h4 className="text-sm font-bold text-white">Ethical Market Research & Competitive Intelligence</h4>
                     <p className="text-xs text-zinc-400 max-w-md">
-                      {fbConn ? 'Synchronizing market research benchmarks and positioning matrices...' : 'Connect your Facebook Page to unlock SADC market benchmarks and competitive positioning matrices.'}
+                      {fbConn ? 'Synchronizing market research benchmarks and positioning matrices...' : 'Connect your Facebook Page to unlock market benchmarks and competitive positioning matrices.'}
                     </p>
                   </div>
                 )}
@@ -7105,7 +7105,7 @@ Rules:
               rows={3} 
               value={customVoiceKeywords} 
               onChange={e => setCustomVoiceKeywords(e.target.value)}
-              placeholder="Sovereign AI, Autonomous Orchestration, SADC Trade Corridor, Enterprise Security" 
+              placeholder="Business Intelligence, Operations, Innovation, Customer Experience, Quality"
               className="w-full mt-1 p-3 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white resize-none focus:outline-none font-mono"
             />
           </div>

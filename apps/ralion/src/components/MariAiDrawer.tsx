@@ -24,7 +24,7 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
   const [messages, setMessages] = useState<Array<{ sender: 'USER' | 'MARI'; text: string; actions?: any[]; tokens?: { totalTokens?: number } }>>([
     {
       sender: 'MARI',
-      text: "Hello! I am Mari AI, your sovereign AI Business Growth Partner. Ask me anything about your growth strategy, market positioning, revenue, or tell me to generate marketing content!"
+      text: "Hello! I am Mari AI, your AI Business Growth Partner. Ask me anything about your growth strategy, market positioning, revenue, or tell me to generate marketing content!"
     }
   ]);
   const [inputQuery, setInputQuery] = useState('');

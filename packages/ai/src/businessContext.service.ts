@@ -134,6 +134,25 @@ const tenantProfileRegistry = new Map<string, TenantProfileOverride>();
 const contextCache: Record<string, { context: BusinessContext; cachedAt: number; version: number }> = {};
 const CACHE_TTL_MS = 60 * 1000; // 1 minute active cache
 
+function deduplicateProducts(items: Array<{ name: string; category?: string; description?: string }>): Array<{ name: string; category: string; description?: string }> {
+  const seen = new Set<string>();
+  const deduplicated: Array<{ name: string; category: string; description?: string }> = [];
+
+  for (const item of items) {
+    if (!item?.name) continue;
+    const normalized = item.name.trim().toLowerCase();
+    if (!seen.has(normalized)) {
+      seen.add(normalized);
+      deduplicated.push({
+        name: item.name.trim(),
+        category: item.category || 'General',
+        description: item.description,
+      });
+    }
+  }
+  return deduplicated;
+}
+
 export class BusinessContextService {
   private static versionCounter = 1;
 
@@ -178,6 +197,9 @@ export class BusinessContextService {
   static async assembleContext(
     orgId?: string,
     options?: {
+      organizationId?: string;
+      workspaceId?: string;
+      userId?: string;
       activeScreen?: { route: string; label: string; entityId?: string };
       forceRefresh?: boolean;
       isTestExecution?: boolean;
@@ -218,7 +240,10 @@ export class BusinessContextService {
     } catch {}
 
     // 1. Layer 1: Business Knowledge & Ingested Website
-    const websiteKnowledge = options?.localOverrides?.websiteKnowledge || WebsiteIngestionService.getWebsiteKnowledge(cleanOrgId);
+    const websiteKnowledge =
+      options?.localOverrides?.websiteKnowledge ||
+      (options?.workspaceId ? WebsiteIngestionService.getWebsiteKnowledge(options.workspaceId) : null) ||
+      WebsiteIngestionService.getWebsiteKnowledge(cleanOrgId);
     let fbPage = options?.localOverrides?.fbPage;
 
     // Tenant-isolated localStorage validation. Never read a global Facebook-page key.
@@ -246,22 +271,38 @@ export class BusinessContextService {
         }
         const sClient = createClient(sUrl, sKey, { auth: { persistSession: false } });
 
+        const targetOrgId = options?.organizationId || cleanOrgId;
+        const targetWorkspaceId = options?.workspaceId;
+        const targetUserId = options?.userId;
+
         // Query strictly for this tenant UUID or canonical slug
         if (cleanOrgId !== 'unconfigured-tenant' && cleanOrgId !== 'public-visitor') {
-          const res = await sClient
+          let query = sClient
             .from('social_connections')
             .select('*')
             .eq('provider', 'facebook')
-            .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected'])
-            .or(`workspace_id.eq.${cleanOrgId},user_id.eq.${cleanOrgId},organization_id.eq.${cleanOrgId}`)
-            .order('updated_at', { ascending: false });
+            .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected']);
+
+          if (targetWorkspaceId && targetOrgId) {
+            query = query.eq('organization_id', targetOrgId).eq('workspace_id', targetWorkspaceId);
+          } else if (targetWorkspaceId) {
+            query = query.eq('workspace_id', targetWorkspaceId);
+          } else if (targetOrgId) {
+            query = query.eq('organization_id', targetOrgId);
+          }
+
+          if (targetUserId) {
+            query = query.eq('user_id', targetUserId);
+          }
+
+          const res = await query.order('updated_at', { ascending: false });
 
           if (res.data && res.data.length > 0) {
             const conn = res.data.find((c: any) => 
               c.account_type === 'BUSINESS' || 
               c.metadata?.is_page === true || 
               c.metadata?.provider_account_type === 'FACEBOOK_PAGE'
-            ) || res.data[0];
+            );
 
             if (conn) {
               const isP = Boolean(conn.metadata?.is_page === true || conn.account_type === 'BUSINESS' || conn.metadata?.provider_account_type === 'FACEBOOK_PAGE');
@@ -313,12 +354,12 @@ export class BusinessContextService {
     // 1. Resolve Canonical Business Identity via authoritative BusinessIdentityResolver
     const { BusinessIdentityResolver } = require('./businessIdentityResolver');
     const resolvedIdentity = BusinessIdentityResolver.resolveIdentity(orgId, {
-      sessionCompanyName: options?.companyName,
-      sessionOrgName: registeredProfile?.companyName,
+      sessionCompanyName: options?.companyName || websiteKnowledge?.title,
+      sessionOrgName: registeredProfile?.companyName || websiteKnowledge?.title,
     });
 
-    const orgName = resolvedIdentity.companyName;
-    const isIdentityVerified = resolvedIdentity.isVerified;
+    const orgName = resolvedIdentity.companyName || websiteKnowledge?.title || registeredProfile?.companyName || '';
+    const isIdentityVerified = resolvedIdentity.isVerified || Boolean(websiteKnowledge?.title);
 
     const isWkValid = Boolean(
       websiteKnowledge && (
@@ -338,7 +379,7 @@ export class BusinessContextService {
 
     const primarySource = isIdentityVerified
       ? (isSocialPageConnected && isWkValid ? 'Business Profile + Website + Facebook' : (isWkValid ? 'Business Profile + Website' : 'Business Knowledge Profile'))
-      : (isWkValid ? 'Website Ingestion' : (isSocialPageConnected ? 'Facebook Social Attachment' : 'Unverified Workspace'));
+      : (isWkValid ? (websiteKnowledge?.source || 'LIVE_INGESTED') : (isSocialPageConnected ? 'Facebook Social Attachment' : 'Unverified Workspace'));
 
     const contactsList = options?.localOverrides?.contacts || [];
     const hasRealContacts = contactsList.length > 0;
@@ -357,7 +398,7 @@ export class BusinessContextService {
       companyName: {
         value: orgName,
         provenance: isIdentityVerified ? 'VERIFIED' : (orgName ? 'USER_PROVIDED' : 'UNVERIFIED'),
-        source: resolvedIdentity.source,
+        source: resolvedIdentity.source || (websiteKnowledge?.source || 'USER_PROVIDED'),
         confidence: isIdentityVerified ? 1.0 : (orgName ? 0.7 : 0.0),
         lastVerifiedAt: timestamp,
       },
@@ -373,14 +414,18 @@ export class BusinessContextService {
           ? websiteKnowledge.websiteUrl
           : (resolvedIdentity.websiteUrl !== 'Not configured' ? resolvedIdentity.websiteUrl : (fbPage?.website || 'Not configured')),
         provenance: (isWkValid || resolvedIdentity.websiteUrl !== 'Not configured') ? 'VERIFIED' : 'UNVERIFIED',
-        source: isWkValid ? 'Website Ingestion' : (resolvedIdentity.websiteUrl !== 'Not configured' ? 'Business Profile' : 'Not configured'),
+        source: (websiteKnowledge?.source as any) || (isWkValid ? 'LIVE_INGESTED' : (resolvedIdentity.websiteUrl !== 'Not configured' ? 'SAVED_PROFILE' : 'PLATFORM_DEFAULT')),
         confidence: (isWkValid || resolvedIdentity.websiteUrl !== 'Not configured') ? 1.0 : 0.0,
         lastVerifiedAt: timestamp,
       },
       websiteKnowledge: {
         value: websiteKnowledge || null,
         provenance: websiteKnowledge?.provenance || (isWkValid ? 'VERIFIED' : 'UNVERIFIED'),
-        source: isWkValid ? 'Ingested Public Website' : 'Not Ingested',
+        source: websiteKnowledge?.source === 'PLATFORM_DEFAULT'
+          ? 'PLATFORM_DEFAULT'
+          : websiteKnowledge?.source === 'SAVED_PROFILE'
+          ? 'SAVED_PROFILE'
+          : (isWkValid ? 'LIVE_INGESTED' : 'Not Ingested'),
         confidence: isWkValid ? 0.98 : 0.0,
         lastVerifiedAt: websiteKnowledge?.lastSuccessfulSync || timestamp,
       },
@@ -420,7 +465,7 @@ export class BusinessContextService {
         lastVerifiedAt: timestamp,
       },
       productsAndServices: {
-        value: wkProducts || registeredProfile?.productsAndServices || resolvedIdentity.productsAndServices || [],
+        value: deduplicateProducts(wkProducts || registeredProfile?.productsAndServices || resolvedIdentity.productsAndServices || []),
         provenance: (wkProducts || registeredProfile?.productsAndServices || resolvedIdentity.productsAndServices?.length > 0) ? 'VERIFIED' : 'UNVERIFIED',
         source: wkProducts ? 'Ingested Public Website' : primarySource,
         confidence: (wkProducts || registeredProfile?.productsAndServices || resolvedIdentity.productsAndServices?.length > 0) ? 1.0 : 0.0,

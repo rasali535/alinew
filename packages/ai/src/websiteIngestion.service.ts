@@ -54,7 +54,7 @@ export interface IngestedWebsiteKnowledge {
     twitter?: string;
     youtube?: string;
   };
-  source: 'WEBSITE_CRAWLER' | 'MANUAL_IMPORT' | 'PLATFORM_DEFAULT';
+  source: 'LIVE_INGESTED' | 'SAVED_PROFILE' | 'PLATFORM_DEFAULT' | 'WEBSITE_CRAWLER' | 'MANUAL_IMPORT';
   contentHash: string;
   version: string;
   isStale: boolean;
@@ -75,8 +75,8 @@ const RAS_ALI_LABS_VERIFIED_WEBSITE: IngestedWebsiteKnowledge = {
   websiteUrl: 'https://www.rasalilabs.com',
   normalizedUrl: 'https://www.rasalilabs.com',
   status: 'INGESTED',
-  ingestedAt: new Date().toISOString(),
-  lastSuccessfulSync: new Date().toISOString(),
+  ingestedAt: '2026-09-01T00:00:00.000Z',
+  lastSuccessfulSync: '2026-09-01T00:00:00.000Z',
   title: 'Ras Ali Labs — Technology & Creative Company',
   description: 'Ras Ali Labs is a Botswana-based technology and creative company delivering intelligent platforms, cinematic productions, digital experiences and original sound.',
   headings: [
@@ -219,6 +219,67 @@ export class WebsiteIngestionService {
         window.localStorage.setItem(`ralion:${orgId}:website`, JSON.stringify(record));
       } catch {}
     }
+  }
+
+  /**
+   * Directly registers or mocks verified live website knowledge for a workspace or tenant.
+   */
+  static registerLiveWebsiteKnowledge(
+    tenantKey: string,
+    data: {
+      url: string;
+      companyName: string;
+      description?: string;
+      headings?: string[];
+      services?: string[];
+      products?: string[];
+      contactEmail?: string;
+      source?: 'LIVE_INGESTED' | 'SAVED_PROFILE' | 'PLATFORM_DEFAULT';
+    }
+  ): IngestedWebsiteKnowledge {
+    const now = new Date().toISOString();
+    const productsServices = [
+      ...(data.services || []).map((s) => ({ name: s, category: 'Services' })),
+      ...(data.products || []).map((p) => ({ name: p, category: 'Products' })),
+    ];
+
+    const record: IngestedWebsiteKnowledge = {
+      organizationId: tenantKey,
+      workspaceId: tenantKey,
+      websiteUrl: data.url,
+      normalizedUrl: data.url,
+      status: 'INGESTED',
+      ingestedAt: now,
+      lastSuccessfulSync: now,
+      title: data.companyName,
+      description: data.description || '',
+      headings: data.headings || [],
+      productsServices,
+      contactInformation: {
+        emails: data.contactEmail ? [data.contactEmail] : [],
+        phones: [],
+        addresses: [],
+      },
+      socialLinks: {},
+      source: data.source || 'LIVE_INGESTED',
+      contentHash: `hash-${Date.now()}`,
+      version: '1.0.0',
+      isStale: false,
+      syncStatus: 'ACTIVE',
+      provenance: 'VERIFIED',
+      summary: data.description || `${data.companyName} at ${data.url}`,
+      sections: [],
+    };
+
+    this.saveDurableRecord(tenantKey, record);
+    return record;
+  }
+
+  /**
+   * Returns the static platform default website knowledge without fake last-sync timestamps.
+   */
+  static getPlatformDefault(): IngestedWebsiteKnowledge {
+    return { ...RAS_ALI_LABS_VERIFIED_WEBSITE };
   }
 
   /**

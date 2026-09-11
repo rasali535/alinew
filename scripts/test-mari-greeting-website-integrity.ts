@@ -1,7 +1,7 @@
 /**
  * MARI AI — GREETING, WEBSITE KNOWLEDGE & MARKDOWN INTEGRITY TEST SUITE
  * Ras Ali Labs (Pty) Ltd
- * 
+ *
  * Verifies:
  * 1. Greeting classifier and deterministic short-circuit routing
  * 2. Zero credit deduction for greetings
@@ -9,6 +9,8 @@
  * 4. Multi-tenant source precedence and tenant isolation
  * 5. Removal of outdated static seed claims (Johannesburg, 99.8% SLA, zero data loss, SADC corridors, etc.)
  * 6. Markdown normalization and SVG artifact stripping
+ * 7. Two UUID-backed workspaces cannot retrieve each other's website or Facebook context
+ * 8. Deduplication of products/services by normalized name
  */
 
 import assert from 'assert';
@@ -152,7 +154,7 @@ async function main() {
   await runTest('Verified seed knowledge contains NO outdated claims', () => {
     const wk = WebsiteIngestionService.getWebsiteKnowledge('ras-ali-labs');
     assert(wk !== null, 'Website knowledge should exist for ras-ali-labs');
-    
+
     const serialized = JSON.stringify(wk);
     assert(!serialized.includes('Johannesburg'), 'Must not mention Johannesburg');
     assert(!serialized.includes('enterprise@rasalilabs.com'), 'Must not mention enterprise@rasalilabs.com');
@@ -161,7 +163,7 @@ async function main() {
     assert(!serialized.includes('99.8%'), 'Must not mention 99.8% SLA');
     assert(!serialized.includes('trade corridor'), 'Must not mention trade corridors');
     assert(!serialized.includes('offline desktop'), 'Must not mention native offline desktop');
-    
+
     // Check verified positioning and contact
     assert(serialized.includes('contact@rasalilabs.com'), 'Must include verified contact email');
     assert(serialized.includes('+267 72 113 009'), 'Must include verified phone');
@@ -191,8 +193,104 @@ async function main() {
     assert(!JSON.stringify(pameltexCtx.layer1.productsAndServices).includes('Film & Creative Production'), 'Pameltex must not contain Ras Ali products');
   });
 
+  await runTest('Two UUID-backed workspaces cannot retrieve each other\'s website or Facebook context', async () => {
+    const wsA = 'aaaaaaaa-1111-4000-8000-aaaaaaaaaaaa';
+    const wsB = 'bbbbbbbb-2222-4000-8000-bbbbbbbbbbbb';
+    const orgA = 'org-tenant-alpha-uuid';
+    const orgB = 'org-tenant-beta-uuid';
+
+    // Ingest custom website knowledge for Workspace A
+    WebsiteIngestionService.registerLiveWebsiteKnowledge(wsA, {
+      url: 'https://alpha-security.example.com',
+      companyName: 'Alpha Security Systems',
+      description: 'CCTV and biometrics specialist',
+      headings: ['Home', 'Surveillance Systems'],
+      services: ['CCTV Installation', 'Biometric Access'],
+      products: ['AlphaCam 4K'],
+      contactEmail: 'info@alpha-security.example.com',
+      source: 'LIVE_INGESTED',
+    });
+
+    // Ingest custom website knowledge for Workspace B
+    WebsiteIngestionService.registerLiveWebsiteKnowledge(wsB, {
+      url: 'https://beta-bakery.example.com',
+      companyName: 'Beta Artisan Bakery',
+      description: 'Handcrafted sourdough and pastries',
+      headings: ['Menu', 'Pastries'],
+      services: ['Custom Wedding Cakes'],
+      products: ['Sourdough Loaf'],
+      contactEmail: 'order@beta-bakery.example.com',
+      source: 'LIVE_INGESTED',
+    });
+
+    // Assemble context for Workspace A
+    const ctxA = await BusinessContextService.assembleContext(orgA, {
+      workspaceId: wsA,
+      organizationId: orgA,
+    });
+
+    // Assemble context for Workspace B
+    const ctxB = await BusinessContextService.assembleContext(orgB, {
+      workspaceId: wsB,
+      organizationId: orgB,
+    });
+
+    // Verify Workspace A gets ONLY Alpha data and zero Beta data
+    assert.strictEqual(ctxA.layer1.companyName.value, 'Alpha Security Systems');
+    assert.strictEqual(ctxA.layer1.websiteUrl?.value, 'https://alpha-security.example.com');
+    assert(JSON.stringify(ctxA.layer1.productsAndServices).includes('AlphaCam 4K'));
+    assert(!JSON.stringify(ctxA.layer1.productsAndServices).includes('Sourdough Loaf'), 'Workspace A must not contain Beta products');
+    assert(!JSON.stringify(ctxA).includes('beta-bakery.example.com'), 'Workspace A must not contain Beta domain');
+
+    // Verify Workspace B gets ONLY Beta data and zero Alpha data
+    assert.strictEqual(ctxB.layer1.companyName.value, 'Beta Artisan Bakery');
+    assert.strictEqual(ctxB.layer1.websiteUrl?.value, 'https://beta-bakery.example.com');
+    assert(JSON.stringify(ctxB.layer1.productsAndServices).includes('Sourdough Loaf'));
+    assert(!JSON.stringify(ctxB.layer1.productsAndServices).includes('AlphaCam 4K'), 'Workspace B must not contain Alpha products');
+    assert(!JSON.stringify(ctxB).includes('alpha-security.example.com'), 'Workspace B must not contain Alpha domain');
+
+    // Verify Source Tagging on Live Ingested
+    assert.strictEqual(ctxA.layer1.websiteUrl?.source, 'LIVE_INGESTED');
+    assert.strictEqual(ctxB.layer1.websiteUrl?.source, 'LIVE_INGESTED');
+  });
+
   // ─────────────────────────────────────────────────────────────────────────
-  // 6. MARKDOWN NORMALIZATION & SVG REMOVAL
+  // 6. PRODUCT DEDUPLICATION & SOURCE INTEGRITY
+  // ─────────────────────────────────────────────────────────────────────────
+  await runTest('Products and services are deduplicated by normalized name', async () => {
+    const wsDup = 'cccccccc-3333-4000-8000-cccccccccccc';
+    const orgDup = 'org-dup-test';
+
+    WebsiteIngestionService.registerLiveWebsiteKnowledge(wsDup, {
+      url: 'https://dup.example.com',
+      companyName: 'Duplicate Test Co',
+      description: 'Testing product deduplication',
+      headings: ['Products'],
+      services: ['Cloud Consulting', 'cloud consulting', '  Cloud Consulting  '],
+      products: ['App Builder', 'APP BUILDER', 'app builder', 'Database Sync'],
+      source: 'LIVE_INGESTED',
+    });
+
+    const ctx = await BusinessContextService.assembleContext(orgDup, {
+      workspaceId: wsDup,
+    });
+
+    const productNames = ctx.layer1.productsAndServices.value.map((p) => p.name);
+    assert.strictEqual(productNames.filter((n) => n.toLowerCase() === 'cloud consulting').length, 1, 'Cloud Consulting must appear exactly once');
+    assert.strictEqual(productNames.filter((n) => n.toLowerCase() === 'app builder').length, 1, 'App Builder must appear exactly once');
+    assert.strictEqual(productNames.filter((n) => n.toLowerCase() === 'database sync').length, 1, 'Database Sync must appear exactly once');
+    assert.strictEqual(productNames.length, 3, 'Total deduplicated items must be exactly 3');
+  });
+
+  await runTest('Platform default website knowledge does not generate fake last-sync timestamps', async () => {
+    const defaultKnowledge = WebsiteIngestionService.getPlatformDefault();
+    assert(defaultKnowledge !== null);
+    assert.strictEqual(defaultKnowledge.source, 'PLATFORM_DEFAULT');
+    assert.strictEqual(defaultKnowledge.lastSuccessfulSync, '2026-09-01T00:00:00.000Z', 'Default knowledge must use static reference timestamp, not live now()');
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 7. MARKDOWN NORMALIZATION & SVG REMOVAL
   // ─────────────────────────────────────────────────────────────────────────
   await runTest('normalizeMarkdownText strips literal "svg" and button artifacts', () => {
     const dirty = 'Here is the plan svgSend to Studio for your growth';

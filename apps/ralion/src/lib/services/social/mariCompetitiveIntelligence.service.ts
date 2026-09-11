@@ -17,18 +17,20 @@ export interface IndustryBenchmarkMetrics {
   industry: string;
   region: string;
   averageEngagementRate: number; // e.g. 3.2%
-  rasAliLabsEngagementRate: number; // e.g. 5.8%
+  clientEngagementRate: number; // e.g. 5.8%
+  rasAliLabsEngagementRate?: number; // backwards compatibility
   averageFollowerGrowthMonthly: number; // e.g. +4.5%
-  rasAliLabsGrowthMonthly: number; // e.g. +13.1%
+  clientGrowthMonthly: number; // e.g. +13.1%
+  rasAliLabsGrowthMonthly?: number; // backwards compatibility
   topPerformingFormats: { format: string; shareOfEngagement: string }[];
   peakPublishingTimes: string[];
 }
 
 export interface CompetitivePositioningDimension {
   dimension: string;
-  traditionalForeignSaaS: string; // e.g. Global Generic (Hootsuite/HubSpot)
-  localRegionalCompetitors: string; // e.g. Basic Agencies
-  ralionOsAdvantage: string; // Ras Ali Labs unique edge
+  traditionalForeignSaaS: string;
+  localRegionalCompetitors: string;
+  ralionOsAdvantage: string;
 }
 
 export interface MarketOpportunityItem {
@@ -60,48 +62,50 @@ export class MariCompetitiveIntelligenceService {
     organizationId?: string;
   }): ComprehensiveMarketResearchReport {
     const benchmarks: IndustryBenchmarkMetrics = {
-      industry: 'Enterprise B2B Software & AI Infrastructure',
-      region: 'Southern Africa (SADC: Botswana, South Africa, Namibia, Zambia)',
+      industry: 'Commercial Technology & Business Services',
+      region: 'Regional & Global Commercial Markets',
       averageEngagementRate: 3.2,
+      clientEngagementRate: 5.8,
       rasAliLabsEngagementRate: 5.8,
       averageFollowerGrowthMonthly: 4.5,
+      clientGrowthMonthly: 13.1,
       rasAliLabsGrowthMonthly: 13.1,
       topPerformingFormats: [
-        { format: 'Short-Form Product Video Reels (<30s)', shareOfEngagement: '62%' },
-        { format: 'Data Infographics & Workflow Architecture Diagrams', shareOfEngagement: '24%' },
-        { format: 'Executive Thought Leadership & Case Studies', shareOfEngagement: '14%' },
+        { format: 'Short-Form Product & Service Video Reels (<30s)', shareOfEngagement: '62%' },
+        { format: 'Visual Infographics & Operational Insights', shareOfEngagement: '24%' },
+        { format: 'Case Studies & Customer Success Highlights', shareOfEngagement: '14%' },
       ],
       peakPublishingTimes: [
-        'Tuesday 09:30–11:00 SAST (Peak B2B Decision-Maker Attention)',
-        'Thursday 10:00–12:00 SAST (Mid-Week Procurement Window)',
-        'Friday 15:00–16:30 SAST (Weekly Innovation & Milestone Recaps)',
+        'Tuesday 09:30–11:00 (Peak Decision-Maker Engagement)',
+        'Thursday 10:00–12:00 (Mid-Week Planning Window)',
+        'Friday 15:00–16:30 (Weekly Milestone & Impact Recaps)',
       ],
     };
 
     const positioningMatrix: CompetitivePositioningDimension[] = [
       {
-        dimension: 'Regional Relevance & Trade Compliance',
-        traditionalForeignSaaS: 'US/EU centric, zero native support for SADC cross-border trade or regional logistics workflows.',
-        localRegionalCompetitors: 'Manual social management agencies with no proprietary software or automation tools.',
-        ralionOsAdvantage: 'Native automated trade corridors, customs compliance, and multi-currency billing (BWP, ZAR, USD).',
+        dimension: 'Market Focus & Customization',
+        traditionalForeignSaaS: 'Rigid global templates without tailored local workflow adaptation.',
+        localRegionalCompetitors: 'Manual service agencies without integrated automation software.',
+        ralionOsAdvantage: 'Integrated business operating system with localized workflow intelligence.',
       },
       {
-        dimension: 'AI Infrastructure & Multi-Model Engine',
-        traditionalForeignSaaS: 'Locked into single proprietary closed models with high USD API markups and foreign latency.',
-        localRegionalCompetitors: 'Generic ChatGPT wrapper prompts with no fine-tuning or enterprise context.',
-        ralionOsAdvantage: 'Real-time multi-model dynamic routing (Gemini + Claude + DeepSeek) with sovereign local data control.',
+        dimension: 'AI Intelligence & Automation',
+        traditionalForeignSaaS: 'Generic single-model wrappers with minimal business context grounding.',
+        localRegionalCompetitors: 'Manual copy-writing without real-time customer data grounding.',
+        ralionOsAdvantage: 'Multi-model business intelligence grounded directly in verified company knowledge.',
       },
       {
-        dimension: 'Pricing & Unit Economics',
-        traditionalForeignSaaS: '$150–$500+/mo in foreign currency with rigid enterprise sales lock-ins.',
-        localRegionalCompetitors: 'Retainer fees exceeding P15,000–P35,000/mo for manual posting.',
-        ralionOsAdvantage: 'Disruptive SaaS pricing starting from $1/day (P30/day) with enterprise-grade autonomous execution.',
+        dimension: 'Operational Economics',
+        traditionalForeignSaaS: 'High per-seat pricing with restrictive enterprise tiers.',
+        localRegionalCompetitors: 'Expensive manual retainers with slow turnaround times.',
+        ralionOsAdvantage: 'High-leverage automated execution with transparent, accessible pricing.',
       },
       {
         dimension: 'Integrated Operational Ecosystem',
-        traditionalForeignSaaS: 'Fragmented single-point tools requiring 10+ disjointed subscriptions.',
-        localRegionalCompetitors: 'Spreadsheet-based planning with manual copy-pasting across portals.',
-        ralionOsAdvantage: 'Unified OS unifying Social Hub, CRM, Invoicing, Document Intelligence, and AI Automation.',
+        traditionalForeignSaaS: 'Fragmented point tools requiring multiple disconnected subscriptions.',
+        localRegionalCompetitors: 'Manual spreadsheet tracking across disconnected channels.',
+        ralionOsAdvantage: 'Unified OS integrating Social Management, CRM, Tasks, and AI Studio.',
       },
     ];
 
@@ -109,40 +113,40 @@ export class MariCompetitiveIntelligenceService {
       {
         id: 'opp_1',
         category: 'TECHNOLOGY_MOAT',
-        title: 'Sovereign AI Infrastructure vs Foreign Hyperscalers',
-        marketInsight: 'Regional African enterprises are increasingly seeking local data residency and sovereign compliance to avoid cross-border data leakage.',
-        recommendedAction: 'Publish engineering thought leadership highlighting Ras Ali Labs local infrastructure and data sovereignty.',
-        suggestedPrompt: 'Draft an authoritative article: "Why African Enterprises Need Sovereign AI and Local Cloud Infrastructure in 2026".',
-        expectedGrowthImpact: '+35% qualified enterprise CTO inquiries',
+        title: 'Verified Business Intelligence & Brand Grounding',
+        marketInsight: 'Commercial audiences engage significantly more with authentic, operational insights than generic promotional copy.',
+        recommendedAction: 'Publish operational spotlights highlighting dependable standards and client value.',
+        suggestedPrompt: 'Draft an authoritative article: "How Operational Excellence and Automation Drive Consistent Client Outcomes in 2026".',
+        expectedGrowthImpact: '+35% qualified customer inquiries',
       },
       {
         id: 'opp_2',
         category: 'CONTENT_GAP',
-        title: 'Under-utilized Video Reel Demos in SADC B2B Sector',
-        marketInsight: '90% of regional software competitors rely on boring static stock photos. Video reels achieve 3.1x higher reach in Southern Africa.',
-        recommendedAction: 'Deploy 2 short-form UI video reels weekly showcasing real-time automated workflows in Ralion OS.',
-        suggestedPrompt: 'Create a 15-second product reel script: "Automating customer quote generation in 3 clicks with Ralion AI".',
+        title: 'Demonstration Reels & Interactive Showcases',
+        marketInsight: 'Short-form visual demonstrations achieve up to 3x higher engagement compared to static posts.',
+        recommendedAction: 'Deploy 2 short-form product or service spotlight reels weekly.',
+        suggestedPrompt: 'Create a 15-second product demonstration script highlighting key customer benefits.',
         expectedGrowthImpact: '+42% organic reach compound growth',
       },
       {
         id: 'opp_3',
         category: 'REGIONAL_UNDERSERVED',
-        title: 'Cross-Border SADC Trade Logistics Automation',
-        marketInsight: 'Logistics and supply chain operators across Botswana and South Africa suffer from manual border paperwork delays.',
-        recommendedAction: 'Highlight Ralion OS automated trade corridor features and customs compliance accelerators.',
-        suggestedPrompt: 'Draft an executive infographic post: "5 Ways SADC Logistics Operators Cut Border Clearance Times by 70%".',
-        expectedGrowthImpact: '+28% shares and bookmarks by trade executives',
+        title: 'Customer Success & Direct Value Delivery',
+        marketInsight: 'Decision-makers prioritize clear business outcomes and transparent service delivery.',
+        recommendedAction: 'Highlight customer success stories and measurable operational improvements.',
+        suggestedPrompt: 'Draft a customer success spotlight infographic illustrating measurable business outcomes.',
+        expectedGrowthImpact: '+28% shares and bookmarks by industry professionals',
       },
     ];
 
     return {
       generatedAt: new Date().toISOString(),
-      industry: 'Enterprise Software & Sovereign AI Infrastructure',
-      region: 'Southern Africa (SADC)',
+      industry: 'Commercial Technology & Business Services',
+      region: 'Regional & Global Commercial Markets',
       benchmarks,
       positioningMatrix,
       opportunities,
-      strategicSummary: 'Ras Ali Labs currently outperforms regional SaaS engagement baselines (5.8% vs 3.2%). Capitalizing on video format velocity and sovereign AI positioning offers an immediate pathway to category leadership across SADC.',
+      strategicSummary: 'Capitalizing on visual content velocity and grounded business intelligence provides a strong foundation for consistent audience growth and client engagement.',
     };
   }
 
