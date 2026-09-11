@@ -71,7 +71,8 @@ export async function verifyPlatformAdminRequest(request: NextRequest): Promise<
       const user = userData.user;
       const isAuthorized = PlatformAdminService.verifyAdminAuthorization(
         user.user_metadata,
-        user.email
+        user.email,
+        user.app_metadata
       );
 
       if (!isAuthorized) {

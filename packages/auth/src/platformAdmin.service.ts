@@ -189,16 +189,24 @@ export class PlatformAdminService {
   }
 
   /**
-   * Verify whether a given user / role is authorized as PLATFORM_ADMIN
+   * Verify whether a given user / role is authorized as PLATFORM_ADMIN.
+   * Privileges are granted ONLY from verified server claims (app_metadata) or trusted server admin emails,
+   * never solely from user-editable user_metadata.
    */
-  static verifyAdminAuthorization(userMetadata: any, email?: string): boolean {
-    if (email === 'ali@rasalilabs.com' || email === 'admin@rasalilabs.com') {
+  static verifyAdminAuthorization(userMetadata: any, email?: string, appMetadata?: any): boolean {
+    const normalizedEmail = email?.toLowerCase().trim();
+    if (normalizedEmail === 'ali@rasalilabs.com' || normalizedEmail === 'admin@rasalilabs.com') {
       return true;
     }
-    const role = userMetadata?.role || userMetadata?.user_role;
-    const isPlatformAdmin = userMetadata?.isPlatformAdmin === true;
-    const orgId = userMetadata?.organizationId;
 
-    return (role === 'PLATFORM_ADMIN' || isPlatformAdmin) && orgId === 'ras-ali-labs';
+    const appRole = appMetadata?.role || appMetadata?.user_role;
+    const isAppPlatformAdmin = appMetadata?.isPlatformAdmin === true;
+    const appOrgId = appMetadata?.organizationId;
+
+    if ((appRole === 'PLATFORM_ADMIN' || isAppPlatformAdmin) && (appOrgId === 'ras-ali-labs' || !appOrgId)) {
+      return true;
+    }
+
+    return false;
   }
 }

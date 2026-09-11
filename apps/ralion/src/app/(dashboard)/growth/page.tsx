@@ -2188,7 +2188,7 @@ Rules:
   const scheduledCount = dateFilteredPosts.filter(p => p.status === 'scheduled').length;
   const activeCampaignsCount = campaigns.filter(c => c.status === 'active').length;
 
-  const activeAcc = connectedAccounts.find(a => a.id === selectedAccountId) || connectedAccounts[0];
+  const activeAcc = connectedAccounts.find(a => a.id === selectedAccountId) || (connectedAccounts.length === 1 ? connectedAccounts[0] : null);
   const activeAccAny = activeAcc as any;
   const fbConn = (activeAcc && activeAcc.provider === 'facebook') ? activeAcc : connectedAccounts.find(a => a.provider === 'facebook');
   const isSelectedFacebook = activeAcc?.provider === 'facebook';
@@ -3459,7 +3459,7 @@ Rules:
             {connectedAccounts.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {connectedAccounts.map((acc) => {
-                  const isSelected = selectedAccountId === acc.id || (!selectedAccountId && connectedAccounts[0]?.id === acc.id);
+                  const isSelected = selectedAccountId === acc.id || (!selectedAccountId && connectedAccounts.length === 1 && connectedAccounts[0]?.id === acc.id);
                   const isFb = acc.provider === 'facebook';
                   return (
                     <div
@@ -3668,7 +3668,7 @@ Rules:
                     variant="primary" 
                     size="sm" 
                     onClick={() => {
-                      const activeAcc = connectedAccounts.find(a => a.id === selectedAccountId) || connectedAccounts[0];
+                      const activeAcc = connectedAccounts.find(a => a.id === selectedAccountId) || (connectedAccounts.length === 1 ? connectedAccounts[0] : null);
                       setNewPost({
                         title: `${activeAcc?.label || 'Social'} Update`,
                         body: 'Ralion OS Social Infrastructure is officially live with verified multi-channel integration.',
@@ -3686,7 +3686,7 @@ Rules:
                     variant="outline" 
                     size="sm" 
                     onClick={() => {
-                      const activeAcc = connectedAccounts.find(a => a.id === selectedAccountId) || connectedAccounts[0];
+                      const activeAcc = connectedAccounts.find(a => a.id === selectedAccountId) || (connectedAccounts.length === 1 ? connectedAccounts[0] : null);
                       if (activeAcc) {
                         handleDisconnectAccount(activeAcc.id, activeAcc.provider);
                       }
@@ -3830,7 +3830,7 @@ Rules:
                 </div>
 
                 {(() => {
-                  const activeConnId = selectedAccountId ?? connectedAccounts[0]?.id ?? '';
+                  const activeConnId = selectedAccountId ?? (connectedAccounts.length === 1 ? connectedAccounts[0]?.id : '') ?? '';
                   const activePosts = connectionPosts[activeConnId] ?? (activeAcc?.provider === 'facebook' ? facebookPagePosts : []);
 
                   if (isPersonalFacebookProfile) {
@@ -6020,13 +6020,13 @@ Rules:
               <div className="mt-1 p-2.5 rounded-xl bg-zinc-950 border border-indigo-500/40 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
                   <div className="w-7 h-7 rounded-lg bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center font-bold text-xs text-indigo-400">
-                    {(connectedAccounts.find(a => a.id === selectedAccountId)?.provider || connectedAccounts[0]?.provider || 'fb').slice(0, 2).toUpperCase()}
+                    {(connectedAccounts.find(a => a.id === selectedAccountId)?.provider || (connectedAccounts.length === 1 ? connectedAccounts[0]?.provider : null) || 'fb').slice(0, 2).toUpperCase()}
                   </div>
                   <div>
                     {(() => {
-                      const activeAcc = connectedAccounts.find(a => a.id === selectedAccountId) || connectedAccounts[0];
+                      const activeAcc = connectedAccounts.find(a => a.id === selectedAccountId) || (connectedAccounts.length === 1 ? connectedAccounts[0] : null);
                       const activeFbPage = (activeAcc?.provider === 'facebook')
-                        ? (availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || availableFacebookPages[0])
+                        ? (availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || (availableFacebookPages.length === 1 ? availableFacebookPages[0] : null))
                         : null;
                       const name = activeAcc?.label || activeFbPage?.name || 'Social Account';
                       const handle = activeAcc?.handle || activeFbPage?.username || `@${activeAcc?.provider || 'social'}`;
