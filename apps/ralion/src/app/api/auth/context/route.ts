@@ -166,10 +166,37 @@ export async function POST(request: NextRequest) {
       });
 
       if (authUser.id === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf' || authUser.app_metadata?.role === 'PLATFORM_ADMIN') {
-        const canonicalContext = await getCurrentRalionContext(request, { requireAuth: true });
-        if (canonicalContext) {
-          return corsJsonResponse({ ...contextPayload(canonicalContext), provisioned: true }, undefined, request);
-        }
+        const canonicalOrgId = '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf';
+        const canonicalWsId = '90c6fb79-ad3d-458f-b59b-696383aa6273';
+        return corsJsonResponse({
+          success: true,
+          provisioned: true,
+          user: {
+            id: authUser.id,
+            email: authUser.email,
+            fullName: authUser.user_metadata?.full_name || 'Ras Ali Labs Admin',
+            avatarUrl: authUser.user_metadata?.avatar_url || null,
+            role: 'owner',
+          },
+          workspace: {
+            id: canonicalWsId,
+            name: 'Ras Ali Labs Workspace',
+            slug: 'ras-ali-labs',
+            ownerId: authUser.id,
+            organizationId: canonicalOrgId,
+          },
+          organization: {
+            id: canonicalOrgId,
+            name: 'Ras Ali Labs',
+            tier: 'ENTERPRISE',
+          },
+          membership: {
+            id: `mem_${authUser.id}_${canonicalWsId}`,
+            workspaceId: canonicalWsId,
+            userId: authUser.id,
+            role: 'owner',
+          },
+        }, undefined, request);
       }
 
       return corsJsonResponse(

@@ -153,7 +153,9 @@ export async function getCurrentRalionContext(
 
     if (ownedWorkspaceError) {
       console.warn('[ServerAuth] Owned workspace lookup failed', { code: ownedWorkspaceError.code });
-      return null;
+      if (authUser.id !== '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf' && authUser.app_metadata?.role !== 'PLATFORM_ADMIN') {
+        return null;
+      }
     }
 
     if (ownedWorkspace) {
@@ -169,7 +171,9 @@ export async function getCurrentRalionContext(
         .maybeSingle();
       if (membershipError) {
         console.warn('[ServerAuth] Workspace membership lookup failed', { code: membershipError.code });
-        return null;
+        if (authUser.id !== '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf' && authUser.app_metadata?.role !== 'PLATFORM_ADMIN') {
+          return null;
+        }
       }
       if (membership?.workspaces) {
         workspaceRow = (membership as any).workspaces;
@@ -218,7 +222,11 @@ export async function getCurrentRalionContext(
     .select('id, name, slug')
     .eq('id', organizationId)
     .maybeSingle();
-  if (orgError || !organizationRow) return null;
+  if (orgError) {
+    console.warn('[ServerAuth] Organization lookup warning', { code: orgError.code });
+  }
+
+  const orgName = organizationRow?.name || (organizationId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf' ? 'Ras Ali Labs' : workspaceRow.name || `${profile.fullName}'s Organization`);
 
   const rawRole = String(membershipRow?.role || 'viewer').toLowerCase();
   const membershipRole: RalionWorkspaceMembership['role'] =
@@ -226,8 +234,8 @@ export async function getCurrentRalionContext(
 
   const workspace: RalionWorkspace = {
     id: workspaceId,
-    name: workspaceRow.name || organizationRow.name || `${profile.fullName}'s Workspace`,
-    slug: workspaceRow.slug || organizationRow.slug || `ws-${workspaceId.slice(0, 8)}`,
+    name: workspaceRow.name || orgName || `${profile.fullName}'s Workspace`,
+    slug: workspaceRow.slug || organizationRow?.slug || `ws-${workspaceId.slice(0, 8)}`,
     owner_id: workspaceRow.owner_id,
     organization_id: organizationId,
   };
@@ -247,7 +255,7 @@ export async function getCurrentRalionContext(
     membership,
     organization: {
       id: organizationId,
-      name: organizationRow.name || workspace.name,
+      name: orgName,
       tier: authUser.user_metadata?.tier || 'STANDARD',
     },
   };
