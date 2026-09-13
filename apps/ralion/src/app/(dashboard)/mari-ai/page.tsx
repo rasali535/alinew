@@ -65,7 +65,7 @@ import {
   DataProvenance,
   WebsiteIngestionService
 } from '@ralion/ai';
-import { getRalionApiUrl, getRalionAuthHeaders } from '@/lib/api-config';
+import { getRalionApiUrl, getRalionAuthHeaders, MARI_BUILD_VERSION } from '@/lib/api-config';
 import { useOrganization } from '@ralion/auth';
 import { MariMarkdownMessage } from '@/components/MariMarkdownMessage';
 
@@ -420,7 +420,15 @@ export default function MariAiPage() {
       let modelUsed = 'Mari Enterprise Intelligence';
       let responseSource = 'UNKNOWN';
       let fallbackUsed = false;
-      const buildVersion = '2026.09.06-v2';
+      const buildVersion = MARI_BUILD_VERSION;
+      let detectedIntent: string | undefined = undefined;
+      let semanticDecisionSource: string | undefined = undefined;
+      let requestedAction: string | undefined = undefined;
+      let requestedSources: string[] | undefined = undefined;
+      let toolsActuallyExecuted: string[] | undefined = undefined;
+      let modelAttempted: string | null | undefined = undefined;
+      let modelSucceeded: boolean | undefined = undefined;
+      let fallbackReason: string | null | undefined = undefined;
 
       // 1. Primary: Server-side authenticated Mari Chat API
       const apiUrl = getRalionApiUrl('/api/mari/chat');
@@ -461,6 +469,15 @@ export default function MariAiPage() {
             tokens = data.usage;
             modelUsed = data.modelUsed || 'Mari Enterprise Intelligence (gemini-2.5-flash)';
             responseSource = data.responseSource || 'SERVER_MARI_CHAT_API';
+            fallbackUsed = typeof data.fallbackUsed === 'boolean' ? data.fallbackUsed : (data.semanticDecisionSource === 'FALLBACK' || !data.modelSucceeded);
+            detectedIntent = data.detectedIntent;
+            semanticDecisionSource = data.semanticDecisionSource;
+            requestedAction = data.requestedAction;
+            requestedSources = data.requestedSources;
+            toolsActuallyExecuted = data.toolsActuallyExecuted;
+            modelAttempted = data.modelAttempted;
+            modelSucceeded = data.modelSucceeded;
+            fallbackReason = data.fallbackReason;
           }
         }
       } catch (apiErr: any) {
@@ -471,6 +488,8 @@ export default function MariAiPage() {
       if (!answerText) {
         fallbackUsed = true;
         responseSource = 'CLIENT_FALLBACK_LOCAL_ENGINE';
+        semanticDecisionSource = 'FALLBACK';
+        fallbackReason = 'NETWORK_OR_SERVER_UNREACHABLE';
 
         let activeCtx = businessContext;
         if (!activeCtx || !activeCtx.layer1.websiteKnowledge?.value || !activeCtx.layer2.social?.isConnected) {
@@ -508,7 +527,7 @@ export default function MariAiPage() {
         modelUsed = apiResult?.modelInfo ? `${apiResult.modelInfo.category} (${apiResult.modelInfo.model})` : 'Mari Growth Intelligence';
       }
 
-      // Live Diagnostic Telemetry in Browser Console
+      // Live Safe Diagnostic Telemetry in Browser Console
       console.log('[MARI_TELEMETRY]', {
         MARI_REQUEST_URL: apiUrl,
         MARI_HTTP_STATUS: httpStatus,
@@ -516,6 +535,14 @@ export default function MariAiPage() {
         MARI_RESPONSE_SOURCE: responseSource,
         MARI_FALLBACK_USED: fallbackUsed,
         MARI_BUILD_VERSION: buildVersion,
+        detectedIntent,
+        semanticDecisionSource,
+        requestedAction,
+        requestedSources,
+        toolsActuallyExecuted,
+        modelAttempted,
+        modelSucceeded,
+        fallbackReason,
       });
 
       const mariMsg: ChatMessage = {

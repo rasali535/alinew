@@ -7,7 +7,7 @@ import { Button, Badge } from '@ralion/ui';
 import { MariMarkdownMessage } from './MariMarkdownMessage';
 import { useOrganization } from '@ralion/auth';
 
-import { getRalionApiUrl, getRalionAuthHeaders } from '@/lib/api-config';
+import { getRalionApiUrl, getRalionAuthHeaders, MARI_BUILD_VERSION } from '@/lib/api-config';
 
 export interface MariAiDrawerProps {
   isOpen: boolean;
@@ -47,7 +47,11 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
       let respText = '';
       let responseSource = 'UNKNOWN';
       let fallbackUsed = false;
-      const buildVersion = '2026.09.06-v2';
+      let buildVersion = MARI_BUILD_VERSION;
+      let detectedIntent: string | undefined = undefined;
+      let modelAttempted: string | null = null;
+      let modelSucceeded: boolean = false;
+      let fallbackReason: string | null = null;
 
       try {
         const authHeaders = await getRalionAuthHeaders();
@@ -87,6 +91,13 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
           const data = await res.json();
           respText = data.answer || data.text || "I've reviewed your business intelligence.";
           responseSource = data.responseSource || 'SERVER_MARI_CHAT_API';
+          fallbackUsed = data.fallbackUsed !== undefined ? data.fallbackUsed : (responseSource === 'local_grounded' && data.detectedIntent !== 'GREETING' && data.detectedIntent !== 'FACEBOOK_CONNECTION_STATUS' && data.detectedIntent !== 'CREATIVE_STUDIO');
+          buildVersion = data.buildVersion || MARI_BUILD_VERSION;
+          detectedIntent = data.detectedIntent;
+          modelAttempted = data.modelAttempted;
+          modelSucceeded = Boolean(data.modelSucceeded);
+          fallbackReason = data.fallbackReason;
+
           setMessages(prev => [
             ...prev,
             {
@@ -98,6 +109,7 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
           ]);
         } else {
           fallbackUsed = true;
+          fallbackReason = `HTTP_${httpStatus}`;
           respText = "I am ready to assist with your growth strategy, campaign planning, and business analysis.";
           responseSource = 'HTTP_NON_200_FALLBACK';
           setMessages(prev => [
@@ -110,6 +122,7 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
         }
       } catch (err: any) {
         fallbackUsed = true;
+        fallbackReason = `NETWORK_ERROR_${err.message || 'EXCEPTION'}`;
         respText = "I'm having trouble connecting to my neural reasoning core right now. Please check your network connection.";
         responseSource = 'NETWORK_ERROR_FALLBACK';
         setMessages(prev => [
@@ -123,10 +136,14 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
         console.log('[MARI_DRAWER_TELEMETRY]', {
           MARI_REQUEST_URL: apiUrl,
           MARI_HTTP_STATUS: httpStatus,
-          MARI_RESPONSE_ANSWER: respText,
+          MARI_RESPONSE_HAS_ANSWER: Boolean(respText),
           MARI_RESPONSE_SOURCE: responseSource,
           MARI_FALLBACK_USED: fallbackUsed,
           MARI_BUILD_VERSION: buildVersion,
+          MARI_DETECTED_INTENT: detectedIntent,
+          MARI_MODEL_ATTEMPTED: modelAttempted,
+          MARI_MODEL_SUCCEEDED: modelSucceeded,
+          MARI_FALLBACK_REASON: fallbackReason,
         });
         setIsProcessing(false);
       }

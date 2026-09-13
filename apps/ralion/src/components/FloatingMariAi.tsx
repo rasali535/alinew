@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Sparkles, X, Send, Bot, User, ChevronUp, Zap, ArrowRight } from 'lucide-react';
 import { MariMarkdownMessage } from './MariMarkdownMessage';
-import { getRalionApiUrl, getRalionAuthHeaders } from '@/lib/api-config';
+import { getRalionApiUrl, getRalionAuthHeaders, MARI_BUILD_VERSION } from '@/lib/api-config';
 import { useOrganization } from '@ralion/auth';
 
 export const FloatingMariAi: React.FC = () => {
@@ -35,7 +35,11 @@ export const FloatingMariAi: React.FC = () => {
     let responseText = '';
     let responseSource = 'UNKNOWN';
     let fallbackUsed = false;
-    const buildVersion = '2026.09.06-v2';
+    let buildVersion = MARI_BUILD_VERSION;
+    let detectedIntent: string | undefined = undefined;
+    let modelAttempted: string | null = null;
+    let modelSucceeded: boolean = false;
+    let fallbackReason: string | null = null;
 
     try {
       const authHeaders = await getRalionAuthHeaders();
@@ -75,9 +79,17 @@ export const FloatingMariAi: React.FC = () => {
         const data = await res.json();
         responseText = data.answer || data.text || "I'm analyzing your business data right now.";
         responseSource = data.responseSource || 'SERVER_MARI_CHAT_API';
+        fallbackUsed = data.fallbackUsed !== undefined ? data.fallbackUsed : (responseSource === 'local_grounded' && data.detectedIntent !== 'GREETING' && data.detectedIntent !== 'FACEBOOK_CONNECTION_STATUS' && data.detectedIntent !== 'CREATIVE_STUDIO');
+        buildVersion = data.buildVersion || MARI_BUILD_VERSION;
+        detectedIntent = data.detectedIntent;
+        modelAttempted = data.modelAttempted;
+        modelSucceeded = Boolean(data.modelSucceeded);
+        fallbackReason = data.fallbackReason;
+
         setMessages(prev => [...prev, { sender: 'MARI', text: responseText, id: `mari-${Date.now()}` }]);
       } else {
         fallbackUsed = true;
+        fallbackReason = `HTTP_${httpStatus}`;
         responseText = "I am currently synchronizing with your live business data. You can access Growth Studio, CRM, and Campaign tools directly from your workspace.";
         responseSource = 'HTTP_NON_200_FALLBACK';
         setMessages(prev => [
@@ -91,6 +103,7 @@ export const FloatingMariAi: React.FC = () => {
       }
     } catch (err: any) {
       fallbackUsed = true;
+      fallbackReason = `NETWORK_ERROR_${err.message || 'EXCEPTION'}`;
       responseText = "I'm having trouble connecting to my neural reasoning core right now. Please check your network connection.";
       responseSource = 'NETWORK_ERROR_FALLBACK';
       setMessages(prev => [
@@ -105,10 +118,14 @@ export const FloatingMariAi: React.FC = () => {
       console.log('[MARI_FLOATING_TELEMETRY]', {
         MARI_REQUEST_URL: apiUrl,
         MARI_HTTP_STATUS: httpStatus,
-        MARI_RESPONSE_ANSWER: responseText,
+        MARI_RESPONSE_HAS_ANSWER: Boolean(responseText),
         MARI_RESPONSE_SOURCE: responseSource,
         MARI_FALLBACK_USED: fallbackUsed,
         MARI_BUILD_VERSION: buildVersion,
+        MARI_DETECTED_INTENT: detectedIntent,
+        MARI_MODEL_ATTEMPTED: modelAttempted,
+        MARI_MODEL_SUCCEEDED: modelSucceeded,
+        MARI_FALLBACK_REASON: fallbackReason,
       });
       setIsProcessing(false);
     }

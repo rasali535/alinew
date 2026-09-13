@@ -6,7 +6,22 @@
  * canonical Ralion API endpoint and share one recoverable Supabase session.
  */
 
-export const MARI_BUILD_VERSION = '2026.09.06-v2';
+export function getMariBuildVersion(): string {
+  if (typeof process !== 'undefined' && process.env) {
+    const envVer =
+      process.env.NEXT_PUBLIC_MARI_BUILD_VERSION ||
+      process.env.MARI_BUILD_VERSION ||
+      process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ||
+      process.env.VERCEL_GIT_COMMIT_SHA ||
+      process.env.GIT_COMMIT_SHA;
+    if (envVer && envVer.trim()) {
+      return envVer.trim().substring(0, 16);
+    }
+  }
+  return '2026.09.13-1ce30d6f';
+}
+
+export const MARI_BUILD_VERSION = getMariBuildVersion();
 
 export function getRalionApiBase(): string {
   const configuredApiUrl = process.env.NEXT_PUBLIC_RALION_API_URL || process.env.NEXT_PUBLIC_API_URL;

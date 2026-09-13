@@ -5,8 +5,17 @@
  * Guarantees NO fallback to legacy dead backends (alinew.onrender.com).
  */
 
-export const AUTHORITATIVE_PROD_API = 'https://rasalilabs.com/ralion';
-export const MARI_BUILD_VERSION = '2026.09.06-v2';
+export function getMariBuildVersion() {
+  const envVer =
+    (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env.VITE_MARI_BUILD_VERSION || import.meta.env.VITE_GIT_COMMIT_SHA)) ||
+    (typeof process !== 'undefined' && process.env && (process.env.NEXT_PUBLIC_MARI_BUILD_VERSION || process.env.MARI_BUILD_VERSION || process.env.GIT_COMMIT_SHA));
+  if (envVer && typeof envVer === 'string' && envVer.trim()) {
+    return envVer.trim().substring(0, 16);
+  }
+  return '2026.09.13-1ce30d6f';
+}
+
+export const MARI_BUILD_VERSION = getMariBuildVersion();
 
 /**
  * Returns the resolved dynamic API base URL.

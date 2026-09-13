@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import axios from 'axios';
 import { cn } from '@/lib/utils';
-import { getApiUrl, getApiBase } from '@/lib/api-config';
+import { getApiUrl, getApiBase, MARI_BUILD_VERSION } from '@/lib/api-config';
 import { generateMariAIResponse } from '@/lib/mariAI';
 import { MariMarkdownMessage } from './MariMarkdownMessage';
 
@@ -208,6 +208,7 @@ export default function Chatbot() {
             backendAnswer = response.data?.answer || response.data?.response;
             if (backendAnswer) {
                 responseSource = response.data?.responseSource || 'SERVER_MARI_CHAT_API';
+                fallbackUsed = response.data?.fallbackUsed !== undefined ? response.data.fallbackUsed : (responseSource === 'local_grounded');
             }
         } catch (backendError) {
             httpStatus = backendError?.response?.status || 0;
@@ -218,10 +219,10 @@ export default function Chatbot() {
             console.log('[MARI_WEBSITE_TELEMETRY]', {
                 MARI_REQUEST_URL: requestUrl,
                 MARI_HTTP_STATUS: httpStatus,
-                MARI_RESPONSE_ANSWER: backendAnswer,
+                MARI_RESPONSE_HAS_ANSWER: Boolean(backendAnswer),
                 MARI_RESPONSE_SOURCE: responseSource,
-                MARI_FALLBACK_USED: false,
-                MARI_BUILD_VERSION: '2026.09.06-v2',
+                MARI_FALLBACK_USED: fallbackUsed,
+                MARI_BUILD_VERSION: MARI_BUILD_VERSION,
             });
             setMessages(prev => [...prev, { role: 'assistant', content: backendAnswer }]);
             setIsLoading(false);
@@ -235,10 +236,10 @@ export default function Chatbot() {
             console.log('[MARI_WEBSITE_TELEMETRY]', {
                 MARI_REQUEST_URL: requestUrl,
                 MARI_HTTP_STATUS: httpStatus,
-                MARI_RESPONSE_ANSWER: aiAnswer,
+                MARI_RESPONSE_HAS_ANSWER: Boolean(aiAnswer),
                 MARI_RESPONSE_SOURCE: 'CLIENT_FALLBACK_AIML_ENGINE',
                 MARI_FALLBACK_USED: true,
-                MARI_BUILD_VERSION: '2026.09.06-v2',
+                MARI_BUILD_VERSION: MARI_BUILD_VERSION,
             });
             setMessages(prev => [...prev, { role: 'assistant', content: aiAnswer }]);
         } catch (aiError) {
