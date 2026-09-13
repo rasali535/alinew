@@ -102,7 +102,7 @@ async function runAcceptance() {
   console.log('\n--- 3. Credit Deduction Accounting ---');
   await new Promise(r => setTimeout(r, 4000));
   const balanceBefore = TenantCreditsService.getBalance(CANONICAL_TENANT_ID);
-  
+
   // Ask a live reasoning question
   const creditPrompt = 'What are key considerations when setting SLA terms for multi-tenant cloud applications?';
   const creditRes = await MariUniversalCore.ask({

@@ -409,7 +409,7 @@ export class SocialPublishingService {
           const zernioProfId = conn.zernio_profile_id;
 
           if (!zernioAccId || !zernioProfId) {
-            throw new Error(`[SocialPublishing] Connected ${platform} account is missing valid Zernio account/profile binding.`);
+            throw new Error(`[SocialPublishing] Connected ${platform} account is missing valid social account binding.`);
           }
 
           console.log('[PUBLISHER_IDENTITY]', JSON.stringify({
@@ -456,9 +456,18 @@ export class SocialPublishingService {
           // For Facebook Pages, resolve authentic Page Access Token
           if (platform === 'facebook' && targetPageId && targetPageId !== 'me') {
             const pageToken = await resolvePageAccessToken(token, targetPageId, conn.metadata);
-            if (pageToken) {
-              publishToken = pageToken;
+            if (!pageToken) {
+              platformResults[platform] = {
+                success: false,
+                error: `Unable to resolve valid Page Access Token for Facebook Page ${targetPageId}. Please reconnect page permissions.`,
+                statusCode: 403,
+                platform,
+                publishedAt: new Date().toISOString(),
+              };
+              errors.push(`${platform}: Page token resolution failed for ${targetPageId}`);
+              return;
             }
+            publishToken = pageToken;
           }
 
           res = await routing.adapter.publish(publishToken, {

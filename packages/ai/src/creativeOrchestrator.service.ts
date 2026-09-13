@@ -28,6 +28,7 @@ import { VisualSemanticEvaluatorService } from './visualSemanticEvaluator.servic
 
 export interface OrchestratorGenerateOptions {
   organizationId: string;
+  workspaceId?: string;
   type: CreativeAssetType;
   prompt: string;
   title?: string;
@@ -36,6 +37,7 @@ export interface OrchestratorGenerateOptions {
   campaign?: string;
   platform?: string;
   cta?: string;
+  caption?: string;
   mockFailure?: string;
 }
 
@@ -314,8 +316,18 @@ export class CreativeOrchestrator {
           ? 'pollinations/flux-resilient'
           : 'black-forest-labs/FLUX.1-schnell';
 
+    const workspaceId = (options as any).workspaceId || organizationId;
+    const hasVisualQA = Boolean(visualQAResult && typeof visualQAResult.visualRelevanceScore === 'number');
+    const semanticScore = hasVisualQA ? visualQAResult?.visualRelevanceScore : undefined;
+    const designScore = hasVisualQA ? visualQAResult?.designQualityScore : undefined;
+    const promptIntegrityScore = hasVisualQA ? visualQAResult?.promptIntegrityScore : undefined;
+    const brandAccuracyScore = hasVisualQA ? visualQAResult?.brandAccuracyScore : undefined;
+    const copyAccuracyScore = hasVisualQA ? visualQAResult?.copyAccuracyScore : undefined;
+    const customerReady = hasVisualQA ? Boolean(visualQAResult?.customerReady) : false;
+
     const asset = await CreativeAssetService.saveBinaryAsset({
       organizationId,
+      workspaceId,
       type,
       provider: successfulResult.providerName,
       prompt: prompt.trim(),
@@ -334,14 +346,14 @@ export class CreativeOrchestrator {
         rawProviderAsset: rawPublicUrl,
         finalComposedAsset: `${getAppBasePath()}/api/creatives/file/${tempAssetId}.${successfulResult.mimeType.includes('png') ? 'png' : successfulResult.mimeType.includes('svg') ? 'svg' : 'jpg'}`,
         provider: successfulResult.providerName,
-        semanticScore: visualQAResult?.visualRelevanceScore ?? 90,
-        designScore: visualQAResult?.designQualityScore ?? 90,
-        promptIntegrityScore: visualQAResult?.promptIntegrityScore ?? 96,
-        brandAccuracyScore: visualQAResult?.brandAccuracyScore ?? 95,
-        copyAccuracyScore: visualQAResult?.copyAccuracyScore ?? 94,
-        customerReady: visualQAResult?.customerReady ?? true,
-        visualRelevanceScore: visualQAResult?.visualRelevanceScore,
-        designQualityScore: visualQAResult?.designQualityScore,
+        semanticScore,
+        designScore,
+        promptIntegrityScore,
+        brandAccuracyScore,
+        copyAccuracyScore,
+        customerReady,
+        visualRelevanceScore: semanticScore,
+        designQualityScore: designScore,
         promptStructureScore: visualQAResult?.promptStructureScore,
         visualQADetails: visualQAResult,
       },
@@ -363,12 +375,13 @@ export class CreativeOrchestrator {
     }
 
     // ── STAGE 6: COMPLETED (CONTRACTS & MARI RECEIPT) ───────────────────────
+    const dynamicCaption = (options as any).caption || `${asset.title}\n\n${prompt.trim()}`;
     const socialContract: SocialHandoffContract = {
       assetId: asset.id,
       mediaUrl: asset.publicUrl,
       mediaType: type === 'VIDEO_REEL' ? 'video' : 'image',
       title: asset.title,
-      caption: `${asset.title}\n\nTargeting enterprise decision makers across SADC. #Enterprise #Technology #SovereignSoftware`,
+      caption: dynamicCaption,
       campaign,
       platform,
       cta,
@@ -414,12 +427,12 @@ export class CreativeOrchestrator {
       finalComposedAsset: asset.publicUrl,
       provider: successfulResult.providerName,
       model: resolvedModel,
-      semanticScore: visualQAResult?.visualRelevanceScore ?? 90,
-      designScore: visualQAResult?.designQualityScore ?? 90,
-      promptIntegrityScore: visualQAResult?.promptIntegrityScore ?? 96,
-      brandAccuracyScore: visualQAResult?.brandAccuracyScore ?? 95,
-      copyAccuracyScore: visualQAResult?.copyAccuracyScore ?? 94,
-      customerReady: visualQAResult?.customerReady ?? true,
+      semanticScore,
+      designScore,
+      promptIntegrityScore,
+      brandAccuracyScore,
+      copyAccuracyScore,
+      customerReady,
       organizationId,
       thumbnailUrl: asset.previewUrl || asset.publicUrl,
       storagePath: asset.storagePath,
@@ -430,9 +443,9 @@ export class CreativeOrchestrator {
       generationTime: successfulResult.generationTimeMs,
       validationStatus: 'PASSED',
       lifecycleState: 'COMPLETED',
-      visualRelevanceScore: visualQAResult?.visualRelevanceScore ?? 90,
-      designQualityScore: visualQAResult?.designQualityScore ?? 90,
-      promptStructureScore: visualQAResult?.promptStructureScore ?? 95,
+      visualRelevanceScore: semanticScore,
+      designQualityScore: designScore,
+      promptStructureScore: visualQAResult?.promptStructureScore,
       visualQADetails: visualQAResult,
       mariResponse: naturalMariResponse,
       socialContract,

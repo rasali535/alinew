@@ -8,6 +8,7 @@ import {
   validateImageBuffer,
   validateVideoBuffer,
 } from '@ralion/ai';
+import { requireRalionContext } from '../../../../lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,36 +16,21 @@ export async function OPTIONS(request: NextRequest) {
   return handleCorsPreflight(request);
 }
 
-function sanitizePrompt(raw: string): string {
-  return raw
-    .replace(/[\u2018\u2019]/g, "'")
-    .replace(/[\u201C\u201D]/g, '"')
-    .replace(/[\u2013\u2014]/g, '-')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function getDimensionsForFormat(format?: string): { width: number; height: number } {
-  switch (format) {
-    case '16:9':
-    case 'landscape':
-      return { width: 1024, height: 576 };
-    case '9:16':
-    case 'story':
-    case 'reel':
-      return { width: 576, height: 1024 };
-    case '4:5':
-    case 'portrait':
-      return { width: 816, height: 1020 };
-    case '1:1':
-    case 'square':
-    default:
-      return { width: 1024, height: 1024 };
-  }
-}
-
 export async function POST(request: NextRequest) {
   try {
+    // 1. Require authenticated server session
+    const authResult = await requireRalionContext(request);
+    if (authResult.response || !authResult.context) {
+      return authResult.response || corsJsonResponse(
+        { success: false, error: 'AUTHENTICATION_REQUIRED', message: 'Authentication required to generate creative assets.' },
+        { status: 401 },
+        request
+      );
+    }
+
+    const authenticatedOrgId = authResult.context.organization.id;
+    const authenticatedWorkspaceId = authResult.context.workspace.id;
+
     const body = await request.json().catch(() => ({}));
     const {
       type = 'POSTER_IMAGE',
@@ -58,26 +44,18 @@ export async function POST(request: NextRequest) {
       mockFailure,
     } = body;
 
-    const organizationId =
-      body.organizationId ||
-      request.headers.get('x-organization-id') ||
-      request.headers.get('x-workspace-id') ||
-      request.headers.get('x-user-id');
-
-    if (!organizationId || organizationId === 'default-org') {
+    // 2. Reject mismatched client hints
+    if (body.organizationId && body.organizationId !== authenticatedOrgId) {
       return corsJsonResponse(
-        {
-          success: false,
-          error: 'Unauthorized: A valid authenticated organizationId is required. Defaulting to default-org is forbidden.',
-          errorCode: 'TENANT_UNAUTHORIZED',
-        },
-        { status: 401 },
+        { success: false, error: 'FORBIDDEN', message: 'Requested organization does not match authenticated session.' },
+        { status: 403 },
         request
       );
     }
 
     const result = await CreativeOrchestrator.generate({
-      organizationId,
+      organizationId: authenticatedOrgId,
+      workspaceId: authenticatedWorkspaceId,
       type: type === 'video' ? 'VIDEO_REEL' : (type === 'image' ? 'POSTER_IMAGE' : type),
       prompt,
       title,
@@ -104,7 +82,7 @@ export async function POST(request: NextRequest) {
     const assetPayload = {
       id: result.receipt.assetId,
       ...result.receipt,
-      organizationId,
+      organizationId: authenticatedOrgId,
     };
 
     return corsJsonResponse({

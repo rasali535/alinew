@@ -69,7 +69,7 @@ async function runRealMariPipelineTests() {
   try {
     const rawKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY;
     const isKeyConfigured = Boolean(rawKey && rawKey.trim().length > 10);
-    
+
     // Check absence of client-exposed env vars in server context
     const hasClientExposedKey = Boolean(process.env.NEXT_PUBLIC_GEMINI_API_KEY);
 
@@ -133,7 +133,7 @@ async function runRealMariPipelineTests() {
       requestId: `req_test_s2_creative_${Date.now()}`,
     });
 
-    const isCreativeIntentDecided = 
+    const isCreativeIntentDecided =
       creativeResult.requestedAction === 'GENERATE_CREATIVE_JOB' &&
       (creativeResult.detectedIntent === 'CREATIVE_STUDIO' || creativeResult.detectedIntent === 'CREATE_FLYER');
 
@@ -160,7 +160,7 @@ async function runRealMariPipelineTests() {
       requestId: `req_test_s2_fb_${Date.now()}`,
     });
 
-    const isFbIntentDecided = 
+    const isFbIntentDecided =
       fbResult.requestedAction === 'inspect_facebook_status' &&
       fbResult.detectedIntent === 'FACEBOOK_CONNECTION_STATUS';
 
@@ -187,7 +187,7 @@ async function runRealMariPipelineTests() {
       requestId: `req_test_s2_greet_${Date.now()}`,
     });
 
-    const isGreetingDeterministic = 
+    const isGreetingDeterministic =
       greetingResult.semanticDecisionSource === 'DETERMINISTIC_CLASSIFICATION' &&
       greetingResult.detectedIntent === 'GREETING' &&
       greetingResult.modelAttempted === null &&
@@ -287,7 +287,7 @@ async function runRealMariPipelineTests() {
       requestId: `req_test_s4_live_fb_${Date.now()}`,
     });
 
-    const isLiveFbValid = 
+    const isLiveFbValid =
       liveFbResult.toolsActuallyExecuted.includes('FacebookPageManagementService.getPrimaryPage') &&
       typeof liveFbResult.answer === 'string' &&
       (liveFbResult.answer.includes('Facebook Page') || liveFbResult.answer.includes('Facebook page') || liveFbResult.answer.includes('Facebook') || liveFbResult.answer.includes('connected') || liveFbResult.answer.includes('Connected'));
@@ -402,7 +402,7 @@ async function runRealMariPipelineTests() {
     });
 
     const responseText = crossTenantResult.answer || '';
-    const hasRasAliLeakage = 
+    const hasRasAliLeakage =
       responseText.includes('Ras Ali Labs') ||
       responseText.includes('Ralion OS') ||
       responseText.includes('Empowered to Prosper') ||
@@ -576,7 +576,7 @@ async function runRealMariPipelineTests() {
     const resGreeting = await MariChatRoute(reqGreeting);
     const dataGreeting = await resGreeting.json();
 
-    const isRouteGreetingValid = 
+    const isRouteGreetingValid =
       resGreeting.status === 200 &&
       dataGreeting.success === true &&
       dataGreeting.detectedIntent === 'GREETING' &&

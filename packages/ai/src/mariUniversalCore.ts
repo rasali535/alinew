@@ -143,6 +143,13 @@ export interface MariQueryResponse {
   modelAttempted: string | null;
   modelSucceeded: boolean;
   modelUsed?: string;
+  classificationModelAttempted?: string | null;
+  classificationModelSucceeded?: boolean;
+  responseModelAttempted?: string | null;
+  responseModelSucceeded?: boolean;
+  actualModelUsed?: string | null;
+  modelsAttempted?: string[];
+  modelFailureCodes?: Record<string, string>;
   responseSource: 'gemini' | 'local_grounded';
   fallbackUsed: boolean;
   fallbackReason: string | null;
@@ -183,12 +190,21 @@ export async function callGeminiSemanticClassifier(
   cleanUserPrompt: string,
   conversationHistory: ChatHistoryTurn[] = [],
   companyName: string = ''
-): Promise<{ decision: SemanticDecision; model: string } | null> {
+): Promise<{
+  decision: SemanticDecision;
+  model: string;
+  usage: MariTokenUsage;
+  modelsAttempted: string[];
+  modelErrors: Record<string, string>;
+} | null> {
   const geminiKey =
     process.env.GEMINI_API_KEY ||
     process.env.GOOGLE_AI_API_KEY ||
     process.env.GOOGLE_API_KEY ||
     process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+
+  const modelsAttempted: string[] = [];
+  const modelErrors: Record<string, string> = {};
 
   if (!geminiKey) {
     return null;
@@ -247,6 +263,7 @@ Classification Rules:
   ];
 
   for (const modelName of modelsToTry) {
+    modelsAttempted.push(modelName);
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiKey}`;
 
     try {
@@ -267,17 +284,20 @@ Classification Rules:
       });
 
       if (!response.ok) {
+        modelErrors[modelName] = `HTTP_${response.status}`;
         continue;
       }
 
       const data = await response.json();
       const rawJson = data.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!rawJson || typeof rawJson !== 'string') {
+        modelErrors[modelName] = 'EMPTY_RESPONSE';
         continue;
       }
 
       const parsed = JSON.parse(rawJson);
       if (!parsed || !parsed.intent || !parsed.mode) {
+        modelErrors[modelName] = 'INVALID_SCHEMA';
         continue;
       }
 
@@ -287,6 +307,9 @@ Classification Rules:
       const validSources = Array.isArray(parsed.requestedSources) && parsed.requestedSources.length > 0
         ? parsed.requestedSources
         : [validMode === 'GENERAL' ? 'GENERAL' : 'BUSINESS_PROFILE'];
+
+      const promptTokens = data.usageMetadata?.promptTokenCount || estimateTokenCount(cleanUserPrompt);
+      const completionTokens = data.usageMetadata?.candidatesTokenCount || estimateTokenCount(rawJson);
 
       return {
         decision: {
@@ -300,13 +323,27 @@ Classification Rules:
           isMultiTurnFollowup: Boolean(parsed.isMultiTurnFollowup),
         },
         model: modelName,
+        usage: {
+          promptTokens,
+          completionTokens,
+          totalTokens: promptTokens + completionTokens,
+        },
+        modelsAttempted,
+        modelErrors,
       };
-    } catch {
+    } catch (err: any) {
+      modelErrors[modelName] = `EXCEPTION_${err?.message || 'NETWORK_ERROR'}`;
       continue;
     }
   }
 
-  return null;
+  return {
+    decision: decideSemanticIntentHeuristic(cleanUserPrompt, conversationHistory),
+    model: '',
+    usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+    modelsAttempted,
+    modelErrors,
+  };
 }
 
 /**
@@ -840,16 +877,32 @@ async function callGeminiNeuralCore(
   conversationHistory: ChatHistoryTurn[],
   semanticDecision: SemanticDecision,
   companyName: string
-): Promise<{ text: string; usage: MariTokenUsage; model: string; error?: string } | null> {
+): Promise<{
+  text: string;
+  usage: MariTokenUsage;
+  model: string;
+  modelsAttempted: string[];
+  modelErrors: Record<string, string>;
+  error?: string;
+} | null> {
   const geminiKey =
     process.env.GEMINI_API_KEY ||
     process.env.GOOGLE_AI_API_KEY ||
     process.env.GOOGLE_API_KEY ||
-    process.env.NEXT_PUBLIC_GEMINI_API_KEY ||
     process.env.GOOGLE_GENERATIVE_AI_API_KEY;
 
+  const modelsAttempted: string[] = [];
+  const modelErrors: Record<string, string> = {};
+
   if (!geminiKey) {
-    return { text: '', usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }, model: 'gemini-2.5-flash', error: 'API_KEY_MISSING' };
+    return {
+      text: '',
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      model: 'gemini-3.5-flash-lite',
+      modelsAttempted,
+      modelErrors: { all: 'API_KEY_MISSING' },
+      error: 'API_KEY_MISSING',
+    };
   }
 
   const systemInstruction = composeSelectiveSystemPrompt(
@@ -885,6 +938,7 @@ async function callGeminiNeuralCore(
   let lastError = '';
 
   for (const modelName of modelsToTry) {
+    modelsAttempted.push(modelName);
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiKey}`;
 
     try {
@@ -906,6 +960,7 @@ async function callGeminiNeuralCore(
       if (!response.ok) {
         const errBody = await response.text().catch(() => '');
         lastError = `HTTP_${response.status}`;
+        modelErrors[modelName] = `HTTP_${response.status}`;
         console.warn(`[MariCore] Gemini (${modelName}) HTTP ${response.status}:`, errBody);
         continue;
       }
@@ -914,6 +969,7 @@ async function callGeminiNeuralCore(
       const candidateText = data.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!candidateText || typeof candidateText !== 'string' || candidateText.trim().length === 0) {
         lastError = 'EMPTY_CANDIDATE_RESPONSE';
+        modelErrors[modelName] = 'EMPTY_CANDIDATE_RESPONSE';
         continue;
       }
 
@@ -935,14 +991,24 @@ async function callGeminiNeuralCore(
           totalTokens: promptTokens + completionTokens,
         },
         model: modelName,
+        modelsAttempted,
+        modelErrors,
       };
     } catch (err: any) {
       lastError = `EXCEPTION_${err.message}`;
+      modelErrors[modelName] = `EXCEPTION_${err.message}`;
       console.warn(`[MariCore] Gemini (${modelName}) API exception:`, err.message);
     }
   }
 
-  return { text: '', usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }, model: 'gemini-2.5-flash', error: lastError || 'ALL_MODELS_FAILED' };
+  return {
+    text: '',
+    usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+    model: modelsAttempted[0] || 'gemini-3.5-flash-lite',
+    modelsAttempted,
+    modelErrors,
+    error: lastError || 'ALL_MODELS_FAILED',
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1193,6 +1259,15 @@ export class MariUniversalCore {
     // Diagnostic tracking state
     let semanticDecisionSource: SemanticDecisionSource = 'MODEL_CLASSIFICATION';
     let toolsActuallyExecuted: string[] = [];
+    let classificationModelAttempted: string | null = null;
+    let classificationModelSucceeded: boolean = false;
+    let classificationTokens: MariTokenUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+    let responseModelAttempted: string | null = null;
+    let responseModelSucceeded: boolean = false;
+    let actualModelUsed: string | null = null;
+    let allModelsAttempted: string[] = [];
+    let modelFailureCodes: Record<string, string> = {};
+
     let modelAttempted: string | null = null;
     let modelSucceeded: boolean = false;
     let fallbackUsed: boolean = false;
@@ -1215,16 +1290,35 @@ export class MariUniversalCore {
       };
       semanticDecisionSource = 'DETERMINISTIC_CLASSIFICATION';
     } else if (!request.forceLocalOnly) {
+      classificationModelAttempted = 'gemini-3.5-flash-lite';
       const modelClassification = await callGeminiSemanticClassifier(
         cleanOriginalPrompt,
         conversationHistory,
         resolvedCompanyName
       );
 
-      if (modelClassification && modelClassification.decision) {
-        semanticDecision = modelClassification.decision;
-        semanticDecisionSource = 'MODEL_CLASSIFICATION';
+      if (modelClassification) {
+        if (modelClassification.modelsAttempted) {
+          for (const m of modelClassification.modelsAttempted) {
+            if (!allModelsAttempted.includes(m)) allModelsAttempted.push(m);
+          }
+        }
+        if (modelClassification.modelErrors) {
+          Object.assign(modelFailureCodes, modelClassification.modelErrors);
+        }
+        if (modelClassification.model) {
+          classificationModelAttempted = modelClassification.modelsAttempted[0] || 'gemini-3.5-flash-lite';
+          classificationModelSucceeded = true;
+          classificationTokens = modelClassification.usage;
+          semanticDecision = modelClassification.decision;
+          semanticDecisionSource = 'MODEL_CLASSIFICATION';
+        } else {
+          classificationModelSucceeded = false;
+          semanticDecision = modelClassification.decision;
+          semanticDecisionSource = 'HEURISTIC_FALLBACK';
+        }
       } else {
+        classificationModelSucceeded = false;
         semanticDecision = decideSemanticIntentHeuristic(
           cleanOriginalPrompt,
           conversationHistory,
@@ -1268,6 +1362,13 @@ export class MariUniversalCore {
         toolsActuallyExecuted,
         modelAttempted,
         modelSucceeded,
+        classificationModelAttempted,
+        classificationModelSucceeded,
+        responseModelAttempted: null,
+        responseModelSucceeded: false,
+        actualModelUsed: null,
+        modelsAttempted: allModelsAttempted,
+        modelFailureCodes,
         responseSource: 'local_grounded',
         fallbackUsed,
         fallbackReason,
@@ -1285,6 +1386,13 @@ export class MariUniversalCore {
         modelAttempted: null,
         modelSucceeded: false,
         modelUsed: 'Mari Growth Intelligence',
+        classificationModelAttempted,
+        classificationModelSucceeded,
+        responseModelAttempted: null,
+        responseModelSucceeded: false,
+        actualModelUsed: null,
+        modelsAttempted: allModelsAttempted,
+        modelFailureCodes,
         responseSource: 'local_grounded',
         fallbackUsed: false,
         fallbackReason: null,
@@ -1328,6 +1436,13 @@ export class MariUniversalCore {
           modelAttempted: null,
           modelSucceeded: false,
           modelUsed: 'Mari Creative Clarification Engine',
+          classificationModelAttempted,
+          classificationModelSucceeded,
+          responseModelAttempted: null,
+          responseModelSucceeded: false,
+          actualModelUsed: null,
+          modelsAttempted: allModelsAttempted,
+          modelFailureCodes,
           responseSource: 'local_grounded',
           fallbackUsed: false,
           fallbackReason: null,
@@ -1389,6 +1504,13 @@ export class MariUniversalCore {
             toolsActuallyExecuted,
             modelAttempted,
             modelSucceeded,
+            classificationModelAttempted,
+            classificationModelSucceeded,
+            responseModelAttempted: null,
+            responseModelSucceeded: false,
+            actualModelUsed: 'flux-1-schnell',
+            modelsAttempted: allModelsAttempted,
+            modelFailureCodes,
             responseSource: 'local_grounded',
             fallbackUsed,
             fallbackReason,
@@ -1406,6 +1528,13 @@ export class MariUniversalCore {
             modelAttempted,
             modelSucceeded: true,
             modelUsed: 'Mari Creative Orchestrator (FLUX / Neural Engine)',
+            classificationModelAttempted,
+            classificationModelSucceeded,
+            responseModelAttempted: null,
+            responseModelSucceeded: false,
+            actualModelUsed: 'flux-1-schnell',
+            modelsAttempted: allModelsAttempted,
+            modelFailureCodes,
             responseSource: 'local_grounded',
             fallbackUsed: false,
             fallbackReason: null,
@@ -1421,9 +1550,9 @@ export class MariUniversalCore {
             companyName: resolvedCompanyName,
             isBusinessContextVerified: isVerified,
             usage: {
-              promptTokens: estimateTokenCount(cleanOriginalPrompt),
-              completionTokens: estimateTokenCount(flyerResponse),
-              totalTokens: estimateTokenCount(cleanOriginalPrompt) + estimateTokenCount(flyerResponse),
+              promptTokens: estimateTokenCount(cleanOriginalPrompt) + classificationTokens.promptTokens,
+              completionTokens: estimateTokenCount(flyerResponse) + classificationTokens.completionTokens,
+              totalTokens: estimateTokenCount(cleanOriginalPrompt) + estimateTokenCount(flyerResponse) + classificationTokens.totalTokens,
             },
             requestId,
           };
@@ -1440,6 +1569,13 @@ export class MariUniversalCore {
             modelAttempted,
             modelSucceeded: false,
             modelUsed: 'Mari Creative Orchestrator',
+            classificationModelAttempted,
+            classificationModelSucceeded,
+            responseModelAttempted: null,
+            responseModelSucceeded: false,
+            actualModelUsed: null,
+            modelsAttempted: allModelsAttempted,
+            modelFailureCodes,
             responseSource: 'local_grounded',
             fallbackUsed: true,
             fallbackReason: 'CREATIVE_STORAGE_ERROR',
@@ -1466,6 +1602,13 @@ export class MariUniversalCore {
           modelAttempted,
           modelSucceeded: false,
           modelUsed: 'Mari Creative Orchestrator',
+          classificationModelAttempted,
+          classificationModelSucceeded,
+          responseModelAttempted: null,
+          responseModelSucceeded: false,
+          actualModelUsed: null,
+          modelsAttempted: allModelsAttempted,
+          modelFailureCodes,
           responseSource: 'local_grounded',
           fallbackUsed: true,
           fallbackReason: 'CREATIVE_GENERATION_EXCEPTION',
@@ -1524,6 +1667,13 @@ export class MariUniversalCore {
           toolsActuallyExecuted,
           modelAttempted: null,
           modelSucceeded: false,
+          classificationModelAttempted,
+          classificationModelSucceeded,
+          responseModelAttempted: null,
+          responseModelSucceeded: false,
+          actualModelUsed: null,
+          modelsAttempted: allModelsAttempted,
+          modelFailureCodes,
           responseSource: 'local_grounded',
           fallbackUsed: false,
           fallbackReason: null,
@@ -1541,6 +1691,13 @@ export class MariUniversalCore {
           modelAttempted: null,
           modelSucceeded: false,
           modelUsed: 'Mari Grounded Live Tools (FacebookPageManagementService)',
+          classificationModelAttempted,
+          classificationModelSucceeded,
+          responseModelAttempted: null,
+          responseModelSucceeded: false,
+          actualModelUsed: null,
+          modelsAttempted: allModelsAttempted,
+          modelFailureCodes,
           responseSource: 'local_grounded',
           fallbackUsed: false,
           fallbackReason: null,
@@ -1551,7 +1708,7 @@ export class MariUniversalCore {
           tenantId: orgId,
           companyName: resolvedCompanyName,
           isBusinessContextVerified: isVerified,
-          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+          usage: classificationTokens,
           requestId,
         };
       }
@@ -1604,12 +1761,13 @@ export class MariUniversalCore {
 
     // 5. Invoke Gemini Reasoning with Clean User Prompt & Selected Context
     let answerText = '';
-    let modelUsed = 'Mari Universal Intelligence (gemini-2.5-flash)';
+    let modelUsed = 'Mari Neural Engine';
     let responseSource: 'gemini' | 'local_grounded' = 'gemini';
-    let usage: MariTokenUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+    let usage: MariTokenUsage = { ...classificationTokens };
     let suggestedActions: MariActionPayload[] = [];
 
-    modelAttempted = 'gemini-2.5-flash';
+    responseModelAttempted = 'gemini-3.5-flash-lite';
+    modelAttempted = 'gemini-3.5-flash-lite';
 
     if (!request.forceLocalOnly) {
       const geminiResult = await callGeminiNeuralCore(
@@ -1620,38 +1778,64 @@ export class MariUniversalCore {
         resolvedCompanyName
       );
 
-      if (geminiResult && geminiResult.text) {
-        answerText = geminiResult.text;
-        usage = geminiResult.usage;
-        modelUsed = `Mari Neural Engine (${geminiResult.model})`;
-        responseSource = 'gemini';
-        modelSucceeded = true;
-        fallbackUsed = false;
-        fallbackReason = null;
+      if (geminiResult) {
+        if (geminiResult.modelsAttempted) {
+          for (const m of geminiResult.modelsAttempted) {
+            if (!allModelsAttempted.includes(m)) allModelsAttempted.push(m);
+          }
+        }
+        if (geminiResult.modelErrors) {
+          Object.assign(modelFailureCodes, geminiResult.modelErrors);
+        }
 
-        // Derive clean suggested actions for UI navigation
-        if (detectedIntent === 'WEBSITE_KNOWLEDGE') {
-          suggestedActions.push({ type: 'NAVIGATE', label: 'Sync Website', payload: { route: '/settings' } });
-        } else if (detectedIntent === 'FACEBOOK_CONNECTION_STATUS') {
-          suggestedActions.push({ type: 'NAVIGATE', label: 'Open Growth Studio', payload: { route: '/growth' } });
-        } else if (detectedIntent === 'CREATIVE_STUDIO' || detectedIntent === 'CREATE_FLYER') {
-          suggestedActions.push(
-            { type: 'NAVIGATE', label: 'Open Creative Studio', payload: { route: '/growth?tab=creatives' } },
-            { type: 'NAVIGATE', label: 'Create Visual in Studio', payload: { route: `/growth?tab=creatives&mode=create&prompt=${encodeURIComponent(cleanOriginalPrompt)}` } }
-          );
-        } else if (detectedIntent === 'WEEKLY_FOCUS' || detectedIntent === 'COMPOUND_QUERY' || detectedIntent === 'BUSINESS_IDENTITY' || detectedIntent === 'BUSINESS_SYNTHESIS') {
-          suggestedActions.push(
-            { type: 'NAVIGATE', label: 'Open Growth Studio', payload: { route: '/growth' } },
-            { type: 'NAVIGATE', label: 'View CRM Pipeline', payload: { route: '/crm' } }
-          );
+        if (geminiResult.text) {
+          answerText = geminiResult.text;
+          usage = {
+            promptTokens: geminiResult.usage.promptTokens + classificationTokens.promptTokens,
+            completionTokens: geminiResult.usage.completionTokens + classificationTokens.completionTokens,
+            totalTokens: geminiResult.usage.totalTokens + classificationTokens.totalTokens,
+          };
+          actualModelUsed = geminiResult.model;
+          modelUsed = `Mari Neural Engine (${geminiResult.model})`;
+          modelAttempted = geminiResult.modelsAttempted[0] || 'gemini-3.5-flash-lite';
+          responseModelAttempted = geminiResult.modelsAttempted[0] || 'gemini-3.5-flash-lite';
+          responseModelSucceeded = true;
+          responseSource = 'gemini';
+          modelSucceeded = true;
+          fallbackUsed = false;
+          fallbackReason = null;
+
+          // Derive clean suggested actions for UI navigation
+          if (detectedIntent === 'WEBSITE_KNOWLEDGE') {
+            suggestedActions.push({ type: 'NAVIGATE', label: 'Sync Website', payload: { route: '/settings' } });
+          } else if (detectedIntent === 'FACEBOOK_CONNECTION_STATUS') {
+            suggestedActions.push({ type: 'NAVIGATE', label: 'Open Growth Studio', payload: { route: '/growth' } });
+          } else if (detectedIntent === 'CREATIVE_STUDIO' || detectedIntent === 'CREATE_FLYER') {
+            suggestedActions.push(
+              { type: 'NAVIGATE', label: 'Open Creative Studio', payload: { route: '/growth?tab=creatives' } },
+              { type: 'NAVIGATE', label: 'Create Visual in Studio', payload: { route: `/growth?tab=creatives&mode=create&prompt=${encodeURIComponent(cleanOriginalPrompt)}` } }
+            );
+          } else if (detectedIntent === 'WEEKLY_FOCUS' || detectedIntent === 'COMPOUND_QUERY' || detectedIntent === 'BUSINESS_IDENTITY' || detectedIntent === 'BUSINESS_SYNTHESIS') {
+            suggestedActions.push(
+              { type: 'NAVIGATE', label: 'Open Growth Studio', payload: { route: '/growth' } },
+              { type: 'NAVIGATE', label: 'View CRM Pipeline', payload: { route: '/crm' } }
+            );
+          }
+        } else {
+          responseModelSucceeded = false;
+          modelSucceeded = false;
+          fallbackUsed = true;
+          fallbackReason = geminiResult?.error || 'GEMINI_UNAVAILABLE';
         }
       } else {
+        responseModelSucceeded = false;
         modelSucceeded = false;
         fallbackUsed = true;
-        fallbackReason = geminiResult?.error || 'GEMINI_UNAVAILABLE';
+        fallbackReason = 'GEMINI_CALL_FAILED';
       }
     } else {
       modelSucceeded = false;
+      responseModelSucceeded = false;
       fallbackUsed = true;
       fallbackReason = 'FORCE_LOCAL_ONLY';
     }
@@ -1710,6 +1894,13 @@ export class MariUniversalCore {
             modelAttempted,
             modelSucceeded: false,
             modelUsed: 'Ralion Credit Gateway',
+            classificationModelAttempted,
+            classificationModelSucceeded,
+            responseModelAttempted,
+            responseModelSucceeded: false,
+            actualModelUsed: null,
+            modelsAttempted: allModelsAttempted,
+            modelFailureCodes,
             responseSource: 'local_grounded',
             fallbackUsed: true,
             fallbackReason: 'INSUFFICIENT_CREDITS',
@@ -1758,6 +1949,13 @@ export class MariUniversalCore {
       toolsActuallyExecuted,
       modelAttempted,
       modelSucceeded,
+      classificationModelAttempted,
+      classificationModelSucceeded,
+      responseModelAttempted,
+      responseModelSucceeded,
+      actualModelUsed,
+      modelsAttempted: allModelsAttempted,
+      modelFailureCodes,
       responseSource,
       fallbackUsed,
       fallbackReason,
@@ -1775,6 +1973,13 @@ export class MariUniversalCore {
       modelAttempted,
       modelSucceeded,
       modelUsed,
+      classificationModelAttempted,
+      classificationModelSucceeded,
+      responseModelAttempted,
+      responseModelSucceeded,
+      actualModelUsed,
+      modelsAttempted: allModelsAttempted,
+      modelFailureCodes,
       responseSource,
       fallbackUsed,
       fallbackReason,

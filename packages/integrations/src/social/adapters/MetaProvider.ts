@@ -274,6 +274,16 @@ export class MetaProvider extends SocialProvider {
         }
       }
 
+      // Support Meta native scheduling if scheduledFor is in the future (> 60 seconds)
+      if (params.options?.scheduledFor) {
+        const scheduledTimeSec = Math.floor(new Date(params.options.scheduledFor).getTime() / 1000);
+        const nowSec = Math.floor(Date.now() / 1000);
+        if (scheduledTimeSec > nowSec + 60) {
+          bodyPayload.published = false;
+          bodyPayload.scheduled_publish_time = scheduledTimeSec;
+        }
+      }
+
       console.log('[MetaProvider] Dispatching Facebook publish:', {
         version,
         targetId,

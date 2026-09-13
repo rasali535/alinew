@@ -3,14 +3,17 @@ import { getAuth, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 
-const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyRalionOSRealApiKey2026",
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "ralion-os.firebaseapp.com",
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "ralion-os",
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "ralion-os.appspot.com",
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "1001961763703",
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:1001961763703:web:ralionOSAppId2026"
-};
+const firebaseApiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY;
+const firebaseProjectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID;
+
+const firebaseConfig = firebaseApiKey && firebaseProjectId ? {
+  apiKey: firebaseApiKey,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || process.env.FIREBASE_AUTH_DOMAIN || `${firebaseProjectId}.firebaseapp.com`,
+  projectId: firebaseProjectId,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || process.env.FIREBASE_STORAGE_BUCKET || `${firebaseProjectId}.appspot.com`,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || process.env.FIREBASE_MESSAGING_SENDER_ID || '',
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || process.env.FIREBASE_APP_ID || ''
+} : null;
 
 export const cloudSqlConfig = {
   location: process.env.CLOUD_SQL_LOCATION || "us-east4",
@@ -19,7 +22,14 @@ export const cloudSqlConfig = {
   connectionName: process.env.CLOUD_SQL_CONNECTION_NAME || "ralion-os:us-east4:ralion-os-instance"
 };
 
-export const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-export const auth: Auth = getAuth(app);
-export const db: Firestore = getFirestore(app);
-export const storage: FirebaseStorage = getStorage(app);
+function getOrInitApp(): FirebaseApp | null {
+  if (getApps().length > 0) return getApp();
+  if (firebaseConfig) return initializeApp(firebaseConfig);
+  return null;
+}
+
+const safeApp = getOrInitApp();
+export const app: FirebaseApp = safeApp as FirebaseApp;
+export const auth: Auth = safeApp ? getAuth(safeApp) : (null as unknown as Auth);
+export const db: Firestore = safeApp ? getFirestore(safeApp) : (null as unknown as Firestore);
+export const storage: FirebaseStorage = safeApp ? getStorage(safeApp) : (null as unknown as FirebaseStorage);

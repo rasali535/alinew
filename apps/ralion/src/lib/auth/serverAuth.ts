@@ -470,6 +470,17 @@ export async function resolveRalionAuthContext(
 export async function requireRalionContext(
   request: NextRequest
 ): Promise<{ context: RalionSessionContext; response: null } | { context: null; response: NextResponse }> {
+  if (contextResolverOverride) {
+    const overridden = await contextResolverOverride(request, { requireAuth: true });
+    if (overridden) {
+      return { context: overridden, response: null };
+    }
+    return {
+      context: null,
+      response: authRequiredResponse(request, 'Authentication required'),
+    };
+  }
+
   const result = await resolveRalionAuthContext(request, { requireAuth: true });
   if (result.status === 'CONTEXT_RESOLVED' && result.context) {
     return { context: result.context, response: null };

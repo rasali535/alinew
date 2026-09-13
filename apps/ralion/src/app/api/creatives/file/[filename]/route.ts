@@ -1,19 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import { CreativeAssetService, getProductionStorageProvider } from '@ralion/ai';
+import { requireRalionContext } from '../../../../../lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/creatives/file/[filename]
  *
- * Canonical creative asset delivery route backed by private Supabase Storage.
+ * Authenticated creative asset delivery route backed by private Supabase Storage.
  * Enforces:
  * 1. Sanitized filename input
- * 2. Authenticated tenant ownership check (HTTP 403 on cross-tenant attempt)
- * 3. Exact object retrieval from Supabase Storage `creatives` bucket
- * 4. Streaming with verified MIME type and HTTP 200
- * 5. Structured HTTP 404 JSON on missing asset (Zero placeholder fallback)
+ * 2. Authenticated server context via requireRalionContext (HTTP 401 without valid session)
+ * 3. Exact tenant ownership verification (HTTP 403 on mismatch)
+ * 4. Strict tenant-scoped storage path retrieval (No fallback to unscoped global objects)
+ * 5. Streaming binary with verified MIME type and SHA-256 integrity
+ * 6. No sensitive tenant ID exposure in public response headers
  */
 export async function GET(
   request: NextRequest,
@@ -25,62 +27,56 @@ export async function GET(
   // 1. Sanitize: prevent directory traversal
   const safeName = path.basename(filename);
   if (!safeName || safeName !== filename || safeName.includes('..')) {
-    return new NextResponse(null, { status: 400 });
+    return new NextResponse(
+      JSON.stringify({ error: 'INVALID_FILENAME', message: 'Invalid asset filename requested.' }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } }
+    );
   }
 
-  // 2. Resolve requesting tenant context
+  // 2. Require authenticated server session
+  const authResult = await requireRalionContext(request);
+  if (authResult.response || !authResult.context) {
+    return authResult.response || new NextResponse(
+      JSON.stringify({ error: 'AUTHENTICATION_REQUIRED', message: 'Authentication required to access creative assets.' }),
+      { status: 401, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
+  const authenticatedOrgId = authResult.context.organization.id;
+  const authenticatedWorkspaceId = authResult.context.workspace.id;
+
+  // 3. Verify untrusted query parameters or headers against authenticated context
   const { searchParams } = new URL(request.url);
-  const requestingOrgId =
-    searchParams.get('organizationId') ||
-    request.headers.get('x-organization-id') ||
-    request.headers.get('x-workspace-id') ||
-    undefined;
+  const hintOrgId = searchParams.get('organizationId') || request.headers.get('x-organization-id');
+  if (hintOrgId && hintOrgId !== authenticatedOrgId) {
+    return new NextResponse(
+      JSON.stringify({ error: 'FORBIDDEN', message: 'Requested organization does not match authenticated context.' }),
+      { status: 403, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
 
-  // 3. Locate CreativeAsset record and verify tenant ownership
+  // 4. Locate CreativeAsset record and verify strict tenant ownership
   const asset = await CreativeAssetService.getAssetByFilename(safeName);
-
-  if (asset && requestingOrgId && requestingOrgId !== 'all') {
-    if (asset.organizationId !== requestingOrgId) {
-      console.warn(
-        `[CreativeFileRoute] Cross-tenant access denied: tenant '${requestingOrgId}' attempted to access asset owned by '${asset.organizationId}'`
-      );
-      return new NextResponse(
-        JSON.stringify({
-          error: 'Access denied: Cross-tenant asset access prohibited',
-          requestedAsset: safeName,
-          requestingTenant: requestingOrgId,
-        }),
-        {
-          status: 403,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
-    }
+  if (asset && asset.organizationId !== authenticatedOrgId) {
+    return new NextResponse(
+      JSON.stringify({ error: 'FORBIDDEN', message: 'Access denied: Cross-tenant asset access prohibited.' }),
+      { status: 403, headers: { 'Content-Type': 'application/json' } }
+    );
   }
 
-  // 4. Download from Supabase Storage
+  // 5. Download strictly from tenant-scoped storage path
   const storage = getProductionStorageProvider();
-  let storagePath = asset?.storagePath;
+  const assetId = asset?.id || safeName.replace(/\.[^/.]+$/, '').replace(/-raw$/, '');
+  const canonicalStoragePath = asset?.storagePath || `organizations/${authenticatedOrgId}/workspaces/${authenticatedWorkspaceId}/assets/${assetId}/${safeName}`;
 
-  if (!storagePath) {
-    if (requestingOrgId && requestingOrgId !== 'all') {
-      storagePath = `${requestingOrgId}/${safeName}`;
-    } else {
-      storagePath = safeName;
-    }
+  let downloadResult = await storage.download(canonicalStoragePath);
+
+  // Fallback only within the same tenant's namespace if storagePath is registered differently
+  if (!downloadResult && asset?.storagePath) {
+    downloadResult = await storage.download(asset.storagePath);
   }
 
-  let downloadResult = await storage.download(storagePath);
-
-  // If direct path failed, attempt to find in Supabase bucket
-  if (!downloadResult && storagePath !== safeName) {
-    downloadResult = await storage.download(safeName);
-    if (downloadResult) {
-      storagePath = safeName;
-    }
-  }
-
-  // 5. Stream real binary from Supabase Storage
+  // 6. Stream real binary from Supabase Storage
   if (downloadResult && downloadResult.buffer.length > 0) {
     const ext = path.extname(safeName).toLowerCase();
     let mimeType = downloadResult.contentType;
@@ -100,24 +96,19 @@ export async function GET(
       headers: {
         'Content-Type': mimeType,
         'Content-Length': String(downloadResult.sizeBytes),
-        'Cache-Control': 'private, max-age=3600',
+        'Cache-Control': 'private, no-transform, max-age=3600',
         'X-Asset-Source': 'supabase-storage',
         'X-Asset-Bucket': 'creatives',
-        'X-Storage-Path': storagePath,
-        'X-Tenant-Owner': asset?.organizationId || 'unassigned',
         'X-Asset-SHA256': downloadResult.sha256,
       },
     });
   }
 
-  // 6. Object not found in Supabase Storage. Return genuine 404 JSON.
-  console.warn(`[CreativeFileRoute] Asset not found in Supabase Storage: ${safeName}`);
+  // 7. Object not found in tenant storage
   return new NextResponse(
     JSON.stringify({
       error: 'ASSET_NOT_FOUND',
       filename: safeName,
-      storageProvider: 'SUPABASE',
-      bucket: 'creatives',
       message: 'The requested creative asset does not exist in durable storage.',
     }),
     {

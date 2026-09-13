@@ -223,6 +223,7 @@ export class CreativeAssetService {
    */
   static async saveBinaryAsset(params: {
     organizationId?: string;
+    workspaceId?: string;
     type: 'POSTER_IMAGE' | 'VIDEO_REEL';
     provider: string;
     prompt: string;
@@ -235,6 +236,7 @@ export class CreativeAssetService {
     if (!orgId || orgId === 'default-org') {
       throw new Error('CreativeAssetService.saveBinaryAsset: Valid authenticated organizationId is required. Defaulting to default-org is prohibited.');
     }
+    const workspaceId = params.workspaceId || orgId;
     const id = `asset-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const ext =
       params.type === 'VIDEO_REEL'
@@ -247,7 +249,8 @@ export class CreativeAssetService {
               ? 'webp'
               : 'jpg';
     const filename = `${id}.${ext}`;
-    const storagePath = filename;
+    const storagePath = `organizations/${orgId}/workspaces/${workspaceId}/assets/${id}/${filename}`;
+    const metaPath = `organizations/${orgId}/workspaces/${workspaceId}/assets/${id}/${filename}.meta.json`;
 
     let byteLength = 0;
     let sha256 = '';
@@ -262,11 +265,12 @@ export class CreativeAssetService {
         : Buffer.from(params.buffer);
       byteLength = nodeBuffer.byteLength;
 
-      // 1. Upload to Supabase Storage
+      // 1. Upload to Supabase Storage in canonical tenant path
       const uploadResult = await storage.upload(storagePath, nodeBuffer, {
         contentType: params.mimeType,
         metadata: {
           organizationId: orgId,
+          workspaceId,
           assetId: id,
           prompt: params.prompt,
         },
@@ -326,12 +330,12 @@ export class CreativeAssetService {
         params.metadata?.rawProviderAsset || params.metadata?.rawPublicUrl || publicUrl,
       finalComposedAsset: params.metadata?.finalComposedAsset || publicUrl,
       model: params.metadata?.model,
-      semanticScore: params.metadata?.semanticScore ?? params.metadata?.visualRelevanceScore,
-      designScore: params.metadata?.designScore ?? params.metadata?.designQualityScore,
+      semanticScore: params.metadata?.semanticScore,
+      designScore: params.metadata?.designScore,
       promptIntegrityScore: params.metadata?.promptIntegrityScore,
       brandAccuracyScore: params.metadata?.brandAccuracyScore,
       copyAccuracyScore: params.metadata?.copyAccuracyScore,
-      customerReady: params.metadata?.customerReady,
+      customerReady: params.metadata?.customerReady ?? false,
       visualRelevanceScore: params.metadata?.visualRelevanceScore,
       designQualityScore: params.metadata?.designQualityScore,
       promptStructureScore: params.metadata?.promptStructureScore,
@@ -340,17 +344,17 @@ export class CreativeAssetService {
       createdAt: new Date().toISOString(),
       completedAt: storageWriteSuccess ? new Date().toISOString() : undefined,
       errorDetails,
-      metadata: params.metadata || {},
+      metadata: {
+        ...params.metadata,
+        workspaceId,
+      },
     };
 
-    // Save metadata in Supabase storage for complete durability across process restarts
+    // Save metadata in Supabase storage under the same tenant namespace
     if (storageWriteSuccess) {
       try {
         const metaBuffer = Buffer.from(JSON.stringify(asset, null, 2));
-        await storage.upload(`${filename}.meta.json`, metaBuffer, {
-          contentType: 'application/json',
-        });
-        await storage.upload(`${id}.meta.json`, metaBuffer, {
+        await storage.upload(metaPath, metaBuffer, {
           contentType: 'application/json',
         });
       } catch (metaErr) {
@@ -359,8 +363,8 @@ export class CreativeAssetService {
     }
 
     assetRegistry.set(id, asset);
-    // Also index by filename for instant retrieval by the file API route
     assetRegistry.set(filename, asset);
+    assetRegistry.set(storagePath, asset);
 
     return asset;
   }
