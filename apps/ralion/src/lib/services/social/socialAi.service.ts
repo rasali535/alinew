@@ -18,10 +18,11 @@ export class SocialAiService {
   /**
    * Repurpose a single core message into platform-optimized drafts
    */
-  static adaptContent(baseIdea: string, platforms: SocialPlatformType[]): Record<SocialPlatformType, AdaptedContent> {
+  static adaptContent(baseIdea: string, platforms: SocialPlatformType[], tenantName?: string): Record<SocialPlatformType, AdaptedContent> {
     const result: Partial<Record<SocialPlatformType, AdaptedContent>> = {};
 
     const cleanIdea = baseIdea.trim();
+    const brand = tenantName?.trim() || 'Our Team';
 
     for (const platform of platforms) {
       switch (platform) {
@@ -31,19 +32,19 @@ export class SocialAiService {
           result.x = {
             platform: 'x',
             body,
-            hashtags: ['#Tech', '#Innovation', '#Enterprise'],
-            tips: 'Under 280 characters with high-engagement opening hook.',
+            hashtags: ['#Tech', '#Innovation', '#Leadership'],
+            tips: 'Short, punchy hook designed for high retweet and quote rate.',
             charCount: body.length,
           };
           break;
         }
 
         case 'linkedin': {
-          const body = `🚀 Elevating Enterprise Workflows\n\n${cleanIdea}\n\nKey Takeaways:\n• Scalable architecture driven by least-privilege security\n• Seamless multi-channel orchestration\n• Unified telemetry & AI copilot\n\nHow is your organization addressing this in 2026? Let's discuss in the comments.\n\n#Leadership #EnterpriseTech #Innovation #RasAliLabs #Productivity`;
+          const body = `🚀 Elevating Enterprise Workflows\n\n${cleanIdea}\n\nKey Takeaways:\n• Scalable architecture driven by least-privilege security\n• Seamless multi-channel orchestration\n• Unified telemetry & AI copilot\n\nHow is your organization addressing this in 2026? Let's discuss in the comments.\n\n#Leadership #EnterpriseTech #Innovation #Productivity`;
           result.linkedin = {
             platform: 'linkedin',
             body,
-            hashtags: ['#Leadership', '#EnterpriseTech', '#Innovation', '#RasAliLabs'],
+            hashtags: ['#Leadership', '#EnterpriseTech', '#Innovation', '#Productivity'],
             tips: 'Structured thought-leadership formatting with bullet points and executive call-to-action.',
             charCount: body.length,
           };
@@ -51,7 +52,7 @@ export class SocialAiService {
         }
 
         case 'instagram': {
-          const body = `✨ Behind the innovation at Ras Ali Labs.\n\n${cleanIdea}\n\n💬 Drop a comment below if you want early access!\n.\n.\n.\n#TechCommunity #AI #ModernTech #Productivity #Engineering #BuildInPublic #Software #Innovation`;
+          const body = `✨ Behind the innovation at ${brand}.\n\n${cleanIdea}\n\n💬 Drop a comment below if you want early access!\n.\n.\n.\n#TechCommunity #AI #ModernTech #Productivity #Engineering #BuildInPublic #Software #Innovation`;
           result.instagram = {
             platform: 'instagram',
             body,
@@ -63,11 +64,11 @@ export class SocialAiService {
         }
 
         case 'facebook': {
-          const body = `📢 Big updates from Ras Ali Labs!\n\n${cleanIdea}\n\n👉 Learn more and explore the full suite at rasalilabs.com. What feature would you like to see next?`;
+          const body = `📢 Big updates from ${brand}!\n\n${cleanIdea}\n\n👉 Learn more and explore our latest innovations. What feature would you like to see next?`;
           result.facebook = {
             platform: 'facebook',
             body,
-            hashtags: ['#RasAliLabs', '#TechNews'],
+            hashtags: ['#TechNews', '#Innovation'],
             tips: 'Conversational community tone with direct web link invitation.',
             charCount: body.length,
           };
@@ -75,7 +76,7 @@ export class SocialAiService {
         }
 
         case 'tiktok': {
-          const body = `🔥 You won't believe how we automated this in Ralion OS! ${cleanIdea.substring(0, 100)}... Full breakdown in the link in bio! #techtok #softwareengineer #aitools #techhacks`;
+          const body = `🔥 You won't believe how we automated this! ${cleanIdea.substring(0, 100)}... Full breakdown in the link in bio! #techtok #softwareengineer #aitools #techhacks`;
           result.tiktok = {
             platform: 'tiktok',
             body,
@@ -87,7 +88,7 @@ export class SocialAiService {
         }
 
         case 'whatsapp': {
-          const body = `*Ras Ali Labs Enterprise Broadcast*\n\n${cleanIdea}\n\n_Reply directly to this message to speak with our technical team._`;
+          const body = `*${brand} Enterprise Broadcast*\n\n${cleanIdea}\n\n_Reply directly to this message to speak with our technical team._`;
           result.whatsapp = {
             platform: 'whatsapp',
             body,

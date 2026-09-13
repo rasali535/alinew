@@ -64,14 +64,14 @@ export async function GET(
     switch (provider) {
       case 'linkedin':
         if (!linkedinAdapter.clientId()) {
-          return corsJsonResponse({ success: false, error: 'LinkedIn is not configured. Please add LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET to .env.local or use Zernio' }, { status: 400 }, request);
+          return corsJsonResponse({ success: false, error: 'LinkedIn is not configured. Please add LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET to .env.local or connect via Ralion Resilient Delivery Network.' }, { status: 400 }, request);
         }
         authorizationUrl = linkedinAdapter.getAuthUrl(stateToken);
         break;
       case 'facebook':
       case 'instagram':
         if (!metaAdapter.clientId()) {
-          return corsJsonResponse({ success: false, error: 'Meta (Facebook/Instagram) is not configured. Please add FACEBOOK_APP_ID and FACEBOOK_APP_SECRET to .env.local or use Zernio' }, { status: 400 }, request);
+          return corsJsonResponse({ success: false, error: 'Meta (Facebook/Instagram) is not configured. Please add FACEBOOK_APP_ID and FACEBOOK_APP_SECRET to .env.local or connect via Ralion Resilient Delivery Network.' }, { status: 400 }, request);
         }
         authorizationUrl = metaAdapter.getAuthUrl(stateToken, provider as 'facebook' | 'instagram', intent);
         break;
@@ -84,14 +84,14 @@ export async function GET(
         break;
       case 'tiktok':
         if (!tiktokAdapter.clientKey()) {
-          return corsJsonResponse({ success: false, error: 'TikTok is not configured. Please add TIKTOK_CLIENT_KEY and TIKTOK_CLIENT_SECRET to .env.local or use Zernio' }, { status: 400 }, request);
+          return corsJsonResponse({ success: false, error: 'TikTok is not configured. Please add TIKTOK_CLIENT_KEY and TIKTOK_CLIENT_SECRET to .env.local or connect via Ralion Resilient Delivery Network.' }, { status: 400 }, request);
         }
         authorizationUrl = tiktokAdapter.getAuthUrl(stateToken, codeChallenge);
         break;
       case 'youtube':
       case 'google':
         if (!youtubeAdapter.clientId()) {
-          return corsJsonResponse({ success: false, error: 'Google/YouTube is not configured. Please add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env.local or use Zernio' }, { status: 400 }, request);
+          return corsJsonResponse({ success: false, error: 'Google/YouTube is not configured. Please add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env.local or connect via Ralion Resilient Delivery Network.' }, { status: 400 }, request);
         }
         authorizationUrl = youtubeAdapter.getAuthUrl(stateToken, provider as 'youtube' | 'google');
         break;

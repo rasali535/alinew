@@ -26,10 +26,13 @@ export async function GET(
   }
 
   const authenticatedOrgId = authResult.context.organization.id;
+  const authenticatedWorkspaceId = authResult.context.workspace.id;
 
   // 2. Verify untrusted query hints
   const { searchParams } = new URL(request.url);
   const hintOrgId = searchParams.get('organizationId') || request.headers.get('x-organization-id');
+  const hintWorkspaceId = searchParams.get('workspaceId') || request.headers.get('x-workspace-id');
+
   if (hintOrgId && hintOrgId !== authenticatedOrgId) {
     return corsJsonResponse(
       { success: false, error: 'FORBIDDEN', message: 'Access denied: Organization mismatch.' },
@@ -38,10 +41,18 @@ export async function GET(
     );
   }
 
-  // 3. Locate asset and verify tenant ownership
-  let rawAsset = CreativeAssetService.getAsset(assetId);
+  if (hintWorkspaceId && hintWorkspaceId !== authenticatedWorkspaceId) {
+    return corsJsonResponse(
+      { success: false, error: 'FORBIDDEN', message: 'Access denied: Workspace mismatch.' },
+      { status: 403 },
+      request
+    );
+  }
+
+  // 3. Locate asset and verify tenant and workspace ownership
+  let rawAsset = CreativeAssetService.getAsset(assetId, authenticatedOrgId, authenticatedWorkspaceId);
   if (!rawAsset) {
-    rawAsset = await CreativeAssetService.getAssetAsync(assetId);
+    rawAsset = await CreativeAssetService.getAssetAsync(assetId, authenticatedOrgId, authenticatedWorkspaceId);
   }
 
   if (!rawAsset) {
@@ -51,6 +62,14 @@ export async function GET(
   if (rawAsset.organizationId !== authenticatedOrgId) {
     return corsJsonResponse(
       { success: false, error: 'FORBIDDEN', message: 'Access denied: Cross-tenant asset access prohibited.' },
+      { status: 403 },
+      request
+    );
+  }
+
+  if (rawAsset.workspaceId && rawAsset.workspaceId !== authenticatedWorkspaceId) {
+    return corsJsonResponse(
+      { success: false, error: 'FORBIDDEN', message: 'Access denied: Cross-workspace asset access prohibited.' },
       { status: 403 },
       request
     );
@@ -76,10 +95,13 @@ export async function DELETE(
   }
 
   const authenticatedOrgId = authResult.context.organization.id;
+  const authenticatedWorkspaceId = authResult.context.workspace.id;
 
   // 2. Verify untrusted query hints
   const { searchParams } = new URL(request.url);
   const hintOrgId = searchParams.get('organizationId') || request.headers.get('x-organization-id');
+  const hintWorkspaceId = searchParams.get('workspaceId') || request.headers.get('x-workspace-id');
+
   if (hintOrgId && hintOrgId !== authenticatedOrgId) {
     return corsJsonResponse(
       { success: false, error: 'FORBIDDEN', message: 'Access denied: Organization mismatch.' },
@@ -88,10 +110,18 @@ export async function DELETE(
     );
   }
 
+  if (hintWorkspaceId && hintWorkspaceId !== authenticatedWorkspaceId) {
+    return corsJsonResponse(
+      { success: false, error: 'FORBIDDEN', message: 'Access denied: Workspace mismatch.' },
+      { status: 403 },
+      request
+    );
+  }
+
   // 3. Locate asset and verify tenant ownership
-  let rawAsset = CreativeAssetService.getAsset(assetId);
+  let rawAsset = CreativeAssetService.getAsset(assetId, authenticatedOrgId, authenticatedWorkspaceId);
   if (!rawAsset) {
-    rawAsset = await CreativeAssetService.getAssetAsync(assetId);
+    rawAsset = await CreativeAssetService.getAssetAsync(assetId, authenticatedOrgId, authenticatedWorkspaceId);
   }
 
   if (!rawAsset) {
@@ -106,7 +136,15 @@ export async function DELETE(
     );
   }
 
-  const deleted = await CreativeAssetService.deleteAsset(assetId, authenticatedOrgId);
+  if (rawAsset.workspaceId && rawAsset.workspaceId !== authenticatedWorkspaceId) {
+    return corsJsonResponse(
+      { success: false, error: 'FORBIDDEN', message: 'Access denied: Cross-workspace asset deletion prohibited.' },
+      { status: 403 },
+      request
+    );
+  }
+
+  const deleted = await CreativeAssetService.deleteAsset(assetId, authenticatedOrgId, authenticatedWorkspaceId);
   if (!deleted) {
     return corsJsonResponse({ success: false, error: 'Failed to delete asset' }, { status: 400 }, request);
   }

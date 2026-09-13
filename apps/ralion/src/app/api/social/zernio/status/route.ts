@@ -5,11 +5,11 @@ import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 
 export const dynamic = 'force-dynamic';
 
-export type ZernioConnectionState =
-  | 'ZERNIO_NOT_CONFIGURED'
-  | 'ZERNIO_CONFIGURED'
-  | 'ZERNIO_CONNECTED'
-  | 'ZERNIO_CONNECTION_FAILED';
+export type ResilientNetworkConnectionState =
+  | 'NETWORK_NOT_CONFIGURED'
+  | 'NETWORK_CONFIGURED'
+  | 'NETWORK_CONNECTED'
+  | 'NETWORK_CONNECTION_FAILED';
 
 export async function OPTIONS(request: NextRequest) {
   return handleCorsPreflight(request);
@@ -19,15 +19,15 @@ export async function GET(request: NextRequest) {
   try {
     const health = await ZernioSocialService.checkApiHealth();
 
-    let connectionState: ZernioConnectionState = 'ZERNIO_NOT_CONFIGURED';
+    let connectionState: ResilientNetworkConnectionState = 'NETWORK_NOT_CONFIGURED';
     if (!health.configured) {
-      connectionState = 'ZERNIO_NOT_CONFIGURED';
+      connectionState = 'NETWORK_NOT_CONFIGURED';
     } else if (health.reachable) {
-      connectionState = 'ZERNIO_CONNECTED';
+      connectionState = 'NETWORK_CONNECTED';
     } else if (health.error) {
-      connectionState = 'ZERNIO_CONNECTION_FAILED';
+      connectionState = 'NETWORK_CONNECTION_FAILED';
     } else {
-      connectionState = 'ZERNIO_CONFIGURED';
+      connectionState = 'NETWORK_CONFIGURED';
     }
 
     const platforms: SocialPlatformType[] = [
@@ -52,12 +52,11 @@ export async function GET(request: NextRequest) {
     return corsJsonResponse({
       success: true,
       status: connectionState,
+      network: 'Ralion Resilient Delivery Network',
       configured: health.configured,
       reachable: health.reachable,
       latencyMs: health.latencyMs,
-      profileCount: health.profileCount,
       featureFlags,
-      testedEndpoint: 'https://zernio.com/api/v1/profiles',
       error: health.error ? 'Connection test failed: server was unable to verify remote endpoint.' : undefined,
       checkedAt: new Date().toISOString(),
     }, undefined, request);
@@ -65,10 +64,10 @@ export async function GET(request: NextRequest) {
     return corsJsonResponse(
       {
         success: false,
-        status: 'ZERNIO_CONNECTION_FAILED' as ZernioConnectionState,
+        status: 'NETWORK_CONNECTION_FAILED' as ResilientNetworkConnectionState,
+        network: 'Ralion Resilient Delivery Network',
         configured: ZernioSocialService.isConfigured(),
         reachable: false,
-        testedEndpoint: 'https://zernio.com/api/v1/profiles',
         error: 'Unexpected server-side error during health probe.',
         checkedAt: new Date().toISOString(),
       },

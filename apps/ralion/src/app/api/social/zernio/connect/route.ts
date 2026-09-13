@@ -34,13 +34,13 @@ export async function POST(request: NextRequest) {
 
     if (!ZernioSocialService.isConfigured()) {
       return corsJsonResponse(
-        { success: false, error: 'Zernio social infrastructure is not configured on the server.' },
+        { success: false, error: 'Ralion Resilient Delivery Network is not configured on the server.' },
         { status: 503 },
         request
       );
     }
 
-    // 1. Resolve or provision Zernio Profile for this tenant
+    // 1. Resolve or provision Profile for this tenant
     const profileId = await SocialProviderRouter.getOrCreateZernioProfile({
       workspaceId,
       organizationId,
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
 
     if (!profileId) {
       return corsJsonResponse(
-        { success: false, error: 'Failed to provision Zernio tenant profile.' },
+        { success: false, error: 'Failed to provision delivery profile for tenant.' },
         { status: 500 },
         request
       );
@@ -57,14 +57,14 @@ export async function POST(request: NextRequest) {
 
     // 2. Generate Connect URL
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    const callbackUrl = `${appUrl}/ralion/growth?connected=${platform}&provider=zernio`;
+    const callbackUrl = `${appUrl}/ralion/growth?connected=${platform}&provider=resilient_network`;
     const { authUrl } = await ZernioSocialService.getConnectUrl(
       platform as SocialPlatformType,
       profileId,
       callbackUrl
     );
 
-    // 3. Log Audit Event
+    // 3. Log Audit Event (internal logs retain technical details)
     await AuditLoggerService.log({
       eventType: 'SOCIAL_ACCOUNT_CONNECT_STARTED',
       eventCategory: 'META',
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
       success: true,
       metadata: {
         platform,
-        provider: 'zernio',
+        provider: 'resilient_network',
         profileId,
         workspaceId,
       },
@@ -80,13 +80,12 @@ export async function POST(request: NextRequest) {
 
     return corsJsonResponse({
       success: true,
-      provider: 'zernio',
+      provider: 'resilient_network',
       platform,
       authUrl,
-      profileId,
     }, undefined, request);
   } catch (err: any) {
-    console.error('[ZernioConnectAPI] Error:', err.message);
-    return corsJsonResponse({ success: false, error: err.message }, { status: 500 }, request);
+    console.error('[ResilientNetworkConnectAPI] Error:', err.message);
+    return corsJsonResponse({ success: false, error: 'Failed to generate connection authorization URL.' }, { status: 500 }, request);
   }
 }

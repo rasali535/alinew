@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
       return corsJsonResponse(
         {
           success: false,
-          provider: 'zernio',
+          provider: 'resilient_network',
           platform: 'facebook',
           error: 'commentId and replyText are required.',
           statusCode: 400,
@@ -66,20 +66,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const effectiveAuthor = authorName || context.workspace?.name || context.organization?.name || 'Ralion Workspace';
+
     const reply = await FacebookCommentsService.replyToComment({
       commentId,
       postId: postId || commentId.split('_')[0] || 'default_post',
       replyText: replyText.trim(),
       userId: context.user.id,
       workspaceId: context.workspace.id,
-      authorName,
+      authorName: effectiveAuthor,
       pageId,
-      organizationId: context.workspace.id,
+      organizationId: context.organization?.id || context.workspace.id,
     });
 
     return corsJsonResponse({
       success: true,
-      provider: 'zernio',
+      provider: 'resilient_network',
       platform: 'facebook',
       postId: reply.postId,
       commentId: reply.commentId,
@@ -94,7 +96,7 @@ export async function POST(request: NextRequest) {
     return corsJsonResponse(
       {
         success: false,
-        provider: 'zernio',
+        provider: 'resilient_network',
         platform: 'facebook',
         error: error.message || 'Failed to post reply to Facebook.',
         statusCode: mappedStatus,

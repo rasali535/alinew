@@ -61,3 +61,4 @@ zip_test/
 *.zip
 public/uploads/
 apps/ralion/public/uploads/
+.ralion/

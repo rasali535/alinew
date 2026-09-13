@@ -266,7 +266,7 @@ export class FacebookCommentsService {
     }
 
     const accountId = conn.zernio_account_id;
-    const pageAuthor = params.authorName || conn.account_name || 'Ras Ali Labs';
+    const pageAuthor = params.authorName || conn.account_name || 'Ralion Workspace';
 
     // 2. Publish reply directly to Facebook via Zernio
     const zernioRes = await ZernioSocialService.replyToComment({

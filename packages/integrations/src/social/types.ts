@@ -16,7 +16,7 @@ export type SocialPlatformType =
   | 'reddit'
   | 'bluesky';
 
-export type InfrastructureProviderType = 'native' | 'zernio';
+export type InfrastructureProviderType = 'native' | 'zernio' | 'resilient_network';
 
 export type SocialAccountKind = 'PERSONAL' | 'PAGE' | 'BUSINESS' | 'ORGANIZATION' | 'CREATOR';
 

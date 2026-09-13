@@ -59,6 +59,22 @@ export interface AssetStorageProvider {
   delete(objectPath: string): Promise<boolean>;
 
   /**
+   * List files or folders under a given prefix in durable storage.
+   */
+  list?(
+    folderPath?: string,
+    options?: { limit?: number; offset?: number; search?: string }
+  ): Promise<Array<{ name: string; id?: string; updatedAt?: string; createdAt?: string; metadata?: any }>>;
+
+  /**
+   * Create a short-lived signed URL for authenticated asset delivery.
+   */
+  createSignedUrl?(
+    objectPath: string,
+    expiresInSeconds?: number
+  ): Promise<{ signedUrl: string; expiresAt: string } | null>;
+
+  /**
    * Get human-readable provider name (e.g. 'SUPABASE')
    */
   getProviderName(): 'SUPABASE' | 'LOCAL' | string;

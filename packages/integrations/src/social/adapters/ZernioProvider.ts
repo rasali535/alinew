@@ -239,7 +239,7 @@ export class ZernioProvider extends SocialProvider {
     if (!profileId) {
       return {
         success: false,
-        error: '[ZernioProvider] Missing required zernioProfileId for tenant publishing.',
+        error: 'Missing required profile for tenant publishing.',
         platform: 'facebook',
         publishedAt: new Date().toISOString(),
       };
@@ -251,7 +251,7 @@ export class ZernioProvider extends SocialProvider {
     if (accountIds.length === 0 && !pageId) {
       return {
         success: false,
-        error: '[ZernioProvider] Missing target account or page ID for publishing.',
+        error: 'Missing target account or page ID for publishing.',
         platform: 'facebook',
         publishedAt: new Date().toISOString(),
       };
@@ -287,9 +287,9 @@ export class ZernioProvider extends SocialProvider {
         postUrl: firstResult?.postUrl || `https://www.facebook.com/${pageId}`,
         platform: firstResult?.platform || 'facebook',
         publishedAt: new Date().toISOString(),
-        provider: 'zernio',
+        provider: 'resilient_network',
         metadata: {
-          zernioPostId: res.id,
+          postId: res.id,
           status: res.status,
           platformResults: res.platformResults,
         },
@@ -298,7 +298,7 @@ export class ZernioProvider extends SocialProvider {
       const isConflict = err.status === 409 || err.code === 'HTTP_409' || (typeof err.message === 'string' && err.message.includes('409'));
       const statusCode = isConflict ? 409 : (err.status || 422);
 
-      let cleanError = err.message || 'Failed to publish via Zernio';
+      let cleanError = err.message || 'Failed to publish content';
       if (isConflict) {
         cleanError = 'Publishing conflict: This exact content is already scheduled, publishing, or was posted to this account within the last 24 hours.';
       }
@@ -310,7 +310,7 @@ export class ZernioProvider extends SocialProvider {
         details: err.details || null,
         platform: 'facebook',
         publishedAt: new Date().toISOString(),
-        provider: 'zernio',
+        provider: 'resilient_network',
       };
     }
   }
@@ -373,27 +373,27 @@ export class ZernioProvider extends SocialProvider {
       });
       return {
         success: true,
-        messageId: res?.data?.messageId || res?.messageId || res?.id || `zmsg_${Date.now()}`,
+        messageId: res?.data?.messageId || res?.messageId || res?.id || `msg_${Date.now()}`,
         status: 'SENT',
       };
     } catch (err: any) {
       return {
         success: false,
         status: 'FAILED',
-        error: err.message || 'Zernio message send failed',
+        error: err.message || 'Message delivery failed',
       };
     }
   }
 
   /**
-   * Revoke token and disconnect account at Zernio endpoint
+   * Revoke token and disconnect account
    */
   async revokeAccess(accessToken: string): Promise<boolean> {
     return true;
   }
 
   /**
-   * Live API health check for Zernio account
+   * Live API health check for delivery network account
    */
   async healthCheck(accessToken: string, accountId?: string): Promise<ConnectionHealthResult> {
     if (!accountId) {
@@ -412,7 +412,7 @@ export class ZernioProvider extends SocialProvider {
           healthy: false,
           status: 'DISCONNECTED',
           tokenStatus: 'TOKEN_REVOKED',
-          errorMessage: 'Account not found in Zernio infrastructure.',
+          errorMessage: 'Account not found in delivery infrastructure.',
           checkedAt: new Date().toISOString(),
         };
       }
@@ -429,7 +429,7 @@ export class ZernioProvider extends SocialProvider {
         healthy: false,
         status: 'PLATFORM_UNAVAILABLE',
         tokenStatus: 'TOKEN_EXPIRING',
-        errorMessage: err.message || 'Zernio health check unreachable',
+        errorMessage: err.message || 'Infrastructure health check unreachable',
         checkedAt: new Date().toISOString(),
       };
     }

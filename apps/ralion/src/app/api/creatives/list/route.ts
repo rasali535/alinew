@@ -25,10 +25,13 @@ export async function GET(request: NextRequest) {
   }
 
   const authenticatedOrgId = authResult.context.organization.id;
+  const authenticatedWorkspaceId = authResult.context.workspace.id;
 
   // 2. Reject untrusted query hints if they do not match
   const { searchParams } = new URL(request.url);
   const hintOrgId = searchParams.get('organizationId') || request.headers.get('x-organization-id');
+  const hintWorkspaceId = searchParams.get('workspaceId') || request.headers.get('x-workspace-id');
+
   if (hintOrgId && hintOrgId !== authenticatedOrgId) {
     return corsJsonResponse(
       { success: false, error: 'FORBIDDEN', message: 'Access denied: Organization mismatch.' },
@@ -37,12 +40,25 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const type = searchParams.get('type');
-
-  let assets = CreativeAssetService.listAssets(authenticatedOrgId);
-  if (type) {
-    assets = assets.filter(a => a.type === type);
+  if (hintWorkspaceId && hintWorkspaceId !== authenticatedWorkspaceId) {
+    return corsJsonResponse(
+      { success: false, error: 'FORBIDDEN', message: 'Access denied: Workspace mismatch.' },
+      { status: 403 },
+      request
+    );
   }
+
+  const type = searchParams.get('type') || undefined;
+  const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!, 10) : 50;
+  const offset = searchParams.get('offset') ? parseInt(searchParams.get('offset')!, 10) : 0;
+
+  const assets = await CreativeAssetService.listAssetsAsync({
+    organizationId: authenticatedOrgId,
+    workspaceId: authenticatedWorkspaceId,
+    type,
+    limit,
+    offset,
+  });
 
   return corsJsonResponse({
     success: true,

@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
       mediaTypes,
       platforms: targetPlatforms,
       scheduledFor: scheduledFor ? new Date(scheduledFor) : undefined,
-      authorName: authorName || 'Ras Ali Labs',
+      authorName: authorName || context.organization?.name || context.workspace?.name || 'Ralion Member',
       pageId,
       socialConnectionId,
       idempotencyKey,

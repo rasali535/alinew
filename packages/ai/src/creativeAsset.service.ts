@@ -6,6 +6,7 @@ import {
 export interface CreativeAsset {
   id: string;
   organizationId: string;
+  workspaceId: string;
   type: 'POSTER_IMAGE' | 'VIDEO_REEL' | 'TEXT_CAPTION' | 'CAMPAIGN_PLAN';
   provider: string; // Internal: 'FLUX.1', 'CogVideoX', etc.
   status: 'QUEUED' | 'GENERATING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
@@ -310,6 +311,7 @@ export class CreativeAssetService {
     const asset: CreativeAsset = {
       id,
       organizationId: orgId,
+      workspaceId,
       type: params.type,
       provider: params.provider,
       status: assetStatus,
@@ -371,10 +373,13 @@ export class CreativeAssetService {
 
   /**
    * Save a raw, pre-composition binary buffer to durable Supabase storage.
+   * Scoped strictly under tenant workspace namespace:
+   * organizations/{orgId}/workspaces/{workspaceId}/assets/{assetId}/raw/{filename}
    */
   static async saveRawBinaryAsset(params: {
     assetId: string;
     organizationId?: string;
+    workspaceId?: string;
     mimeType: string;
     buffer: any;
   }): Promise<{ rawPublicUrl: string; rawStoragePath: string }> {
@@ -382,6 +387,7 @@ export class CreativeAssetService {
     if (!orgId || orgId === 'default-org') {
       throw new Error('CreativeAssetService.saveRawBinaryAsset: Valid authenticated organizationId is required.');
     }
+    const workspaceId = params.workspaceId || orgId;
     const ext = params.mimeType.includes('png')
       ? 'png'
       : params.mimeType.includes('svg')
@@ -390,7 +396,7 @@ export class CreativeAssetService {
           ? 'webp'
           : 'jpg';
     const filename = `${params.assetId}-raw.${ext}`;
-    const rawStoragePath = filename;
+    const rawStoragePath = `organizations/${orgId}/workspaces/${workspaceId}/assets/${params.assetId}/raw/${filename}`;
 
     const storage: AssetStorageProvider = getProductionStorageProvider();
 
@@ -415,6 +421,7 @@ export class CreativeAssetService {
    */
   static createAssetRecord(params: {
     organizationId?: string;
+    workspaceId?: string;
     type: 'POSTER_IMAGE' | 'VIDEO_REEL' | 'TEXT_CAPTION' | 'CAMPAIGN_PLAN';
     provider: string;
     prompt: string;
@@ -429,10 +436,12 @@ export class CreativeAssetService {
     if (!orgId || orgId === 'default-org') {
       throw new Error('CreativeAssetService.createAssetRecord: Valid authenticated organizationId is required.');
     }
+    const workspaceId = params.workspaceId || orgId;
     const id = `asset-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const asset: CreativeAsset = {
       id,
       organizationId: orgId,
+      workspaceId,
       type: params.type,
       provider: params.provider,
       status: params.status || 'QUEUED',
@@ -475,15 +484,27 @@ export class CreativeAssetService {
   }
 
   /**
-   * Get an asset by ID with tenant isolation check.
-   * If in memory, returns immediately.
+   * Get an asset by ID with organization and workspace isolation check.
+   * If in memory, verifies tenant context and returns immediately.
    */
-  static getAsset(id: string, requestingOrgId?: string): CreativeAsset | null {
+  static getAsset(
+    id: string,
+    requestingOrgId?: string,
+    requestingWorkspaceId?: string
+  ): CreativeAsset | null {
     const asset = assetRegistry.get(id) || null;
 
     if (asset) {
       if (requestingOrgId && requestingOrgId !== 'all' && asset.organizationId !== requestingOrgId) {
         return null; // Deny cross-tenant asset retrieval
+      }
+      if (
+        requestingWorkspaceId &&
+        requestingWorkspaceId !== 'all' &&
+        asset.workspaceId &&
+        asset.workspaceId !== requestingWorkspaceId
+      ) {
+        return null; // Deny cross-workspace asset retrieval
       }
       return asset;
     }
@@ -492,29 +513,71 @@ export class CreativeAssetService {
   }
 
   /**
-   * Asynchronously get an asset by ID, checking Supabase Storage if not in memory.
+   * Asynchronously get an asset by ID, checking canonical Supabase Storage if not in memory.
+   * Uses canonical path:
+   * organizations/{orgId}/workspaces/{workspaceId}/assets/{id}/{filename}.meta.json
    */
-  static async getAssetAsync(id: string, requestingOrgId?: string): Promise<CreativeAsset | null> {
-    let asset = assetRegistry.get(id) || null;
+  static async getAssetAsync(
+    id: string,
+    requestingOrgId?: string,
+    requestingWorkspaceId?: string
+  ): Promise<CreativeAsset | null> {
+    let asset = this.getAsset(id, requestingOrgId, requestingWorkspaceId);
 
-    if (!asset) {
+    if (!asset && requestingOrgId && requestingWorkspaceId) {
       try {
         const storage = getProductionStorageProvider();
-        const metaPath = `${id}.meta.json`;
-        const downloaded = await storage.download(metaPath);
-        if (downloaded) {
-          asset = JSON.parse(downloaded.buffer.toString('utf-8'));
-          if (asset) {
-            assetRegistry.set(asset.id, asset);
-            if (asset.storagePath) assetRegistry.set(asset.storagePath, asset);
+        const folderPath = `organizations/${requestingOrgId}/workspaces/${requestingWorkspaceId}/assets/${id}`;
+
+        // Search folder in storage for meta.json
+        if (storage.list) {
+          const files = await storage.list(folderPath, { limit: 10 });
+          const metaFile = files.find((f) => f.name.endsWith('.meta.json'));
+          if (metaFile) {
+            const metaPath = `${folderPath}/${metaFile.name}`;
+            const downloaded = await storage.download(metaPath);
+            if (downloaded) {
+              asset = JSON.parse(downloaded.buffer.toString('utf-8'));
+              if (asset) {
+                assetRegistry.set(asset.id, asset);
+                if (asset.storagePath) assetRegistry.set(asset.storagePath, asset);
+              }
+            }
           }
         }
-      } catch {}
+
+        // Direct common extensions fallback if list was empty
+        if (!asset) {
+          const extensions = ['jpg', 'png', 'mp4', 'webp', 'svg'];
+          for (const ext of extensions) {
+            const candidateMeta = `${folderPath}/${id}.${ext}.meta.json`;
+            const downloaded = await storage.download(candidateMeta);
+            if (downloaded) {
+              asset = JSON.parse(downloaded.buffer.toString('utf-8'));
+              if (asset) {
+                assetRegistry.set(asset.id, asset);
+                if (asset.storagePath) assetRegistry.set(asset.storagePath, asset);
+                break;
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn(`[CreativeAssetService] Notice loading asset ${id} from storage:`, err);
+      }
     }
 
     if (asset) {
       if (requestingOrgId && requestingOrgId !== 'all' && asset.organizationId !== requestingOrgId) {
         return null; // Deny cross-tenant asset retrieval
+      }
+      if (
+        requestingWorkspaceId &&
+        requestingWorkspaceId !== 'all' &&
+        asset.workspaceId &&
+        asset.workspaceId !== requestingWorkspaceId
+      ) {
+        return null; // Deny cross-workspace asset retrieval
       }
       return asset;
     }
@@ -524,11 +587,12 @@ export class CreativeAssetService {
 
   /**
    * Locate an asset by filename (e.g. 'asset-1788194025026-2mae6.jpg')
-   * Supports tenant verification and cross-restart lookup.
+   * Supports tenant verification and cross-restart lookup via canonical Supabase path.
    */
   static async getAssetByFilename(
     filename: string,
-    requestingOrgId?: string
+    requestingOrgId?: string,
+    requestingWorkspaceId?: string
   ): Promise<CreativeAsset | null> {
     // 1. Direct registry lookup
     let asset = assetRegistry.get(filename) || null;
@@ -538,25 +602,37 @@ export class CreativeAssetService {
       asset = assetRegistry.get(id) || null;
     }
 
-    // 2. If not found in memory (e.g. after restart), search Supabase Storage
-    if (!asset) {
+    // 2. If not found in memory (e.g. after restart), search canonical Supabase Storage path
+    if (!asset && requestingOrgId && requestingWorkspaceId) {
       try {
+        const id = filename.replace(/\.[^/.]+$/, '').replace(/-raw$/, '');
         const storage = getProductionStorageProvider();
-        const metaPath = `${filename}.meta.json`;
+        const metaPath = `organizations/${requestingOrgId}/workspaces/${requestingWorkspaceId}/assets/${id}/${filename}.meta.json`;
         const downloaded = await storage.download(metaPath);
         if (downloaded) {
           asset = JSON.parse(downloaded.buffer.toString('utf-8'));
           if (asset) {
             assetRegistry.set(asset.id, asset);
             assetRegistry.set(filename, asset);
+            if (asset.storagePath) assetRegistry.set(asset.storagePath, asset);
           }
         }
-      } catch {}
+      } catch (err) {
+        console.warn(`[CreativeAssetService] Notice loading filename ${filename} from storage:`, err);
+      }
     }
 
     if (asset) {
       if (requestingOrgId && requestingOrgId !== 'all' && asset.organizationId !== requestingOrgId) {
         return null; // Cross-tenant access denied
+      }
+      if (
+        requestingWorkspaceId &&
+        requestingWorkspaceId !== 'all' &&
+        asset.workspaceId &&
+        asset.workspaceId !== requestingWorkspaceId
+      ) {
+        return null; // Cross-workspace access denied
       }
       return asset;
     }
@@ -565,32 +641,151 @@ export class CreativeAssetService {
   }
 
   /**
-   * List all assets strictly for an organization.
+   * Generates a short-lived signed delivery URL for an authenticated tenant asset.
+   * Verifies strict workspace ownership before issuing the URL.
    */
-  static listAssets(organizationId?: string): CreativeAsset[] {
+  static async createSignedDeliveryUrl(params: {
+    assetId: string;
+    organizationId: string;
+    workspaceId: string;
+    expiresInSeconds?: number;
+  }): Promise<{
+    assetId: string;
+    signedUrl: string;
+    expiresAt: string;
+    mimeType: string;
+    sha256?: string;
+  } | null> {
+    const { assetId, organizationId, workspaceId, expiresInSeconds = 900 } = params;
+    const asset = await this.getAssetAsync(assetId, organizationId, workspaceId);
+
+    if (!asset) return null;
+
+    if (asset.organizationId !== organizationId || (asset.workspaceId && asset.workspaceId !== workspaceId)) {
+      return null; // Deny cross-workspace delivery
+    }
+
+    const storage = getProductionStorageProvider();
+    const cleanPath = asset.storagePath || `organizations/${organizationId}/workspaces/${workspaceId}/assets/${assetId}/${assetId}.${asset.mimeType.includes('png') ? 'png' : 'jpg'}`;
+
+    if (storage.createSignedUrl) {
+      const signed = await storage.createSignedUrl(cleanPath, expiresInSeconds);
+      if (signed) {
+        return {
+          assetId: asset.id,
+          signedUrl: signed.signedUrl,
+          expiresAt: signed.expiresAt,
+          mimeType: asset.mimeType,
+          sha256: asset.sha256,
+        };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * List all assets strictly for an organization and workspace.
+   */
+  static listAssets(organizationId?: string, workspaceId?: string): CreativeAsset[] {
     const all = Array.from(assetRegistry.values());
-    // Deduplicate by ID
     const uniqueMap = new Map<string, CreativeAsset>();
     for (const a of all) {
       if (!uniqueMap.has(a.id)) {
         uniqueMap.set(a.id, a);
       }
     }
-    const uniqueAssets = Array.from(uniqueMap.values());
+    let uniqueAssets = Array.from(uniqueMap.values());
 
-    if (!organizationId || organizationId === 'all') return uniqueAssets.reverse();
-    return uniqueAssets.filter((a) => a.organizationId === organizationId).reverse();
+    if (organizationId && organizationId !== 'all') {
+      uniqueAssets = uniqueAssets.filter((a) => a.organizationId === organizationId);
+    }
+    if (workspaceId && workspaceId !== 'all') {
+      uniqueAssets = uniqueAssets.filter((a) => !a.workspaceId || a.workspaceId === workspaceId);
+    }
+
+    return uniqueAssets.reverse();
+  }
+
+  /**
+   * List assets durably from Supabase Storage for the authenticated organization and workspace.
+   */
+  static async listAssetsAsync(params: {
+    organizationId: string;
+    workspaceId: string;
+    type?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<CreativeAsset[]> {
+    const { organizationId, workspaceId, type, limit = 50, offset = 0 } = params;
+    const storage = getProductionStorageProvider();
+    const prefix = `organizations/${organizationId}/workspaces/${workspaceId}/assets`;
+
+    // 1. Check in-memory first
+    const inMem = this.listAssets(organizationId, workspaceId);
+    if (inMem.length > 0) {
+      let filtered = inMem;
+      if (type) filtered = filtered.filter((a) => a.type === type);
+      return filtered.slice(offset, offset + limit);
+    }
+
+    // 2. Discover from durable Supabase storage prefix
+    if (storage.list) {
+      try {
+        const folders = await storage.list(prefix, { limit: 100 });
+        const discovered: CreativeAsset[] = [];
+
+        for (const f of folders) {
+          const folderMeta = await storage.list(`${prefix}/${f.name}`, { limit: 10 });
+          const metaFile = folderMeta.find((item) => item.name.endsWith('.meta.json'));
+          if (metaFile) {
+            const downloaded = await storage.download(`${prefix}/${f.name}/${metaFile.name}`);
+            if (downloaded) {
+              const loadedAsset: CreativeAsset = JSON.parse(downloaded.buffer.toString('utf-8'));
+              if (
+                loadedAsset &&
+                loadedAsset.organizationId === organizationId &&
+                (!loadedAsset.workspaceId || loadedAsset.workspaceId === workspaceId)
+              ) {
+                discovered.push(loadedAsset);
+                assetRegistry.set(loadedAsset.id, loadedAsset);
+              }
+            }
+          }
+        }
+
+        let result = discovered;
+        if (type) result = result.filter((a) => a.type === type);
+        return result.slice(offset, offset + limit);
+      } catch (err) {
+        console.warn('[CreativeAssetService] listAssetsAsync storage scan error:', err);
+      }
+    }
+
+    return [];
   }
 
   /**
    * Delete an asset by ID with tenant isolation verification.
    */
-  static async deleteAsset(id: string, requestingOrgId?: string): Promise<boolean> {
-    const existing = assetRegistry.get(id);
+  static async deleteAsset(
+    id: string,
+    requestingOrgId?: string,
+    requestingWorkspaceId?: string
+  ): Promise<boolean> {
+    const existing = await this.getAssetAsync(id, requestingOrgId, requestingWorkspaceId);
     if (!existing) return false;
 
     if (requestingOrgId && requestingOrgId !== 'all' && existing.organizationId !== requestingOrgId) {
       return false; // Deny cross-tenant asset deletion
+    }
+    if (
+      requestingWorkspaceId &&
+      requestingWorkspaceId !== 'all' &&
+      existing.workspaceId &&
+      existing.workspaceId !== requestingWorkspaceId
+    ) {
+      return false; // Deny cross-workspace asset deletion
     }
 
     if (existing.storagePath) {
@@ -605,5 +800,12 @@ export class CreativeAssetService {
 
     assetRegistry.delete(id);
     return true;
+  }
+
+  /**
+   * Clear in-memory registry for testing durability across simulated server restarts.
+   */
+  static clearRegistryForTesting(): void {
+    assetRegistry.clear();
   }
 }

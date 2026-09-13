@@ -34,11 +34,19 @@ export async function GET(request: NextRequest) {
       console.warn('[SocialConnectionsAPI] DB query notice:', error.message);
     }
 
-    const connections = (rawConnections || []).map((conn: any) => ({
-      ...conn,
-      avatar_url: conn.profile_image_url || conn.avatar_url || conn.metadata?.avatarUrl || null,
-      account_name: conn.account_name || conn.metadata?.pageName || 'Social Account',
-    }));
+    const connections = (rawConnections || []).map((conn: any) => {
+      const {
+        infrastructure_provider,
+        zernio_account_id,
+        zernio_profile_id,
+        ...safeConn
+      } = conn;
+      return {
+        ...safeConn,
+        avatar_url: conn.profile_image_url || conn.avatar_url || conn.metadata?.avatarUrl || null,
+        account_name: conn.account_name || conn.metadata?.pageName || 'Social Account',
+      };
+    });
 
     return corsJsonResponse({
       success: true,

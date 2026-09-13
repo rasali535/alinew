@@ -30,11 +30,12 @@ export async function GET(
   }
 
   const authenticatedOrgId = authResult.context.organization.id;
+  const authenticatedWorkspaceId = authResult.context.workspace.id;
 
   // 2. Locate asset and verify tenant ownership
-  let asset = CreativeAssetService.getAsset(assetId);
+  let asset = CreativeAssetService.getAsset(assetId, authenticatedOrgId, authenticatedWorkspaceId);
   if (!asset) {
-    asset = await CreativeAssetService.getAssetAsync(assetId);
+    asset = await CreativeAssetService.getAssetAsync(assetId, authenticatedOrgId, authenticatedWorkspaceId);
   }
 
   if (!asset) {
@@ -44,6 +45,14 @@ export async function GET(
   if (asset.organizationId !== authenticatedOrgId) {
     return corsJsonResponse(
       { success: false, error: 'FORBIDDEN', message: 'Access denied: Cross-tenant asset status inspection prohibited.' },
+      { status: 403 },
+      request
+    );
+  }
+
+  if (asset.workspaceId && asset.workspaceId !== authenticatedWorkspaceId) {
+    return corsJsonResponse(
+      { success: false, error: 'FORBIDDEN', message: 'Access denied: Cross-workspace asset status inspection prohibited.' },
       { status: 403 },
       request
     );

@@ -84,6 +84,8 @@ export async function POST(request: NextRequest) {
       ? platforms
       : ['facebook'];
 
+    const effectiveAuthor = authorName || context.workspace?.name || context.organization?.name || 'Ralion Member';
+
     const result = await SocialPublishingService.publish({
       userId: actualUserId,
       workspaceId: actualWorkspaceId,
@@ -94,7 +96,7 @@ export async function POST(request: NextRequest) {
       mediaTypes,
       platforms: targetPlatforms,
       scheduledFor: scheduledFor ? new Date(scheduledFor) : undefined,
-      authorName: authorName || 'Ras Ali Labs',
+      authorName: effectiveAuthor,
       pageId,
       socialConnectionId,
       idempotencyKey,
@@ -121,6 +123,18 @@ export async function POST(request: NextRequest) {
       primaryError,
     });
 
+    // Sanitize platformResults to remove internal provider markers
+    const sanitizedPlatformResults: any = {};
+    if (result.platformResults) {
+      for (const [pKey, pVal] of Object.entries(result.platformResults)) {
+        if (pVal) {
+          const { zernio_account_id, zernio_profile_id, ...safeVal } = pVal as any;
+          if (safeVal.provider === 'zernio') safeVal.provider = 'resilient_network';
+          sanitizedPlatformResults[pKey] = safeVal;
+        }
+      }
+    }
+
     return corsJsonResponse({
       success: isSuccess || isPartial,
       postId: result.postId,
@@ -129,8 +143,7 @@ export async function POST(request: NextRequest) {
       ...(result.conflict ? { conflict: true, error: primaryError || 'Publishing conflict' } : {}),
       ...(result.conflictDetails ? { conflictDetails: result.conflictDetails } : {}),
       ...(!isSuccess && !isPartial && primaryError ? { error: primaryError } : {}),
-      platformResults: result.platformResults,
-      result,
+      platformResults: sanitizedPlatformResults,
       requestId,
       ...(result.errors?.length ? { errors: result.errors } : {}),
     }, { status: httpStatus }, request);

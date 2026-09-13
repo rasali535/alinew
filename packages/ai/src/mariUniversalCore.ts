@@ -347,6 +347,17 @@ Classification Rules:
 }
 
 /**
+ * Semantic intent classifier wrapper.
+ */
+export function decideSemanticIntent(
+  prompt: string,
+  conversationHistory: ChatHistoryTurn[] = [],
+  context?: BusinessContext | null
+): SemanticDecision {
+  return decideSemanticIntentHeuristic(prompt, conversationHistory, context);
+}
+
+/**
  * Heuristic semantic decision engine (Emergency offline fallback when model classification is unavailable).
  */
 export function decideSemanticIntentHeuristic(
@@ -1417,8 +1428,8 @@ export class MariUniversalCore {
       const isKnownTenant = resolvedCompanyName && resolvedCompanyName !== 'Unconfigured' && resolvedCompanyName !== 'unconfigured-tenant';
       const brand = semanticDecision.entities.brand || (isKnownTenant ? resolvedCompanyName : '');
       const product = semanticDecision.entities.product || brand || '';
-      const tagline = semanticDecision.entities.tagline || (brand.includes('Ras Ali') ? 'Empowered to Prosper' : '');
-      const description = semanticDecision.entities.description || '';
+      const tagline = semanticDecision.entities.tagline || (brand.includes('Ras Ali') ? 'Empowered to Prosper' : (businessContext?.layer1?.tagline?.value || ''));
+      const description = semanticDecision.entities.description || (product.includes('Ralion') || brand.includes('Ras Ali') ? 'Your AI Business Operating System' : (businessContext?.layer1?.valueProposition?.value || ''));
       const website = semanticDecision.entities.website || (businessContext?.layer1?.websiteUrl?.value || '');
       const assetType = semanticDecision.entities.assetType || 'FLYER';
       const format = semanticDecision.entities.format || 'PORTRAIT_4_5';

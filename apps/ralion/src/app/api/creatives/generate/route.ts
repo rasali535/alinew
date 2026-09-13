@@ -1,13 +1,7 @@
 import { NextRequest } from 'next/server';
+import crypto from 'crypto';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../lib/cors';
-import {
-  CreativeAssetService,
-  CreativeAsset,
-  CreativeGenerationError,
-  CreativeOrchestrator,
-  validateImageBuffer,
-  validateVideoBuffer,
-} from '@ralion/ai';
+import { CreativeOrchestrator } from '@ralion/ai';
 import { requireRalionContext } from '../../../../lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
@@ -17,12 +11,19 @@ export async function OPTIONS(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const requestId = `req_gen_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+
   try {
     // 1. Require authenticated server session
     const authResult = await requireRalionContext(request);
     if (authResult.response || !authResult.context) {
       return authResult.response || corsJsonResponse(
-        { success: false, error: 'AUTHENTICATION_REQUIRED', message: 'Authentication required to generate creative assets.' },
+        {
+          success: false,
+          error: 'AUTHENTICATION_REQUIRED',
+          message: 'Authentication required to generate creative assets.',
+          requestId,
+        },
         { status: 401 },
         request
       );
@@ -47,7 +48,25 @@ export async function POST(request: NextRequest) {
     // 2. Reject mismatched client hints
     if (body.organizationId && body.organizationId !== authenticatedOrgId) {
       return corsJsonResponse(
-        { success: false, error: 'FORBIDDEN', message: 'Requested organization does not match authenticated session.' },
+        {
+          success: false,
+          error: 'FORBIDDEN',
+          message: 'Requested organization does not match authenticated session.',
+          requestId,
+        },
+        { status: 403 },
+        request
+      );
+    }
+
+    if (body.workspaceId && body.workspaceId !== authenticatedWorkspaceId) {
+      return corsJsonResponse(
+        {
+          success: false,
+          error: 'FORBIDDEN',
+          message: 'Requested workspace does not match authenticated session.',
+          requestId,
+        },
         { status: 403 },
         request
       );
@@ -72,10 +91,10 @@ export async function POST(request: NextRequest) {
       return corsJsonResponse({
         success: false,
         status: result.status,
-        error: result.errorDetails?.errorMessage || result.userFacingMessage,
+        error: result.userFacingMessage || 'Creative generation failed.',
         errorCode: result.errorDetails?.errorCode || 'GENERATION_FAILED',
         userFacingMessage: result.userFacingMessage,
-        details: result.errorDetails,
+        requestId,
       }, { status: httpStatus }, request);
     }
 
@@ -83,6 +102,7 @@ export async function POST(request: NextRequest) {
       id: result.receipt.assetId,
       ...result.receipt,
       organizationId: authenticatedOrgId,
+      workspaceId: authenticatedWorkspaceId,
     };
 
     return corsJsonResponse({
@@ -91,17 +111,18 @@ export async function POST(request: NextRequest) {
       userFacingMessage: result.userFacingMessage,
       asset: assetPayload,
       receipt: result.receipt,
+      requestId,
     }, undefined, request);
 
   } catch (err: any) {
-    console.error('[Creative Generation API] Unhandled Error:', err);
+    console.error(`[Creative Generation API] Unhandled Error (${requestId}):`, err);
     return corsJsonResponse({
       success: false,
       status: 'FAILED',
-      error: 'An unexpected internal error occurred during creative generation.',
+      error: 'Creative generation service encountered an unexpected error. Please try again.',
       userFacingMessage: 'Creative generation service encountered an unexpected error. Please try again.',
       errorCode: 'INTERNAL_ERROR',
-      technicalDetails: err?.message,
+      requestId,
     }, { status: 500 }, request);
   }
 }

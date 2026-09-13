@@ -20,6 +20,7 @@ import { callMariAiApi, generateHfImage, generateHfVideo, MariOrchestrationServi
 import { getRalionApiUrl, fetchRalionApi, getRalionAuthHeaders } from '@/lib/api-config';
 import { useOrganization } from '@ralion/auth';
 import { AnalyticsSource, MetricState, formatAnalyticsMetric } from '@/lib/services/social/facebookAnalyticsSemantics';
+import { SecureImage, SecureVideo, resolveSecureAssetUrl } from '@/components/SecureMedia';
 
 async function authFetch(pathOrUrl: string, init?: RequestInit, opName?: string): Promise<Response> {
   const url = pathOrUrl.startsWith('http') ? pathOrUrl : getRalionApiUrl(pathOrUrl);
@@ -1936,8 +1937,14 @@ Rules:
         };
       }
 
+      let finalDisplayUrl = asset.publicUrl || asset.previewUrl;
+      try {
+        const resolvedSigned = await resolveSecureAssetUrl(asset.id || finalDisplayUrl);
+        if (resolvedSigned) finalDisplayUrl = resolvedSigned;
+      } catch {}
+
       if (type === 'poster') {
-        setGeneratedPoster(asset.publicUrl || asset.previewUrl);
+        setGeneratedPoster(finalDisplayUrl);
         setIsGeneratingPoster(false);
 
         const newItem: GeneratedContentItem = {
@@ -1945,8 +1952,8 @@ Rules:
           type: 'POSTER_IMAGE',
           title: asset.title,
           prompt: asset.prompt,
-          output: asset.publicUrl || asset.previewUrl,
-          previewUrl: asset.previewUrl || asset.publicUrl,
+          output: finalDisplayUrl,
+          previewUrl: finalDisplayUrl,
           modelUsed: `FLUX.1 Studio (${posterFormat}, ${posterStyle})`,
           createdAt: 'Just now'
         };
@@ -1957,7 +1964,7 @@ Rules:
         });
         setTimeout(() => setOauthAlert(null), 4000);
       } else {
-        setGeneratedVideo(asset.publicUrl || asset.previewUrl);
+        setGeneratedVideo(finalDisplayUrl);
         setIsGeneratingVideo(false);
 
         const newItem: GeneratedContentItem = {
@@ -1965,8 +1972,8 @@ Rules:
           type: 'VIDEO_REEL',
           title: asset.title,
           prompt: asset.prompt,
-          output: asset.publicUrl || asset.previewUrl,
-          previewUrl: asset.previewUrl || asset.publicUrl,
+          output: finalDisplayUrl,
+          previewUrl: finalDisplayUrl,
           modelUsed: `CogVideoX Motion Studio (${videoLength})`,
           createdAt: 'Just now'
         };
@@ -5505,13 +5512,10 @@ Rules:
                     {creativeMode === 'poster' ? (
                       generatedPoster ? (
                         <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-xl">
-                          <img
-                            src={resolveSafeImageUrl(generatedPoster, posterPrompt || 'Studio Poster')}
+                          <SecureImage
+                            src={generatedPoster}
                             alt="Generated Studio Poster"
                             className="w-full h-auto max-h-[420px] object-contain rounded-xl shadow-2xl"
-                            onError={(e) => {
-                              (e.currentTarget as HTMLImageElement).src = resolveSafeImageUrl('', posterPrompt || 'Studio Poster');
-                            }}
                           />
 
                           {/* Brand Logo Watermark */}
@@ -5575,9 +5579,10 @@ Rules:
                     ) : (
                       generatedVideo ? (
                         <div className="relative w-full h-full flex items-center justify-center">
-                          <video controls className="w-full rounded-xl max-h-[380px] object-cover shadow-2xl">
-                            <source src={generatedVideo} type="video/mp4" />
-                          </video>
+                          <SecureVideo
+                            src={generatedVideo}
+                            className="w-full rounded-xl max-h-[380px] object-cover shadow-2xl"
+                          />
                           {creativeLogo && (
                             <div className={`absolute p-2.5 rounded-xl bg-black/60 backdrop-blur-md border border-white/20 shadow-xl pointer-events-none ${
                               logoPosition === 'top-left' ? 'top-4 left-4' :
@@ -5858,16 +5863,13 @@ Rules:
                   <div key={item.id} className="p-3.5 rounded-2xl bg-zinc-900/80 border border-zinc-800 flex flex-col justify-between gap-3 group hover:border-purple-500/40 transition-all shadow-md">
                     <div className="aspect-video w-full rounded-xl overflow-hidden bg-black/60 relative">
                       {item.type === 'POSTER_IMAGE' ? (
-                        <img
-                          src={resolveSafeImageUrl(item.output, item.title)}
+                        <SecureImage
+                          src={item.output}
                           alt={item.title}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          onError={(e) => {
-                            (e.currentTarget as HTMLImageElement).src = resolveSafeImageUrl('', item.title);
-                          }}
                         />
                       ) : (
-                        <video src={item.output} className="w-full h-full object-cover" />
+                        <SecureVideo src={item.output} className="w-full h-full object-cover" />
                       )}
                       <span className="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-black/80 text-[10px] font-bold text-white backdrop-blur-sm border border-white/10">
                         {item.type === 'POSTER_IMAGE' ? 'POSTER' : 'VIDEO'}
@@ -6235,9 +6237,9 @@ Rules:
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-12 h-12 rounded-xl overflow-hidden bg-black border border-zinc-800 shrink-0 flex items-center justify-center">
                     {newPost.mediaType === 'video' ? (
-                      <video src={newPost.mediaUrl} className="w-full h-full object-cover" />
+                      <SecureVideo src={newPost.mediaUrl} className="w-full h-full object-cover" />
                     ) : (
-                      <img src={newPost.mediaUrl} alt="Upload Preview" className="w-full h-full object-cover" />
+                      <SecureImage src={newPost.mediaUrl} alt="Upload Preview" className="w-full h-full object-cover" />
                     )}
                   </div>
                   <div className="min-w-0">
@@ -6312,7 +6314,6 @@ Rules:
                      || availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || null)
                   : null;
 
-                const publishIdempotencyKey = `pub_modal_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
                 const payload = {
                   title: topic || 'Social Post',
                   body: `${contentBody}\n\n${newPost.hashtags}`.trim(),
@@ -6323,7 +6324,6 @@ Rules:
                   authorName: targetConn.label || activeFbPage?.name || organization?.name || user?.displayName || 'Social Account',
                   socialConnectionId: targetConn.id,
                   pageId: isFacebookTarget ? (activeFbPage?.pageId || targetConn.providerAccountId || undefined) : undefined,
-                  idempotencyKey: publishIdempotencyKey,
                 };
 
                 try {

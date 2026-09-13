@@ -178,4 +178,60 @@ export class SupabaseStorageProvider implements AssetStorageProvider {
       return false;
     }
   }
+
+  async list(
+    folderPath?: string,
+    options?: { limit?: number; offset?: number; search?: string }
+  ): Promise<Array<{ name: string; id?: string; updatedAt?: string; createdAt?: string; metadata?: any }>> {
+    try {
+      const supabase = this.getClient();
+      const cleanPath = folderPath ? folderPath.replace(/^\/+/, '').replace(/\/+$/, '') : undefined;
+      const { data, error } = await supabase.storage
+        .from(this.bucketName)
+        .list(cleanPath, {
+          limit: options?.limit || 100,
+          offset: options?.offset || 0,
+          search: options?.search,
+          sortBy: { column: 'created_at', order: 'desc' },
+        });
+
+      if (error || !data) return [];
+      return data.map((item) => ({
+        name: item.name,
+        id: item.id || undefined,
+        updatedAt: item.updated_at || undefined,
+        createdAt: item.created_at || undefined,
+        metadata: item.metadata || undefined,
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  async createSignedUrl(
+    objectPath: string,
+    expiresInSeconds: number = 900
+  ): Promise<{ signedUrl: string; expiresAt: string } | null> {
+    try {
+      const supabase = this.getClient();
+      const cleanPath = objectPath.replace(/^\/+/, '');
+      const { data, error } = await supabase.storage
+        .from(this.bucketName)
+        .createSignedUrl(cleanPath, expiresInSeconds);
+
+      if (error || !data?.signedUrl) {
+        console.error(`[SupabaseStorageProvider] createSignedUrl failed for ${cleanPath}:`, error);
+        return null;
+      }
+
+      const expiresAt = new Date(Date.now() + expiresInSeconds * 1000).toISOString();
+      return {
+        signedUrl: data.signedUrl,
+        expiresAt,
+      };
+    } catch (err) {
+      console.error('[SupabaseStorageProvider] createSignedUrl error:', err);
+      return null;
+    }
+  }
 }

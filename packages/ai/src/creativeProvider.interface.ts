@@ -42,6 +42,8 @@ export interface CreativeProvider {
 
 export interface SocialHandoffContract {
   assetId: string;
+  organizationId: string;
+  workspaceId: string;
   mediaUrl: string;
   mediaType: 'image' | 'video';
   title: string;
@@ -53,9 +55,15 @@ export interface SocialHandoffContract {
 
 export interface MariCreativeReceipt {
   assetId: string;
+  organizationId: string;
+  workspaceId: string;
   assetType: CreativeAssetType;
   mediaUrl: string;
-  publicUrl?: string;
+  publicUrl: string;
+  storagePath: string;
+  mimeType: string;
+  sha256?: string;
+  status: 'COMPLETED';
   thumbnailUrl: string;
   title: string;
   prompt: string;

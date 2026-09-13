@@ -48,6 +48,8 @@ export async function GET(
   // 3. Verify untrusted query parameters or headers against authenticated context
   const { searchParams } = new URL(request.url);
   const hintOrgId = searchParams.get('organizationId') || request.headers.get('x-organization-id');
+  const hintWorkspaceId = searchParams.get('workspaceId') || request.headers.get('x-workspace-id');
+
   if (hintOrgId && hintOrgId !== authenticatedOrgId) {
     return new NextResponse(
       JSON.stringify({ error: 'FORBIDDEN', message: 'Requested organization does not match authenticated context.' }),
@@ -55,13 +57,28 @@ export async function GET(
     );
   }
 
-  // 4. Locate CreativeAsset record and verify strict tenant ownership
-  const asset = await CreativeAssetService.getAssetByFilename(safeName);
-  if (asset && asset.organizationId !== authenticatedOrgId) {
+  if (hintWorkspaceId && hintWorkspaceId !== authenticatedWorkspaceId) {
     return new NextResponse(
-      JSON.stringify({ error: 'FORBIDDEN', message: 'Access denied: Cross-tenant asset access prohibited.' }),
+      JSON.stringify({ error: 'FORBIDDEN', message: 'Requested workspace does not match authenticated context.' }),
       { status: 403, headers: { 'Content-Type': 'application/json' } }
     );
+  }
+
+  // 4. Locate CreativeAsset record and verify strict tenant and workspace ownership
+  const asset = await CreativeAssetService.getAssetByFilename(safeName, authenticatedOrgId, authenticatedWorkspaceId);
+  if (asset) {
+    if (asset.organizationId !== authenticatedOrgId) {
+      return new NextResponse(
+        JSON.stringify({ error: 'FORBIDDEN', message: 'Access denied: Cross-tenant asset access prohibited.' }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    if (asset.workspaceId && asset.workspaceId !== authenticatedWorkspaceId) {
+      return new NextResponse(
+        JSON.stringify({ error: 'FORBIDDEN', message: 'Access denied: Cross-workspace asset access prohibited.' }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
   }
 
   // 5. Download strictly from tenant-scoped storage path
@@ -71,8 +88,8 @@ export async function GET(
 
   let downloadResult = await storage.download(canonicalStoragePath);
 
-  // Fallback only within the same tenant's namespace if storagePath is registered differently
-  if (!downloadResult && asset?.storagePath) {
+  // Fallback only within the same workspace's namespace if storagePath is registered differently
+  if (!downloadResult && asset?.storagePath && asset.organizationId === authenticatedOrgId && (!asset.workspaceId || asset.workspaceId === authenticatedWorkspaceId)) {
     downloadResult = await storage.download(asset.storagePath);
   }
 

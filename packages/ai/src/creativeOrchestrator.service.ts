@@ -222,12 +222,15 @@ export class CreativeOrchestrator {
 
     const tempAssetId = `asset-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
+    const resolvedWorkspaceId = (options as any).workspaceId || organizationId;
+
     if (type === 'POSTER_IMAGE' && successfulResult) {
       // 1. Durably save raw, un-composed image binary
       try {
         const rawInfo = await CreativeAssetService.saveRawBinaryAsset({
           assetId: tempAssetId,
           organizationId,
+          workspaceId: resolvedWorkspaceId,
           mimeType: successfulResult.mimeType,
           buffer: successfulResult.buffer,
         });
@@ -275,6 +278,7 @@ export class CreativeOrchestrator {
                 const rawRetryInfo = await CreativeAssetService.saveRawBinaryAsset({
                   assetId: tempAssetId,
                   organizationId,
+                  workspaceId: resolvedWorkspaceId,
                   mimeType: retryRes.mimeType,
                   buffer: retryRes.buffer,
                 });
@@ -316,7 +320,7 @@ export class CreativeOrchestrator {
           ? 'pollinations/flux-resilient'
           : 'black-forest-labs/FLUX.1-schnell';
 
-    const workspaceId = (options as any).workspaceId || organizationId;
+    const workspaceId = resolvedWorkspaceId;
     const hasVisualQA = Boolean(visualQAResult && typeof visualQAResult.visualRelevanceScore === 'number');
     const semanticScore = hasVisualQA ? visualQAResult?.visualRelevanceScore : undefined;
     const designScore = hasVisualQA ? visualQAResult?.designQualityScore : undefined;
@@ -378,6 +382,8 @@ export class CreativeOrchestrator {
     const dynamicCaption = (options as any).caption || `${asset.title}\n\n${prompt.trim()}`;
     const socialContract: SocialHandoffContract = {
       assetId: asset.id,
+      organizationId: asset.organizationId || organizationId,
+      workspaceId: asset.workspaceId || options.workspaceId || organizationId,
       mediaUrl: asset.publicUrl,
       mediaType: type === 'VIDEO_REEL' ? 'video' : 'image',
       title: asset.title,
@@ -393,6 +399,8 @@ export class CreativeOrchestrator {
       `It's ready in Growth Studio.\n\n` +
       `[Preview ${type === 'VIDEO_REEL' ? 'Reel' : 'Visual'}] | [Edit] | [Use in Social] | [Schedule Post]`;
 
+    const deliveryEndpoint = `${getAppBasePath()}/api/creatives/${asset.id}/delivery`;
+
     const receipt: MariCreativeReceipt & {
       id: string;
       publicUrl: string;
@@ -400,6 +408,8 @@ export class CreativeOrchestrator {
       rawPublicUrl?: string;
       storagePath?: string;
       mimeType: string;
+      sha256?: string;
+      deliveryEndpoint: string;
       visualRelevanceScore?: number;
       designQualityScore?: number;
       promptStructureScore?: number;
@@ -414,6 +424,7 @@ export class CreativeOrchestrator {
       copyAccuracyScore?: number;
       customerReady?: boolean;
       organizationId?: string;
+      workspaceId?: string;
       visualQADetails?: any;
     } = {
       id: asset.id,
@@ -421,6 +432,7 @@ export class CreativeOrchestrator {
       assetType: type,
       mediaUrl: asset.publicUrl,
       publicUrl: asset.publicUrl,
+      deliveryEndpoint,
       rawMediaUrl: rawPublicUrl || asset.publicUrl,
       rawPublicUrl: rawPublicUrl || asset.publicUrl,
       rawProviderAsset: rawPublicUrl || asset.publicUrl,
@@ -434,11 +446,14 @@ export class CreativeOrchestrator {
       copyAccuracyScore,
       customerReady,
       organizationId,
+      workspaceId,
       thumbnailUrl: asset.previewUrl || asset.publicUrl,
       storagePath: asset.storagePath,
       mimeType: asset.mimeType,
+      sha256: asset.sha256,
       title: asset.title,
       prompt: asset.prompt,
+      status: 'COMPLETED',
       providerStatus: 'COMPLETED',
       generationTime: successfulResult.generationTimeMs,
       validationStatus: 'PASSED',
