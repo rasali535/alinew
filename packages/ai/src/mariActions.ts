@@ -4,6 +4,7 @@ export type MariActionType =
   | 'GENERATE_REPORT'
   | 'ADD_CONTACT'
   | 'TRIGGER_WORKFLOW'
+  | 'GENERATE_FLYER'
   | 'NAVIGATE';
 
 export interface MariActionPayload {

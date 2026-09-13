@@ -11,6 +11,12 @@
  * 6. Clean Markdown output without SVG leakage or raw bracket tokens.
  */
 
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+
+dotenv.config({ path: path.resolve(__dirname, '../apps/ralion/.env.local') });
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
 import { MariUniversalCore, classifyCapabilityMode } from '../packages/ai/src/mariUniversalCore';
 
 interface TestCase {

@@ -6,8 +6,12 @@ import {
   BusinessContextService,
   classifyCapabilityMode,
   MARI_BUILD_VERSION,
+  setMariFacebookPageService,
 } from '@ralion/ai';
 import { getCurrentRalionContext } from '../../../../lib/auth/serverAuth';
+import { FacebookPageManagementService } from '../../../../lib/services/social/facebookPageManagement.service';
+
+setMariFacebookPageService(FacebookPageManagementService);
 
 export const dynamic = 'force-dynamic';
 

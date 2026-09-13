@@ -13,9 +13,10 @@
 import { StructuredCreativeBrief } from './creativeBrief.types';
 
 const GEMINI_API_KEYS = [
-  "AQ.Ab8RN6LHIgVR8Zti6ifRmdpEKXKguMi1mbTZ951Mdn0mFzBhxA",
   process.env.GEMINI_API_KEY,
-  process.env.NEXT_PUBLIC_GEMINI_API_KEY,
+  process.env.GOOGLE_AI_API_KEY,
+  process.env.GOOGLE_API_KEY,
+  process.env.GOOGLE_GENERATIVE_AI_API_KEY,
 ].filter(Boolean) as string[];
 
 export interface VisualSemanticQAResult {

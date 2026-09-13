@@ -74,7 +74,7 @@ export class BillingDatabaseService {
     if (!sub) {
       const now = new Date().toISOString();
       const nextYear = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
-      const isEnterpriseDefault = organizationId === 'ras-ali-labs' || organizationId === 'org-rasalilabs-demo' || organizationId.includes('rasali');
+      const isEnterpriseDefault = organizationId === 'ras-ali-labs' || organizationId === 'org-rasalilabs-demo' || organizationId.includes('rasali') || organizationId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf';
       sub = {
         id: `sub_${organizationId}_default`,
         organizationId,

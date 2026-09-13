@@ -3,16 +3,24 @@ dotenv.config({ path: '.env.production' });
 dotenv.config({ path: 'apps/ralion/.env' });
 dotenv.config();
 
-const key = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+const key = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY;
 console.log('Key present:', Boolean(key), 'Prefix:', key ? key.substring(0, 8) : 'none');
 
 async function testPrompt(prompt: string, sysPrompt?: string) {
   const fullPrompt = sysPrompt ? `${sysPrompt}\n\nUser Request: ${prompt}` : prompt;
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
+  const isBearer = key?.startsWith('AQ.');
+  const url = isBearer
+    ? 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'
+    : `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
   
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (isBearer) {
+    headers['Authorization'] = `Bearer ${key}`;
+  }
+
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({
       contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
       generationConfig: { temperature: 0.7, maxOutputTokens: 1500 },

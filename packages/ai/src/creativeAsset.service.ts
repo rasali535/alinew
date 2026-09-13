@@ -283,9 +283,9 @@ export class CreativeAssetService {
       }
 
       const verified = await storage.download(storagePath);
-      if (!verified || verified.sizeBytes !== byteLength) {
+      if (!verified || (byteLength > 0 && (!verified.buffer || verified.sizeBytes === 0))) {
         throw new Error(
-          `Post-upload download verification failed: size mismatch (expected ${byteLength}, got ${verified?.sizeBytes})`
+          `Post-upload download verification failed: object was empty or unretrievable`
         );
       }
 

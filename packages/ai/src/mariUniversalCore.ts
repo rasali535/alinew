@@ -48,10 +48,20 @@ export function getMariBuildVersion(): string {
       return envVer.trim().substring(0, 16);
     }
   }
-  return '2026.09.13-1ce30d6f';
+  return 'unknown-dev';
 }
 
 export const MARI_BUILD_VERSION = getMariBuildVersion();
+
+let _mariFacebookPageService: any = null;
+
+export function setMariFacebookPageService(service: any) {
+  _mariFacebookPageService = service;
+}
+
+export function getMariFacebookPageService(): any {
+  return _mariFacebookPageService;
+}
 
 export type MariCapabilityMode = 'GENERAL' | 'BUSINESS' | 'ACTION';
 export type RequestedContextSource =
@@ -64,6 +74,14 @@ export type RequestedContextSource =
   | 'ALL_SOURCES'
   | 'GENERAL'
   | 'CROSS_SOURCE';
+
+export type SemanticDecisionSource =
+  | 'MODEL_CLASSIFICATION'
+  | 'DETERMINISTIC_CLASSIFICATION'
+  | 'HEURISTIC_FALLBACK'
+  | 'MODEL'
+  | 'DETERMINISTIC'
+  | 'FALLBACK';
 
 export interface ChatHistoryTurn {
   role: 'user' | 'model';
@@ -91,7 +109,7 @@ export interface SemanticDecision {
   mode: MariCapabilityMode;
   intent: string;
   requestedSources: RequestedContextSource[];
-  requestedAction: 'NONE' | 'GENERATE_CREATIVE_JOB' | 'NAVIGATE' | 'REFRESH_CONNECTION' | 'CONFIRM_ACTION';
+  requestedAction: 'NONE' | 'GENERATE_CREATIVE_JOB' | 'NAVIGATE' | 'REFRESH_CONNECTION' | 'CONFIRM_ACTION' | 'inspect_facebook_status';
   entities: SemanticEntities;
   missingInformation: string[];
   confidence: number;
@@ -118,12 +136,13 @@ export interface MariQueryResponse {
   answer: string;
   capabilityMode: MariCapabilityMode;
   detectedIntent: string;
-  semanticDecisionSource: 'MODEL' | 'DETERMINISTIC' | 'FALLBACK';
+  semanticDecisionSource: SemanticDecisionSource;
   requestedAction: string;
   requestedSources: RequestedContextSource[];
   toolsActuallyExecuted: string[];
   modelAttempted: string | null;
   modelSucceeded: boolean;
+  modelUsed?: string;
   responseSource: 'gemini' | 'local_grounded';
   fallbackUsed: boolean;
   fallbackReason: string | null;
@@ -143,16 +162,157 @@ export interface MariQueryResponse {
 // 1. MODEL-BASED & SEMANTIC DECISION ENGINE
 // ─────────────────────────────────────────────────────────────────────────────
 
+export function isPureGreeting(text: string): boolean {
+  const pLower = text.trim().toLowerCase();
+  const clean = pLower.replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!clean) return false;
+  const words = clean.split(' ');
+  const greetingWords = new Set([
+    'hi', 'hello', 'hey', 'good', 'morning', 'afternoon', 'evening', 'day',
+    'greetings', 'howdy', 'there', 'mari', 'ai', 'how', 'are', 'you', 'today', 'welcome', 'yo', 'sup'
+  ]);
+  if (words.every(w => greetingWords.has(w))) return true;
+  return /^(hello|hi|hey|good\s+(morning|afternoon|evening)|greetings|howdy)([\s!.,👋]|(\s*,?\s*(there|mari|ai|good\s+(morning|afternoon|evening)|how\s+are\s+you[\s?!]*)))*$/i.test(pLower);
+}
+
 /**
- * Authoritative semantic decision engine identifying:
- * - Intent
- * - Requested sources
- * - Requested action
- * - Entities (brand, product, tagline, description, website, assetType, format)
- * - Missing essential information
- * - Confidence score & Multi-turn references
+ * Executes a dedicated structured semantic decision call with Gemini.
+ * Returns schema-validated structured output.
  */
-export function decideSemanticIntent(
+export async function callGeminiSemanticClassifier(
+  cleanUserPrompt: string,
+  conversationHistory: ChatHistoryTurn[] = [],
+  companyName: string = ''
+): Promise<{ decision: SemanticDecision; model: string } | null> {
+  const geminiKey =
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_AI_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+
+  if (!geminiKey) {
+    return null;
+  }
+
+  const systemInstruction = `You are the structured Semantic Decision & Intent Classifier for Mari AI inside Ralion OS.
+Given the user's prompt, recent conversation history, and company context (${companyName || 'Business'}), classify the user request into a strict JSON object with the following schema:
+{
+  "mode": "BUSINESS" | "GENERAL" | "ACTION",
+  "intent": string (e.g. "GREETING", "FACEBOOK_CONNECTION_STATUS", "CREATIVE_STUDIO", "WEBSITE_KNOWLEDGE", "BUSINESS_IDENTITY", "WEEKLY_FOCUS", "GROWTH_STRATEGY", "BUSINESS_PERFORMANCE", "COMPARE_WEBSITE_VS_SOCIAL", "COMPOUND_QUERY", "MISSING_DATA_AUDIT", "BUSINESS_SYNTHESIS", "TARGET_CUSTOMERS", "GENERAL_REASONING"),
+  "requestedSources": array of strings from ["FACEBOOK", "WEBSITE", "CRM", "OPERATIONS", "GROWTH", "BUSINESS_PROFILE", "CROSS_SOURCE", "ALL_SOURCES", "GENERAL"],
+  "requestedAction": "NONE" | "GENERATE_CREATIVE_JOB" | "NAVIGATE" | "REFRESH_CONNECTION" | "CONFIRM_ACTION" | "inspect_facebook_status",
+  "entities": {
+    "brand": string (optional),
+    "product": string (optional),
+    "tagline": string (optional),
+    "description": string (optional),
+    "website": string (optional),
+    "assetType": "FLYER" | "POSTER" | "REEL" | "BANNER" | "CUSTOM" (optional),
+    "format": string (optional),
+    "channel": string (optional),
+    "actionSubject": string (optional)
+  },
+  "missingInformation": array of strings (optional),
+  "confidence": number between 0.0 and 1.0
+}
+
+Classification Rules:
+- Requests asking to create/generate/design flyers, posters, or reels: mode="ACTION", intent="CREATIVE_STUDIO", requestedAction="GENERATE_CREATIVE_JOB", requestedSources=["GROWTH"].
+- Facebook status/connection questions (e.g. "Is my Facebook connected?"): mode="BUSINESS", intent="FACEBOOK_CONNECTION_STATUS", requestedAction="inspect_facebook_status", requestedSources=["FACEBOOK"].
+- General questions, science, math, coding, or writing explanations: mode="GENERAL", intent="GENERAL_REASONING", requestedSources=["GENERAL"], requestedAction="NONE".
+- Pure greetings: mode="BUSINESS", intent="GREETING", requestedAction="NONE", requestedSources=["GENERAL"].
+- Respond with valid JSON ONLY.`;
+
+  const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+
+  if (conversationHistory.length > 0) {
+    for (const turn of conversationHistory.slice(-6)) {
+      contents.push({
+        role: turn.role,
+        parts: [{ text: turn.text }],
+      });
+    }
+  }
+
+  contents.push({
+    role: 'user',
+    parts: [{ text: `Classify the following user input:\n"${cleanUserPrompt}"` }],
+  });
+
+  const modelsToTry = [
+    'gemini-3.5-flash-lite',
+    'gemini-3.6-flash',
+    'gemini-3.5-flash',
+    'gemini-3.1-pro-preview',
+  ];
+
+  for (const modelName of modelsToTry) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiKey}`;
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: {
+            parts: [{ text: systemInstruction }],
+          },
+          contents,
+          generationConfig: {
+            temperature: 0.1,
+            maxOutputTokens: 800,
+            responseMimeType: 'application/json',
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        continue;
+      }
+
+      const data = await response.json();
+      const rawJson = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!rawJson || typeof rawJson !== 'string') {
+        continue;
+      }
+
+      const parsed = JSON.parse(rawJson);
+      if (!parsed || !parsed.intent || !parsed.mode) {
+        continue;
+      }
+
+      const validMode: MariCapabilityMode =
+        parsed.mode === 'ACTION' ? 'ACTION' : parsed.mode === 'GENERAL' ? 'GENERAL' : 'BUSINESS';
+
+      const validSources = Array.isArray(parsed.requestedSources) && parsed.requestedSources.length > 0
+        ? parsed.requestedSources
+        : [validMode === 'GENERAL' ? 'GENERAL' : 'BUSINESS_PROFILE'];
+
+      return {
+        decision: {
+          mode: validMode,
+          intent: String(parsed.intent).trim().toUpperCase(),
+          requestedSources: validSources as RequestedContextSource[],
+          requestedAction: parsed.requestedAction || 'NONE',
+          entities: parsed.entities || {},
+          missingInformation: Array.isArray(parsed.missingInformation) ? parsed.missingInformation : [],
+          confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0.95,
+          isMultiTurnFollowup: Boolean(parsed.isMultiTurnFollowup),
+        },
+        model: modelName,
+      };
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Heuristic semantic decision engine (Emergency offline fallback when model classification is unavailable).
+ */
+export function decideSemanticIntentHeuristic(
   prompt: string,
   conversationHistory: ChatHistoryTurn[] = [],
   context?: BusinessContext | null
@@ -161,18 +321,7 @@ export function decideSemanticIntent(
   const pLower = p.toLowerCase();
 
   // 1. Deterministic Standalone Greeting
-  const isPureGreeting = (text: string): boolean => {
-    const clean = text.toLowerCase().replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim();
-    if (!clean) return false;
-    const words = clean.split(' ');
-    const greetingWords = new Set([
-      'hi', 'hello', 'hey', 'good', 'morning', 'afternoon', 'evening', 'day',
-      'greetings', 'howdy', 'there', 'mari', 'ai', 'how', 'are', 'you', 'today', 'welcome', 'yo', 'sup'
-    ]);
-    return words.every(w => greetingWords.has(w));
-  };
-
-  if (isPureGreeting(pLower) || /^(hello|hi|hey|good\s+(morning|afternoon|evening)|greetings|howdy)([\s!.,👋]|(\s*,?\s*(there|mari|ai|good\s+(morning|afternoon|evening)|how\s+are\s+you[\s?!]*)))*$/i.test(pLower)) {
+  if (isPureGreeting(pLower)) {
     return {
       mode: 'BUSINESS',
       intent: 'GREETING',
@@ -252,9 +401,9 @@ export function decideSemanticIntent(
 
   // 3. Creative Studio / Flyer / Poster / Reel Generation Jobs
   const isCreativeCreation =
-    /\b(create|generate|produce|make|design|draft|build)\s+(a\s+|an\s+)?(commercial\s+|launch\s+|marketing\s+|promotional\s+|social\s+(media\s+)?)?(flyer|poster|advert|ad|artwork|graphic|visual|reel|video|banner|campaign)\b/i.test(pLower) ||
-    /\b(need|want)\s+(a\s+|an\s+)?(launch\s+|marketing\s+|social\s+)?(flyer|poster|artwork|advert|graphic|banner|reel)\b/i.test(pLower) ||
-    /\b(make\s+something\s+i\s+can\s+boost|design\s+an\s+advert|create\s+a\s+flyer|make\s+a\s+flyer|generate\s+a\s+flyer|flyer\s+for\s+ralion)\b/i.test(pLower) ||
+    /\b(create|generate|produce|make|design|draft|build|need|want)\b[\s\w-]{0,60}\b(flyer|poster|advert|ad|artwork|graphic|visual|reel|video|banner|campaign)\b/i.test(pLower) ||
+    /\b(flyer|poster|reel|advert)\s+for\b/i.test(pLower) ||
+    /\b(make\s+something\s+i\s+can\s+boost|design\s+an\s+advert)\b/i.test(pLower) ||
     pLower.includes('make something i can boost');
 
   if (isCreativeCreation) {
@@ -262,12 +411,26 @@ export function decideSemanticIntent(
     const isFlyer = /\b(flyer)\b/i.test(pLower);
     const assetType = isVideo ? 'REEL' : (isFlyer ? 'FLYER' : 'POSTER');
 
-    let product = 'Ralion OS';
+    const ctxCompany = context?.layer1?.companyName?.value;
+    const isRasAliContext = ctxCompany && ctxCompany.includes('Ras Ali');
+    const isRasAliMentioned = pLower.includes('ralion') || pLower.includes('ras ali');
+
+    const brand = isRasAliMentioned || isRasAliContext
+      ? 'Ras Ali Labs'
+      : (ctxCompany && ctxCompany !== 'unconfigured-tenant' && ctxCompany !== 'Unconfigured' ? ctxCompany : '');
+
+    let product = '';
     if (pLower.includes('ralion os') || pLower.includes('ralion')) {
       product = 'Ralion OS';
     } else if (pLower.includes('pameltex')) {
       product = 'Pameltex Medical';
+    } else if (brand) {
+      product = brand;
     }
+
+    const tagline = brand === 'Ras Ali Labs' ? 'Empowered to Prosper' : (context?.layer1?.valueProposition?.value || '');
+    const description = brand === 'Ras Ali Labs' ? 'Your AI Business Operating System' : (context?.layer1?.industry?.value || 'Commercial Flyer');
+    const website = brand === 'Ras Ali Labs' ? 'www.rasalilabs.com' : (context?.layer1?.websiteUrl?.value || '');
 
     return {
       mode: 'ACTION',
@@ -275,15 +438,15 @@ export function decideSemanticIntent(
       requestedSources: ['GROWTH'],
       requestedAction: 'GENERATE_CREATIVE_JOB',
       entities: {
-        brand: product === 'Ralion OS' ? 'Ras Ali Labs' : (context?.layer1?.companyName?.value || 'Ras Ali Labs'),
+        brand,
         product,
-        tagline: product === 'Ralion OS' ? 'Empowered to Prosper' : 'Excellence in Execution',
-        description: product === 'Ralion OS' ? 'Your AI Business Operating System' : 'Premium Commercial Solutions',
-        website: product === 'Ralion OS' ? 'www.rasalilabs.com' : (context?.layer1?.websiteUrl?.value || 'www.rasalilabs.com'),
+        tagline,
+        description,
+        website,
         assetType,
         format: 'PORTRAIT_4_5',
       },
-      missingInformation: [],
+      missingInformation: !brand && !product ? ['brand', 'product', 'offer'] : [],
       confidence: 0.98,
       isMultiTurnFollowup: false,
     };
@@ -564,7 +727,7 @@ export function classifyCapabilityMode(prompt: string, context?: BusinessContext
   intent: string;
   requestedSource?: RequestedContextSource;
 } {
-  const decision = decideSemanticIntent(prompt, [], context);
+  const decision = decideSemanticIntentHeuristic(prompt, [], context);
   return {
     mode: decision.mode,
     intent: decision.intent,
@@ -713,7 +876,12 @@ async function callGeminiNeuralCore(
     parts: [{ text: cleanUserPrompt }],
   });
 
-  const modelsToTry = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-2.0-flash'];
+  const modelsToTry = [
+    'gemini-3.5-flash-lite',
+    'gemini-3.6-flash',
+    'gemini-3.5-flash',
+    'gemini-3.1-pro-preview',
+  ];
   let lastError = '';
 
   for (const modelName of modelsToTry) {
@@ -1023,7 +1191,7 @@ export class MariUniversalCore {
     let isVerified = resolvedIdentity.isVerified;
 
     // Diagnostic tracking state
-    let semanticDecisionSource: 'MODEL' | 'DETERMINISTIC' | 'FALLBACK' = 'MODEL';
+    let semanticDecisionSource: SemanticDecisionSource = 'MODEL_CLASSIFICATION';
     let toolsActuallyExecuted: string[] = [];
     let modelAttempted: string | null = null;
     let modelSucceeded: boolean = false;
@@ -1032,17 +1200,52 @@ export class MariUniversalCore {
     let isReasoningFailure: boolean = false;
 
     // 2. Structured Model-Based Semantic Intent & Tool Selection
-    const semanticDecision = decideSemanticIntent(
-      cleanOriginalPrompt,
-      conversationHistory,
-      businessContext
-    );
+    let semanticDecision: SemanticDecision;
+
+    if (isPureGreeting(cleanOriginalPrompt)) {
+      semanticDecision = {
+        mode: 'BUSINESS',
+        intent: 'GREETING',
+        requestedSources: ['BUSINESS_PROFILE'],
+        requestedAction: 'NONE',
+        entities: {},
+        missingInformation: [],
+        confidence: 1.0,
+        isMultiTurnFollowup: false,
+      };
+      semanticDecisionSource = 'DETERMINISTIC_CLASSIFICATION';
+    } else if (!request.forceLocalOnly) {
+      const modelClassification = await callGeminiSemanticClassifier(
+        cleanOriginalPrompt,
+        conversationHistory,
+        resolvedCompanyName
+      );
+
+      if (modelClassification && modelClassification.decision) {
+        semanticDecision = modelClassification.decision;
+        semanticDecisionSource = 'MODEL_CLASSIFICATION';
+      } else {
+        semanticDecision = decideSemanticIntentHeuristic(
+          cleanOriginalPrompt,
+          conversationHistory,
+          businessContext
+        );
+        semanticDecisionSource = 'HEURISTIC_FALLBACK';
+      }
+    } else {
+      semanticDecision = decideSemanticIntentHeuristic(
+        cleanOriginalPrompt,
+        conversationHistory,
+        businessContext
+      );
+      semanticDecisionSource = 'HEURISTIC_FALLBACK';
+    }
 
     const { mode: capabilityMode, intent: detectedIntent } = semanticDecision;
 
     // 2.5. Deterministic Greeting Short-Circuit (Zero Gemini calls, Zero credit deduction, Zero technical metadata)
     if (detectedIntent === 'GREETING') {
-      semanticDecisionSource = 'DETERMINISTIC';
+      semanticDecisionSource = 'DETERMINISTIC_CLASSIFICATION';
       modelAttempted = null;
       modelSucceeded = false;
       fallbackUsed = false;
@@ -1050,7 +1253,7 @@ export class MariUniversalCore {
       toolsActuallyExecuted = [];
 
       const greetingUser = (resolvedCompanyName && resolvedCompanyName.includes('Ras Ali')) ? 'Ras Ali' : (resolvedCompanyName || '');
-      const greetingText = resolvedCompanyName
+      const greetingText = resolvedCompanyName && resolvedCompanyName !== 'unconfigured-tenant' && resolvedCompanyName !== 'Unconfigured'
         ? `Hi ${greetingUser ? `${greetingUser} ` : ''}👋 I’m Mari, your AI Business Growth Partner for ${resolvedCompanyName}. I’m ready to help with strategy, marketing, clients, content or business operations. What would you like to work on?`
         : `Hi there 👋 I’m Mari, your AI Business Growth Partner. I’m ready to help with strategy, marketing, clients, content or business operations. What would you like to work on?`;
 
@@ -1075,7 +1278,7 @@ export class MariUniversalCore {
         answer: greetingText,
         capabilityMode: 'BUSINESS',
         detectedIntent: 'GREETING',
-        semanticDecisionSource: 'DETERMINISTIC',
+        semanticDecisionSource,
         requestedAction: 'NONE',
         requestedSources: ['BUSINESS_PROFILE'],
         toolsActuallyExecuted: [],
@@ -1103,120 +1306,179 @@ export class MariUniversalCore {
 
     // 2.8. Action Trigger: Real Creative Generation Job Execution
     if (semanticDecision.requestedAction === 'GENERATE_CREATIVE_JOB') {
-      semanticDecisionSource = 'DETERMINISTIC';
-      modelAttempted = 'Mari Creative Orchestrator (FLUX / Neural Engine)';
-      toolsActuallyExecuted.push('CreativeOrchestrator.generate');
-
-      const brand = semanticDecision.entities.brand || resolvedCompanyName || 'Ras Ali Labs';
-      const product = semanticDecision.entities.product || 'Ralion OS';
-      const tagline = semanticDecision.entities.tagline || 'Empowered to Prosper';
-      const description = semanticDecision.entities.description || 'Your AI Business Operating System';
-      const website = semanticDecision.entities.website || 'www.rasalilabs.com';
+      const isKnownTenant = resolvedCompanyName && resolvedCompanyName !== 'Unconfigured' && resolvedCompanyName !== 'unconfigured-tenant';
+      const brand = semanticDecision.entities.brand || (isKnownTenant ? resolvedCompanyName : '');
+      const product = semanticDecision.entities.product || brand || '';
+      const tagline = semanticDecision.entities.tagline || (brand.includes('Ras Ali') ? 'Empowered to Prosper' : '');
+      const description = semanticDecision.entities.description || '';
+      const website = semanticDecision.entities.website || (businessContext?.layer1?.websiteUrl?.value || '');
       const assetType = semanticDecision.entities.assetType || 'FLYER';
       const format = semanticDecision.entities.format || 'PORTRAIT_4_5';
+
+      // Cross-tenant isolation check: if brand/product is missing and tenant is unknown, ask concise clarification
+      if (!brand && !product) {
+        return {
+          answer: "I'd be glad to generate a commercial flyer for your business. What is your brand name, product name, and the primary message or offer you would like featured?",
+          capabilityMode: 'ACTION',
+          detectedIntent: 'CREATIVE_STUDIO',
+          semanticDecisionSource,
+          requestedAction: 'NONE',
+          requestedSources: ['GROWTH'],
+          toolsActuallyExecuted: [],
+          modelAttempted: null,
+          modelSucceeded: false,
+          modelUsed: 'Mari Creative Clarification Engine',
+          responseSource: 'local_grounded',
+          fallbackUsed: false,
+          fallbackReason: null,
+          buildVersion: MARI_BUILD_VERSION,
+          suggestedActions: [],
+          ragContext: null,
+          contextSources: ['BusinessIdentityResolver'],
+          tenantId: orgId,
+          companyName: resolvedCompanyName,
+          isBusinessContextVerified: isVerified,
+          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+          requestId,
+        };
+      }
+
+      modelAttempted = 'Mari Creative Orchestrator (FLUX / Neural Engine)';
 
       try {
         const genResult = await CreativeOrchestrator.generate({
           organizationId: orgId,
           type: assetType === 'REEL' ? 'VIDEO_REEL' : 'POSTER_IMAGE',
-          prompt: `${brand} - ${product}: ${description}. Tagline: ${tagline}. Website: ${website}. Modern high-impact commercial flyer.`,
-          title: `${product} Launch ${assetType}`,
+          prompt: `${brand}${product ? ` - ${product}` : ''}: ${description || 'Commercial Flyer'}.${tagline ? ` Tagline: ${tagline}.` : ''}${website ? ` Website: ${website}.` : ''} Modern high-impact commercial flyer.`,
+          title: `${product || brand} Launch ${assetType}`,
           format,
-          campaign: `${product} Launch`,
+          campaign: `${product || brand} Launch`,
           platform: 'facebook',
-          cta: `Visit ${website}`,
+          cta: website ? `Visit ${website}` : 'Learn More',
         });
 
-        modelSucceeded = true;
-        fallbackUsed = false;
-        fallbackReason = null;
+        if (genResult && genResult.success && genResult.receipt?.assetId) {
+          toolsActuallyExecuted.push('CreativeOrchestrator.generate');
+          modelSucceeded = true;
+          fallbackUsed = false;
+          fallbackReason = null;
 
-        const jobId = genResult.receipt?.assetId || `job_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-        const mediaUrl = genResult.receipt?.publicUrl || genResult.receipt?.mediaUrl || `/api/creatives/file/${jobId}.png`;
-        const jobStatus = genResult.status || 'COMPLETED';
+          const jobId = genResult.receipt.assetId;
+          const mediaUrl = genResult.receipt.publicUrl || genResult.receipt.mediaUrl || `/api/creatives/file/${jobId}`;
+          const jobStatus = genResult.status || 'COMPLETED';
 
-        const flyerResponse = `### Creative Generation Job Dispatched & Completed
+          const flyerResponse = `### Creative Generation Job Dispatched & Completed\n\nI have generated a high-impact commercial **${assetType}** for **${brand}**:\n\n• **Job ID**: \`${jobId}\`\n• **Asset Type**: ${assetType}\n• **Parent Brand**: ${brand}\n• **Product**: ${product || brand}\n${tagline ? `• **Tagline**: ${tagline}\n` : ''}${description ? `• **Description**: ${description}\n` : ''}${website ? `• **Website**: ${website}\n` : ''}• **Dimensions**: 1080x1350 (Facebook Portrait 4:5 Default)\n• **Status**: **${jobStatus}**\n\n**Preview & Asset Download**:\n[View Generated Asset](${mediaUrl})\n\nYour asset has been securely stored in the Ralion Creative Vault and is ready to publish to connected social channels.`;
 
-I have generated a high-impact commercial **${assetType}** for **${brand}**:
+          const flyerAction: MariActionPayload = {
+            id: `flyer_${jobId}`,
+            type: 'GENERATE_FLYER',
+            label: 'View Generated Flyer',
+            title: `${product || brand} Launch ${assetType}`,
+            description: tagline || 'Exclusive Offer',
+            payload: { route: '/marketing/flyers', assetId: jobId, mediaUrl },
+          };
 
-• **Job ID**: \`${jobId}\`
-• **Asset Type**: ${assetType}
-• **Parent Brand**: ${brand}
-• **Product**: ${product}
-• **Tagline**: ${tagline}
-• **Description**: ${description}
-• **Website**: ${website}
-• **Dimensions**: 1080x1350 (Facebook Portrait 4:5 Default)
-• **Status**: **${jobStatus}**
+          console.log(JSON.stringify({
+            level: 'INFO',
+            type: 'MARI_DIAGNOSTIC_TRACE',
+            requestId,
+            detectedIntent,
+            semanticDecisionSource,
+            requestedAction: semanticDecision.requestedAction,
+            requestedSources: semanticDecision.requestedSources,
+            toolsActuallyExecuted,
+            modelAttempted,
+            modelSucceeded,
+            responseSource: 'local_grounded',
+            fallbackUsed,
+            fallbackReason,
+            buildVersion: MARI_BUILD_VERSION,
+          }));
 
-**Preview & Asset Download**:
-[View Generated Asset](${mediaUrl})
-
-Your asset has been securely stored in the Ralion Creative Vault and is ready to publish to connected social channels.`;
-
-        const flyerAction: MariActionPayload = {
-          id: `flyer_${jobId}`,
-          type: 'GENERATE_FLYER',
-          action: 'generate_flyer',
-          label: 'View Generated Flyer',
-          title: `${product} Launch ${assetType}`,
-          headline: tagline,
-          ctaText: `Visit ${website}`,
-          targetScreen: '/marketing/flyers',
-          payload: { route: '/marketing/flyers', assetId: jobId, mediaUrl },
-        };
-
-        console.log(JSON.stringify({
-          level: 'INFO',
-          type: 'MARI_DIAGNOSTIC_TRACE',
-          requestId,
-          detectedIntent,
-          semanticDecisionSource,
-          requestedAction: semanticDecision.requestedAction,
-          requestedSources: semanticDecision.requestedSources,
-          toolsActuallyExecuted,
-          modelAttempted,
-          modelSucceeded,
-          responseSource: 'local_grounded',
-          fallbackUsed,
-          fallbackReason,
-          buildVersion: MARI_BUILD_VERSION,
-        }));
-
+          return {
+            answer: flyerResponse,
+            capabilityMode: 'ACTION',
+            detectedIntent: detectedIntent || 'CREATIVE_STUDIO',
+            semanticDecisionSource,
+            requestedAction: 'GENERATE_CREATIVE_JOB',
+            requestedSources: ['GROWTH'],
+            toolsActuallyExecuted,
+            modelAttempted,
+            modelSucceeded: true,
+            modelUsed: 'Mari Creative Orchestrator (FLUX / Neural Engine)',
+            responseSource: 'local_grounded',
+            fallbackUsed: false,
+            fallbackReason: null,
+            buildVersion: MARI_BUILD_VERSION,
+            suggestedActions: [
+              flyerAction,
+              { type: 'NAVIGATE', label: 'Open Creative Studio', payload: { route: '/growth?tab=creatives' } },
+              { type: 'NAVIGATE', label: 'Publish to Facebook', payload: { route: `/growth?tab=publish&assetId=${jobId}` } },
+            ],
+            ragContext: null,
+            contextSources: ['CreativeOrchestrator', 'BusinessIdentityResolver'],
+            tenantId: orgId,
+            companyName: resolvedCompanyName,
+            isBusinessContextVerified: isVerified,
+            usage: {
+              promptTokens: estimateTokenCount(cleanOriginalPrompt),
+              completionTokens: estimateTokenCount(flyerResponse),
+              totalTokens: estimateTokenCount(cleanOriginalPrompt) + estimateTokenCount(flyerResponse),
+            },
+            requestId,
+          };
+        } else {
+          const errorMsg = genResult?.userFacingMessage || (genResult as any)?.errorDetails?.errorMessage || 'Creative asset generation encountered a storage or provider error.';
+          return {
+            answer: `Creative asset generation could not be completed: ${errorMsg}\n\nPlease verify your storage credentials and retry.`,
+            capabilityMode: 'ACTION',
+            detectedIntent: 'CREATIVE_STUDIO',
+            semanticDecisionSource,
+            requestedAction: 'GENERATE_CREATIVE_JOB',
+            requestedSources: ['GROWTH'],
+            toolsActuallyExecuted: [],
+            modelAttempted,
+            modelSucceeded: false,
+            modelUsed: 'Mari Creative Orchestrator',
+            responseSource: 'local_grounded',
+            fallbackUsed: true,
+            fallbackReason: 'CREATIVE_STORAGE_ERROR',
+            buildVersion: MARI_BUILD_VERSION,
+            suggestedActions: [],
+            ragContext: null,
+            contextSources: ['CreativeOrchestrator'],
+            tenantId: orgId,
+            companyName: resolvedCompanyName,
+            isBusinessContextVerified: isVerified,
+            usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+            requestId,
+          };
+        }
+      } catch (genErr: any) {
         return {
-          answer: flyerResponse,
+          answer: `Creative asset generation could not be completed: ${genErr?.message || 'Storage error'}\n\nPlease verify storage configuration.`,
           capabilityMode: 'ACTION',
-          detectedIntent: detectedIntent || 'CREATE_FLYER',
-          semanticDecisionSource: 'DETERMINISTIC',
+          detectedIntent: 'CREATIVE_STUDIO',
+          semanticDecisionSource,
           requestedAction: 'GENERATE_CREATIVE_JOB',
           requestedSources: ['GROWTH'],
-          toolsActuallyExecuted,
+          toolsActuallyExecuted: [],
           modelAttempted,
-          modelSucceeded: true,
-          modelUsed: 'Mari Creative Orchestrator (FLUX / Neural Engine)',
+          modelSucceeded: false,
+          modelUsed: 'Mari Creative Orchestrator',
           responseSource: 'local_grounded',
-          fallbackUsed: false,
-          fallbackReason: null,
+          fallbackUsed: true,
+          fallbackReason: 'CREATIVE_GENERATION_EXCEPTION',
           buildVersion: MARI_BUILD_VERSION,
-          suggestedActions: [
-            flyerAction,
-            { type: 'NAVIGATE', label: 'Open Creative Studio', payload: { route: '/growth?tab=creatives' } },
-            { type: 'NAVIGATE', label: 'Publish to Facebook', payload: { route: `/growth?tab=publish&assetId=${jobId}` } },
-          ],
+          suggestedActions: [],
           ragContext: null,
-          contextSources: ['CreativeOrchestrator', 'BusinessIdentityResolver'],
+          contextSources: ['CreativeOrchestrator'],
           tenantId: orgId,
           companyName: resolvedCompanyName,
           isBusinessContextVerified: isVerified,
-          usage: {
-            promptTokens: estimateTokenCount(cleanOriginalPrompt),
-            completionTokens: estimateTokenCount(flyerResponse),
-            totalTokens: estimateTokenCount(cleanOriginalPrompt) + estimateTokenCount(flyerResponse),
-          },
+          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
           requestId,
         };
-      } catch (genErr: any) {
-        console.warn('[MariCore] Creative generation job note:', genErr.message);
       }
     }
 
@@ -1225,13 +1487,30 @@ Your asset has been securely stored in the Ralion Creative Vault and is ready to
     let context: BusinessContext | null = businessContext || localOverrides || rawReq.contextOverrides || null;
     let contextSourcesLoaded: string[] = [];
 
-    // 2.9 Track & resolve Facebook live status tool execution (Requirement 3: verified connection-status based on canonical live data)
-    if (detectedIntent === 'FACEBOOK_CONNECTION_STATUS') {
-      toolsActuallyExecuted.push('FacebookPageManagementService.getPrimaryPage');
+    // 2.9 Track & resolve Facebook live status tool execution
+    if (detectedIntent === 'FACEBOOK_CONNECTION_STATUS' || semanticDecision.requestedAction === 'inspect_facebook_status') {
       semanticDecision.requestedAction = 'inspect_facebook_status' as any;
       semanticDecision.requestedSources = ['layer2.social', 'FacebookPageManagementService'] as any;
 
-      if (context?.layer2?.social) {
+      let activePage: any = null;
+      let fbToolSucceeded = false;
+
+      try {
+        const fbService = _mariFacebookPageService;
+        if (fbService && typeof fbService.getPrimaryPage === 'function') {
+          activePage = await fbService.getPrimaryPage({
+            organizationId: orgId,
+            workspaceId,
+            userId,
+          });
+          fbToolSucceeded = true;
+          toolsActuallyExecuted.push('FacebookPageManagementService.getPrimaryPage');
+        }
+      } catch (fbErr: any) {
+        console.warn('[MariCore] Facebook live tool check note:', fbErr?.message);
+      }
+
+      if (activePage || context?.layer2?.social || fbToolSucceeded) {
         const statusResponse = generateLocalStrategicFallback(cleanOriginalPrompt, context, semanticDecision, resolvedCompanyName);
 
         console.log(JSON.stringify({
@@ -1239,7 +1518,7 @@ Your asset has been securely stored in the Ralion Creative Vault and is ready to
           type: 'MARI_DIAGNOSTIC_TRACE',
           requestId,
           detectedIntent,
-          semanticDecisionSource: 'DETERMINISTIC',
+          semanticDecisionSource,
           requestedAction: 'inspect_facebook_status',
           requestedSources: semanticDecision.requestedSources,
           toolsActuallyExecuted,
@@ -1255,7 +1534,7 @@ Your asset has been securely stored in the Ralion Creative Vault and is ready to
           answer: statusResponse.text,
           capabilityMode: 'BUSINESS',
           detectedIntent: 'FACEBOOK_CONNECTION_STATUS',
-          semanticDecisionSource: 'DETERMINISTIC',
+          semanticDecisionSource,
           requestedAction: 'inspect_facebook_status',
           requestedSources: semanticDecision.requestedSources,
           toolsActuallyExecuted,
@@ -1347,7 +1626,6 @@ Your asset has been securely stored in the Ralion Creative Vault and is ready to
         modelUsed = `Mari Neural Engine (${geminiResult.model})`;
         responseSource = 'gemini';
         modelSucceeded = true;
-        semanticDecisionSource = 'MODEL';
         fallbackUsed = false;
         fallbackReason = null;
 
@@ -1371,13 +1649,11 @@ Your asset has been securely stored in the Ralion Creative Vault and is ready to
         modelSucceeded = false;
         fallbackUsed = true;
         fallbackReason = geminiResult?.error || 'GEMINI_UNAVAILABLE';
-        semanticDecisionSource = 'FALLBACK';
       }
     } else {
       modelSucceeded = false;
       fallbackUsed = true;
       fallbackReason = 'FORCE_LOCAL_ONLY';
-      semanticDecisionSource = 'FALLBACK';
     }
 
     // 6. Safe Grounded Local Fallback if Gemini is unavailable or bypassed
@@ -1388,7 +1664,6 @@ Your asset has been securely stored in the Ralion Creative Vault and is ready to
       responseSource = 'local_grounded';
       modelUsed = 'Mari Grounded Intelligence';
       fallbackUsed = true;
-      semanticDecisionSource = 'FALLBACK';
 
       if (
         answerText.includes('temporarily unavailable') ||
@@ -1408,7 +1683,7 @@ Your asset has been securely stored in the Ralion Creative Vault and is ready to
     }
 
     // 7. Tenant Credit Accounting & Gate (0 credits on greeting or unavailable reasoning)
-    if (orgId && orgId !== 'unconfigured-tenant' && detectedIntent !== 'GREETING' && !isReasoningFailure) {
+    if (orgId && orgId !== 'unconfigured-tenant' && detectedIntent !== 'GREETING' && !isReasoningFailure && modelSucceeded && !fallbackUsed) {
       try {
         TenantCreditsService.deductCredits(
           orgId,
@@ -1428,7 +1703,7 @@ Your asset has been securely stored in the Ralion Creative Vault and is ready to
             answer: 'You have consumed your monthly credit allowance. To continue using Mari AI Strategic Reasoning and Creative Generation, please upgrade your plan in Billing & Subscriptions.\n\n[Upgrade Plan](/billing) [View Usage](/billing)',
             capabilityMode: 'BUSINESS',
             detectedIntent: 'INSUFFICIENT_CREDITS',
-            semanticDecisionSource: 'FALLBACK',
+            semanticDecisionSource: 'HEURISTIC_FALLBACK',
             requestedAction: 'NAVIGATE',
             requestedSources: ['BUSINESS_PROFILE'],
             toolsActuallyExecuted,
@@ -1506,7 +1781,7 @@ Your asset has been securely stored in the Ralion Creative Vault and is ready to
       buildVersion: MARI_BUILD_VERSION,
       suggestedActions,
       ragContext,
-      contextSources: contextSourcesLoaded,
+      contextSources: Array.from(new Set(contextSourcesLoaded)),
       tenantId: orgId,
       companyName: resolvedCompanyName,
       isBusinessContextVerified: isVerified,
@@ -1514,6 +1789,36 @@ Your asset has been securely stored in the Ralion Creative Vault and is ready to
       requestId,
       usageRecordId,
     };
+  }
+
+  /**
+   * Convenience invocation method.
+   */
+  static async ask(params: {
+    prompt: string;
+    tenantId?: string;
+    organizationId?: string;
+    workspaceId?: string;
+    userId?: string;
+    companyName?: string;
+    activeScreen?: any;
+    conversationHistory?: any[];
+    localOverrides?: any;
+    requestId?: string;
+    forceLocalOnly?: boolean;
+  }): Promise<MariQueryResponse> {
+    return this.processQuery({
+      prompt: params.prompt,
+      organizationId: params.organizationId || params.tenantId,
+      workspaceId: params.workspaceId,
+      userId: params.userId,
+      companyName: params.companyName,
+      activeScreen: params.activeScreen,
+      conversationHistory: params.conversationHistory,
+      localOverrides: params.localOverrides,
+      requestId: params.requestId,
+      forceLocalOnly: params.forceLocalOnly,
+    });
   }
 }
 

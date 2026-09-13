@@ -18,7 +18,7 @@ export function getMariBuildVersion(): string {
       return envVer.trim().substring(0, 16);
     }
   }
-  return '2026.09.13-1ce30d6f';
+  return 'unknown-dev';
 }
 
 export const MARI_BUILD_VERSION = getMariBuildVersion();

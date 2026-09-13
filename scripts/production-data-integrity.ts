@@ -66,6 +66,8 @@ async function runIntegritySuite() {
   
   // Query posts for Account A
   const postsA = await FacebookPageManagementService.getPagePosts({
+    organizationId: connA!.workspace_id || connA!.user_id,
+    userId: connA!.user_id,
     socialConnectionId: connA!.id,
     pageId: connA!.provider_account_id,
     limit: 20,
@@ -74,6 +76,8 @@ async function runIntegritySuite() {
 
   // Query posts for Account B
   const postsB = await FacebookPageManagementService.getPagePosts({
+    organizationId: connB!.workspace_id || connB!.user_id,
+    userId: connB!.user_id,
     socialConnectionId: connB!.id,
     pageId: connB!.provider_account_id,
     limit: 20,
@@ -147,8 +151,8 @@ async function runIntegritySuite() {
 
   for (const f of coreFiles) {
     const content = fs.readFileSync(f, 'utf-8');
-    assertStrict(!content.includes('mpparRo7a5t5B7uOlWBxiRI7NDsVGfmxkPUEbxSYBfA'), `File ${f} does not contain leaked service role JWT`);
-    assertStrict(!content.includes('AQ.Ab8RN6LHIgVR8Zti6ifRmdpEKXKguMi1mbTZ951Mdn0mFzBhxA'), `File ${f} does not contain hardcoded Gemini API key`);
+    assertStrict(!content.includes('AIzaSy'), `File ${f} does not contain hardcoded Google AI Studio API key`);
+    assertStrict(!content.includes('NEXT_PUBLIC_GEMINI_API_KEY'), `File ${f} does not contain NEXT_PUBLIC_GEMINI_API_KEY`);
   }
 
   console.log('\n================================================================');

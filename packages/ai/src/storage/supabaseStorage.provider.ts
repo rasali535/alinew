@@ -125,11 +125,15 @@ export class SupabaseStorageProvider implements AssetStorageProvider {
           search: filename,
         });
 
-      if (error || !files) {
-        return false;
+      if (!error && files && files.some((f) => f.name === filename)) {
+        return true;
       }
 
-      return files.some((f) => f.name === filename);
+      // Fallback existence check via download
+      const { data: dlBlob } = await supabase.storage
+        .from(this.bucketName)
+        .download(cleanPath);
+      return Boolean(dlBlob);
     } catch {
       return false;
     }

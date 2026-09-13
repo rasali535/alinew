@@ -1,8 +1,9 @@
 async function testGemini() {
   const keys = [
     process.env.GEMINI_API_KEY,
-    process.env.NEXT_PUBLIC_GEMINI_API_KEY,
+    process.env.GOOGLE_AI_API_KEY,
     process.env.GOOGLE_API_KEY,
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY,
   ].filter(Boolean) as string[];
 
   console.log(`Testing Gemini API with ${keys.length} keys...`);
