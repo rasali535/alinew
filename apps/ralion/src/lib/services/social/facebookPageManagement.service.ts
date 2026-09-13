@@ -48,7 +48,7 @@ export async function resolvePageAccessToken(userToken: string, targetPageId: st
     console.warn('[FacebookPageManagement] Failed to resolve Page Access Token from /me/accounts:', err?.message || err);
   }
 
-  return userToken;
+  return null;
 }
 
 function getServiceSupabase() {

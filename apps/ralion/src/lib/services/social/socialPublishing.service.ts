@@ -56,7 +56,7 @@ export interface PublishRequest {
 }
 
 export interface MultiPublishResult {
-  postId: string;
+  postId: string | null;
   overallStatus: 'PUBLISHED' | 'PARTIALLY_PUBLISHED' | 'FAILED' | 'QUEUED';
   platformResults: Record<SocialPlatformType, PublishResponse>;
   statusCode?: number;
@@ -250,11 +250,16 @@ export class SocialPublishingService {
         .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected', 'active'])
         .is('disconnected_at', null);
 
+      if (params.socialConnectionId) {
+        connQuery = connQuery.eq('id', params.socialConnectionId);
+      }
       if (params.organizationId && params.organizationId !== 'default-org') {
-        connQuery = connQuery.or(`organization_id.eq.${params.organizationId},workspace_id.eq.${params.workspaceId || params.organizationId}`);
-      } else if (params.workspaceId && params.workspaceId !== 'default') {
+        connQuery = connQuery.eq('organization_id', params.organizationId);
+      }
+      if (params.workspaceId && params.workspaceId !== 'default') {
         connQuery = connQuery.eq('workspace_id', params.workspaceId);
-      } else if (params.userId && params.userId !== 'default-user') {
+      }
+      if (params.userId && params.userId !== 'default-user') {
         connQuery = connQuery.eq('user_id', params.userId);
       }
 
@@ -272,7 +277,7 @@ export class SocialPublishingService {
     if (params.socialConnectionId) {
       explicitConnection = (connections || []).find((c) => c.id === params.socialConnectionId);
       if (!explicitConnection) {
-        const connSecurityError = new Error(`[SocialPublishing] Access denied: Connection ${params.socialConnectionId} does not belong to this workspace/user.`);
+        const connSecurityError = new Error(`[SocialPublishing] Access denied: Connection ${params.socialConnectionId} does not belong to this canonical workspace/user.`);
         (connSecurityError as any).statusCode = 403;
         throw connSecurityError;
       }
@@ -284,23 +289,39 @@ export class SocialPublishingService {
 
     // 5. Parallel Dispatch with Provider Routing
     const publishPromises = params.platforms.map(async (platform) => {
-      // Prioritize explicit connection ID, then page ID match, then platform match
+      const platformConnections = (connections || []).filter((c) => c.provider === platform);
+
+      // Prioritize explicit connection ID, then page ID match
       let conn = explicitConnection && (explicitConnection.provider === platform || params.platforms.length === 1)
         ? explicitConnection
         : undefined;
 
       if (!conn && params.pageId) {
-        conn = (connections || []).find(
+        conn = platformConnections.find(
           (c) =>
-            c.provider === platform &&
-            (c.provider_account_id === params.pageId ||
-              c.page_id === params.pageId ||
-              c.metadata?.pageId === params.pageId)
+            c.provider_account_id === params.pageId ||
+            c.page_id === params.pageId ||
+            c.metadata?.pageId === params.pageId
         );
       }
 
+      // If still not resolved:
+      // If exactly ONE account exists for this platform, select it.
+      // If MULTIPLE accounts exist and neither pageId nor socialConnectionId was specified, fail safely.
       if (!conn) {
-        conn = (connections || []).find((c) => c.provider === platform);
+        if (platformConnections.length === 1) {
+          conn = platformConnections[0];
+        } else if (platformConnections.length > 1) {
+          platformResults[platform] = {
+            success: false,
+            error: `Multiple active ${platform} connections exist for this workspace. Please specify an explicit socialConnectionId or pageId to publish.`,
+            statusCode: 400,
+            platform,
+            publishedAt: new Date().toISOString(),
+          };
+          errors.push(`${platform}: Ambiguous connection - multiple accounts exist`);
+          return;
+        }
       }
 
       if (!conn) {
@@ -564,10 +585,14 @@ export class SocialPublishingService {
       console.warn('[SocialPublishing] Audit log notice:', auditErr.message);
     }
 
-    const finalPostId = postRecord?.id || `post_${Date.now()}`;
+    const isSuccessfulDispatch = overallStatus === 'PUBLISHED' || overallStatus === 'QUEUED' || overallStatus === 'PARTIALLY_PUBLISHED';
+    const finalPostId: string | null = isSuccessfulDispatch
+      ? (postRecord?.id || `pub_rec_${idempotencyKey}`)
+      : null;
+
     if (overallStatus === 'PUBLISHED' || overallStatus === 'QUEUED') {
       this.publishedPosts.push({
-        id: finalPostId,
+        id: finalPostId || `pub_rec_${idempotencyKey}`,
         userId: params.userId,
         workspaceId: params.workspaceId,
         organizationId: params.organizationId,
