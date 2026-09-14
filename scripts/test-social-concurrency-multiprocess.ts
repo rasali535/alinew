@@ -163,7 +163,7 @@ async function run() {
           ...process.env,
           SUPABASE_URL: mockSupabaseUrl,
           NEXT_PUBLIC_SUPABASE_URL: mockSupabaseUrl,
-          SUPABASE_SERVICE_ROLE_KEY: 'test-mock-service-role-key-never-live',
+          SUPABASE_SERVICE_ROLE_KEY: 'test-only-placeholder-service-role-key',
           NODE_ENV: 'test',
         },
         stdio: ['ignore', 'pipe', 'pipe'],

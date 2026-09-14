@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS public.social_publish_idempotency (
     body_hash TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'CLAIMED' CHECK (status IN ('CLAIMED', 'IN_PROGRESS', 'COMPLETED', 'FAILED')),
     lease_token TEXT,
-    post_id UUID REFERENCES public.social_posts(id) ON DELETE SET NULL,
+    post_id UUID, -- Nullable UUID reference to internal post; foreign key to public.social_posts may be validated and added via dedicated migration once canonical posts table is provisioned
     external_receipt_id TEXT,
     platform_results JSONB DEFAULT '{}'::jsonb,
     error_message TEXT,
@@ -38,7 +38,7 @@ ON public.social_publish_idempotency (user_id, organization_id, workspace_id, de
 CREATE INDEX IF NOT EXISTS idx_social_publish_idempotency_hash_lookup
 ON public.social_publish_idempotency (user_id, organization_id, workspace_id, destination, body_hash, created_at);
 
--- Foreign key index on post_id to resolve Supabase Advisor unindexed foreign key warning
+-- Secondary index on post_id for internal post lookups and future foreign-key validation
 CREATE INDEX IF NOT EXISTS idx_social_publish_idempotency_post_id
 ON public.social_publish_idempotency (post_id);
 

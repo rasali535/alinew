@@ -23,7 +23,7 @@ async function getFreePort(): Promise<number> {
 const DB_USER = 'postgres';
 const DB_PASSWORD = 'isolated_validation_password';
 const DB_NAME = 'postgres';
-const DB_DIR = path.resolve(__dirname, '../.isolated-pgdata');
+const DB_DIR = path.resolve(__dirname, `../.isolated-pgdata-${Date.now()}`);
 
 
 interface ConcurrencyResult {
@@ -92,16 +92,7 @@ async function main() {
 
     // Ensure pgcrypto extension for gen_random_uuid
     await superuserClient.query(`CREATE EXTENSION IF NOT EXISTS "pgcrypto";`);
-
-    // Ensure dependency table social_posts exists
-    await superuserClient.query(`
-      CREATE TABLE IF NOT EXISTS public.social_posts (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id TEXT,
-        created_at TIMESTAMPTZ DEFAULT pg_catalog.now()
-      );
-    `);
-    console.log('✅ [2/7] Roles (anon, authenticated, service_role) and base schema ready.');
+    console.log('✅ [2/7] Roles (anon, authenticated, service_role) and pgcrypto extension ready.');
 
     // 2. Apply the publishing idempotency migration
     console.log('⏳ [3/7] Applying 20260913_publishing_idempotency_dispatch_claims.sql migration...');
