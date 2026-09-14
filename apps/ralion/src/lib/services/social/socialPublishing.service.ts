@@ -706,8 +706,8 @@ export class SocialPublishingService {
     const idempotencyKey = params.idempotencyKey || `hash_${bodyHash}`;
     const cutoff24h = Date.now() - 24 * 60 * 60 * 1000;
 
-    const orgIdKey = params.organizationId;
-    const wsIdKey = params.workspaceId;
+    const orgIdKey = params.organizationId!;
+    const wsIdKey = params.workspaceId!;
 
     // Optional in-memory dispatch lock check (local optimization only)
     const dispatchLockKey = `${params.userId}:${orgIdKey}:${wsIdKey}:${currentDestination}:${idempotencyKey}`;
