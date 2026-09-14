@@ -4,8 +4,8 @@ import { corsJsonResponse, handleCorsPreflight } from '../../../../lib/cors';
 import {
   extractAuthToken,
   resolveRalionAuthContext,
-  getCurrentRalionContext,
   getServiceSupabase,
+  getVerifierSupabase,
   type RalionSessionContext,
 } from '../../../../lib/auth/serverAuth';
 
@@ -50,16 +50,17 @@ async function verifyRequestUser(request: NextRequest) {
   const token = extractAuthToken(request);
   if (!token) return { token: null, user: null, reason: 'missing' as const, errorStatus: 401, errorCode: 'AUTH_TOKEN_MISSING' };
 
-  let supabase: ReturnType<typeof getServiceSupabase>;
+  // Use publishable-key verifier for JWT validation — never the service-role admin client.
+  let verifier: ReturnType<typeof getVerifierSupabase>;
   try {
-    supabase = getServiceSupabase();
+    verifier = getVerifierSupabase();
   } catch (err: any) {
-    console.error('[AuthContext API] Supabase config error:', err?.message);
+    console.error('[AuthContext API] Verifier config error:', err?.message);
     return { token, user: null, reason: 'config_error' as const, errorStatus: 500, errorCode: 'SUPABASE_CONFIG_ERROR' };
   }
 
   try {
-    const { data, error } = await supabase.auth.getUser(token);
+    const { data, error } = await verifier.auth.getUser(token);
     if (error || !data?.user) {
       return { token, user: null, reason: 'invalid' as const, errorStatus: 401, errorCode: 'AUTH_TOKEN_INVALID' };
     }
@@ -89,13 +90,24 @@ export async function GET(request: NextRequest) {
     }
 
     if (authResult.status === 'AUTHENTICATION_REQUIRED') {
-      const isMissing = authResult.errorCode === 'AUTH_TOKEN_MISSING';
+      if (authResult.errorCode === 'AUTH_TOKEN_MISSING') {
+        return corsJsonResponse(
+          {
+            success: false,
+            code: 'AUTH_TOKEN_MISSING',
+            error: 'Authentication required',
+            message: 'Bearer token is required.',
+          },
+          { status: 401 },
+          request
+        );
+      }
       return corsJsonResponse(
         {
           success: false,
-          code: isMissing ? 'AUTH_TOKEN_MISSING' : 'AUTH_TOKEN_INVALID',
-          error: isMissing ? 'Authentication required' : 'Session is invalid or expired',
-          message: isMissing ? 'Bearer token is required.' : 'Please sign in again.',
+          code: 'AUTH_TOKEN_INVALID',
+          error: 'Session is invalid or expired',
+          message: 'Please sign in again.',
         },
         { status: 401 },
         request
@@ -158,22 +170,55 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const verified = await verifyRequestUser(request);
-    if (verified.reason === 'missing') {
+    // Authoritative resolution path: validates JWT and resolves tenant context in a single pass.
+    // verifyRequestUser() and resolveRalionAuthContext() must not each call verifier.auth.getUser(token).
+    const authResult = await resolveRalionAuthContext(request, { requireAuth: true });
+
+    // Idempotency gate: always reuse a context that already resolves.
+    if (authResult.status === 'CONTEXT_RESOLVED' && authResult.context) {
+      return corsJsonResponse(contextPayload(authResult.context), undefined, request);
+    }
+
+    if (authResult.status === 'AUTHENTICATION_REQUIRED') {
+      if (authResult.errorCode === 'AUTH_TOKEN_MISSING') {
+        return corsJsonResponse(
+          {
+            success: false,
+            code: 'AUTH_TOKEN_MISSING',
+            error: 'Authentication required',
+            message: 'Bearer token is required.',
+          },
+          { status: 401 },
+          request
+        );
+      }
       return corsJsonResponse(
-        { success: false, code: 'AUTH_TOKEN_MISSING', error: 'Authentication required', message: 'Bearer token is required.' },
+        {
+          success: false,
+          code: 'AUTH_TOKEN_INVALID',
+          error: 'Session is invalid or expired',
+          message: 'Please sign in again.',
+        },
         { status: 401 },
         request
       );
     }
-    if (verified.reason === 'config_error') {
+
+    if (authResult.errorCode === 'SUPABASE_CONFIG_ERROR') {
       return corsJsonResponse(
-        { success: false, code: 'SUPABASE_CONFIG_ERROR', error: 'Configuration error', message: 'Supabase service role key is not configured.' },
+        {
+          success: false,
+          code: 'SUPABASE_CONFIG_ERROR',
+          error: 'Configuration error',
+          message: authResult.errorMessage || 'Supabase service role key is not configured.',
+        },
         { status: 500 },
         request
       );
     }
-    if (verified.reason === 'invalid' || !verified.user) {
+
+    const authUser = authResult.user;
+    if (!authUser) {
       return corsJsonResponse(
         { success: false, code: 'AUTH_TOKEN_INVALID', error: 'Session is invalid or expired', message: 'Please sign in again.' },
         { status: 401 },
@@ -181,12 +226,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Idempotency gate: always reuse a context that already resolves.
-    const existing = await getCurrentRalionContext(request, { requireAuth: true });
-    if (existing) return corsJsonResponse(contextPayload(existing), undefined, request);
-
     const supabase = getServiceSupabase();
-    const authUser = verified.user;
 
     // Never create a second tenant for a user who is already a member of another
     // workspace. Membership inconsistencies require an administrator repair.
@@ -375,8 +415,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const repaired = await getCurrentRalionContext(request, { requireAuth: true });
-    if (!repaired) {
+    const repairedResult = await resolveRalionAuthContext(request, { requireAuth: true });
+    if (repairedResult.status !== 'CONTEXT_RESOLVED' || !repairedResult.context) {
       return corsJsonResponse(
         {
           success: false,
@@ -388,7 +428,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return corsJsonResponse({ ...contextPayload(repaired), provisioned: true }, undefined, request);
+    return corsJsonResponse({ ...contextPayload(repairedResult.context), provisioned: true }, undefined, request);
   } catch {
     console.error('[AuthContext API] Workspace provisioning failed unexpectedly');
     return corsJsonResponse(

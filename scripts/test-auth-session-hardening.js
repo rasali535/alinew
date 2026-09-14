@@ -55,8 +55,9 @@ const checks = [
   [
     'api-config refreshes at most once strictly on AUTH_TOKEN_INVALID (401)',
     apiConfigSource.includes('res.status === 401') &&
-    apiConfigSource.includes('body?.code === \'AUTH_TOKEN_MISSING\'') &&
-    apiConfigSource.includes('getRalionAuthHeaders({ refresh: true })')
+    apiConfigSource.includes("body?.code === 'AUTH_TOKEN_INVALID'") &&
+    apiConfigSource.includes('shouldRefresh = true') &&
+    !apiConfigSource.includes("body?.code === 'AUTH_TOKEN_MISSING'")
   ],
   [
     'api-config injects Authorization, x-user-id, and tenant hints',
@@ -67,8 +68,8 @@ const checks = [
 
   // 3. OrganizationContext Loop-Breaker
   [
-    'OrganizationContext debounces rapid context resolutions',
-    orgContextSource.includes('lastResolveTimeRef') &&
+    'OrganizationContext coalesces rapid context resolutions via promise guard',
+    orgContextSource.includes('_activeContextResolution') &&
     orgContextSource.includes('isResolvingRef')
   ],
   [
@@ -143,6 +144,105 @@ const checks = [
   [
     'Website supabase.js has zero hardcoded legacy anon key strings',
     !websiteSupabaseSource.includes('r-hhC-BT3WCf9JLq-HeTHXIFkulM5XkorUEfkqMhc-g')
+  ],
+
+  // ── Second-Pass Auth Fix (Requirement A) ─────────────────────────────────────
+  // A1. serverAuth.ts exports getVerifierSupabase() using publishable/anon key
+  [
+    'serverAuth.ts exports getVerifierSupabase() using publishable/anon key for JWT verification',
+    serverAuthSource.includes('export function getVerifierSupabase()') &&
+    serverAuthSource.includes('SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY')
+  ],
+  // A2. resolveRalionAuthContext() calls verifier.auth.getUser(), NOT service admin client
+  [
+    'resolveRalionAuthContext() calls verifier.auth.getUser(), not getServiceSupabase() for JWT validation',
+    serverAuthSource.includes('verifier.auth.getUser(token)') &&
+    serverAuthSource.includes('adminClient') &&
+    serverAuthSource.includes(".from('profiles')") &&
+    !serverAuthSource.match(/getServiceSupabase\(\)[\s\S]{0,200}auth\.getUser/)
+  ],
+  // A3. Config errors in verifier return 500 SUPABASE_CONFIG_ERROR, not AUTH_TOKEN_INVALID
+  [
+    'Verifier config errors return 500 SUPABASE_CONFIG_ERROR (not swallowed as AUTH_TOKEN_INVALID)',
+    serverAuthSource.includes('isConfigError') &&
+    serverAuthSource.includes("errorCode: 'SUPABASE_CONFIG_ERROR'") &&
+    serverAuthSource.includes('httpStatus: 500')
+  ],
+  // A4. auth context route.ts uses getVerifierSupabase() in verifyRequestUser()
+  [
+    'auth/context/route.ts verifyRequestUser() uses getVerifierSupabase(), not getServiceSupabase()',
+    authContextRoute.includes('getVerifierSupabase') &&
+    authContextRoute.includes('verifier.auth.getUser(token)') &&
+    !authContextRoute.match(/getServiceSupabase\(\)[\s\S]{0,100}auth\.getUser/)
+  ],
+  // A5. auth context route.ts POST uses single authoritative resolution path
+  [
+    'auth/context/route.ts POST uses single authoritative resolveRalionAuthContext() path (no double getUser)',
+    authContextRoute.includes('const authResult = await resolveRalionAuthContext(request') &&
+    !authContextRoute.match(/export\s+async\s+function\s+POST[\s\S]*?await\s+verifyRequestUser/)
+  ],
+
+  // ── Requirement B: Single global refresh ─────────────────────────────────────
+  // B1. window.__ralion_refresh_session__ is exported from client.ts
+  [
+    'client.ts assigns window.__ralion_refresh_session__ = deduplicatedRefreshSession after instantiation',
+    clientSource.includes('__ralion_refresh_session__') &&
+    clientSource.includes('deduplicatedRefreshSession')
+  ],
+  // B2. OrganizationContext never calls auth.refreshSession() directly
+  [
+    'OrganizationContext does not call auth.refreshSession() directly (uses global function only)',
+    !orgContextSource.match(/await\s+[\w.]+\.auth\.refreshSession\s*\(/) &&
+    !orgContextSource.includes('= await sharedClient.auth.refreshSession')
+  ],
+  // B3. OrganizationContext uses callGlobalRefresh() / window.__ralion_refresh_session__
+  [
+    'OrganizationContext refresh goes through callGlobalRefresh() / __ralion_refresh_session__',
+    orgContextSource.includes('callGlobalRefresh') &&
+    orgContextSource.includes('__ralion_refresh_session__')
+  ],
+
+  // ── Requirement C: No visibility-triggered context loops ─────────────────────
+  // C1. OrganizationContext does not listen to SIGNED_IN events
+  [
+    'OrganizationContext does not trigger resolution on SIGNED_IN (visibility loop removed)',
+    !orgContextSource.includes("event === 'SIGNED_IN'")
+  ],
+  // C2. OrganizationContext does not listen to TOKEN_REFRESHED events
+  [
+    'OrganizationContext does not trigger resolution on TOKEN_REFRESHED',
+    !orgContextSource.includes("event === 'TOKEN_REFRESHED'")
+  ],
+  // C3. OrganizationContext uses promise-based coalescing guard
+  [
+    'OrganizationContext uses promise-based coalescing (_activeContextResolution)',
+    orgContextSource.includes('_activeContextResolution') &&
+    orgContextSource.includes('resolveGuard')
+  ],
+
+  // ── Requirement D: Terminal invalid-session failure ───────────────────────────
+  // D1. terminateInvalidSession signs out locally and clears storage
+  [
+    'terminateInvalidSession() performs local signOut and clears all auth storage before redirecting',
+    orgContextSource.includes('terminateInvalidSession') &&
+    orgContextSource.includes("signOut({ scope: 'local' }") &&
+    orgContextSource.includes('_redirectedToLogin') &&
+    orgContextSource.includes("window.location.href = '/login'")
+  ],
+  // D2. Second AUTH_TOKEN_INVALID after refresh triggers terminal failure (not just clearResolvedContext)
+  [
+    'Double AUTH_TOKEN_INVALID after refresh calls terminateInvalidSession(), not just clearResolvedContext()',
+    orgContextSource.includes('await terminateInvalidSession()') &&
+    !!orgContextSource.match(/AUTH_TOKEN_INVALID[\s\S]{0,400}terminateInvalidSession/)
+  ],
+
+  // ── Requirement E: authFetch exact-gate ──────────────────────────────────────
+  // E1. authFetch only refreshes when code === 'AUTH_TOKEN_INVALID' (exact, not blocklist)
+  [
+    "authFetch refreshes only on exact code === 'AUTH_TOKEN_INVALID' (no blocklist approach)",
+    apiConfigSource.includes("body?.code === 'AUTH_TOKEN_INVALID'") &&
+    apiConfigSource.includes('shouldRefresh = true') &&
+    !apiConfigSource.includes("body?.code === 'AUTH_TOKEN_MISSING'")
   ]
 ];
 

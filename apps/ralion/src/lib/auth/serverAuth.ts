@@ -23,6 +23,27 @@ function requireSupabaseUrl(): string {
   return url || CANONICAL_SUPABASE_URL;
 }
 
+/**
+ * Publishable-key client used exclusively for user JWT verification (auth.getUser).
+ * The publishable/anon key is sent as the Supabase apikey; the user access JWT is
+ * sent in Authorization: Bearer. Never mix roles: do NOT use this for DB writes.
+ */
+export function getVerifierSupabase() {
+  const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!publishableKey) {
+    const err = new Error('[ServerAuth] SUPABASE_PUBLISHABLE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY is required for JWT verification.');
+    (err as any).code = 'SUPABASE_CONFIG_ERROR';
+    throw err;
+  }
+  return createClient(CANONICAL_SUPABASE_URL, publishableKey, {
+    auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
+  });
+}
+
+/**
+ * Service-role admin client used exclusively for privileged DB queries.
+ * Never call auth.getUser() on this client — it must not validate user JWTs.
+ */
 export function getServiceSupabase() {
   const serviceKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceKey) {
@@ -81,6 +102,7 @@ export type RalionAuthStatus =
 export interface RalionAuthResult {
   status: RalionAuthStatus;
   context: RalionSessionContext | null;
+  user?: User | null;
   errorCode?: string;
   errorMessage?: string;
   httpStatus: 200 | 401 | 403 | 409 | 500;
@@ -145,26 +167,21 @@ export async function resolveRalionAuthContext(
   request: NextRequest,
   options: { requireAuth?: boolean } = { requireAuth: true }
 ): Promise<RalionAuthResult> {
-  let supabase: ReturnType<typeof getServiceSupabase>;
+  // ─── Step 1: JWT verification via publishable-key verifier ONLY ──────────────
+  // Never call auth.getUser() through the service-role/secret-key admin client.
+  // The Supabase SDK sends the Supabase key as `apikey` and the user JWT as
+  // `Authorization: Bearer`. These two responsibilities must use separate clients.
+  let verifier: ReturnType<typeof getVerifierSupabase>;
   try {
-    supabase = getServiceSupabase();
+    verifier = getVerifierSupabase();
   } catch (error: any) {
-    console.error('[ServerAuth] Supabase initialization failed:', error.message);
-    if (options.requireAuth) {
-      return {
-        status: 'TENANT_DATABASE_ERROR',
-        context: null,
-        errorCode: 'SUPABASE_CONFIG_ERROR',
-        errorMessage: 'Database configuration error.',
-        httpStatus: 500,
-      };
-    }
+    console.error('[ServerAuth] JWT verifier initialization failed:', error.message);
     return {
-      status: 'AUTHENTICATION_REQUIRED',
+      status: 'TENANT_DATABASE_ERROR',
       context: null,
-      errorCode: 'UNCONFIGURED',
-      errorMessage: 'Authentication service unavailable.',
-      httpStatus: 401,
+      errorCode: 'SUPABASE_CONFIG_ERROR',
+      errorMessage: 'Authentication service configuration error.',
+      httpStatus: 500,
     };
   }
 
@@ -181,9 +198,9 @@ export async function resolveRalionAuthContext(
 
   let authUser: User | null = null;
   try {
-    const { data, error } = await supabase.auth.getUser(token);
+    const { data, error } = await verifier.auth.getUser(token);
     if (error || !data?.user) {
-      console.warn('[ServerAuth] Invalid or expired token:', { code: error?.code });
+      console.warn('[ServerAuth] JWT verification failed:', { code: error?.code, status: error?.status });
       return {
         status: 'AUTHENTICATION_REQUIRED',
         context: null,
@@ -194,13 +211,43 @@ export async function resolveRalionAuthContext(
     }
     authUser = data.user;
   } catch (err: any) {
-    console.error('[ServerAuth] Auth service exception:', err.message);
+    // Distinguish config/API-key errors from invalid-token errors.
+    // API key issues produce messages about 'Invalid API key' or 'apikey', whereas
+    // genuine JWT rejections produce auth-specific codes.
+    const msg: string = String(err?.message || '');
+    const isConfigError = /invalid api key|apikey|configuration|SUPABASE_CONFIG/i.test(msg);
+    if (isConfigError) {
+      console.error('[ServerAuth] JWT verifier API key error:', msg);
+      return {
+        status: 'TENANT_DATABASE_ERROR',
+        context: null,
+        errorCode: 'SUPABASE_CONFIG_ERROR',
+        errorMessage: 'Authentication service configuration error.',
+        httpStatus: 500,
+      };
+    }
+    console.error('[ServerAuth] JWT verification exception:', msg);
     return {
       status: 'AUTHENTICATION_REQUIRED',
       context: null,
       errorCode: 'AUTH_TOKEN_INVALID',
       errorMessage: 'Failed to verify authentication token.',
       httpStatus: 401,
+    };
+  }
+
+  // ─── Step 2: Privileged DB access via service-role admin client ────────────
+  let adminClient: ReturnType<typeof getServiceSupabase>;
+  try {
+    adminClient = getServiceSupabase();
+  } catch (error: any) {
+    console.error('[ServerAuth] Admin client initialization failed:', error.message);
+    return {
+      status: 'TENANT_DATABASE_ERROR',
+      context: null,
+      errorCode: 'SUPABASE_CONFIG_ERROR',
+      errorMessage: 'Database configuration error.',
+      httpStatus: 500,
     };
   }
 
@@ -212,7 +259,7 @@ export async function resolveRalionAuthContext(
   };
 
   try {
-    const { data: dbProfile } = await supabase
+    const { data: dbProfile } = await adminClient
       .from('profiles')
       .select('id, full_name, email, avatar_url')
       .eq('id', authUser.id)
@@ -261,7 +308,7 @@ export async function resolveRalionAuthContext(
   let membershipRow: any = null;
 
   if (requestedWorkspaceId) {
-    const { data: requestedWorkspace, error: workspaceError } = await supabase
+    const { data: requestedWorkspace, error: workspaceError } = await adminClient
       .from('workspaces')
       .select('id, name, slug, owner_id, organization_id')
       .eq('id', requestedWorkspaceId)
@@ -298,7 +345,7 @@ export async function resolveRalionAuthContext(
         role: 'owner',
       };
     } else {
-      const { data: member, error } = await supabase
+      const { data: member, error } = await adminClient
         .from('workspace_members')
         .select('id, workspace_id, user_id, role')
         .eq('workspace_id', requestedWorkspace.id)
@@ -330,7 +377,7 @@ export async function resolveRalionAuthContext(
     }
   } else {
     // Look for workspaces owned by user
-    const { data: ownedWorkspace, error: ownedWorkspaceError } = await supabase
+    const { data: ownedWorkspace, error: ownedWorkspaceError } = await adminClient
       .from('workspaces')
       .select('id, name, slug, owner_id, organization_id, created_at')
       .eq('owner_id', authUser.id)
@@ -359,7 +406,7 @@ export async function resolveRalionAuthContext(
       };
     } else {
       // Look for workspace memberships
-      const { data: membership, error: membershipError } = await supabase
+      const { data: membership, error: membershipError } = await adminClient
         .from('workspace_members')
         .select('id, workspace_id, user_id, role, workspaces ( id, name, slug, owner_id, organization_id, created_at )')
         .eq('user_id', authUser.id)
@@ -394,6 +441,7 @@ export async function resolveRalionAuthContext(
     return {
       status: 'WORKSPACE_CONTEXT_MISSING',
       context: null,
+      user: authUser,
       errorCode: 'WORKSPACE_CONTEXT_MISSING',
       errorMessage: 'Authenticated user has no accessible workspaces.',
       httpStatus: 409,
@@ -407,6 +455,7 @@ export async function resolveRalionAuthContext(
     return {
       status: 'TENANT_DATABASE_ERROR',
       context: null,
+      user: authUser,
       errorCode: 'CORRUPTED_WORKSPACE_RECORD',
       errorMessage: 'Workspace record is missing valid workspace or organization ID.',
       httpStatus: 500,
@@ -417,13 +466,14 @@ export async function resolveRalionAuthContext(
     return {
       status: 'FORBIDDEN',
       context: null,
+      user: authUser,
       errorCode: 'ORGANIZATION_MISMATCH',
       errorMessage: 'The requested organization does not match the workspace organization.',
       httpStatus: 403,
     };
   }
 
-  const { data: organizationRow, error: orgError } = await supabase
+  const { data: organizationRow, error: orgError } = await adminClient
     .from('organizations')
     .select('id, name, slug')
     .eq('id', organizationId)
@@ -469,6 +519,7 @@ export async function resolveRalionAuthContext(
   return {
     status: 'CONTEXT_RESOLVED',
     context: resolvedContext,
+    user: authUser,
     httpStatus: 200,
   };
 }

@@ -69,6 +69,15 @@ async function getBrowserSession(forceRefresh = false): Promise<{ access_token: 
 
   if (forceRefresh) {
     try {
+      // Prefer the globally registered deduplicated refresh function (set by client.ts)
+      // to avoid importing a second Supabase client instance.
+      if (typeof window !== 'undefined' && typeof (window as any).__ralion_refresh_session__ === 'function') {
+        const refreshed = await (window as any).__ralion_refresh_session__();
+        if (!refreshed.error && refreshed.data.session) {
+          return refreshed.data.session;
+        }
+        return null;
+      }
       const { createClient } = await import('@/lib/supabase/client');
       const supabase = createClient();
       const refreshed = await deduplicatedRefreshSession(supabase);
@@ -221,15 +230,17 @@ export async function authFetch(pathOrUrl: string, init?: RequestInit): Promise<
       credentials: init?.credentials || 'include',
     });
 
-    // Only retry if response was 401 AND we had an active token that is now rejected
+    // Only retry when the server explicitly says the presented token is invalid.
+    // AUTH_TOKEN_MISSING means there was no token — refreshing won't help.
+    // Unknown 401 codes, 403, 409, and 500 must never trigger a refresh cycle.
     if (res.status === 401 && hadSession && typeof window !== 'undefined') {
-      let shouldRefresh = true;
+      let shouldRefresh = false;
       try {
         const cloned = res.clone();
         const body = await cloned.json();
-        // Do not refresh on missing token or unconfigured errors
-        if (body?.code === 'AUTH_TOKEN_MISSING' || body?.code === 'UNCONFIGURED' || body?.code === 'SUPABASE_CONFIG_ERROR') {
-          shouldRefresh = false;
+        // Refresh if and only if the server returned the exact token-invalid code.
+        if (body?.code === 'AUTH_TOKEN_INVALID') {
+          shouldRefresh = true;
         }
       } catch {}
 

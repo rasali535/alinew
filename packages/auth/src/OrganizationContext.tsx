@@ -37,6 +37,13 @@ const OrganizationContext = createContext<OrganizationContextType>({
   logout: () => {},
 });
 
+// ─── Module-level resolution guards ────────────────────────────────────────────
+// Promise-based coalescing: all concurrent callers share a single resolution.
+// This is intentionally module-level (not a ref) so it survives across renders.
+let _activeContextResolution: Promise<void> | null = null;
+// Terminal redirect guard: once we redirect to /login we must not do it again.
+let _redirectedToLogin = false;
+
 function getContextApiBase(): string {
   if (typeof window === 'undefined') return '';
   const origin = window.location.origin;
@@ -53,6 +60,24 @@ function getContextApiBase(): string {
 function getSharedSupabaseClient(): any | null {
   if (typeof window === 'undefined') return null;
   return (window as any).__ralion_supabase_instance__ || (globalThis as any).__ralion_supabase_instance__ || null;
+}
+
+/**
+ * Call the canonical global refresh function.
+ * Never call sharedClient.auth.refreshSession() directly — that bypasses
+ * the shared in-flight promise coalescing in client.ts.
+ */
+async function callGlobalRefresh(): Promise<{ data: { session: any | null }; error: any | null }> {
+  // Prefer the globally exposed deduplicated refresh function set by client.ts
+  if (typeof (window as any).__ralion_refresh_session__ === 'function') {
+    return (window as any).__ralion_refresh_session__();
+  }
+  // Fall back to an already-in-flight promise if the function hasn't been registered yet
+  if ((window as any).__ralion_refresh_promise__) {
+    return (window as any).__ralion_refresh_promise__;
+  }
+  // If no global is available (e.g., client hasn't been instantiated), return a clean error
+  return { data: { session: null }, error: { message: 'Refresh function not available' } };
 }
 
 function readStoredSessionFallback(): { accessToken: string | null; user: any | null } {
@@ -84,17 +109,15 @@ async function readCurrentSession(forceRefresh = false): Promise<{ accessToken: 
   if (sharedClient?.auth) {
     try {
       if (forceRefresh) {
-        // Use global deduplicated refresh if available
-        let refreshed: any = null;
-        if (typeof (window as any).__ralion_refresh_promise__ !== 'undefined' && (window as any).__ralion_refresh_promise__) {
-          refreshed = await (window as any).__ralion_refresh_promise__;
-        } else if (typeof sharedClient.auth.refreshSession === 'function') {
-          refreshed = await sharedClient.auth.refreshSession();
-        }
+        // ALWAYS go through the global deduplicated refresh function.
+        // Never call sharedClient.auth.refreshSession() directly.
+        const refreshed = await callGlobalRefresh();
         const refreshedSession = refreshed?.data?.session;
         if (refreshedSession?.access_token) {
           return { accessToken: refreshedSession.access_token, user: refreshedSession.user || null };
         }
+        // Refresh failed — do not fall through to getSession (stale token may re-trigger storm)
+        return { accessToken: null, user: null };
       }
 
       if (typeof sharedClient.auth.getSession === 'function') {
@@ -135,6 +158,39 @@ async function readResponseCode(res: Response): Promise<string | null> {
   }
 }
 
+/**
+ * Purge all auth-related storage entries and redirect to /login exactly once.
+ * This is called after a session is irrecoverably invalid (double AUTH_TOKEN_INVALID).
+ */
+async function terminateInvalidSession(): Promise<void> {
+  if (_redirectedToLogin) return;
+  _redirectedToLogin = true;
+
+  // Sign out locally only \u2014 do not call the Supabase server (server may be rejecting us anyway)
+  const client = getSharedSupabaseClient();
+  if (client?.auth?.signOut) {
+    await client.auth.signOut({ scope: 'local' }).catch(() => {});
+  }
+
+  // Clear all Ralion and Supabase auth storage
+  try {
+    localStorage.removeItem('ralion-app-auth-token');
+    localStorage.removeItem('ralion_active_workspace_id');
+    localStorage.removeItem('ralion_organization_id');
+    localStorage.removeItem('ralion_org_name');
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
+        localStorage.removeItem(key);
+      }
+    }
+    sessionStorage.clear();
+  } catch {}
+
+  // Redirect once
+  window.location.href = '/login';
+}
+
 export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [organization, setOrganization] = useState<Organization | null>(null);
@@ -142,8 +198,8 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [activeBranch, setActiveBranch] = useState<Branch | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isContextResolved, setIsContextResolved] = useState(false);
+  // isResolvingRef guards setIsLoading(true) from running after unmount
   const isResolvingRef = useRef(false);
-  const lastResolveTimeRef = useRef(0);
 
   const clearResolvedContext = useCallback(() => {
     setUser(null);
@@ -154,12 +210,19 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, []);
 
   const resolveAuthoritativeContext = useCallback(async () => {
-    if (typeof window === 'undefined' || isResolvingRef.current) return;
-    
-    // Prevent resolution storm: debounce calls within 200ms
-    const now = Date.now();
-    if (now - lastResolveTimeRef.current < 200) return;
-    lastResolveTimeRef.current = now;
+    if (typeof window === 'undefined') return;
+
+    // ─── Promise-based coalescing ────────────────────────────────────────────
+    // All callers that arrive while a resolution is in progress will await the
+    // existing promise and return immediately after it settles. Only one full
+    // resolution runs at a time, regardless of how many events arrive.
+    if (_activeContextResolution) {
+      await _activeContextResolution;
+      return;
+    }
+
+    let resolveGuard!: () => void;
+    _activeContextResolution = new Promise<void>(r => { resolveGuard = r; });
 
     isResolvingRef.current = true;
     setIsLoading(true);
@@ -179,11 +242,20 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       // itself is invalid. Do NOT refresh on missing tokens or other error statuses.
       if (res.status === 401 && responseCode === 'AUTH_TOKEN_INVALID') {
         const refreshed = await readCurrentSession(true);
+
         if (refreshed.accessToken && refreshed.accessToken !== accessToken) {
           accessToken = refreshed.accessToken;
           supabaseUser = refreshed.user || supabaseUser;
           res = await fetchAuthoritativeContext(accessToken);
           responseCode = await readResponseCode(res);
+        }
+
+        // If server still returns AUTH_TOKEN_INVALID after a successful refresh,
+        // the session is irrecoverably dead. Terminate it and redirect to login.
+        if (res.status === 401 && responseCode === 'AUTH_TOKEN_INVALID') {
+          console.warn('[AuthContext] Session irrecoverably invalid after refresh — signing out.');
+          await terminateInvalidSession();
+          return; // Do not call clearResolvedContext; redirect is in flight.
         }
       }
 
@@ -278,10 +350,14 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     } finally {
       setIsLoading(false);
       isResolvingRef.current = false;
+      // Release the coalescing guard so the next independent event can trigger
+      resolveGuard();
+      _activeContextResolution = null;
     }
   }, [clearResolvedContext]);
 
   useEffect(() => {
+    // Resolve once on mount from the current getSession() result \u2014 no forced refresh.
     resolveAuthoritativeContext();
 
     const handleOrgUpdate = () => resolveAuthoritativeContext();
@@ -293,9 +369,22 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     const sharedClient = getSharedSupabaseClient();
     const authSubscription = sharedClient?.auth?.onAuthStateChange?.((event: string) => {
-      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
-        resolveAuthoritativeContext();
-      }
+      // ─── Deliberate omissions ────────────────────────────────────────────────
+      // SIGNED_IN: deliberately NOT handled here.
+      //   Supabase fires SIGNED_IN on every tab visibility recovery via
+      //   _onVisibilityChanged → _recoverAndRefresh. Listening to it causes the
+      //   refresh storm seen in production: each tab focus triggers a context
+      //   resolution which may in turn trigger another refresh event.
+      //   The initial mount resolution above handles the first login.
+      //
+      // USER_UPDATED: deliberately NOT handled here.
+      //   This event can be fired by GoTrue during refresh cycles and would
+      //   cascade into repeated resolution. If user profile updates require
+      //   re-resolution, callers should invoke refreshOrganization() explicitly.
+      //
+      // TOKEN_REFRESHED: deliberately NOT handled here.
+      //   Would create infinite loops: refresh → TOKEN_REFRESHED → resolve →
+      //   AUTH_TOKEN_INVALID → refresh → ...
       if (event === 'SIGNED_OUT') {
         clearResolvedContext();
       }

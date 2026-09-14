@@ -5,6 +5,9 @@ import { createClient as createSupabaseClient, SupabaseClient, Session } from '@
 declare global {
   var __ralion_supabase_instance__: SupabaseClient | undefined;
   var __ralion_refresh_promise__: Promise<{ data: { session: Session | null; user: any | null }; error: any | null }> | null | undefined;
+  // Canonical global refresh function — shared across all imports and chunks.
+  // Always call this instead of auth.refreshSession() directly.
+  var __ralion_refresh_session__: ((client?: SupabaseClient) => Promise<{ data: { session: Session | null; user: any | null }; error: any | null }>) | undefined;
 }
 
 let _supabaseInstance: SupabaseClient | null = null;
@@ -94,9 +97,14 @@ function getOrCreateBrowserClient(): SupabaseClient {
   _supabaseInstance = instance;
   if (typeof window !== 'undefined') {
     (window as any).__ralion_supabase_instance__ = instance;
+    // Expose the deduplicated refresh function globally so OrganizationContext
+    // and api-config can call it without a direct module import, preventing
+    // duplicate GoTrueClient instances from competing on the same storage key.
+    (window as any).__ralion_refresh_session__ = deduplicatedRefreshSession;
   }
   if (typeof globalThis !== 'undefined') {
     (globalThis as any).__ralion_supabase_instance__ = instance;
+    (globalThis as any).__ralion_refresh_session__ = deduplicatedRefreshSession;
   }
 
   return instance;
