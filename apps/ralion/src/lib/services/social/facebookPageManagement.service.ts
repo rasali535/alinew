@@ -6,14 +6,14 @@
  * tenant-bound destination management, real posts querying, and normalized analytics.
  */
 
+import 'server-only';
 import { createClient } from '@supabase/supabase-js';
-import { ZernioSocialService } from '@ralion/integrations';
+import { ZernioSocialService, META_GRAPH_API_VERSION } from '@ralion/integrations/server';
 import { EntitlementService } from '@ralion/auth';
 import { AuditLoggerService } from '../auditLogger.service';
 import { SocialTokenManager } from './socialTokenManager.service';
 import { FacebookCommentsService } from './facebookComments.service';
 import { FacebookConnectionStateService } from './facebookConnectionState.service';
-import { META_GRAPH_API_VERSION } from '@ralion/integrations';
 
 export { META_GRAPH_API_VERSION };
 

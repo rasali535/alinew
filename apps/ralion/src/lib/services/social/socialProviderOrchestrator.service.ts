@@ -16,13 +16,14 @@
  * - Platform infrastructure names (Meta/Zernio) are completely concealed from customer UI.
  */
 
+import 'server-only';
 import {
   SocialPlatformType,
   MASTER_PLATFORM_FACEBOOK_PAGE_ID,
   MASTER_PLATFORM_ZERNIO_PROFILE_ID,
   SocialProviderRegistry,
   ZernioSocialService,
-} from '@ralion/integrations';
+} from '@ralion/integrations/server';
 import { AuditLoggerService } from '../auditLogger.service';
 import { MetaCredentialService } from '../metaCredential.service';
 import { SocialTokenManager } from './socialTokenManager.service';

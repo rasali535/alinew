@@ -4,9 +4,9 @@ import {
   BusinessKnowledgeProfileService,
   TenantCreditsService,
   CreativeAssetService,
-} from '@ralion/ai';
+} from '@ralion/ai/server';
 import { BillingDatabaseService } from '@ralion/database';
-import { PlatformAdminService, CustomerSummaryItem } from '@ralion/auth';
+import { PlatformAdminService, CustomerSummaryItem } from '@ralion/auth/server';
 import { createClient } from '@supabase/supabase-js';
 
 export async function GET(request: NextRequest) {

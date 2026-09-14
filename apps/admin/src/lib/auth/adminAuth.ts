@@ -1,6 +1,7 @@
+import 'server-only';
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { PlatformAdminService } from '@ralion/auth';
+import { PlatformAdminService } from '@ralion/auth/server';
 
 export interface AdminAuthResult {
   authorized: boolean;

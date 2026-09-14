@@ -7,12 +7,13 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import 'server-only';
 import {
   SocialPlatformType,
   SocialProviderRegistry,
   ConnectionHealthResult,
   ZernioSocialService,
-} from '@ralion/integrations';
+} from '@ralion/integrations/server';
 import { SocialTokenManager } from './socialTokenManager.service';
 
 function getServiceSupabase() {

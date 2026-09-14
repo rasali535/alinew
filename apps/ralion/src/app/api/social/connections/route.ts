@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { SocialProviderRegistry } from '@ralion/integrations';
+import { SocialProviderRegistry } from '@ralion/integrations/server';
 import { SocialDisconnectService } from '@/lib/services/social/socialDisconnect.service';
 import { FacebookConnectionStateService } from '@/lib/services/social/facebookConnectionState.service';
 import { SocialConnectionHealthService } from '@/lib/services/social/socialConnectionHealth.service';

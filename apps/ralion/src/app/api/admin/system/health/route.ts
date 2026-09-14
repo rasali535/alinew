@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyPlatformAdminRequest } from '../../../../../lib/auth/adminAuth';
 import { createClient } from '@supabase/supabase-js';
-import { SystemHealthMetric } from '@ralion/auth';
+import { SystemHealthMetric } from '@ralion/auth/server';
 
 export async function GET(request: NextRequest) {
   const auth = await verifyPlatformAdminRequest(request);

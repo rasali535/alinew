@@ -11,10 +11,27 @@ interface SignedUrlCacheEntry {
 
 const signedUrlCache = new Map<string, SignedUrlCacheEntry>();
 
+export function clearSecureMediaCache(scope?: { organizationId?: string; workspaceId?: string; userId?: string }): void {
+  if (!scope || (!scope.organizationId && !scope.workspaceId && !scope.userId)) {
+    signedUrlCache.clear();
+    return;
+  }
+  const prefix = `${scope.userId || ''}:${scope.organizationId || ''}:${scope.workspaceId || ''}:`;
+  for (const key of signedUrlCache.keys()) {
+    if (key.startsWith(prefix)) {
+      signedUrlCache.delete(key);
+    }
+  }
+}
+
 /**
  * Resolves a secure short-lived signed delivery URL for a creative asset.
+ * Enforces cache keys namespaced by userId, organizationId, and workspaceId.
  */
-export async function resolveSecureAssetUrl(assetIdOrPath: string): Promise<string | null> {
+export async function resolveSecureAssetUrl(
+  assetIdOrPath: string,
+  context?: { organizationId?: string; workspaceId?: string; userId?: string }
+): Promise<{ signedUrl: string; expiresAt: number } | null> {
   if (!assetIdOrPath) return null;
 
   // Direct base64, blob, or already fully-qualified signed URLs
@@ -23,7 +40,7 @@ export async function resolveSecureAssetUrl(assetIdOrPath: string): Promise<stri
     assetIdOrPath.startsWith('blob:') ||
     (assetIdOrPath.startsWith('http') && assetIdOrPath.includes('token='))
   ) {
-    return assetIdOrPath;
+    return { signedUrl: assetIdOrPath, expiresAt: Date.now() + 15 * 60 * 1000 };
   }
 
   // Extract canonical asset ID or filename
@@ -35,10 +52,12 @@ export async function resolveSecureAssetUrl(assetIdOrPath: string): Promise<stri
   }
   cleanId = cleanId.split('?')[0];
 
+  const cacheKey = `${context?.userId || 'u'}:${context?.organizationId || 'org'}:${context?.workspaceId || 'ws'}:${cleanId}`;
+
   // Check in-memory cache (with 60-second safety buffer before expiration)
-  const cached = signedUrlCache.get(cleanId);
+  const cached = signedUrlCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now() + 60000) {
-    return cached.signedUrl;
+    return cached;
   }
 
   try {
@@ -49,11 +68,12 @@ export async function resolveSecureAssetUrl(assetIdOrPath: string): Promise<stri
     const data = res.data;
     if (data.success && data.signedUrl) {
       const expiresAt = data.expiresAt ? new Date(data.expiresAt).getTime() : Date.now() + 14 * 60 * 1000;
-      signedUrlCache.set(cleanId, {
+      const entry = {
         signedUrl: data.signedUrl,
         expiresAt,
-      });
-      return data.signedUrl;
+      };
+      signedUrlCache.set(cacheKey, entry);
+      return entry;
     }
   } catch (err) {
     console.warn('[SecureMedia] Delivery resolution notice:', err);
@@ -64,61 +84,93 @@ export async function resolveSecureAssetUrl(assetIdOrPath: string): Promise<stri
 
 /**
  * React hook to retrieve and automatically refresh a secure delivery URL.
+ * Includes request cancellation, rapid prop change safety, and proactive renewal.
  */
-export function useSecureMediaUrl(assetIdOrPath?: string) {
+export function useSecureMediaUrl(
+  assetIdOrPath?: string,
+  context?: { organizationId?: string; workspaceId?: string; userId?: string }
+) {
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(Boolean(assetIdOrPath));
   const [error, setError] = useState<string | null>(null);
   const [retryAttempts, setRetryAttempts] = useState<number>(0);
 
-  // Clear stale URLs and reset state immediately when the target asset changes
+  // Clear stale URLs and reset state immediately when the target asset or context changes
   useEffect(() => {
     setUrl(null);
     setError(null);
     setRetryAttempts(0);
     setLoading(Boolean(assetIdOrPath));
-  }, [assetIdOrPath]);
-
-  const fetchUrl = useCallback(async (isRetry = false) => {
-    if (!assetIdOrPath) {
-      setUrl(null);
-      setLoading(false);
-      setError(null);
-      return;
-    }
-
-    // Guard against infinite retry loops (maximum 2 retries per asset)
-    if (isRetry && retryAttempts >= 2) {
-      setError('Unable to load secure creative media after retries.');
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    const resolved = await resolveSecureAssetUrl(assetIdOrPath);
-    if (resolved) {
-      setUrl(resolved);
-      setError(null);
-    } else {
-      setError('Unable to load secure creative media.');
-    }
-    setLoading(false);
-    if (isRetry) {
-      setRetryAttempts((prev) => prev + 1);
-    }
-  }, [assetIdOrPath, retryAttempts]);
+  }, [assetIdOrPath, context?.organizationId, context?.workspaceId]);
 
   useEffect(() => {
-    fetchUrl(false);
-  }, [assetIdOrPath]); // Only re-fetch when target asset changes
+    let cancelled = false;
+    let refreshTimer: NodeJS.Timeout | null = null;
+
+    async function load(isRetry = false) {
+      if (!assetIdOrPath) {
+        if (!cancelled) {
+          setUrl(null);
+          setLoading(false);
+          setError(null);
+        }
+        return;
+      }
+
+      if (isRetry && retryAttempts >= 2) {
+        if (!cancelled) {
+          setError('Unable to load secure creative media after retries.');
+          setLoading(false);
+        }
+        return;
+      }
+
+      if (!cancelled) {
+        setLoading(true);
+        setError(null);
+      }
+
+      const result = await resolveSecureAssetUrl(assetIdOrPath, context);
+      if (cancelled) return;
+
+      if (result && result.signedUrl) {
+        setUrl(result.signedUrl);
+        setError(null);
+        setLoading(false);
+
+        // Schedule proactive refresh 90 seconds before URL expiry
+        const msUntilExpiry = result.expiresAt - Date.now() - 90000;
+        if (msUntilExpiry > 10000) {
+          refreshTimer = setTimeout(() => {
+            if (!cancelled) {
+              load(false);
+            }
+          }, msUntilExpiry);
+        }
+      } else {
+        setUrl(null);
+        setError('Unable to load secure creative media.');
+        setLoading(false);
+      }
+    }
+
+    load(retryAttempts > 0);
+
+    return () => {
+      cancelled = true;
+      if (refreshTimer) clearTimeout(refreshTimer);
+    };
+  }, [assetIdOrPath, context?.organizationId, context?.workspaceId, context?.userId, retryAttempts]);
+
+  const refresh = useCallback(() => {
+    setRetryAttempts((prev) => prev + 1);
+  }, []);
 
   return {
     url,
     loading,
     error,
-    refresh: () => fetchUrl(true),
+    refresh,
     canRetry: retryAttempts < 2,
   };
 }

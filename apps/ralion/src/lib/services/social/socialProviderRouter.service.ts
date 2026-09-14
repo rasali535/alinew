@@ -9,6 +9,7 @@
  * 4. Safe fallback rules (strictly prevents duplicate publishing)
  */
 
+import 'server-only';
 import { createClient } from '@supabase/supabase-js';
 import {
   SocialPlatformType,
@@ -16,7 +17,7 @@ import {
   SocialProviderRegistry,
   SocialProvider,
   ZernioSocialService,
-} from '@ralion/integrations';
+} from '@ralion/integrations/server';
 
 function getServiceSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co';

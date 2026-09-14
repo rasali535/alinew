@@ -7,6 +7,7 @@
  * stable idempotency keys, and audit logging.
  */
 
+import 'server-only';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
@@ -18,7 +19,7 @@ import {
   assertMasterZernioAuthorization,
   MASTER_PLATFORM_ZERNIO_PROFILE_ID,
   MASTER_PLATFORM_FACEBOOK_PAGE_ID,
-} from '@ralion/integrations';
+} from '@ralion/integrations/server';
 import { SocialContentValidator } from './socialContentValidator.service';
 import { SocialTokenManager } from './socialTokenManager.service';
 import { SocialProviderRouter } from './socialProviderRouter.service';
@@ -27,10 +28,10 @@ import { AuditLoggerService } from '../auditLogger.service';
 import { resolvePageAccessToken } from './facebookPageManagement.service';
 
 function getServiceSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co';
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co';
+  const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!key) {
-    throw new Error('[SocialPublishing] Missing SUPABASE_SERVICE_ROLE_KEY environment variable.');
+    throw new Error('[SocialPublishing] Missing SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY environment variable.');
   }
   return createClient(url, key, {
     auth: {
@@ -137,47 +138,51 @@ export class SocialPublishingService {
     });
   }
 
-  private static getDurableStorePath(): string {
-    const dir = path.resolve(process.cwd(), '.ralion');
-    if (!fs.existsSync(dir)) {
-      try {
-        fs.mkdirSync(dir, { recursive: true });
-      } catch {}
-    }
-    return path.join(dir, 'social_publish_idempotency.json');
-  }
+  /**
+   * Generates a deterministic canonical payload hash across all publishing parameters:
+   * normalized title, normalized body, sorted platforms, destination, sorted media references & types,
+   * scheduled time, and publishing options.
+   */
+  public static computeCanonicalPayloadHash(params: {
+    title?: string;
+    body: string;
+    platforms: string[];
+    destination: string;
+    mediaUrls?: string[];
+    mediaTypes?: string[];
+    scheduledFor?: Date | string;
+    pageId?: string;
+  }): string {
+    const normTitle = (params.title || '').trim().toLowerCase();
+    const normBody = (params.body || '').trim();
+    const sortedPlatforms = params.platforms.slice().sort().join(',');
+    const dest = params.destination.trim();
+    const sortedMediaUrls = (params.mediaUrls || []).slice().sort().map((u) => u.trim());
+    const sortedMediaTypes = (params.mediaTypes || []).slice().sort().map((t) => t.trim().toLowerCase());
+    const sched = params.scheduledFor
+      ? (params.scheduledFor instanceof Date ? params.scheduledFor.toISOString() : new Date(params.scheduledFor).toISOString())
+      : '';
+    const pid = (params.pageId || '').trim();
 
-  private static loadDurableClaims(): any[] {
-    try {
-      const p = this.getDurableStorePath();
-      if (fs.existsSync(p)) {
-        const raw = fs.readFileSync(p, 'utf-8');
-        return JSON.parse(raw) || [];
-      }
-    } catch {}
-    return [];
-  }
+    const canonicalStructure = {
+      t: normTitle,
+      b: normBody,
+      p: sortedPlatforms,
+      d: dest,
+      m: sortedMediaUrls,
+      mt: sortedMediaTypes,
+      s: sched,
+      pid,
+    };
 
-  private static saveDurableClaims(claims: any[]) {
-    try {
-      const p = this.getDurableStorePath();
-      fs.writeFileSync(p, JSON.stringify(claims, null, 2), 'utf-8');
-    } catch {}
-  }
-
-  static clearDurableStoreForTesting() {
-    try {
-      const p = this.getDurableStorePath();
-      if (fs.existsSync(p)) {
-        fs.unlinkSync(p);
-      }
-    } catch {}
+    return crypto.createHash('sha256').update(JSON.stringify(canonicalStructure)).digest('hex');
   }
 
   /**
    * Atomic Database Idempotency Dispatch Claim
    * Canonical uniqueness boundary: user_id + organization_id + workspace_id + destination + idempotency_key
    * AND matching across all 5 dimensions.
+   * Fails closed with 503 if PostgreSQL is unavailable.
    */
   private static async claimDispatch(params: {
     userId: string;
@@ -186,15 +191,20 @@ export class SocialPublishingService {
     destination: string;
     idempotencyKey: string;
     bodyHash: string;
+    leaseToken?: string;
   }): Promise<{
     conflict: boolean;
     claimId?: string;
+    leaseToken?: string;
     claimStatus?: string;
     postId?: string | null;
+    externalReceiptId?: string | null;
     platformResults?: any;
     message?: string;
+    dbUnavailable?: boolean;
   }> {
     const supabase = getServiceSupabase();
+    const leaseToken = params.leaseToken || crypto.randomUUID();
 
     // 1. Try atomic database RPC
     try {
@@ -205,14 +215,17 @@ export class SocialPublishingService {
         p_destination: params.destination,
         p_idempotency_key: params.idempotencyKey,
         p_body_hash: params.bodyHash,
+        p_lease_token: leaseToken,
       });
 
       if (!error && data) {
         return {
           conflict: Boolean(data.conflict),
           claimId: data.claim_id,
+          leaseToken: data.lease_token || leaseToken,
           claimStatus: data.claim_status,
           postId: data.post_id || null,
+          externalReceiptId: data.external_receipt_id || null,
           platformResults: data.platform_results || {},
           message: data.message,
         };
@@ -221,7 +234,7 @@ export class SocialPublishingService {
       console.warn('[SocialPublishing] claim_social_publish_dispatch RPC notice:', rpcErr?.message);
     }
 
-    // 2. Direct table fallback with atomic INSERT / unique constraint
+    // 2. Direct table query with atomic row check & INSERT / ON CONFLICT
     try {
       const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const { data: existing, error: fetchErr } = await supabase
@@ -231,7 +244,7 @@ export class SocialPublishingService {
         .eq('organization_id', params.organizationId)
         .eq('workspace_id', params.workspaceId)
         .eq('destination', params.destination)
-        .eq('idempotency_key', params.idempotencyKey)
+        .or(`idempotency_key.eq.${params.idempotencyKey},body_hash.eq.${params.bodyHash}`)
         .gt('created_at', cutoff24h)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -244,6 +257,7 @@ export class SocialPublishingService {
             claimStatus: 'ALREADY_COMPLETED',
             claimId: existing.id,
             postId: existing.post_id,
+            externalReceiptId: existing.external_receipt_id,
             platformResults: existing.platform_results || {},
             message: 'This exact content was already published or scheduled for this account within the last 24 hours.',
           };
@@ -256,8 +270,9 @@ export class SocialPublishingService {
               .from('social_publish_idempotency')
               .update({
                 status: 'IN_PROGRESS',
+                lease_token: leaseToken,
                 claimed_at: new Date().toISOString(),
-                expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+                expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
                 retry_count: (existing.retry_count || 0) + 1,
                 updated_at: new Date().toISOString(),
               })
@@ -267,6 +282,7 @@ export class SocialPublishingService {
               return {
                 conflict: false,
                 claimId: existing.id,
+                leaseToken,
                 claimStatus: 'CLAIMED_RETRY',
                 message: 'Recovered stale dispatch lease.',
               };
@@ -295,8 +311,9 @@ export class SocialPublishingService {
             .from('social_publish_idempotency')
             .update({
               status: 'IN_PROGRESS',
+              lease_token: leaseToken,
               claimed_at: new Date().toISOString(),
-              expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+              expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
               retry_count: (existing.retry_count || 0) + 1,
               error_message: null,
               updated_at: new Date().toISOString(),
@@ -306,6 +323,7 @@ export class SocialPublishingService {
           return {
             conflict: false,
             claimId: existing.id,
+            leaseToken,
             claimStatus: 'CLAIMED_RETRY',
             message: 'Retrying previously failed dispatch.',
           };
@@ -322,8 +340,9 @@ export class SocialPublishingService {
           idempotency_key: params.idempotencyKey,
           body_hash: params.bodyHash,
           status: 'IN_PROGRESS',
+          lease_token: leaseToken,
           claimed_at: new Date().toISOString(),
-          expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+          expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
         })
         .select('id')
         .maybeSingle();
@@ -332,6 +351,7 @@ export class SocialPublishingService {
         return {
           conflict: false,
           claimId: insData.id,
+          leaseToken,
           claimStatus: 'CLAIMED_NEW',
         };
       }
@@ -344,170 +364,123 @@ export class SocialPublishingService {
         };
       }
     } catch (tableErr: any) {
-      console.warn('[SocialPublishing] Direct table idempotency claim notice:', tableErr?.message);
+      console.error('[SocialPublishing] Direct table idempotency claim error:', tableErr?.message);
     }
 
-    // 3. Durable store fallback (for Hostinger process restarts and tests where Supabase table is pending migration)
-    const durableClaims = this.loadDurableClaims();
-    const cutoff24hMs = Date.now() - 24 * 60 * 60 * 1000;
-    const existingDurable = durableClaims.find(
-      (c) =>
-        c.user_id === params.userId &&
-        c.organization_id === params.organizationId &&
-        c.workspace_id === params.workspaceId &&
-        c.destination === params.destination &&
-        (c.idempotency_key === params.idempotencyKey || c.body_hash === params.bodyHash) &&
-        c.created_at_ms > cutoff24hMs
-    );
-
-    if (existingDurable) {
-      if (existingDurable.status === 'COMPLETED') {
-        return {
-          conflict: true,
-          claimStatus: 'ALREADY_COMPLETED',
-          claimId: existingDurable.id,
-          postId: existingDurable.post_id,
-          platformResults: existingDurable.platform_results || {},
-          message: 'This exact content was already published or scheduled for this account within the last 24 hours.',
-        };
-      }
-
-      if (existingDurable.status === 'CLAIMED' || existingDurable.status === 'IN_PROGRESS') {
-        const isStale = existingDurable.claimed_at_ms < Date.now() - 5 * 60 * 1000;
-        if (!isStale) {
-          return {
-            conflict: true,
-            claimStatus: 'IN_PROGRESS_CONFLICT',
-            claimId: existingDurable.id,
-            message: 'A publish dispatch with this exact payload is currently in flight.',
-          };
-        }
-        // Reclaim stale lease
-        existingDurable.claimed_at_ms = Date.now();
-        existingDurable.retry_count = (existingDurable.retry_count || 0) + 1;
-        this.saveDurableClaims(durableClaims);
-        return {
-          conflict: false,
-          claimId: existingDurable.id,
-          claimStatus: 'CLAIMED_RETRY',
-          message: 'Recovered stale dispatch lease.',
-        };
-      }
-
-      if (existingDurable.status === 'FAILED') {
-        if (existingDurable.retry_count >= 5 && existingDurable.failed_at_ms > Date.now() - 15 * 60 * 1000) {
-          return {
-            conflict: true,
-            claimStatus: 'FAILED_THROTTLED',
-            claimId: existingDurable.id,
-            message: 'Maximum retry attempts exceeded for this payload. Please wait 15 minutes before retrying.',
-          };
-        }
-        existingDurable.status = 'IN_PROGRESS';
-        existingDurable.claimed_at_ms = Date.now();
-        existingDurable.retry_count = (existingDurable.retry_count || 0) + 1;
-        this.saveDurableClaims(durableClaims);
-        return {
-          conflict: false,
-          claimId: existingDurable.id,
-          claimStatus: 'CLAIMED_RETRY',
-          message: 'Retrying previously failed dispatch.',
-        };
-      }
-    }
-
-    // Insert new durable claim
-    const newClaimId = `claim_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
-    durableClaims.push({
-      id: newClaimId,
-      user_id: params.userId,
-      organization_id: params.organizationId,
-      workspace_id: params.workspaceId,
-      destination: params.destination,
-      idempotency_key: params.idempotencyKey,
-      body_hash: params.bodyHash,
-      status: 'IN_PROGRESS',
-      claimed_at_ms: Date.now(),
-      created_at_ms: Date.now(),
-      retry_count: 0,
-    });
-    this.saveDurableClaims(durableClaims);
-
+    // Fail closed: PostgreSQL is the correctness boundary.
+    // If the database claim RPC and table are unavailable, publishing must fail closed with HTTP 503.
     return {
-      conflict: false,
-      claimId: newClaimId,
-      claimStatus: 'CLAIMED_NEW',
+      conflict: true,
+      dbUnavailable: true,
+      message: 'Publishing idempotency infrastructure is temporarily unavailable. Dispatch aborted to prevent uncoordinated publication.',
     };
   }
 
-  private static async completeDispatch(claimId: string | null, postId: string | null, platformResults: any) {
-    if (!claimId) return;
+  private static async completeDispatch(params: {
+    claimId: string;
+    organizationId: string;
+    workspaceId: string;
+    postId: string | null;
+    externalReceiptId?: string | null;
+    platformResults: any;
+    leaseToken?: string;
+  }): Promise<boolean> {
+    const { claimId, organizationId, workspaceId, postId, externalReceiptId, platformResults, leaseToken } = params;
+    if (!claimId) return false;
     const supabase = getServiceSupabase();
+
+    // Verify postId is a valid UUID before passing to database UUID column
+    const isValidUuid = postId ? /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(postId) : false;
+    const cleanPostId = isValidUuid ? postId : null;
+
     try {
-      const { error } = await supabase.rpc('complete_social_publish_dispatch', {
+      const { data, error } = await supabase.rpc('complete_social_publish_dispatch', {
         p_claim_id: claimId,
-        p_post_id: postId,
+        p_organization_id: organizationId,
+        p_workspace_id: workspaceId,
+        p_post_id: cleanPostId,
+        p_external_receipt_id: externalReceiptId || (postId && !isValidUuid ? postId : null),
         p_platform_results: platformResults,
+        p_lease_token: leaseToken || null,
       });
-      if (error) {
-        await supabase
-          .from('social_publish_idempotency')
-          .update({
-            status: 'COMPLETED',
-            post_id: postId,
-            platform_results: platformResults,
-            completed_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', claimId);
+
+      if (!error && typeof data === 'boolean') {
+        return data;
       }
+
+      // Fallback conditional update
+      let updQuery = supabase
+        .from('social_publish_idempotency')
+        .update({
+          status: 'COMPLETED',
+          post_id: cleanPostId,
+          external_receipt_id: externalReceiptId || (postId && !isValidUuid ? postId : null),
+          platform_results: platformResults,
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', claimId)
+        .eq('organization_id', organizationId)
+        .eq('workspace_id', workspaceId)
+        .eq('status', 'IN_PROGRESS');
+
+      if (leaseToken) {
+        updQuery = updQuery.eq('lease_token', leaseToken);
+      }
+
+      const { data: updData, error: updErr } = await updQuery.select('id');
+      return !updErr && Boolean(updData && updData.length === 1);
     } catch (err: any) {
       console.warn('[SocialPublishing] completeDispatch notice:', err?.message);
-    }
-
-    // Update durable store fallback
-    const durableClaims = this.loadDurableClaims();
-    const target = durableClaims.find((c) => c.id === claimId);
-    if (target) {
-      target.status = 'COMPLETED';
-      target.post_id = postId;
-      target.platform_results = platformResults;
-      target.completed_at_ms = Date.now();
-      this.saveDurableClaims(durableClaims);
+      return false;
     }
   }
 
-  private static async failDispatch(claimId: string | null, errorMessage: string) {
-    if (!claimId) return;
+  private static async failDispatch(params: {
+    claimId: string;
+    organizationId: string;
+    workspaceId: string;
+    errorMessage: string;
+    leaseToken?: string;
+  }): Promise<boolean> {
+    const { claimId, organizationId, workspaceId, errorMessage, leaseToken } = params;
+    if (!claimId) return false;
     const supabase = getServiceSupabase();
     try {
-      const { error } = await supabase.rpc('fail_social_publish_dispatch', {
+      const { data, error } = await supabase.rpc('fail_social_publish_dispatch', {
         p_claim_id: claimId,
+        p_organization_id: organizationId,
+        p_workspace_id: workspaceId,
         p_error_message: errorMessage,
+        p_lease_token: leaseToken || null,
       });
-      if (error) {
-        await supabase
-          .from('social_publish_idempotency')
-          .update({
-            status: 'FAILED',
-            error_message: errorMessage,
-            failed_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', claimId);
+
+      if (!error && typeof data === 'boolean') {
+        return data;
       }
+
+      let updQuery = supabase
+        .from('social_publish_idempotency')
+        .update({
+          status: 'FAILED',
+          error_message: errorMessage,
+          failed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', claimId)
+        .eq('organization_id', organizationId)
+        .eq('workspace_id', workspaceId)
+        .eq('status', 'IN_PROGRESS');
+
+      if (leaseToken) {
+        updQuery = updQuery.eq('lease_token', leaseToken);
+      }
+
+      const { data: updData, error: updErr } = await updQuery.select('id');
+      return !updErr && Boolean(updData && updData.length === 1);
     } catch (err: any) {
       console.warn('[SocialPublishing] failDispatch notice:', err?.message);
-    }
-
-    // Update durable store fallback
-    const durableClaims = this.loadDurableClaims();
-    const target = durableClaims.find((c) => c.id === claimId);
-    if (target) {
-      target.status = 'FAILED';
-      target.error_message = errorMessage;
-      target.failed_at_ms = Date.now();
-      this.saveDurableClaims(durableClaims);
+      return false;
     }
   }
 
@@ -583,10 +556,19 @@ export class SocialPublishingService {
 
     const supabase = getServiceSupabase();
     const normalizedBody = params.body.trim();
-    const bodyHash = crypto.createHash('sha256').update(normalizedBody).digest('hex');
-    const idempotencyKey = params.idempotencyKey || `hash_${bodyHash}`;
     const sortedPlatforms = params.platforms.slice().sort().join(',');
     const currentDestination = params.socialConnectionId ? `conn:${params.socialConnectionId}` : sortedPlatforms;
+    const bodyHash = this.computeCanonicalPayloadHash({
+      title: params.title,
+      body: normalizedBody,
+      platforms: params.platforms,
+      destination: currentDestination,
+      mediaUrls: params.mediaUrls,
+      mediaTypes: params.mediaTypes,
+      scheduledFor: params.scheduledFor,
+      pageId: params.pageId,
+    });
+    const idempotencyKey = params.idempotencyKey || `hash_${bodyHash}`;
     const cutoff24h = Date.now() - 24 * 60 * 60 * 1000;
 
     const orgIdKey = params.organizationId || 'default-org';
@@ -697,6 +679,13 @@ export class SocialPublishingService {
       claimId = claim.claimId || null;
 
       if (claim.conflict) {
+        if (claim.dbUnavailable) {
+          const infraError = new Error(`[SocialPublishing] ${claim.message || 'Publishing infrastructure unavailable'}`);
+          (infraError as any).statusCode = 503;
+          (infraError as any).conflict = false;
+          throw infraError;
+        }
+
         const isCompleted = claim.claimStatus === 'ALREADY_COMPLETED';
         return {
           postId: claim.postId || null,
@@ -1087,9 +1076,23 @@ export class SocialPublishingService {
 
     if (claim.claimId) {
       if (isSuccessfulDispatch) {
-        await this.completeDispatch(claim.claimId, finalPostId, platformResults);
+        await this.completeDispatch({
+          claimId: claim.claimId,
+          organizationId: orgIdKey,
+          workspaceId: wsIdKey,
+          postId: postRecord?.id || null,
+          externalReceiptId: finalPostId,
+          platformResults,
+          leaseToken: claim.leaseToken,
+        });
       } else {
-        await this.failDispatch(claim.claimId, errors.join('; ') || 'Publish failed');
+        await this.failDispatch({
+          claimId: claim.claimId,
+          organizationId: orgIdKey,
+          workspaceId: wsIdKey,
+          errorMessage: errors.join('; ') || 'Publish failed',
+          leaseToken: claim.leaseToken,
+        });
       }
     }
 
@@ -1122,7 +1125,12 @@ export class SocialPublishingService {
     };
     } catch (publishErr: any) {
       if (claimId) {
-        await this.failDispatch(claimId, publishErr?.message || 'Publish dispatch threw unexpected exception');
+        await this.failDispatch({
+          claimId,
+          organizationId: orgIdKey,
+          workspaceId: wsIdKey,
+          errorMessage: publishErr?.message || 'Publish dispatch threw unexpected exception',
+        });
       }
       throw publishErr;
     } finally {

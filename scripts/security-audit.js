@@ -201,8 +201,7 @@ if (foundLeaks.length === 0) {
 // 6. Manual Verification Items
 // ---------------------------------------------------------------------
 manual('Supabase Dashboard MFA', 'Verify TOTP MFA is toggled ON in Supabase Auth Settings');
-manual('Meta Developer Console Live Mode', 'Verify Meta App is in Live Mode');
-manual('Zernio Production API Key', 'Configure ZERNIO_API_KEY in Supabase Vault / VPS environment');
+manual('Delivery Network API Key', 'Configure API keys in Supabase Vault / Hostinger or Render environment');
 
 // ---------------------------------------------------------------------
 // Print Results Summary

@@ -12,13 +12,14 @@
  * 7. Server-side billing audit logging (zero secrets exposed)
  */
 
+import 'server-only';
 import {
   BillingDatabaseService,
   SubscriptionPlanId,
   OrganizationSubscriptionRecord,
   BillingCycle,
 } from '@ralion/database';
-import { TenantCreditsService } from '@ralion/ai';
+import { TenantCreditsService } from '@ralion/ai/server';
 import { PLAN_CATALOG } from '@ralion/auth';
 
 export interface PayPalConfig {

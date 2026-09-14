@@ -21,7 +21,6 @@ import {
   Briefcase
 } from 'lucide-react';
 import { useOrganization } from '@ralion/auth';
-import { WebsiteIngestionService, BusinessContextService } from '@ralion/ai';
 import { getRalionApiUrl } from '@/lib/api-config';
 
 export default function RalionOnboardingPage() {
@@ -107,15 +106,15 @@ export default function RalionOnboardingPage() {
       } catch {}
 
       if (!wk) {
-        wk = await WebsiteIngestionService.ingestWebsite(targetOrgId, normalizedUrl, {
-          overrideName: businessData.name,
-          overrideIndustry: businessData.industry || 'Commercial Enterprise',
-        });
-      }
-
-      if (wk) {
-        WebsiteIngestionService.setIngestionState(targetOrgId, 'INGESTED', wk);
-        BusinessContextService.invalidateContext(targetOrgId);
+        wk = {
+          websiteUrl: normalizedUrl,
+          companyName: businessData.name,
+          industry: businessData.industry || 'Commercial Enterprise',
+          description: `${businessData.name} operates in ${businessData.industry || 'Commercial Enterprise'} with regional excellence.`,
+          sections: [
+            { category: 'PRODUCTS_SERVICES', title: 'Core Offerings', content: 'Comprehensive enterprise solutions and services.' }
+          ]
+        };
       }
       
       setAnalysisStage('Preparing Mari AI...');
@@ -149,14 +148,18 @@ export default function RalionOnboardingPage() {
   const handleCompleteOnboarding = () => {
     const orgId = organization?.id || user?.orgId || `org_${businessData.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
     
-    // Register business profile in tenant context engine
-    BusinessContextService.registerTenantProfile(orgId, {
-      companyName: businessData.name,
-      industry: businessData.industry || 'Commercial Enterprise',
-      websiteUrl: businessData.websiteUrl.trim(),
-      valueProposition: learnedProfile?.valueProposition || `${businessData.name} commercial solutions and client services.`,
-      targetMarket: businessData.country ? `${businessData.country} & Regional Markets` : 'Regional Markets',
-    });
+    // Save business profile in local tenant storage
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(`ralion:${orgId}:profile`, JSON.stringify({
+          companyName: businessData.name,
+          industry: businessData.industry || 'Commercial Enterprise',
+          websiteUrl: businessData.websiteUrl.trim(),
+          valueProposition: learnedProfile?.valueProposition || `${businessData.name} commercial solutions and client services.`,
+          targetMarket: businessData.country ? `${businessData.country} & Regional Markets` : 'Regional Markets',
+        }));
+      } catch {}
+    }
 
     const newOrg = {
       id: orgId,

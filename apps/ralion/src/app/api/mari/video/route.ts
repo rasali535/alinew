@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../lib/cors';
-import { CreativeOrchestrator } from '@ralion/ai';
+import { CreativeOrchestrator } from '@ralion/ai/server';
 
 export const dynamic = 'force-dynamic';
 

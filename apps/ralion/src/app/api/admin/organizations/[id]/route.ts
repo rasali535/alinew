@@ -7,9 +7,9 @@ import {
   CreativeAssetService,
   BusinessContextService,
   MariOrchestrationService,
-} from '@ralion/ai';
+} from '@ralion/ai/server';
 import { BillingDatabaseService } from '@ralion/database';
-import { PlatformAdminService } from '@ralion/auth';
+import { PlatformAdminService } from '@ralion/auth/server';
 import { createClient } from '@supabase/supabase-js';
 
 export async function GET(

@@ -25,7 +25,7 @@ Because Supabase Secrets are encrypted at rest and accessible to **Supabase Edge
                               ▼
 ┌────────────────────────────────────────────────────────────┐
 │                    RALION NODE/NEXT SERVER                 │
-│                 (Hostinger VPS / Local Server)             │
+│         (Hostinger Managed Node.js / Local Server)         │
 └──────────────┬──────────────────────────────┬──────────────┘
                │                              │
      Option A: │ Direct Server Environment    │ Option B: Supabase Edge Bridge
@@ -46,12 +46,12 @@ Because Supabase Secrets are encrypted at rest and accessible to **Supabase Edge
 
 ---
 
-## 3. Option A: Server Runtime Environment Variable (Recommended for VPS / Hostinger)
+## 3. Option A: Server Runtime Environment Variable (Recommended for Hostinger / Render)
 
-If running the Next.js application on Hostinger VPS or local environment:
+If running the application on Hostinger Managed Node.js or Render:
 1. Add `ZERNIO_API_KEY` to the server environment:
    * **Local:** Add to `apps/ralion/.env.local` (git-ignored).
-   * **Hostinger VPS:** In your VPS Docker or PM2 environment configuration, set `ZERNIO_API_KEY`.
+   * **Hostinger / Render:** In your hPanel or Render dashboard environment settings, configure `ZERNIO_API_KEY`.
 2. Run `node scripts/verify-zernio-secret.js`.
 3. The state will transition from `ZERNIO_NOT_CONFIGURED` $\longrightarrow$ `ZERNIO_CONNECTED`.
 

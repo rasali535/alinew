@@ -1489,19 +1489,19 @@ export class MariUniversalCore {
           fallbackUsed = false;
           fallbackReason = null;
 
-          const jobId = genResult.receipt.assetId;
-          const mediaUrl = genResult.receipt.publicUrl || genResult.receipt.mediaUrl || `/api/creatives/file/${jobId}`;
+          const verifiedAssetId = genResult.receipt.assetId;
+          const mediaUrl = genResult.receipt.publicUrl || genResult.receipt.mediaUrl || `/api/creatives/${verifiedAssetId}/delivery`;
           const jobStatus = genResult.status || 'COMPLETED';
 
-          const flyerResponse = `### Creative Generation Job Dispatched & Completed\n\nI have generated a high-impact commercial **${assetType}** for **${brand}**:\n\n• **Job ID**: \`${jobId}\`\n• **Asset Type**: ${assetType}\n• **Parent Brand**: ${brand}\n• **Product**: ${product || brand}\n${tagline ? `• **Tagline**: ${tagline}\n` : ''}${description ? `• **Description**: ${description}\n` : ''}${website ? `• **Website**: ${website}\n` : ''}• **Dimensions**: 1080x1350 (Facebook Portrait 4:5 Default)\n• **Status**: **${jobStatus}**\n\n**Preview & Asset Download**:\n[View Generated Asset](${mediaUrl})\n\nYour asset has been securely stored in the Ralion Creative Vault and is ready to publish to connected social channels.`;
+          const flyerResponse = `### Creative Generation Job Dispatched & Completed\n\nI have generated a high-impact commercial **${assetType}** for **${brand}**:\n\n• **Asset ID**: \`${verifiedAssetId}\`\n• **Asset Type**: ${assetType}\n• **Parent Brand**: ${brand}\n• **Product**: ${product || brand}\n${tagline ? `• **Tagline**: ${tagline}\n` : ''}${description ? `• **Description**: ${description}\n` : ''}${website ? `• **Website**: ${website}\n` : ''}• **Dimensions**: 1080x1350 (Facebook Portrait 4:5 Default)\n• **Status**: **${jobStatus}**\n\n**Preview & Asset Download**:\n[View Generated Asset](${mediaUrl})\n\nYour asset has been securely stored in the Ralion Creative Vault and is ready to publish to connected social channels.`;
 
           const flyerAction: MariActionPayload = {
-            id: `flyer_${jobId}`,
+            id: `flyer_${verifiedAssetId}`,
             type: 'GENERATE_FLYER',
             label: 'View Generated Flyer',
             title: `${product || brand} Launch ${assetType}`,
             description: tagline || 'Exclusive Offer',
-            payload: { route: '/marketing/flyers', assetId: jobId, mediaUrl },
+            payload: { route: '/marketing/flyers', assetId: verifiedAssetId, mediaUrl },
           };
 
           console.log(JSON.stringify({
@@ -1553,7 +1553,7 @@ export class MariUniversalCore {
             suggestedActions: [
               flyerAction,
               { type: 'NAVIGATE', label: 'Open Creative Studio', payload: { route: '/growth?tab=creatives' } },
-              { type: 'NAVIGATE', label: 'Publish to Facebook', payload: { route: `/growth?tab=publish&assetId=${jobId}` } },
+              { type: 'NAVIGATE', label: 'Publish to Facebook', payload: { route: `/growth?tab=publish&assetId=${verifiedAssetId}` } },
             ],
             ragContext: null,
             contextSources: ['CreativeOrchestrator', 'BusinessIdentityResolver'],

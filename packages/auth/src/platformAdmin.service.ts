@@ -1,3 +1,4 @@
+import 'server-only';
 import { createClient } from '@supabase/supabase-js';
 
 export interface AdminAuditLogEntry {
@@ -88,9 +89,9 @@ export class PlatformAdminService {
       this.auditLogs.pop();
     }
 
-    // Also persist non-blocking to security_audit_logs table if credentials available
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+    // Also persist non-blocking to security_audit_logs table if credentials available (server-side only)
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
     if (supabaseUrl && serviceKey) {
       try {
         const supabase = createClient(supabaseUrl, serviceKey);

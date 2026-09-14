@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import crypto from 'crypto';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../lib/cors';
-import { CreativeOrchestrator } from '@ralion/ai';
+import { CreativeOrchestrator } from '@ralion/ai/server';
 import { requireRalionContext } from '../../../../lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';

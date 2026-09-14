@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../lib/cors';
 import { getCurrentRalionContext, authRequiredResponse } from '@/lib/auth/serverAuth';
-import { MariTokenTelemetryService } from '@ralion/ai';
+import { MariTokenTelemetryService } from '@ralion/ai/server';
 
 export const dynamic = 'force-dynamic';
 

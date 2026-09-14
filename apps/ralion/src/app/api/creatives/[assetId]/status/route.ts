@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../../lib/cors';
-import { CreativeAssetService } from '@ralion/ai';
+import { CreativeAssetService } from '@ralion/ai/server';
 import { requireRalionContext } from '../../../../../lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';

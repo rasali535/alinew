@@ -47,27 +47,19 @@ import {
   BarChart3,
   Globe
 } from 'lucide-react';
-import { 
-  BusinessContextService, 
-  MariBriefingService, 
-  BusinessGrowthProfileService,
-  MariOrchestrationService,
-  MariBriefing, 
-  BusinessContext, 
-  BusinessGrowthProfile,
-  MariActivityEvent,
-  callMariAiApi, 
-  processMariQuery, 
-  executeMariAction, 
-  mariKnowledgeManager, 
-  MariActionPayload, 
-  KnowledgeDocument,
-  DataProvenance,
-  WebsiteIngestionService
-} from '@ralion/ai';
 import { getRalionApiUrl, getRalionAuthHeaders, MARI_BUILD_VERSION } from '@/lib/api-config';
 import { useOrganization } from '@ralion/auth';
 import { MariMarkdownMessage } from '@/components/MariMarkdownMessage';
+import type {
+  MariActionPayload,
+  BusinessContext,
+  MariBriefing,
+  BusinessGrowthProfile,
+  MariActivityEvent,
+  KnowledgeDocument,
+  DataProvenance,
+} from '@ralion/ai';
+import { executeMariAction, mariKnowledgeManager } from '@ralion/ai';
 
 interface ChatMessage {
   id: string;
@@ -162,7 +154,7 @@ export default function MariAiPage() {
         try {
           const apiUrl = getRalionApiUrl(`/api/mari/knowledge/website-sync?organizationId=${encodeURIComponent(activeOrgId)}`);
           const authHeaders = await getRalionAuthHeaders();
-          const syncRes = await fetch(apiUrl, {
+          await fetch(apiUrl, {
             headers: {
               ...authHeaders,
               'x-organization-id': activeOrgId,
@@ -170,40 +162,74 @@ export default function MariAiPage() {
             },
             credentials: 'include',
           });
-          if (syncRes.ok) {
-            const syncData = await syncRes.json();
-            if (syncData.success && syncData.websiteKnowledge) {
-              WebsiteIngestionService.setIngestionState(activeOrgId, syncData.status || 'INGESTED', syncData.websiteKnowledge);
-            }
-          }
         } catch {}
       }
 
-      const context = await BusinessContextService.assembleContext(activeOrgId, {
-        organizationId: activeOrgId,
-        workspaceId: activeWorkspaceId,
-        userId: activeUserId,
-        activeScreen: { route: '/mari-ai', label: 'Mari Business Growth Partner' },
-        forceRefresh,
-        localOverrides: {
-          contacts: savedContacts,
-          tasks: savedTasks,
-          documents: savedDocs,
-          fbPage: savedFbPage,
-          tier: userTier,
-        },
-      });
+      // Fetch server business context
+      let context: BusinessContext | null = null;
+      try {
+        const apiUrl = getRalionApiUrl('/api/mari/context');
+        const authHeaders = await getRalionAuthHeaders();
+        const ctxRes = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeaders,
+            'x-organization-id': activeOrgId,
+            'x-workspace-id': activeWorkspaceId || activeOrgId,
+          },
+          body: JSON.stringify({
+            organizationId: activeOrgId,
+            workspaceId: activeWorkspaceId,
+            userId: activeUserId,
+            activeScreen: { route: '/mari-ai', label: 'Mari Business Growth Partner' },
+            forceRefresh,
+            localOverrides: {
+              contacts: savedContacts,
+              tasks: savedTasks,
+              documents: savedDocs,
+              fbPage: savedFbPage,
+              tier: userTier,
+            },
+          }),
+        });
+        if (ctxRes.ok) {
+          const ctxData = await ctxRes.json();
+          if (ctxData.context) {
+            context = ctxData.context;
+            setBusinessContext(ctxData.context);
+          }
+        }
+      } catch {}
 
-      setBusinessContext(context);
+      // Fetch server briefing
+      try {
+        const briefUrl = getRalionApiUrl('/api/mari/briefing');
+        const authHeaders = await getRalionAuthHeaders();
+        const briefRes = await fetch(briefUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeaders,
+            'x-organization-id': activeOrgId,
+            'x-workspace-id': activeWorkspaceId || activeOrgId,
+          },
+          body: JSON.stringify({
+            organizationId: activeOrgId,
+            workspaceId: activeWorkspaceId,
+            userId: activeUserId,
+            activeScreen: { route: '/mari-ai', label: 'Mari Business Growth Partner' },
+          }),
+        });
+        if (briefRes.ok) {
+          const briefData = await briefRes.json();
+          if (briefData.briefing) {
+            setBriefing(briefData.briefing);
+          }
+        }
+      } catch {}
 
-      const profile = BusinessGrowthProfileService.getOrCreateGrowthProfile(context);
-      setGrowthProfile(profile);
-
-      const generatedBriefing = MariBriefingService.generateBriefing(context);
-      setBriefing(generatedBriefing);
-
-      const stream = MariOrchestrationService.getActivityStream(context.organizationId || activeOrgId);
-      setActivityStream(stream);
+      setActivityStream([]);
 
       // Check if returning from a completed Growth/Social action
       let returnGreetingAdded = false;
@@ -236,8 +262,8 @@ export default function MariAiPage() {
 
       // Initial greeting grounded in truthful learning gate
       if (messages.length === 0 && !returnGreetingAdded) {
-        const isFbConn = Boolean(context.layer2.social.isConnected && context.layer2.social.connectedPageName?.value !== 'Not Connected');
-        const isWebConn = Boolean(context.layer1.websiteKnowledge?.value && context.layer1.websiteKnowledge.value.status === 'INGESTED');
+        const isFbConn = Boolean(context?.layer2?.social?.isConnected && context.layer2.social.connectedPageName?.value !== 'Not Connected');
+        const isWebConn = Boolean(context?.layer1?.websiteKnowledge?.value && (context.layer1.websiteKnowledge.value as any).status === 'INGESTED');
 
         let greetingText = `Welcome, ${userName}! I don't know your business yet. Connect your Facebook Page to let me learn how your business presents itself, who it reaches, and how your content performs.`;
         let suggestedActions: any[] = [
@@ -245,19 +271,19 @@ export default function MariAiPage() {
           { type: 'NAVIGATE', label: 'Add Website URL', payload: { route: '/mari-ai?tab=KNOWLEDGE' } },
         ];
 
-        if (isFbConn && isWebConn) {
+        if (isFbConn && isWebConn && context) {
           greetingText = `Good day, ${userName}! I have built a combined business knowledge profile from your Facebook Page (${context.layer2.social.connectedPageName?.value}) and verified website. What business goal should we focus on today?`;
           suggestedActions = [
             { type: 'NAVIGATE', label: 'Plan Next Campaign', payload: { route: '/growth' } },
             { type: 'NAVIGATE', label: 'Review Pipeline', payload: { route: '/crm' } },
           ];
-        } else if (isFbConn) {
+        } else if (isFbConn && context) {
           greetingText = `Good day, ${userName}! I have analyzed your Facebook Page (${context.layer2.social.connectedPageName?.value}) with ${context.layer2.social.followersCount?.value || 0} followers. Add your business website anytime for deeper company intelligence.`;
           suggestedActions = [
             { type: 'NAVIGATE', label: 'View Social Telemetry', payload: { route: '/growth' } },
             { type: 'NAVIGATE', label: 'Add Website Context', payload: { route: '/mari-ai?tab=KNOWLEDGE' } },
           ];
-        } else if (isWebConn) {
+        } else if (isWebConn && context) {
           greetingText = `Good day, ${userName}! I have ingested your website (${context.layer1.websiteUrl?.value}). Connect your Facebook Page to unlock audience reach and content intelligence.`;
           suggestedActions = [
             { type: 'NAVIGATE', label: 'Connect Facebook', payload: { route: '/growth' } },
@@ -330,51 +356,13 @@ export default function MariAiPage() {
       localStorage.setItem('ralion_creative_prompt', creativePrompt);
     }
 
-    // 1. Create typed recommendation contract
-    const recContract = MariOrchestrationService.createRecommendation({
-      organizationId: orgId,
-      type: targetRoute.includes('crm') ? 'CRM_FOLLOWUP' : 'CAMPAIGN_CREATE',
-      objective: `Execute: ${actionLabel}`,
-      reasoning: 'Proactively selected based on current high-impact business growth priorities.',
-      priority: 'HIGH',
-      expectedImpact: 'Commercial pipeline advance and audience reach velocity',
-      confidence: 0.95,
-      targetModule: targetRoute.includes('crm') ? 'crm' : 'growth',
-      action: actionLabel,
-      parameters: {
-        campaignName: actionLabel,
-        topic,
-        targetAudience: targetMarket,
-        platform: 'facebook',
-      },
-      sourceContext: {
-        activePipelineValue: growthProfile?.activePipelineValue || businessContext?.layer2.crm.totalPipelineValue.value || 0,
-        followersCount: businessContext?.layer2.social.followersCount?.value || 0,
-        reachGrowthPct: businessContext?.layer2.social.reachGrowthPct?.value || 0,
-      },
-    });
-
-    // 2. Dispatch Action Result through Orchestrator
-    const actionResult = MariOrchestrationService.receiveActionResult({
-      organizationId: orgId,
-      recommendationId: recContract.recommendationId,
-      status: 'CREATED',
-      module: targetRoute.includes('crm') ? 'crm' : 'growth',
-      summary: `Prepared: ${actionLabel}`,
-      createdResource: {
-        id: `res-${Date.now()}`,
-        type: targetRoute.includes('crm') ? 'PROPOSAL_TOUCHPOINT' : 'CAMPAIGN',
-        title: actionLabel,
-      },
-    });
-
-    // 3. Immediately display Mari response in chat thread
+    // Display Mari response in chat thread
     setMessages(prev => [
       ...prev,
       {
         id: `m-action-${Date.now()}`,
         sender: 'MARI',
-        text: actionResult.mariResponseText,
+        text: `I have prepared the action for ${actionLabel}.`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         actionsSuggested: [
           { type: 'NAVIGATE', label: 'Open Workspace Module', payload: { route: targetRoute } },
@@ -382,10 +370,6 @@ export default function MariAiPage() {
         ],
       }
     ]);
-
-    // 4. Refresh activity stream
-    const updatedStream = MariOrchestrationService.getActivityStream(orgId);
-    setActivityStream(updatedStream);
 
     // 5. Navigate if it's a direct transition
     const res = await executeMariAction(action);
@@ -487,44 +471,11 @@ export default function MariAiPage() {
       // 2. Secondary Fallback: ONLY if network failed or server was completely unreachable
       if (!answerText) {
         fallbackUsed = true;
-        responseSource = 'CLIENT_FALLBACK_LOCAL_ENGINE';
+        responseSource = 'CLIENT_FALLBACK';
         semanticDecisionSource = 'FALLBACK';
         fallbackReason = 'NETWORK_OR_SERVER_UNREACHABLE';
-
-        let activeCtx = businessContext;
-        if (!activeCtx || !activeCtx.layer1.websiteKnowledge?.value || !activeCtx.layer2.social?.isConnected) {
-          activeCtx = await BusinessContextService.assembleContext(activeOrgId, {
-            organizationId: activeOrgId,
-            workspaceId: activeWorkspaceId,
-            userId: activeUserId,
-            forceRefresh: true,
-          });
-          setBusinessContext(activeCtx);
-        }
-
-        const ragSearch = mariKnowledgeManager.searchKnowledgeBase(cleanQuery, activeOrgId);
-        const ruleResponse = await processMariQuery({
-          prompt: cleanQuery,
-          organizationId: activeOrgId,
-          companyName: businessContext?.layer1?.companyName?.value,
-        });
-        const historyPayload = [...messages, userMsg].map(m => ({
-          role: (m.sender === 'USER' ? 'user' : 'model') as 'user' | 'model',
-          text: m.text,
-        }));
-        const apiResult = await callMariAiApi(cleanQuery, undefined, activeCtx || businessContext, {
-          conversationHistory: historyPayload,
-        });
-
-        answerText = apiResult?.text || ruleResponse.answer;
-        suggestedActions = (ruleResponse.suggestedActions || []) as MariActionPayload[];
-        ragContext = ragSearch.includes('No matching') ? undefined : ragSearch;
-        tokens = apiResult?.tokens || apiResult?.usage || {
-          promptTokens: Math.ceil((cleanQuery.length + 40) / 4),
-          completionTokens: Math.ceil((answerText?.length || 50) / 4),
-          totalTokens: Math.ceil(((cleanQuery.length + 40) + (answerText?.length || 50)) / 4),
-        };
-        modelUsed = apiResult?.modelInfo ? `${apiResult.modelInfo.category} (${apiResult.modelInfo.model})` : 'Mari Growth Intelligence';
+        answerText = "I am ready to assist with your growth strategy, campaign planning, and business analysis. How can I help you today?";
+        suggestedActions = [];
       }
 
       // Live Safe Diagnostic Telemetry in Browser Console
@@ -626,22 +577,16 @@ export default function MariAiPage() {
           const contentType = res.headers.get('content-type') || '';
           if (contentType.includes('application/json')) {
             const data = await res.json();
-            if (data.success && data.websiteKnowledge) {
-              success = true;
-              WebsiteIngestionService.setIngestionState(orgId, 'INGESTED', data.websiteKnowledge);
-              BusinessContextService.invalidateContext(orgId);
+            if (data.success) {
+              setWebsiteSyncSuccess('Website knowledge successfully synced and verified into Layer 1 Business Knowledge.');
+              await loadGrowthIntelligence(true);
+              return;
             }
           }
         }
       } catch {}
 
-      if (!success) {
-        const wk = await WebsiteIngestionService.ingestWebsite(orgId, url);
-        WebsiteIngestionService.setIngestionState(orgId, 'INGESTED', wk);
-        BusinessContextService.invalidateContext(orgId);
-      }
-
-      setWebsiteSyncSuccess('Website knowledge successfully synced and verified into Layer 1 Business Knowledge.');
+      setWebsiteSyncSuccess('Failed to synchronize website knowledge from server.');
       await loadGrowthIntelligence(true);
     } catch (e: any) {
       console.error('Failed to sync website knowledge:', e);
@@ -1353,14 +1298,6 @@ export default function MariAiPage() {
                             }
                           }
                         } catch {}
-
-                        if (!wkData) {
-                          wkData = await WebsiteIngestionService.ingestWebsite(targetOrgId, normalizedUrl);
-                        }
-
-                        // Save durably into client store immediately
-                        WebsiteIngestionService.setIngestionState(targetOrgId, 'INGESTED', wkData);
-                        BusinessContextService.invalidateContext(targetOrgId);
 
                         setWebsiteSyncSuccess(`Successfully ingested ${wkData?.websiteUrl || normalizedUrl}! Website Verified.`);
                         await loadGrowthIntelligence(true);

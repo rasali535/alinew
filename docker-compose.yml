@@ -1,11 +1,9 @@
-
-
 # =====================================================================
 # Rasali Labs — Docker Compose
-# Docker Hub: hub.docker.com/u/rasali
-# Local dev:  docker compose up -d --build
-# Push:       docker compose push
-# VPS deploy: docker compose pull && docker compose up -d
+# NOTE: This file is strictly for local multi-container development and testing.
+# It is NOT the Hostinger deployment mechanism; Hostinger uses managed
+# Node.js hosting configured via hPanel.
+# Local dev: docker compose up -d --build
 # =====================================================================
 
 x-docker-hub-user: &docker-hub-user rasali

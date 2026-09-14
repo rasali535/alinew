@@ -6,6 +6,7 @@
  * Uses SUPABASE_SERVICE_ROLE_KEY strictly server-side.
  */
 
+import 'server-only';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 import {
@@ -27,7 +28,7 @@ export class SupabaseStorageProvider implements AssetStorageProvider {
     if (this.client) return this.client;
 
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co';
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!key) {
       throw new Error(

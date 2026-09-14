@@ -4,8 +4,9 @@
  * Unified inbox stream for WhatsApp, Instagram, Facebook Messenger, LinkedIn, and X DMs.
  */
 
+import 'server-only';
 import { createClient } from '@supabase/supabase-js';
-import { SocialPlatformType, SocialProviderRegistry, ZernioSocialService } from '@ralion/integrations';
+import { SocialPlatformType, SocialProviderRegistry, ZernioSocialService } from '@ralion/integrations/server';
 import { SocialTokenManager } from './socialTokenManager.service';
 
 function getServiceSupabase() {

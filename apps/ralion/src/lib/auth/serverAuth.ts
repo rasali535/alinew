@@ -7,6 +7,7 @@
  * they are strictly validated against server-side ownership and membership.
  */
 
+import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, User } from '@supabase/supabase-js';
 import { corsJsonResponse } from '../cors';
@@ -18,8 +19,8 @@ function requireSupabaseUrl(): string {
 }
 
 export function getServiceSupabase() {
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!serviceKey) throw new Error('[ServerAuth] SUPABASE_SERVICE_ROLE_KEY environment variable is required.');
+  const serviceKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey) throw new Error('[ServerAuth] SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY environment variable is required.');
   return createClient(requireSupabaseUrl(), serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
   });

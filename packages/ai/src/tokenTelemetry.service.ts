@@ -8,6 +8,8 @@
  * 3. Authoritative cumulative usage metering per workspace/tenant.
  */
 
+import 'server-only';
+
 export interface TokenUsageRecord {
   id: string;
   organizationId: string;
@@ -77,10 +79,11 @@ export class MariTokenTelemetryService {
     this.records.set(organizationId, list);
     this.recordedRequestIds.add(requestId);
 
-    // Durable persistence to security audit log (non-blocking)
-    if (typeof process !== 'undefined' && process.env) {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+    // Durable persistence to security audit log (server-side only, non-blocking)
+    if (typeof window === 'undefined' && typeof process !== 'undefined' && process.env) {
+      const env = process.env;
+      const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL || env.SUPABASE_URL;
+      const serviceKey = env['SUPABASE_SECRET_KEY'] || env['SUPABASE_SERVICE_ROLE_KEY'] || env['SUPABASE_SERVICE_KEY'];
 
       if (supabaseUrl && serviceKey) {
         import('@supabase/supabase-js').then(({ createClient }) => {
@@ -148,11 +151,10 @@ export class MariTokenTelemetryService {
   static async getAuthoritativeUsageCount(organizationId: string): Promise<number> {
     const memCount = (this.records.get(organizationId) || []).length;
 
-    if (typeof process !== 'undefined' && process.env) {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
 
-      if (supabaseUrl && serviceKey) {
+    if (supabaseUrl && serviceKey) {
         try {
           const { createClient } = await import('@supabase/supabase-js');
           const client = createClient(supabaseUrl, serviceKey, {
@@ -170,7 +172,6 @@ export class MariTokenTelemetryService {
           }
         } catch {}
       }
-    }
 
     return memCount;
   }

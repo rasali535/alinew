@@ -1,7 +1,8 @@
 import { NextRequest } from 'next/server';
-import { ZernioSocialService, SocialPlatformType } from '@ralion/integrations';
+import { ZernioSocialService, SocialPlatformType } from '@ralion/integrations/server';
 import { SocialProviderRouter } from '@/lib/services/social/socialProviderRouter.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
+import { requireRalionContext } from '@/lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,18 @@ export async function OPTIONS(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
+    const authResult = await requireRalionContext(request);
+    if (authResult.response || !authResult.context) {
+      return (
+        authResult.response ||
+        corsJsonResponse(
+          { success: false, error: 'Authentication required to inspect network status.' },
+          { status: 401 },
+          request
+        )
+      );
+    }
+
     const health = await ZernioSocialService.checkApiHealth();
 
     let connectionState: ResilientNetworkConnectionState = 'NETWORK_NOT_CONFIGURED';

@@ -4,9 +4,9 @@ import {
   TenantCreditsService,
   CreativeAssetService,
   BusinessKnowledgeProfileService,
-} from '@ralion/ai';
+} from '@ralion/ai/server';
 import { BillingDatabaseService } from '@ralion/database';
-import { PlatformAdminService } from '@ralion/auth';
+import { PlatformAdminService } from '@ralion/auth/server';
 import { createClient } from '@supabase/supabase-js';
 import { getSocialConnectionCapabilities } from '@ralion/integrations';
 

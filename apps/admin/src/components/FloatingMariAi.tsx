@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import { Sparkles, X, Send, Bot, User, ChevronUp } from 'lucide-react';
-import { processMariQuery } from '@ralion/ai';
 
 export const FloatingMariAi: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -25,11 +24,20 @@ export const FloatingMariAi: React.FC = () => {
     setInput('');
 
     try {
-      const res = await processMariQuery({
-        prompt: text,
-        organizationId: 'admin',
+      const res = await fetch('/api/mari/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: text,
+          organizationId: 'admin',
+        }),
       });
-      setMessages(prev => [...prev, { sender: 'MARI', text: res.answer }]);
+      if (res.ok) {
+        const data = await res.json();
+        setMessages(prev => [...prev, { sender: 'MARI', text: data.answer || 'I am here to help.' }]);
+      } else {
+        setMessages(prev => [...prev, { sender: 'MARI', text: 'I am ready to assist your business operations. How can I help?' }]);
+      }
     } catch {
       setMessages(prev => [...prev, { sender: 'MARI', text: 'I am ready to assist your business operations. How can I help?' }]);
     }

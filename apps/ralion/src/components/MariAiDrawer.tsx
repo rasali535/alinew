@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import { X, Send, Sparkles, Bot, FileText, Zap, CornerDownLeft, ArrowRight } from 'lucide-react';
-import { processMariQuery, generateMarketingCampaign } from '@ralion/ai';
 import { Button, Badge } from '@ralion/ui';
 import { MariMarkdownMessage } from './MariMarkdownMessage';
 import { useOrganization } from '@ralion/auth';

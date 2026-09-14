@@ -5,8 +5,9 @@
  * Providers: LinkedIn, Facebook/Instagram, X (Twitter), TikTok, YouTube/Google
  */
 
+import 'server-only';
 import { createClient } from '@supabase/supabase-js';
-import { encryptToken, decryptToken } from '@ralion/integrations';
+import { encryptToken, decryptToken } from '@ralion/integrations/server';
 
 // Service-role Supabase client (server-side only)
 function getServiceSupabase() {

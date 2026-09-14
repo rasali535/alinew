@@ -26,6 +26,13 @@ export class SocialProviderRegistry {
   private static zernioProviderInstance = new ZernioProvider();
 
   /**
+   * Register or override a provider adapter instance (for testing or custom providers)
+   */
+  static registerProvider(platform: SocialPlatformType, provider: SocialProvider): void {
+    this.nativeProviders.set(platform, provider);
+  }
+
+  /**
    * Retrieve the provider adapter instance for a given platform and infrastructure mode
    */
   static getProvider(

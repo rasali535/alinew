@@ -4,7 +4,7 @@ import {
   generateCodeVerifier, generateCodeChallenge,
   SUPPORTED_SOCIAL_PROVIDERS
 } from '@/lib/services/social.service';
-import { generateOAuthState, ZernioSocialService } from '@ralion/integrations';
+import { generateOAuthState, ZernioSocialService } from '@ralion/integrations/server';
 import { SocialProviderRouter } from '@/lib/services/social/socialProviderRouter.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 import { requireRalionContext } from '@/lib/auth/serverAuth';

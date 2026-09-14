@@ -11,8 +11,9 @@
  * - Structured audit logging for every lifecycle event
  */
 
+import 'server-only';
 import { createClient } from '@supabase/supabase-js';
-import { encryptToken, decryptToken } from '@ralion/integrations';
+import { encryptToken, decryptToken } from '@ralion/integrations/server';
 import { AuditLoggerService } from './auditLogger.service';
 
 function getServiceSupabase() {

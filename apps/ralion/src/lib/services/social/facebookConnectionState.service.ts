@@ -15,8 +15,9 @@
  * - Authoritative disconnect enforcement (no Zernio resurrection)
  */
 
+import 'server-only';
 import { createClient } from '@supabase/supabase-js';
-import { decryptToken } from '@ralion/integrations';
+import { decryptToken } from '@ralion/integrations/server';
 
 function getServiceSupabase() {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;

@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import { X, Send, Sparkles, Bot, FileText, Zap, CornerDownLeft } from 'lucide-react';
-import { processMariQuery, generateMarketingCampaign } from '@ralion/ai';
 import { Button, Badge } from '@ralion/ui';
 
 export interface MariAiDrawerProps {
@@ -36,18 +35,34 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
     setIsProcessing(true);
 
     try {
-      const response = await processMariQuery({
-        prompt: userText,
-        organizationId: 'admin',
+      const res = await fetch('/api/mari/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: userText,
+          organizationId: 'admin',
+        }),
       });
-      setMessages(prev => [
-        ...prev,
-        {
-          sender: 'MARI',
-          text: response.answer,
-          actions: response.suggestedActions
-        }
-      ]);
+
+      if (res.ok) {
+        const response = await res.json();
+        setMessages(prev => [
+          ...prev,
+          {
+            sender: 'MARI',
+            text: response.answer,
+            actions: response.actions || response.suggestedActions
+          }
+        ]);
+      } else {
+        setMessages(prev => [
+          ...prev,
+          {
+            sender: 'MARI',
+            text: 'I encountered an issue processing your query. Please try again.',
+          }
+        ]);
+      }
     } catch (err) {
       setMessages(prev => [
         ...prev,

@@ -4,7 +4,7 @@
  * Pre-publishing validation of character limits, video lengths, media sizes, and platform capabilities.
  */
 
-import { SocialPlatformType, SocialProviderRegistry } from '@ralion/integrations';
+import { SocialPlatformType, SocialProviderRegistry } from '@ralion/integrations/server';
 
 export interface ValidationIssue {
   platform: SocialPlatformType;

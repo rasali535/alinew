@@ -22,11 +22,19 @@
     "paths": {
       "@/*": ["src/*"],
       "@ralion/ui": ["../../packages/ui/src"],
+      "@ralion/ui/*": ["../../packages/ui/src/*"],
       "@ralion/core": ["../../packages/core/src"],
+      "@ralion/core/*": ["../../packages/core/src/*"],
       "@ralion/auth": ["../../packages/auth/src"],
+      "@ralion/auth/*": ["../../packages/auth/src/*"],
       "@ralion/database": ["../../packages/database/src"],
+      "@ralion/database/*": ["../../packages/database/src/*"],
       "@ralion/ai": ["../../packages/ai/src"],
-      "@ralion/modules": ["../../packages/modules/src"]
+      "@ralion/ai/*": ["../../packages/ai/src/*"],
+      "@ralion/integrations": ["../../packages/integrations/src"],
+      "@ralion/integrations/*": ["../../packages/integrations/src/*"],
+      "@ralion/modules": ["../../packages/modules/src"],
+      "@ralion/modules/*": ["../../packages/modules/src/*"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../lib/cors';
 import { BillingDatabaseService } from '@ralion/database';
-import { TenantCreditsService } from '@ralion/ai';
+import { TenantCreditsService } from '@ralion/ai/server';
 
 export const dynamic = 'force-dynamic';
 

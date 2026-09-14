@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../../lib/cors';
-import { PayPalService } from '@ralion/integrations';
+import { PayPalService } from '@ralion/integrations/server';
 
 export const dynamic = 'force-dynamic';
 

@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, Button, Badge } from '@ralion/ui';
 import { Settings, Building2, Shield, Users, MapPin, Key, Laptop, Check, RefreshCw, HardDrive, BrainCircuit, Globe, BookOpen, CheckCircle2, ShieldCheck, Database, Activity, Sparkles } from 'lucide-react';
 import { REGISTERED_MODULES } from '@ralion/modules';
-import { WebsiteIngestionService } from '@ralion/ai';
 import { getRalionApiUrl } from '@/lib/api-config';
 import { useOrganization } from '@ralion/auth';
 import Link from 'next/link';
@@ -39,13 +38,12 @@ export default function SettingsPage() {
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.websiteKnowledge) {
-          WebsiteIngestionService.setIngestionState(activeOrgId, data.status || 'INGESTED', data.websiteKnowledge);
           setWkKnowledge(data.websiteKnowledge);
           return;
         }
       }
     } catch {}
-    setWkKnowledge(WebsiteIngestionService.getWebsiteKnowledge(activeOrgId));
+    setWkKnowledge(null);
   };
 
   useEffect(() => {
@@ -67,7 +65,6 @@ export default function SettingsPage() {
         setWebsiteSyncSuccess('Please provide a website URL to ingest.');
         return;
       }
-      let success = false;
 
       try {
         const apiUrl = getRalionApiUrl('/api/mari/knowledge/website-sync');
@@ -84,23 +81,18 @@ export default function SettingsPage() {
           if (contentType.includes('application/json')) {
             const data = await res.json();
             if (data.success && data.websiteKnowledge) {
-              success = true;
-              WebsiteIngestionService.setIngestionState(orgId, 'INGESTED', data.websiteKnowledge);
               setWkKnowledge(data.websiteKnowledge);
+              setWebsiteSyncSuccess('Website knowledge successfully re-indexed and verified into Layer 1 Business Knowledge.');
+              return;
             }
           }
         }
       } catch {}
 
-      if (!success) {
-        const wk = await WebsiteIngestionService.ingestWebsite(orgId, url);
-        WebsiteIngestionService.setIngestionState(orgId, 'INGESTED', wk);
-        setWkKnowledge(wk);
-      }
-
-      setWebsiteSyncSuccess('Website knowledge successfully re-indexed and verified into Layer 1 Business Knowledge.');
+      setWebsiteSyncSuccess('Failed to synchronize website knowledge from server.');
     } catch (e) {
       console.error(e);
+      setWebsiteSyncSuccess('An error occurred during synchronization.');
     } finally {
       setIsSyncingWebsite(false);
     }

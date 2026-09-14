@@ -4,8 +4,9 @@
  * Secure server-side OAuth token lifecycle management using AES-256-GCM
  */
 
+import 'server-only';
 import { createClient } from '@supabase/supabase-js';
-import { encryptToken, decryptToken, SocialPlatformType, SocialProviderRegistry } from '@ralion/integrations';
+import { encryptToken, decryptToken, SocialPlatformType, SocialProviderRegistry } from '@ralion/integrations/server';
 import { AuditLoggerService } from '../auditLogger.service';
 
 function getServiceSupabase() {

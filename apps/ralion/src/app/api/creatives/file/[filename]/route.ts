@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
-import { CreativeAssetService, getProductionStorageProvider } from '@ralion/ai';
+import { CreativeAssetService, getProductionStorageProvider } from '@ralion/ai/server';
 import { requireRalionContext } from '../../../../../lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';

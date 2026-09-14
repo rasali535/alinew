@@ -7,7 +7,7 @@ import {
   classifyCapabilityMode,
   MARI_BUILD_VERSION,
   setMariFacebookPageService,
-} from '@ralion/ai';
+} from '@ralion/ai/server';
 import { getCurrentRalionContext } from '../../../../lib/auth/serverAuth';
 import { FacebookPageManagementService } from '../../../../lib/services/social/facebookPageManagement.service';
 

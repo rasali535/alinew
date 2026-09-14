@@ -13,8 +13,9 @@
  * - Invalidation of all downstream caches (State Machine, BusinessContext, TokenManager)
  */
 
+import 'server-only';
 import { createClient } from '@supabase/supabase-js';
-import { ZernioSocialService } from '@ralion/integrations';
+import { ZernioSocialService } from '@ralion/integrations/server';
 import { FacebookConnectionStateService } from './facebookConnectionState.service';
 
 function getServiceSupabase() {
@@ -172,7 +173,7 @@ export class SocialDisconnectService {
     if (userId) FacebookConnectionStateService.invalidateCache(userId);
 
     try {
-      const { BusinessContextService } = require('@ralion/ai');
+      const { BusinessContextService } = require('@ralion/ai/server');
       BusinessContextService.invalidateContext(tenantId);
       BusinessContextService.invalidateContext(workspaceId);
     } catch {}

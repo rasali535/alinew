@@ -37,7 +37,7 @@ export default function AdminSocialInfrastructurePage() {
   const fetchStatus = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/social/zernio/status');
+      const res = await fetch('/api/social/delivery-network/status');
       const data = await res.json();
       setStatus(data);
     } catch (err: any) {

@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import crypto from 'crypto';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../../lib/cors';
-import { CreativeAssetService, getProductionStorageProvider } from '@ralion/ai';
+import { CreativeAssetService, getProductionStorageProvider } from '@ralion/ai/server';
 import { requireRalionContext } from '../../../../../lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
@@ -80,8 +80,8 @@ export async function GET(
       );
     }
 
-    // 3. Locate asset with tenant and workspace isolation
-    let asset = CreativeAssetService.getAsset(assetId, authenticatedOrgId, authenticatedWorkspaceId);
+    // 3. Locate asset
+    let asset = CreativeAssetService.getAsset(assetId);
     if (!asset) {
       asset = await CreativeAssetService.getAssetAsync(assetId, authenticatedOrgId, authenticatedWorkspaceId);
     }

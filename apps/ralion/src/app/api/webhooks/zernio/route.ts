@@ -1,6 +1,7 @@
+import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { ZernioSocialService } from '@ralion/integrations';
+import { ZernioSocialService } from '@ralion/integrations/server';
 import { AuditLoggerService } from '@/lib/services/auditLogger.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 

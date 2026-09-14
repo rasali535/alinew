@@ -27,7 +27,8 @@
     "react-dom": "^19.0.0",
     "recharts": "^2.12.7",
     "tailwind-merge": "^2.3.0",
-    "zustand": "^4.5.2"
+    "zustand": "^4.5.2",
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@types/node": "^20.14.2",

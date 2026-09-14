@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyPlatformAdminRequest } from '../../../../lib/auth/adminAuth';
-import { PlatformAdminService } from '@ralion/auth';
+import { PlatformAdminService } from '@ralion/auth/server';
 
 export async function GET(request: NextRequest) {
   const auth = await verifyPlatformAdminRequest(request);

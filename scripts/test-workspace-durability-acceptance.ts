@@ -1,21 +1,71 @@
-import dotenv from 'dotenv';
-dotenv.config();
+// =====================================================================
+// Ralion OS — Workspace Durability Acceptance Test
+// Enforces:
+// 1. Mandatory test guard preventing execution against production storage
+// 2. MockIsolatedStorageProvider injection via setStorageProvider
+// 3. Exact workspace-level isolation & durability across server restarts
+// 4. Zero mutation of live production storage
+// =====================================================================
 
+const isProdUrl = (url?: string) => Boolean(url && (url.includes('yidsfihagwttlmhfynmf') || url.includes('supabase.co')));
+const testBucket = process.env.TEST_STORAGE_BUCKET || 'isolated-test-bucket';
+
+if (process.env.TEST_ALLOW_STORAGE_MUTATIONS !== 'true') {
+  console.log('[Test Guard] Running in SAFE ISOLATED MOCK MODE (zero live storage mutation).');
+} else {
+  if (!process.env.TEST_SUPABASE_URL || isProdUrl(process.env.TEST_SUPABASE_URL)) {
+    console.error('FATAL TEST GUARD: TEST_SUPABASE_URL must be an isolated non-production instance.');
+    process.exit(1);
+  }
+  if (!process.env.TEST_STORAGE_BUCKET || testBucket === 'creatives') {
+    console.error('FATAL TEST GUARD: TEST_STORAGE_BUCKET must not equal "creatives".');
+    process.exit(1);
+  }
+}
+
+import './preload-server-only.cjs';
+import { setStorageProvider } from '../packages/ai/src/storage/index';
+import { MockIsolatedStorageProvider } from './mock-isolated-storage';
 import { CreativeAssetService } from '../packages/ai/src/creativeAsset.service';
 
-function createFakeJpegBuffer(size = 2048): Buffer {
+// Inject mock storage provider
+const mockStorage = new MockIsolatedStorageProvider();
+setStorageProvider(mockStorage);
+
+function createValidJpegBuffer(): Buffer {
+  const commentLength = 1024;
+  const commentHeader = Buffer.from([0xff, 0xfe, (commentLength >> 8) & 0xff, commentLength & 0xff]);
+  const commentData = Buffer.alloc(commentLength - 2, 0x20);
+  const baseJpeg = Buffer.from([
+    0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x01, 0x00, 0x48,
+    0x00, 0x48, 0x00, 0x00, 0xff, 0xdb, 0x00, 0x43, 0x00, 0x08, 0x06, 0x06, 0x07, 0x06, 0x05, 0x08,
+    0x07, 0x07, 0x07, 0x09, 0x09, 0x08, 0x0a, 0x0c, 0x14, 0x0d, 0x0c, 0x0b, 0x0b, 0x0c, 0x19, 0x12,
+    0x13, 0x0f, 0x14, 0x1d, 0x1a, 0x1f, 0x1e, 0x1d, 0x1a, 0x1c, 0x1c, 0x20, 0x24, 0x2e, 0x27, 0x20,
+    0x22, 0x2c, 0x23, 0x1c, 0x1c, 0x28, 0x37, 0x29, 0x2c, 0x30, 0x31, 0x34, 0x34, 0x34, 0x1f, 0x27,
+    0x39, 0x3d, 0x38, 0x32, 0x3c, 0x2e, 0x33, 0x34, 0x32, 0xff, 0xc0, 0x00, 0x0b, 0x08, 0x00, 0x01,
+    0x00, 0x01, 0x01, 0x01, 0x11, 0x00, 0xff, 0xc4, 0x00, 0x1f, 0x00, 0x00, 0x01, 0x05, 0x01, 0x01,
+    0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04,
+    0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0xff, 0xda, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3f,
+    0x00, 0xbf, 0x80, 0xff, 0xd9,
+  ]);
+  const part1 = baseJpeg.subarray(0, 20);
+  const part2 = baseJpeg.subarray(20);
+  return Buffer.concat([part1, commentHeader, commentData, part2]);
+}
+
+function createValidMp4Buffer(size = 2048): Buffer {
   const buf = Buffer.alloc(size);
-  buf[0] = 0xff;
-  buf[1] = 0xd8;
-  buf[2] = 0xff;
-  buf[3] = 0xe0;
-  buf[4] = 0x00;
-  buf[5] = 0x10;
-  buf.write('JFIF', 6, 'ascii');
+  // MP4 box header: size (32 bytes), type 'ftyp', major brand 'isom'
+  buf.writeUInt32BE(32, 0);
+  buf.write('ftyp', 4, 'ascii');
+  buf.write('isom', 8, 'ascii');
+  buf.writeUInt32BE(512, 12);
+  buf.write('isom', 16, 'ascii');
+  buf.write('mp42', 20, 'ascii');
   return buf;
 }
 
-function createFakePngBuffer(size = 2048): Buffer {
+function createValidPngBuffer(size = 2048): Buffer {
   const buf = Buffer.alloc(size);
   buf[0] = 0x89;
   buf[1] = 0x50;
@@ -46,7 +96,7 @@ async function run() {
     prompt: 'Spring engineering video',
     title: 'Spring engineering video',
     mimeType: 'video/mp4',
-    buffer: createFakeJpegBuffer(2048), // valid binary
+    buffer: createValidMp4Buffer(2048),
     metadata: { duration: 15 },
   });
 
@@ -58,7 +108,7 @@ async function run() {
     prompt: 'Engineering banner',
     title: 'Engineering banner',
     mimeType: 'image/png',
-    buffer: createFakePngBuffer(2048),
+    buffer: createValidPngBuffer(2048),
   });
 
   // 2. Create raw asset under ws1
@@ -67,7 +117,7 @@ async function run() {
     organizationId: org1,
     workspaceId: ws1,
     mimeType: 'image/jpeg',
-    buffer: createFakeJpegBuffer(2048),
+    buffer: createValidJpegBuffer(),
   });
 
   const rawPath = rawResult.rawStoragePath;
@@ -88,7 +138,7 @@ async function run() {
     prompt: 'Marketing flyer',
     title: 'Marketing flyer',
     mimeType: 'image/png',
-    buffer: createFakePngBuffer(2048),
+    buffer: createValidPngBuffer(2048),
   });
 
   // 4. Wipe In-Memory Store

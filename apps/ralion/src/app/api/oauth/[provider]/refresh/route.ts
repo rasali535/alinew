@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { getConnectorForProvider, IntegrationProvider } from '@ralion/integrations';
+import { getConnectorForProvider, IntegrationProvider } from '@ralion/integrations/server';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 
 export const dynamic = 'force-dynamic';

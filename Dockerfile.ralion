@@ -1,5 +1,8 @@
 # =====================================================================
 # Dockerfile.ralion — Ralion Next.js Dashboard (Server / Standalone Mode)
+# NOTE: This Dockerfile is used for Render deployments (see render.yaml)
+# and local development/testing. It is NOT the Hostinger deployment mechanism;
+# Hostinger uses managed Node.js hosting configured via hPanel.
 # Multi-stage build: deps → build → minimal production runner
 # =====================================================================
 

@@ -27,8 +27,11 @@ next-env.d.ts
 
 # Production builds
 /build
+/build/
+build/
 dist/
 dist#
+apps/website/build/
 
 # Logs and debug files
 npm-debug.log*
@@ -62,3 +65,6 @@ zip_test/
 public/uploads/
 apps/ralion/public/uploads/
 .ralion/
+scratch/
+.isolated-pgdata/
+supabase/.temp/

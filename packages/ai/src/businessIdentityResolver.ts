@@ -20,6 +20,7 @@ export interface ResolvedBusinessIdentity {
   organizationId: string;
   workspaceId?: string;
   companyName: string;
+  flagshipProduct?: string;
   isVerified: boolean;
   industry: string;
   targetMarket: string;
@@ -91,6 +92,7 @@ export class BusinessIdentityResolver {
         organizationId: 'ras-ali-labs',
         workspaceId: options?.workspaceId || '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf',
         companyName: 'Ras Ali Labs',
+        flagshipProduct: 'Ralion OS',
         isVerified: true,
         industry: profile?.industry?.value || 'Technology, Creative Production & Intelligent Software',
         targetMarket: (profile?.targetMarkets?.value && profile.targetMarkets.value.length > 0)

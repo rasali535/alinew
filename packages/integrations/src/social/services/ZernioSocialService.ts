@@ -7,6 +7,7 @@
  * Idempotent requests, rate-limit resilience with exponential backoff, and signature verification.
  */
 
+import 'server-only';
 import * as crypto from 'crypto';
 import {
   SocialPlatformType,
@@ -71,6 +72,7 @@ export class ZernioSocialService {
 
   private static getSupabaseKey(): string {
     return (
+      process.env.SUPABASE_SECRET_KEY ||
       process.env.SUPABASE_SERVICE_ROLE_KEY ||
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
       ''

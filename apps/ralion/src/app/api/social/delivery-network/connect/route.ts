@@ -1,9 +1,9 @@
 import { NextRequest } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { SocialPlatformType, ZernioSocialService } from '@ralion/integrations';
+import { SocialPlatformType, ZernioSocialService } from '@ralion/integrations/server';
 import { SocialProviderRouter } from '@/lib/services/social/socialProviderRouter.service';
 import { AuditLoggerService } from '@/lib/services/auditLogger.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
+import { requireRalionContext } from '@/lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,24 +13,43 @@ export async function OPTIONS(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { platform, workspaceId, organizationId } = body;
+    const authResult = await requireRalionContext(request);
+    if (authResult.response || !authResult.context) {
+      return (
+        authResult.response ||
+        corsJsonResponse(
+          { success: false, error: 'Authentication required to initiate social connection.' },
+          { status: 401 },
+          request
+        )
+      );
+    }
+
+    const { user, workspace, organization } = authResult.context;
+    const authenticatedUserId = user.id;
+    const authenticatedWorkspaceId = workspace.id;
+    const authenticatedOrgId = organization.id;
+
+    let body: any = {};
+    try {
+      body = await request.json();
+    } catch {
+      return corsJsonResponse({ success: false, error: 'Invalid JSON request body.' }, { status: 400 }, request);
+    }
+
+    const { platform, workspaceId: hintWorkspaceId, organizationId: hintOrgId } = body;
 
     if (!platform) {
       return corsJsonResponse({ success: false, error: 'Social platform is required.' }, { status: 400 }, request);
     }
 
-    // Verify user authentication
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-        global: { headers: { cookie: request.headers.get('cookie') || '' } },
-      }
-    );
-    const { data: { user } } = await supabase.auth.getUser();
-    const userId = user?.id || 'anonymous';
+    // Reject mismatched client tenant hints with 403 Forbidden
+    if (hintWorkspaceId && hintWorkspaceId !== authenticatedWorkspaceId) {
+      return corsJsonResponse({ success: false, error: 'Forbidden: Workspace mismatch.' }, { status: 403 }, request);
+    }
+    if (hintOrgId && hintOrgId !== authenticatedOrgId) {
+      return corsJsonResponse({ success: false, error: 'Forbidden: Organization mismatch.' }, { status: 403 }, request);
+    }
 
     if (!ZernioSocialService.isConfigured()) {
       return corsJsonResponse(
@@ -40,11 +59,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 1. Resolve or provision Profile for this tenant
+    // 1. Resolve or provision Profile for this tenant using verified server context
     const profileId = await SocialProviderRouter.getOrCreateZernioProfile({
-      workspaceId,
-      organizationId,
-      userId,
+      workspaceId: authenticatedWorkspaceId,
+      organizationId: authenticatedOrgId,
+      userId: authenticatedUserId,
     });
 
     if (!profileId) {
@@ -68,13 +87,13 @@ export async function POST(request: NextRequest) {
     await AuditLoggerService.log({
       eventType: 'SOCIAL_ACCOUNT_CONNECT_STARTED',
       eventCategory: 'META',
-      userId,
+      userId: authenticatedUserId,
       success: true,
       metadata: {
         platform,
         provider: 'resilient_network',
         profileId,
-        workspaceId,
+        workspaceId: authenticatedWorkspaceId,
       },
     });
 

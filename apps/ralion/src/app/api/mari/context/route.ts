@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../lib/cors';
-import { BusinessContextService } from '@ralion/ai';
+import { BusinessContextService } from '@ralion/ai/server';
 import { getCurrentRalionContext, authRequiredResponse } from '../../../../lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';

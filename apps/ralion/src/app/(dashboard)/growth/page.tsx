@@ -16,11 +16,11 @@ import { AuthService } from '@/lib/services/auth.service';
 import { createClient } from '@/lib/supabase/client';
 import { TierAccessGate } from '@/components/TierAccessGate';
 import { MariMarkdownMessage } from '@/components/MariMarkdownMessage';
-import { callMariAiApi, generateHfImage, generateHfVideo, MariOrchestrationService, MariRecommendationContract } from '@ralion/ai';
 import { getRalionApiUrl, fetchRalionApi, getRalionAuthHeaders } from '@/lib/api-config';
 import { useOrganization } from '@ralion/auth';
 import { AnalyticsSource, MetricState, formatAnalyticsMetric } from '@/lib/services/social/facebookAnalyticsSemantics';
 import { SecureImage, SecureVideo, resolveSecureAssetUrl } from '@/components/SecureMedia';
+import type { MariRecommendationContract } from '@ralion/ai';
 
 async function authFetch(pathOrUrl: string, init?: RequestInit, opName?: string): Promise<Response> {
   const url = pathOrUrl.startsWith('http') ? pathOrUrl : getRalionApiUrl(pathOrUrl);
@@ -372,9 +372,6 @@ function GrowthPageContent() {
   const [mariRecommendation, setMariRecommendation] = useState<MariRecommendationContract | null>(null);
 
   useEffect(() => {
-    const rec = MariOrchestrationService.getPendingRecommendation();
-    if (rec) setMariRecommendation(rec);
-
     if (typeof window !== 'undefined') {
       const savedPrompt = localStorage.getItem('ralion_creative_prompt');
       if (savedPrompt) {
@@ -389,40 +386,28 @@ function GrowthPageContent() {
   const handleMariBrainstorm = async () => {
     setIsBrainstorming(true);
     try {
-      const { callMariAiApi, BusinessContextService } = await import('@ralion/ai');
       let activeOrgId = organization?.id || user?.orgId || user?.uid || '';
-      const activeWorkspaceId = workspace?.id || '';
-      const activeUserId = user?.uid || (user as any)?.id || '';
+      const orgName = organization?.name || 'Your Business';
       if (typeof window !== 'undefined') {
         activeOrgId = activeOrgId || localStorage.getItem('ralion_org_id') || localStorage.getItem('ralion_workspace_id') || '';
       }
-      let context = null;
-      try {
-        context = await BusinessContextService.assembleContext(activeOrgId, {
-          organizationId: activeOrgId,
-          workspaceId: activeWorkspaceId,
-          userId: activeUserId,
-        });
-      } catch {}
-
-      const orgName = context?.layer1?.companyName?.value || 'Your Business';
-      const industry = context?.layer1?.industry?.value || 'Commercial Solutions';
-
-      const promptReq = `You are Mari AI, Creative Director for ${orgName} (${industry}).
-Generate 3 distinct, highly vivid visual photography/3D scene prompts for social media marketing.
-Rules:
-1. Do NOT write generic slogans or headline copy. Write vivid visual scene descriptions that an AI image model can paint (subjects, setting, lighting, objects, modern African enterprise atmosphere).
-2. The concepts must directly represent ${orgName}'s core business and value proposition.
-3. Return ONLY a valid JSON array of 3 objects with keys: "title", "prompt", "style", "format".`;
-
-      const res = await callMariAiApi(promptReq, undefined, context || undefined);
-      const text = typeof res === 'string' ? res : res?.text || '';
 
       let parsed: any[] = [];
       try {
-        const jsonMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/);
-        if (jsonMatch) {
-          parsed = JSON.parse(jsonMatch[0]);
+        const res = await authFetch('/api/mari/chat', {
+          method: 'POST',
+          body: JSON.stringify({
+            prompt: 'Generate 3 distinct, highly vivid visual photography/3D scene prompts for social media marketing. Return ONLY a valid JSON array of 3 objects with keys: "title", "prompt", "style", "format".',
+            organizationId: activeOrgId,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const text = data.answer || data.text || '';
+          const jsonMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/);
+          if (jsonMatch) {
+            parsed = JSON.parse(jsonMatch[0]);
+          }
         }
       } catch {}
 
@@ -1999,17 +1984,26 @@ Rules:
     if (!aiPrompt.trim()) return;
     setIsGenerating(true);
     try {
-      const res = await callMariAiApi(aiPrompt);
-      if (res) {
-        setAiResult(res.text);
+      const activeOrgId = organization?.id || user?.orgId || user?.uid || '';
+      const response = await authFetch('/api/mari/chat', {
+        method: 'POST',
+        body: JSON.stringify({
+          prompt: aiPrompt,
+          organizationId: activeOrgId,
+        }),
+      });
+      if (response.ok) {
+        const res = await response.json();
+        const text = res.text || res.answer || '';
+        setAiResult(text);
 
         const newItem: GeneratedContentItem = {
           id: `gen-${Date.now()}`,
           type: 'CAMPAIGN_PLAN',
           title: aiPrompt.substring(0, 35) + '...',
           prompt: aiPrompt,
-          output: res.text,
-          modelUsed: `${res.modelInfo.category} (${res.modelInfo.model})`,
+          output: text,
+          modelUsed: res.modelInfo?.model ? `${res.modelInfo.category || 'AI'} (${res.modelInfo.model})` : 'Mari AI Universal Core',
           createdAt: 'Just now'
         };
         setGeneratedGallery(prev => [newItem, ...prev]);
@@ -2074,7 +2068,7 @@ Rules:
            || availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || null)
         : null;
 
-      const publishIdempotencyKey = `pub_post_${postId}_${Date.now()}`;
+      const publishIdempotencyKey = `pub_post_${postId}`;
       const payload = {
         title: post.title,
         body: `${post.body}\n\n${post.hashtags?.join(' ') || ''}`.trim(),
@@ -2194,8 +2188,18 @@ Rules:
     let strategy = 'Campaign strategy created and attached to active queue.';
     if (newCampaign.prompt.trim()) {
       try {
-        const res = await callMariAiApi(`Develop campaign strategy for ${newCampaign.name}: ${newCampaign.prompt}`);
-        if (res) strategy = res.text;
+        const activeOrgId = organization?.id || user?.orgId || user?.uid || '';
+        const response = await authFetch('/api/mari/chat', {
+          method: 'POST',
+          body: JSON.stringify({
+            prompt: `Develop campaign strategy for ${newCampaign.name}: ${newCampaign.prompt}`,
+            organizationId: activeOrgId,
+          }),
+        });
+        if (response.ok) {
+          const res = await response.json();
+          strategy = res.text || res.answer || strategy;
+        }
       } catch (e) {
         console.error(e);
       }

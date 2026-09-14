@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { verifyOAuthState } from '@ralion/integrations';
+import { verifyOAuthState } from '@ralion/integrations/server';
 import {
   linkedinAdapter, metaAdapter, xAdapter, tiktokAdapter, youtubeAdapter,
   storeOAuthTokens,

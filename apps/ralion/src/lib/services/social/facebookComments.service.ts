@@ -4,8 +4,9 @@
  * Handles reading real post comments, syncing comment threads, and replying as the Facebook Page.
  */
 
+import 'server-only';
 import { createClient } from '@supabase/supabase-js';
-import { ZernioSocialService } from '@ralion/integrations';
+import { ZernioSocialService } from '@ralion/integrations/server';
 import { AuditLoggerService } from '../auditLogger.service';
 
 export interface FacebookComment {
