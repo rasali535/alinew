@@ -1112,7 +1112,7 @@ export class SocialPublishingService {
     const successes = Object.values(platformResults).filter((r) => r?.success).length;
     const isScheduled = Boolean(params.scheduledFor);
 
-    let overallStatus: 'PUBLISHED' | 'PARTIALLY_PUBLISHED' | 'FAILED' | 'QUEUED' = 'FAILED';
+    let overallStatus: MultiPublishResult['overallStatus'] = 'FAILED';
     if (successes === total) {
       overallStatus = isScheduled ? 'QUEUED' : 'PUBLISHED';
     } else if (successes > 0) {
