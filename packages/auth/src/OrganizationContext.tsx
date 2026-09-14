@@ -83,8 +83,14 @@ async function readCurrentSession(forceRefresh = false): Promise<{ accessToken: 
 
   if (sharedClient?.auth) {
     try {
-      if (forceRefresh && typeof sharedClient.auth.refreshSession === 'function') {
-        const refreshed = await sharedClient.auth.refreshSession();
+      if (forceRefresh) {
+        // Use global deduplicated refresh if available
+        let refreshed: any = null;
+        if (typeof (window as any).__ralion_refresh_promise__ !== 'undefined' && (window as any).__ralion_refresh_promise__) {
+          refreshed = await (window as any).__ralion_refresh_promise__;
+        } else if (typeof sharedClient.auth.refreshSession === 'function') {
+          refreshed = await sharedClient.auth.refreshSession();
+        }
         const refreshedSession = refreshed?.data?.session;
         if (refreshedSession?.access_token) {
           return { accessToken: refreshedSession.access_token, user: refreshedSession.user || null };
@@ -137,6 +143,7 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [isLoading, setIsLoading] = useState(true);
   const [isContextResolved, setIsContextResolved] = useState(false);
   const isResolvingRef = useRef(false);
+  const lastResolveTimeRef = useRef(0);
 
   const clearResolvedContext = useCallback(() => {
     setUser(null);
@@ -148,6 +155,12 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const resolveAuthoritativeContext = useCallback(async () => {
     if (typeof window === 'undefined' || isResolvingRef.current) return;
+    
+    // Prevent resolution storm: debounce calls within 200ms
+    const now = Date.now();
+    if (now - lastResolveTimeRef.current < 200) return;
+    lastResolveTimeRef.current = now;
+
     isResolvingRef.current = true;
     setIsLoading(true);
     setIsContextResolved(false);
@@ -163,8 +176,8 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       let responseCode = await readResponseCode(res);
 
       // Refresh exactly once only when the server says the authentication token
-      // itself is invalid. A missing workspace is not an authentication failure.
-      if (res.status === 401 && (responseCode === 'AUTH_TOKEN_INVALID' || responseCode === 'AUTHENTICATION_REQUIRED')) {
+      // itself is invalid. Do NOT refresh on missing tokens or other error statuses.
+      if (res.status === 401 && responseCode === 'AUTH_TOKEN_INVALID') {
         const refreshed = await readCurrentSession(true);
         if (refreshed.accessToken && refreshed.accessToken !== accessToken) {
           accessToken = refreshed.accessToken;
@@ -273,14 +286,14 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     const handleOrgUpdate = () => resolveAuthoritativeContext();
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key && (e.key === 'ralion-app-auth-token' || (e.key.startsWith('sb-') && e.key.endsWith('-auth-token')))) {
+      if (e.key && e.key === 'ralion-app-auth-token') {
         resolveAuthoritativeContext();
       }
     };
 
     const sharedClient = getSharedSupabaseClient();
     const authSubscription = sharedClient?.auth?.onAuthStateChange?.((event: string) => {
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
         resolveAuthoritativeContext();
       }
       if (event === 'SIGNED_OUT') {

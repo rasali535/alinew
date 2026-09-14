@@ -16,70 +16,11 @@ import { AuthService } from '@/lib/services/auth.service';
 import { createClient } from '@/lib/supabase/client';
 import { TierAccessGate } from '@/components/TierAccessGate';
 import { MariMarkdownMessage } from '@/components/MariMarkdownMessage';
-import { getRalionApiUrl, fetchRalionApi, getRalionAuthHeaders } from '@/lib/api-config';
-import { useOrganization } from '@ralion/auth';
-import { AnalyticsSource, MetricState, formatAnalyticsMetric } from '@/lib/services/social/facebookAnalyticsSemantics';
-import { SecureImage, SecureVideo, resolveSecureAssetUrl } from '@/components/SecureMedia';
+import { getRalionApiUrl, fetchRalionApi, getRalionAuthHeaders, authFetch } from '@/lib/api-config';
+import { AnalyticsSource, MetricState } from '@/lib/services/social/facebookAnalyticsSemantics';
 import type { MariRecommendationContract } from '@ralion/ai';
-
-async function authFetch(pathOrUrl: string, init?: RequestInit, opName?: string): Promise<Response> {
-  const url = pathOrUrl.startsWith('http') ? pathOrUrl : getRalionApiUrl(pathOrUrl);
-  const operation = opName || pathOrUrl.split('?')[0].replace(/^\/api\//, '').replace(/\//g, '_');
-  let tenantUuid = 'anonymous';
-
-  try {
-    const authHeaders = await getRalionAuthHeaders().catch(() => ({} as Record<string, string>));
-    tenantUuid = authHeaders['x-workspace-id'] || authHeaders['x-organization-id'] || authHeaders['x-user-id'] || 'default-tenant';
-    const headers = new Headers(init?.headers);
-    if (!headers.has('Authorization') && authHeaders.Authorization) {
-      headers.set('Authorization', authHeaders.Authorization);
-    }
-    if (!headers.has('x-user-id') && authHeaders['x-user-id']) {
-      headers.set('x-user-id', authHeaders['x-user-id']);
-    }
-    if (!headers.has('x-workspace-id') && authHeaders['x-workspace-id']) {
-      headers.set('x-workspace-id', authHeaders['x-workspace-id']);
-    }
-    if (!headers.has('x-organization-id') && authHeaders['x-organization-id']) {
-      headers.set('x-organization-id', authHeaders['x-organization-id']);
-    }
-    if (!headers.has('Content-Type') && init?.body && typeof init.body === 'string') {
-      headers.set('Content-Type', 'application/json');
-    }
-
-    let res = await fetch(url, {
-      ...init,
-      headers,
-      credentials: init?.credentials || 'include',
-    });
-
-    if (res.status === 401 && authHeaders.Authorization && typeof window !== 'undefined') {
-      const refreshedAuth = await getRalionAuthHeaders({ refresh: true }).catch(() => ({} as Record<string, string>));
-      if (refreshedAuth.Authorization) {
-        headers.set('Authorization', refreshedAuth.Authorization);
-        if (refreshedAuth['x-workspace-id']) headers.set('x-workspace-id', refreshedAuth['x-workspace-id']);
-        if (refreshedAuth['x-organization-id']) headers.set('x-organization-id', refreshedAuth['x-organization-id']);
-        res = await fetch(url, {
-          ...init,
-          headers,
-          credentials: init?.credentials || 'include',
-        });
-      }
-    }
-
-    console.debug(`[Ralion Growth Telemetry] Op: ${operation} | URL: ${url} | Status: ${res.status} | Tenant: ${tenantUuid}`);
-    return res;
-  } catch (rawErr: any) {
-    const errObj = rawErr instanceof Error ? rawErr : new Error(typeof rawErr === 'object' ? JSON.stringify(rawErr) : String(rawErr));
-    console.warn(`[Ralion Growth Telemetry] [ERROR] Op: ${operation} | URL: ${url} | Tenant: ${tenantUuid} | Message: ${errObj.message}`);
-    // Safe structured fallback response so consumers never encounter unhandled promise rejections or raw object throws
-    return new Response(JSON.stringify({ success: false, error: errObj.message, status: 503 }), {
-      status: 503,
-      statusText: 'Service Unavailable',
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-}
+import { SecureImage, SecureVideo, resolveSecureAssetUrl } from '@/components/SecureMedia';
+import { useOrganization } from '@ralion/auth';
 
 function resolveSafeImageUrl(src?: string, fallbackTitle: string = 'Ralion Creative'): string {
   if (!src || typeof src !== 'string') {
@@ -1925,7 +1866,7 @@ function GrowthPageContent() {
       let finalDisplayUrl = asset.publicUrl || asset.previewUrl;
       try {
         const resolvedSigned = await resolveSecureAssetUrl(asset.id || finalDisplayUrl);
-        if (resolvedSigned) finalDisplayUrl = resolvedSigned;
+        if (resolvedSigned?.signedUrl) finalDisplayUrl = resolvedSigned.signedUrl;
       } catch {}
 
       if (type === 'poster') {

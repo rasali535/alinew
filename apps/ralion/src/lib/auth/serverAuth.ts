@@ -12,15 +12,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient, User } from '@supabase/supabase-js';
 import { corsJsonResponse } from '../cors';
 
+export const CANONICAL_SUPABASE_URL = 'https://yidsfihagwttlmhfynmf.supabase.co';
+
 function requireSupabaseUrl(): string {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!url) throw new Error('[ServerAuth] SUPABASE_URL is required.');
-  return url;
+  const isProd = process.env.NODE_ENV === 'production';
+  if (isProd && (!url || url.includes('localhost') || url.includes('127.0.0.1'))) {
+    return CANONICAL_SUPABASE_URL;
+  }
+  return url || CANONICAL_SUPABASE_URL;
 }
 
 export function getServiceSupabase() {
   const serviceKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!serviceKey) throw new Error('[ServerAuth] SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY environment variable is required.');
+  if (!serviceKey) {
+    const err = new Error('[ServerAuth] SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY environment variable is required.');
+    (err as any).code = 'SUPABASE_CONFIG_ERROR';
+    throw err;
+  }
   return createClient(requireSupabaseUrl(), serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
   });
@@ -66,6 +75,7 @@ export type RalionAuthStatus =
   | 'CONTEXT_RESOLVED'
   | 'AUTHENTICATION_REQUIRED'
   | 'FORBIDDEN'
+  | 'WORKSPACE_CONTEXT_MISSING'
   | 'TENANT_DATABASE_ERROR';
 
 export interface RalionAuthResult {
@@ -73,20 +83,20 @@ export interface RalionAuthResult {
   context: RalionSessionContext | null;
   errorCode?: string;
   errorMessage?: string;
-  httpStatus: 200 | 401 | 403 | 500;
+  httpStatus: 200 | 401 | 403 | 409 | 500;
 }
 
-export function authRequiredResponse(request: NextRequest, message = 'Authentication required') {
+export function authRequiredResponse(request: NextRequest, message = 'Authentication required', errorCode = 'AUTH_TOKEN_MISSING') {
   return corsJsonResponse(
-    { success: false, error: 'AUTHENTICATION_REQUIRED', message },
+    { success: false, error: errorCode, code: errorCode, message },
     { status: 401 },
     request
   );
 }
 
-export function forbiddenResponse(request: NextRequest, message = 'You do not have access to this resource') {
+export function forbiddenResponse(request: NextRequest, message = 'You do not have access to this resource', errorCode = 'FORBIDDEN') {
   return corsJsonResponse(
-    { success: false, error: 'FORBIDDEN', message },
+    { success: false, error: errorCode, code: errorCode, message },
     { status: 403 },
     request
   );
@@ -94,7 +104,7 @@ export function forbiddenResponse(request: NextRequest, message = 'You do not ha
 
 export function notFoundResponse(request: NextRequest, message = 'Resource not found') {
   return corsJsonResponse(
-    { success: false, error: 'NOT_FOUND', message },
+    { success: false, error: 'NOT_FOUND', code: 'NOT_FOUND', message },
     { status: 404 },
     request
   );
@@ -102,7 +112,7 @@ export function notFoundResponse(request: NextRequest, message = 'Resource not f
 
 export function tenantDatabaseErrorResponse(request: NextRequest, message = 'Database error resolving tenant context', errorCode = 'TENANT_DATABASE_ERROR') {
   return corsJsonResponse(
-    { success: false, error: errorCode, message },
+    { success: false, error: errorCode, code: errorCode, message },
     { status: 500 },
     request
   );
@@ -111,7 +121,7 @@ export function tenantDatabaseErrorResponse(request: NextRequest, message = 'Dat
 export function extractAuthToken(request: NextRequest): string | null {
   const authHeader = request.headers.get('authorization') || request.headers.get('Authorization');
   if (authHeader?.startsWith('Bearer ')) return authHeader.substring(7).trim();
-  const cookieNames = ['sb-yidsfihagwttlmhfynmf-auth-token', 'sb-access-token', 'supabase-auth-token', 'sb:token'];
+  const cookieNames = ['sb-yidsfihagwttlmhfynmf-auth-token', 'ralion-app-auth-token', 'sb-access-token', 'supabase-auth-token', 'sb:token'];
   for (const name of cookieNames) {
     const cookie = request.cookies.get(name);
     if (!cookie?.value) continue;
@@ -163,7 +173,7 @@ export async function resolveRalionAuthContext(
     return {
       status: 'AUTHENTICATION_REQUIRED',
       context: null,
-      errorCode: 'MISSING_TOKEN',
+      errorCode: 'AUTH_TOKEN_MISSING',
       errorMessage: 'Authentication token is required.',
       httpStatus: 401,
     };
@@ -173,11 +183,11 @@ export async function resolveRalionAuthContext(
   try {
     const { data, error } = await supabase.auth.getUser(token);
     if (error || !data?.user) {
-      console.warn('[ServerAuth] Invalid or expired token:', { code: error?.code, message: error?.message });
+      console.warn('[ServerAuth] Invalid or expired token:', { code: error?.code });
       return {
         status: 'AUTHENTICATION_REQUIRED',
         context: null,
-        errorCode: 'INVALID_TOKEN',
+        errorCode: 'AUTH_TOKEN_INVALID',
         errorMessage: 'Authentication token is invalid or expired.',
         httpStatus: 401,
       };
@@ -188,7 +198,7 @@ export async function resolveRalionAuthContext(
     return {
       status: 'AUTHENTICATION_REQUIRED',
       context: null,
-      errorCode: 'AUTH_EXCEPTION',
+      errorCode: 'AUTH_TOKEN_INVALID',
       errorMessage: 'Failed to verify authentication token.',
       httpStatus: 401,
     };
@@ -258,11 +268,11 @@ export async function resolveRalionAuthContext(
       .maybeSingle();
 
     if (workspaceError) {
-      console.error('[ServerAuth] Database error looking up workspace:', { code: workspaceError.code, message: workspaceError.message });
+      console.error('[ServerAuth] Database error looking up workspace:', { code: workspaceError.code });
       return {
         status: 'TENANT_DATABASE_ERROR',
         context: null,
-        errorCode: workspaceError.code || 'WORKSPACE_DB_ERROR',
+        errorCode: 'TENANT_DATABASE_ERROR',
         errorMessage: 'Database error looking up requested workspace.',
         httpStatus: 500,
       };
@@ -297,17 +307,16 @@ export async function resolveRalionAuthContext(
 
       if (error || !member) {
         if (error) {
-          console.error('[ServerAuth] Database error looking up workspace membership:', { code: error.code, message: error.message });
+          console.error('[ServerAuth] Database error looking up workspace membership:', { code: error.code });
           return {
             status: 'TENANT_DATABASE_ERROR',
             context: null,
-            errorCode: error.code || 'MEMBERSHIP_DB_ERROR',
+            errorCode: 'TENANT_DATABASE_ERROR',
             errorMessage: 'Database error verifying workspace membership.',
             httpStatus: 500,
           };
         }
-        // Invariant guard: missing tenant membership must fail closed
-        if (error || !member) return {
+        return {
           status: 'FORBIDDEN',
           context: null,
           errorCode: 'WORKSPACE_ACCESS_DENIED',
@@ -330,11 +339,11 @@ export async function resolveRalionAuthContext(
       .maybeSingle();
 
     if (ownedWorkspaceError) {
-      console.error('[ServerAuth] Database error looking up owned workspaces:', { code: ownedWorkspaceError.code, message: ownedWorkspaceError.message });
+      console.error('[ServerAuth] Database error looking up owned workspaces:', { code: ownedWorkspaceError.code });
       return {
         status: 'TENANT_DATABASE_ERROR',
         context: null,
-        errorCode: ownedWorkspaceError.code || 'OWNED_WORKSPACE_DB_ERROR',
+        errorCode: 'TENANT_DATABASE_ERROR',
         errorMessage: 'Database error resolving user workspace.',
         httpStatus: 500,
       };
@@ -359,11 +368,11 @@ export async function resolveRalionAuthContext(
         .maybeSingle();
 
       if (membershipError) {
-        console.error('[ServerAuth] Database error looking up user membership:', { code: membershipError.code, message: membershipError.message });
+        console.error('[ServerAuth] Database error looking up user membership:', { code: membershipError.code });
         return {
           status: 'TENANT_DATABASE_ERROR',
           context: null,
-          errorCode: membershipError.code || 'MEMBERSHIP_DB_ERROR',
+          errorCode: 'TENANT_DATABASE_ERROR',
           errorMessage: 'Database error resolving workspace membership.',
           httpStatus: 500,
         };
@@ -383,11 +392,11 @@ export async function resolveRalionAuthContext(
 
   if (!workspaceRow) {
     return {
-      status: 'FORBIDDEN',
+      status: 'WORKSPACE_CONTEXT_MISSING',
       context: null,
-      errorCode: 'NO_ACTIVE_WORKSPACE',
+      errorCode: 'WORKSPACE_CONTEXT_MISSING',
       errorMessage: 'Authenticated user has no accessible workspaces.',
-      httpStatus: 403,
+      httpStatus: 409,
     };
   }
 
@@ -421,7 +430,7 @@ export async function resolveRalionAuthContext(
     .maybeSingle();
 
   if (orgError) {
-    console.warn('[ServerAuth] Organization lookup warning:', { code: orgError.code, message: orgError.message });
+    console.warn('[ServerAuth] Organization lookup warning:', { code: orgError.code });
   }
 
   const orgName = organizationRow?.name || workspaceRow.name || `${profile.fullName}'s Organization`;
@@ -466,7 +475,7 @@ export async function resolveRalionAuthContext(
 
 /**
  * Standard route authorization helper that automatically emits the correct
- * HTTP 401, 403, or 500 response on failure, or returns non-null context on success.
+ * HTTP 401, 403, 409, or 500 response on failure, or returns non-null context on success.
  */
 export async function requireRalionContext(
   request: NextRequest
@@ -478,7 +487,7 @@ export async function requireRalionContext(
     }
     return {
       context: null,
-      response: authRequiredResponse(request, 'Authentication required'),
+      response: authRequiredResponse(request, 'Authentication required', 'AUTH_TOKEN_MISSING'),
     };
   }
 
@@ -487,10 +496,35 @@ export async function requireRalionContext(
     return { context: result.context, response: null };
   }
 
+  if (result.status === 'AUTHENTICATION_REQUIRED') {
+    return {
+      context: null,
+      response: authRequiredResponse(request, result.errorMessage, result.errorCode),
+    };
+  }
+
   if (result.status === 'FORBIDDEN') {
     return {
       context: null,
-      response: forbiddenResponse(request, result.errorMessage),
+      response: forbiddenResponse(request, result.errorMessage, result.errorCode),
+    };
+  }
+
+  if (result.status === 'WORKSPACE_CONTEXT_MISSING') {
+    return {
+      context: null,
+      response: corsJsonResponse(
+        {
+          success: false,
+          code: 'WORKSPACE_CONTEXT_MISSING',
+          error: 'WORKSPACE_CONTEXT_MISSING',
+          authenticated: true,
+          repairable: true,
+          message: 'Your account is authenticated, but its organization workspace has not been resolved yet.',
+        },
+        { status: 409 },
+        request
+      ),
     };
   }
 
@@ -503,7 +537,7 @@ export async function requireRalionContext(
 
   return {
     context: null,
-    response: authRequiredResponse(request, result.errorMessage),
+    response: authRequiredResponse(request, result.errorMessage, result.errorCode),
   };
 }
 

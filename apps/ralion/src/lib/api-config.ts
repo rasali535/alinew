@@ -3,8 +3,11 @@
  * Ras Ali Labs (Pty) Ltd
  *
  * Ensures all dynamic API requests from the frontend are routed to the
- * canonical Ralion API endpoint and share one recoverable Supabase session.
+ * canonical Ralion API endpoint, share one recoverable Supabase session,
+ * and deduplicate in-flight token refresh cycles.
  */
+
+import { deduplicatedRefreshSession } from './supabase/client';
 
 export function getMariBuildVersion(): string {
   if (typeof process !== 'undefined' && process.env) {
@@ -59,52 +62,78 @@ export function getRalionApiUrl(path: string): string {
   return `${base}${normalizedPath}`;
 }
 
-async function getBrowserSession(forceRefresh = false) {
+let _sessionPromise: Promise<any> | null = null;
+
+async function getBrowserSession(forceRefresh = false): Promise<{ access_token: string; user?: any; refresh_token?: string } | null> {
   if (typeof window === 'undefined') return null;
-  try {
-    const { createClient } = await import('@/lib/supabase/client');
-    const supabase = createClient();
-    const { data, error } = await supabase.auth.getSession();
 
-    let session = !error ? data.session : null;
-
-    const expiresSoon = Boolean(
-      session?.expires_at && session.expires_at * 1000 <= Date.now() + 60_000
-    );
-
-    if ((forceRefresh || expiresSoon) && session?.refresh_token) {
-      const refreshed = await supabase.auth.refreshSession();
-      if (!refreshed.error && refreshed.data.session) return refreshed.data.session;
-      if (forceRefresh) session = null;
+  if (forceRefresh) {
+    try {
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const refreshed = await deduplicatedRefreshSession(supabase);
+      if (!refreshed.error && refreshed.data.session) {
+        return refreshed.data.session;
+      }
+      return null;
+    } catch {
+      return null;
     }
-
-    if (session) return session;
-  } catch {
-    // Supabase client instance error, proceed to storage fallback
   }
 
-  // Fallback to direct storage parsing if supabase client has not finished rehydrating
-  try {
-    const directSession = localStorage.getItem('ralion-app-auth-token');
-    if (directSession) {
-      const parsed = JSON.parse(directSession);
-      const token = parsed?.access_token || parsed?.currentSession?.access_token;
-      const user = parsed?.user || parsed?.currentSession?.user;
-      if (token) return { access_token: token, user } as any;
-    }
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (!key || !key.startsWith('sb-') || !key.endsWith('-auth-token')) continue;
-      const raw = localStorage.getItem(key);
-      if (!raw) continue;
-      const parsed = JSON.parse(raw);
-      const token = parsed?.access_token || parsed?.currentSession?.access_token;
-      const user = parsed?.user || parsed?.currentSession?.user;
-      if (token) return { access_token: token, user } as any;
-    }
-  } catch {}
+  if (_sessionPromise) return _sessionPromise;
 
-  return null;
+  _sessionPromise = (async () => {
+    try {
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data, error } = await supabase.auth.getSession();
+
+      let session = !error ? data.session : null;
+
+      const expiresSoon = Boolean(
+        session?.expires_at && session.expires_at * 1000 <= Date.now() + 60_000
+      );
+
+      if (expiresSoon && session?.refresh_token) {
+        const refreshed = await deduplicatedRefreshSession(supabase);
+        if (!refreshed.error && refreshed.data.session) {
+          return refreshed.data.session;
+        }
+      }
+
+      if (session) return session;
+    } catch {
+      // Supabase client instance error, proceed to storage fallback
+    } finally {
+      _sessionPromise = null;
+    }
+
+    // Fallback to direct storage parsing if supabase client has not finished rehydrating
+    try {
+      const directSession = localStorage.getItem('ralion-app-auth-token');
+      if (directSession) {
+        const parsed = JSON.parse(directSession);
+        const token = parsed?.access_token || parsed?.currentSession?.access_token;
+        const user = parsed?.user || parsed?.currentSession?.user;
+        if (token) return { access_token: token, user } as any;
+      }
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key || !key.startsWith('sb-') || !key.endsWith('-auth-token')) continue;
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        const parsed = JSON.parse(raw);
+        const token = parsed?.access_token || parsed?.currentSession?.access_token;
+        const user = parsed?.user || parsed?.currentSession?.user;
+        if (token) return { access_token: token, user } as any;
+      }
+    } catch {}
+
+    return null;
+  })();
+
+  return _sessionPromise;
 }
 
 function appendTenantHints(headers: Record<string, string>, session: any) {
@@ -142,7 +171,7 @@ function mergeAuthHeaders(initHeaders: HeadersInit | undefined, authHeaders: Rec
   return headers;
 }
 
-async function parseApiResponse<T>(res: Response): Promise<{ ok: boolean; status: number; data: T; error?: string }> {
+async function parseApiResponse<T>(res: Response): Promise<{ ok: boolean; status: number; data: T; error?: string; code?: string }> {
   const contentType = res.headers.get('content-type') || '';
   let data: any = null;
 
@@ -165,15 +194,18 @@ async function parseApiResponse<T>(res: Response): Promise<{ ok: boolean; status
     ok: res.ok,
     status: res.status,
     data,
+    code: data?.code,
     error: res.ok ? undefined : (data?.error || data?.message || `HTTP ${res.status}`),
   };
 }
 
-export async function fetchRalionApi<T = any>(
-  path: string,
-  init?: RequestInit
-): Promise<{ ok: boolean; status: number; data: T; error?: string }> {
-  const url = getRalionApiUrl(path);
+/**
+ * Universal Authenticated Fetch Helper for Ralion Frontend.
+ * Automatically injects Bearer token and tenant hint headers, and deduplicates
+ * token refreshes on 401 AUTH_TOKEN_INVALID.
+ */
+export async function authFetch(pathOrUrl: string, init?: RequestInit): Promise<Response> {
+  const url = pathOrUrl.startsWith('http') ? pathOrUrl : getRalionApiUrl(pathOrUrl);
 
   try {
     const initialAuth = await getRalionAuthHeaders();
@@ -189,23 +221,51 @@ export async function fetchRalionApi<T = any>(
       credentials: init?.credentials || 'include',
     });
 
-    // Recover once from an expired/revoked access token. The server still
-    // validates the refreshed JWT and tenant membership; this is not a bypass.
+    // Only retry if response was 401 AND we had an active token that is now rejected
     if (res.status === 401 && hadSession && typeof window !== 'undefined') {
-      const refreshedAuth = await getRalionAuthHeaders({ refresh: true });
-      if (refreshedAuth.Authorization) {
-        headers = mergeAuthHeaders(init?.headers, refreshedAuth, true);
-        if (!headers.has('Content-Type') && init?.body && typeof init.body === 'string') {
-          headers.set('Content-Type', 'application/json');
+      let shouldRefresh = true;
+      try {
+        const cloned = res.clone();
+        const body = await cloned.json();
+        // Do not refresh on missing token or unconfigured errors
+        if (body?.code === 'AUTH_TOKEN_MISSING' || body?.code === 'UNCONFIGURED' || body?.code === 'SUPABASE_CONFIG_ERROR') {
+          shouldRefresh = false;
         }
-        res = await fetch(url, {
-          ...init,
-          headers,
-          credentials: init?.credentials || 'include',
-        });
+      } catch {}
+
+      if (shouldRefresh) {
+        const refreshedAuth = await getRalionAuthHeaders({ refresh: true });
+        if (refreshedAuth.Authorization && refreshedAuth.Authorization !== initialAuth.Authorization) {
+          headers = mergeAuthHeaders(init?.headers, refreshedAuth, true);
+          if (!headers.has('Content-Type') && init?.body && typeof init.body === 'string') {
+            headers.set('Content-Type', 'application/json');
+          }
+          res = await fetch(url, {
+            ...init,
+            headers,
+            credentials: init?.credentials || 'include',
+          });
+        }
       }
     }
 
+    return res;
+  } catch (rawErr: any) {
+    const errObj = rawErr instanceof Error ? rawErr : new Error(String(rawErr));
+    return new Response(JSON.stringify({ success: false, error: errObj.message, status: 503 }), {
+      status: 503,
+      statusText: 'Service Unavailable',
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+}
+
+export async function fetchRalionApi<T = any>(
+  path: string,
+  init?: RequestInit
+): Promise<{ ok: boolean; status: number; data: T; error?: string; code?: string }> {
+  try {
+    const res = await authFetch(path, init);
     return await parseApiResponse<T>(res);
   } catch (err: any) {
     return {

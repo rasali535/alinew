@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../lib/cors';
 import {
   extractAuthToken,
+  resolveRalionAuthContext,
   getCurrentRalionContext,
   getServiceSupabase,
   type RalionSessionContext,
@@ -47,12 +48,26 @@ function contextPayload(ctx: RalionSessionContext) {
 
 async function verifyRequestUser(request: NextRequest) {
   const token = extractAuthToken(request);
-  if (!token) return { token: null, user: null, reason: 'missing' as const };
+  if (!token) return { token: null, user: null, reason: 'missing' as const, errorStatus: 401, errorCode: 'AUTH_TOKEN_MISSING' };
 
-  const supabase = getServiceSupabase();
-  const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data?.user) return { token, user: null, reason: 'invalid' as const };
-  return { token, user: data.user, reason: null };
+  let supabase: ReturnType<typeof getServiceSupabase>;
+  try {
+    supabase = getServiceSupabase();
+  } catch (err: any) {
+    console.error('[AuthContext API] Supabase config error:', err?.message);
+    return { token, user: null, reason: 'config_error' as const, errorStatus: 500, errorCode: 'SUPABASE_CONFIG_ERROR' };
+  }
+
+  try {
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data?.user) {
+      return { token, user: null, reason: 'invalid' as const, errorStatus: 401, errorCode: 'AUTH_TOKEN_INVALID' };
+    }
+    return { token, user: data.user, reason: null, errorStatus: 200, errorCode: null };
+  } catch (err: any) {
+    console.error('[AuthContext API] User verification error:', err?.message);
+    return { token, user: null, reason: 'invalid' as const, errorStatus: 401, errorCode: 'AUTH_TOKEN_INVALID' };
+  }
 }
 
 function safeSlug(name: string, suffix: string) {
@@ -67,26 +82,27 @@ function safeSlug(name: string, suffix: string) {
 
 export async function GET(request: NextRequest) {
   try {
-    const verified = await verifyRequestUser(request);
-    if (verified.reason === 'missing') {
-      return corsJsonResponse(
-        { success: false, code: 'AUTH_TOKEN_MISSING', error: 'Authentication required', message: 'Bearer token is required.' },
-        { status: 401 },
-        request
-      );
+    const authResult = await resolveRalionAuthContext(request, { requireAuth: true });
+
+    if (authResult.status === 'CONTEXT_RESOLVED' && authResult.context) {
+      return corsJsonResponse(contextPayload(authResult.context), undefined, request);
     }
-    if (verified.reason === 'invalid' || !verified.user) {
-      console.warn('[AuthContext API] Supabase session rejected');
+
+    if (authResult.status === 'AUTHENTICATION_REQUIRED') {
+      const isMissing = authResult.errorCode === 'AUTH_TOKEN_MISSING';
       return corsJsonResponse(
-        { success: false, code: 'AUTH_TOKEN_INVALID', error: 'Session is invalid or expired', message: 'Please sign in again.' },
+        {
+          success: false,
+          code: isMissing ? 'AUTH_TOKEN_MISSING' : 'AUTH_TOKEN_INVALID',
+          error: isMissing ? 'Authentication required' : 'Session is invalid or expired',
+          message: isMissing ? 'Bearer token is required.' : 'Please sign in again.',
+        },
         { status: 401 },
         request
       );
     }
 
-    const ctx = await getCurrentRalionContext(request, { requireAuth: true });
-    if (!ctx) {
-      console.warn('[AuthContext API] Authenticated user has no verified workspace context', { userId: verified.user.id });
+    if (authResult.status === 'WORKSPACE_CONTEXT_MISSING') {
       return corsJsonResponse(
         {
           success: false,
@@ -101,9 +117,31 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return corsJsonResponse(contextPayload(ctx), undefined, request);
-  } catch {
-    console.error('[AuthContext API] Failed to resolve context');
+    if (authResult.status === 'FORBIDDEN') {
+      return corsJsonResponse(
+        {
+          success: false,
+          code: authResult.errorCode || 'FORBIDDEN',
+          error: 'Forbidden',
+          message: authResult.errorMessage || 'You do not have access to this resource.',
+        },
+        { status: 403 },
+        request
+      );
+    }
+
+    return corsJsonResponse(
+      {
+        success: false,
+        code: authResult.errorCode || 'TENANT_DATABASE_ERROR',
+        error: 'Database error',
+        message: authResult.errorMessage || 'Failed to resolve auth context.',
+      },
+      { status: authResult.httpStatus || 500 },
+      request
+    );
+  } catch (err: any) {
+    console.error('[AuthContext API] Failed to resolve context:', err?.message);
     return corsJsonResponse(
       { success: false, code: 'INTERNAL_ERROR', error: 'Internal error', message: 'Failed to resolve auth context.' },
       { status: 500 },
@@ -123,14 +161,21 @@ export async function POST(request: NextRequest) {
     const verified = await verifyRequestUser(request);
     if (verified.reason === 'missing') {
       return corsJsonResponse(
-        { success: false, code: 'AUTH_TOKEN_MISSING', error: 'Authentication required' },
+        { success: false, code: 'AUTH_TOKEN_MISSING', error: 'Authentication required', message: 'Bearer token is required.' },
         { status: 401 },
+        request
+      );
+    }
+    if (verified.reason === 'config_error') {
+      return corsJsonResponse(
+        { success: false, code: 'SUPABASE_CONFIG_ERROR', error: 'Configuration error', message: 'Supabase service role key is not configured.' },
+        { status: 500 },
         request
       );
     }
     if (verified.reason === 'invalid' || !verified.user) {
       return corsJsonResponse(
-        { success: false, code: 'AUTH_TOKEN_INVALID', error: 'Session is invalid or expired' },
+        { success: false, code: 'AUTH_TOKEN_INVALID', error: 'Session is invalid or expired', message: 'Please sign in again.' },
         { status: 401 },
         request
       );
@@ -161,8 +206,6 @@ export async function POST(request: NextRequest) {
     if (ownedError) {
       console.error('[AuthContext API] Workspace lookup failed during repair:', {
         code: ownedError.code,
-        message: ownedError.message,
-        hint: ownedError.hint,
       });
 
       if (authUser.id === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf' || authUser.app_metadata?.role === 'PLATFORM_ADMIN') {
@@ -344,12 +387,6 @@ export async function POST(request: NextRequest) {
         request
       );
     }
-
-    console.log('[AuthContext API] Canonical workspace context provisioned', {
-      userId: repaired.user.id,
-      workspaceId: repaired.workspace.id,
-      organizationId: repaired.organization.id,
-    });
 
     return corsJsonResponse({ ...contextPayload(repaired), provisioned: true }, undefined, request);
   } catch {

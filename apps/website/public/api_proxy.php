@@ -61,12 +61,16 @@ $targetUrl = rtrim($backendUrl, '/') . $path . ($queryString !== '' ? '?' . $que
 // 4. Prepare headers to forward
 $forwardHeaders = [];
 $ignoreHeaders = ['host', 'connection', 'content-length', 'transfer-encoding', 'accept-encoding'];
+$hasAuth = false;
 
 if (function_exists('getallheaders')) {
     foreach (getallheaders() as $name => $value) {
         $lower = strtolower($name);
         if (!in_array($lower, $ignoreHeaders, true)) {
             $forwardHeaders[] = "$name: $value";
+            if ($lower === 'authorization') {
+                $hasAuth = true;
+            }
         }
     }
 } else {
@@ -76,8 +80,20 @@ if (function_exists('getallheaders')) {
             $lower = strtolower($name);
             if (!in_array($lower, $ignoreHeaders, true)) {
                 $forwardHeaders[] = "$name: $value";
+                if ($lower === 'authorization') {
+                    $hasAuth = true;
+                }
             }
         }
+    }
+}
+
+// Ensure Authorization is captured if passed via FastCGI environment variables
+if (!$hasAuth) {
+    $authVal = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+    if (!empty($authVal)) {
+        $forwardHeaders[] = "Authorization: $authVal";
+        $hasAuth = true;
     }
 }
 

@@ -6,9 +6,16 @@ Options -Indexes +FollowSymLinks
   Require all granted
 </IfModule>
 
+<IfModule mod_setenvif.c>
+  SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
+</IfModule>
+
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /ralion/
+
+  CGIPassAuth On
+  RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
   # 1. Route all /ralion/api/* to PHP proxy script (transparent upstream proxy)
   RewriteRule ^api/(.*)$ /api_proxy.php?__proxy_path=api/$1 [QSA,L]
