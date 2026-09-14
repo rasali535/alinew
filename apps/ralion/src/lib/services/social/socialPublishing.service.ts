@@ -3,7 +3,7 @@
  * Ras Ali Labs (Pty) Ltd
  *
  * Coordinates multi-platform parallel publishing with atomic per-platform statuses,
- * provider routing (Zernio vs Native), automatic base64 media asset hosting,
+ * provider routing (delivery network vs native), validated public HTTPS media,
  * stable idempotency keys, and audit logging.
  */
 
@@ -60,12 +60,122 @@ export interface PublishRequest {
 
 export interface MultiPublishResult {
   postId: string | null;
-  overallStatus: 'PUBLISHED' | 'PARTIALLY_PUBLISHED' | 'FAILED' | 'QUEUED';
+  overallStatus: 'PUBLISHED' | 'PARTIALLY_PUBLISHED' | 'FAILED' | 'QUEUED' | 'PUBLISHED_WITH_PERSISTENCE_WARNING';
   platformResults: Record<SocialPlatformType, PublishResponse>;
   statusCode?: number;
   conflict?: boolean;
   conflictDetails?: any;
   errors: string[];
+  persistenceWarning?: boolean;
+  persistenceError?: 'PUBLICATION_HISTORY_PERSISTENCE_FAILED';
+}
+
+const PUBLISHABLE_PLATFORMS = new Set<string>([
+  'facebook',
+  'instagram',
+  'linkedin',
+  'x',
+  'youtube',
+  'tiktok',
+  'threads',
+  'pinterest',
+  'reddit',
+  'bluesky',
+  'whatsapp',
+]);
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function publishingInputError(code: string, message: string): Error {
+  const error = new Error(message);
+  (error as any).statusCode = 400;
+  (error as any).publicCode = code;
+  return error;
+}
+
+function canonicalizePlatforms(platforms: unknown): SocialPlatformType[] {
+  if (!Array.isArray(platforms) || platforms.length === 0) {
+    throw publishingInputError('INVALID_PLATFORM', 'At least one supported platform is required.');
+  }
+
+  const canonical = platforms.map((platform) => {
+    if (typeof platform !== 'string') {
+      throw publishingInputError('INVALID_PLATFORM', 'Every platform must be a string.');
+    }
+    const normalized = platform.trim().toLowerCase() === 'twitter'
+      ? 'x'
+      : platform.trim().toLowerCase();
+    if (!PUBLISHABLE_PLATFORMS.has(normalized)) {
+      throw publishingInputError('INVALID_PLATFORM', 'One or more requested platforms are unsupported.');
+    }
+    return normalized as SocialPlatformType;
+  });
+
+  return Array.from(new Set(canonical));
+}
+
+function isPrivateOrLocalHostname(hostname: string): boolean {
+  const value = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (value === 'localhost' || value.endsWith('.localhost') || value.endsWith('.local')) return true;
+  if (value === '::1' || value.startsWith('fe80:') || value.startsWith('fc') || value.startsWith('fd')) return true;
+
+  const octets = value.split('.').map(Number);
+  if (octets.length !== 4 || octets.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+    return false;
+  }
+
+  return octets[0] === 10
+    || octets[0] === 127
+    || (octets[0] === 169 && octets[1] === 254)
+    || (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31)
+    || (octets[0] === 192 && octets[1] === 168)
+    || octets[0] === 0;
+}
+
+function validateMediaInputs(mediaUrls?: unknown, mediaTypes?: unknown): {
+  mediaUrls: string[];
+  mediaTypes: string[];
+} {
+  if (mediaUrls !== undefined && !Array.isArray(mediaUrls)) {
+    throw publishingInputError('INVALID_MEDIA', 'mediaUrls must be an array.');
+  }
+  if (mediaTypes !== undefined && !Array.isArray(mediaTypes)) {
+    throw publishingInputError('INVALID_MEDIA_TYPE', 'mediaTypes must be an array.');
+  }
+
+  const urls = (mediaUrls || []) as unknown[];
+  const types = (mediaTypes || []) as unknown[];
+  if (urls.length > 20) {
+    throw publishingInputError('INVALID_MEDIA', 'No more than 20 media items may be published at once.');
+  }
+  if (types.length > 0 && types.length !== urls.length) {
+    throw publishingInputError('INVALID_MEDIA_TYPE', 'mediaTypes must correspond one-to-one with mediaUrls.');
+  }
+
+  const safeUrls = urls.map((candidate) => {
+    if (typeof candidate !== 'string') {
+      throw publishingInputError('INVALID_MEDIA', 'Every media item must be an HTTPS URL.');
+    }
+    let parsed: URL;
+    try {
+      parsed = new URL(candidate);
+    } catch {
+      throw publishingInputError('INVALID_MEDIA', 'Every media item must be a valid HTTPS URL.');
+    }
+    if (parsed.protocol !== 'https:' || parsed.username || parsed.password || isPrivateOrLocalHostname(parsed.hostname)) {
+      throw publishingInputError('INVALID_MEDIA', 'Media URLs must use public HTTPS addresses.');
+    }
+    return parsed.toString();
+  });
+
+  const safeTypes = types.map((candidate) => {
+    if (typeof candidate !== 'string' || !/^(image|video)\/[a-z0-9.+-]+$/i.test(candidate)) {
+      throw publishingInputError('INVALID_MEDIA_TYPE', 'Every media type must be a valid image or video MIME type.');
+    }
+    return candidate.toLowerCase();
+  });
+
+  return { mediaUrls: safeUrls, mediaTypes: safeTypes };
 }
 
 // Global in-memory registry for isomorphic Next.js server & runtime dev support
@@ -538,6 +648,31 @@ export class SocialPublishingService {
    * Execute multi-platform content publishing with idempotency and provider routing
    */
   static async publish(params: PublishRequest): Promise<MultiPublishResult> {
+    // Tenant identity is mandatory at the service boundary because this method has
+    // callers beyond the HTTP route.
+    if (!params.userId || !params.organizationId || !params.workspaceId) {
+      throw publishingInputError(
+        'TENANT_CONTEXT_REQUIRED',
+        'Canonical user, organization and workspace context is required.'
+      );
+    }
+
+    const normalizedPlatforms = canonicalizePlatforms(params.platforms);
+    const normalizedMedia = validateMediaInputs(params.mediaUrls, params.mediaTypes);
+    if (params.socialConnectionId && !UUID_PATTERN.test(params.socialConnectionId)) {
+      throw publishingInputError('INVALID_CONNECTION_ID', 'socialConnectionId must be a valid UUID.');
+    }
+    if (params.scheduledFor && Number.isNaN(params.scheduledFor.getTime())) {
+      throw publishingInputError('INVALID_SCHEDULE_DATE', 'scheduledFor must be a valid timestamp.');
+    }
+
+    params = {
+      ...params,
+      platforms: normalizedPlatforms,
+      mediaUrls: normalizedMedia.mediaUrls,
+      mediaTypes: normalizedMedia.mediaTypes,
+    };
+
     // 1. Pre-Publish Content Validation
     const validation = SocialContentValidator.validate({
       platforms: params.platforms,
@@ -571,8 +706,8 @@ export class SocialPublishingService {
     const idempotencyKey = params.idempotencyKey || `hash_${bodyHash}`;
     const cutoff24h = Date.now() - 24 * 60 * 60 * 1000;
 
-    const orgIdKey = params.organizationId || 'default-org';
-    const wsIdKey = params.workspaceId || 'default-ws';
+    const orgIdKey = params.organizationId;
+    const wsIdKey = params.workspaceId;
 
     // Optional in-memory dispatch lock check (local optimization only)
     const dispatchLockKey = `${params.userId}:${orgIdKey}:${wsIdKey}:${currentDestination}:${idempotencyKey}`;
@@ -596,8 +731,8 @@ export class SocialPublishingService {
       const memoryDup = this.publishedPosts.find(
         (p) =>
           p.userId === params.userId &&
-          (p.organizationId || 'default-org') === orgIdKey &&
-          (p.workspaceId || 'default-ws') === wsIdKey &&
+          p.organizationId === orgIdKey &&
+          p.workspaceId === wsIdKey &&
           p.destination === currentDestination &&
           ((params.idempotencyKey && p.idempotencyKey === params.idempotencyKey) || p.bodyHash === bodyHash || p.body === normalizedBody) &&
           p.createdAt > cutoff24h &&
@@ -710,9 +845,9 @@ export class SocialPublishingService {
     if (globalPublishStore.__ralion_mock_connections && globalPublishStore.__ralion_mock_connections.length > 0) {
       connections = globalPublishStore.__ralion_mock_connections.filter((c) => {
         const matchesPlatform = params.platforms.includes(c.provider);
-        const matchesOrg = !params.organizationId || params.organizationId === 'default-org' || c.organization_id === params.organizationId;
-        const matchesWs = !params.workspaceId || params.workspaceId === 'default' || c.workspace_id === params.workspaceId;
-        const matchesUser = !params.userId || params.userId === 'default-user' || c.user_id === params.userId;
+        const matchesOrg = c.organization_id === params.organizationId;
+        const matchesWs = c.workspace_id === params.workspaceId;
+        const matchesUser = c.user_id === params.userId;
         return matchesPlatform && matchesOrg && matchesWs && matchesUser;
       });
     } else {
@@ -727,15 +862,9 @@ export class SocialPublishingService {
         if (params.socialConnectionId) {
           connQuery = connQuery.eq('id', params.socialConnectionId);
         }
-        if (params.organizationId && params.organizationId !== 'default-org') {
-          connQuery = connQuery.eq('organization_id', params.organizationId);
-        }
-        if (params.workspaceId && params.workspaceId !== 'default') {
-          connQuery = connQuery.eq('workspace_id', params.workspaceId);
-        }
-        if (params.userId && params.userId !== 'default-user') {
-          connQuery = connQuery.eq('user_id', params.userId);
-        }
+        connQuery = connQuery.eq('organization_id', params.organizationId);
+        connQuery = connQuery.eq('workspace_id', params.workspaceId);
+        connQuery = connQuery.eq('user_id', params.userId);
 
         const { data, error } = await connQuery;
         if (error) {
@@ -1017,35 +1146,73 @@ export class SocialPublishingService {
         ? highestStatusCode
         : 422;
 
-    // 7. Record Post in Database (Graceful Non-Blocking Persistence)
+    const isSuccessfulDispatch =
+      overallStatus === 'PUBLISHED'
+      || overallStatus === 'QUEUED'
+      || overallStatus === 'PARTIALLY_PUBLISHED';
+    const correlationHash = crypto.createHash('sha256').update(idempotencyKey).digest('hex').slice(0, 32);
+    const syntheticReceiptId = `pub_rec_${correlationHash}`;
+    const persistenceRequestId = `alert_${crypto.randomUUID()}`;
+
+    // 7. Record successful or partially successful provider execution. A history
+    // failure must not cause an external provider retry.
     let postRecord: any = null;
-    try {
-      const { data } = await supabase
-        .from('social_posts')
-        .insert({
-          user_id: params.userId,
-          workspace_id: params.workspaceId || null,
-          title: params.title || null,
-          body: params.body,
-          media_urls: normalizedMediaUrls,
-          media_types: params.mediaTypes || [],
-          platforms: params.platforms,
-          status: isScheduled ? 'SCHEDULED' : overallStatus,
-          platform_post_ids: platformPostIds,
-          platform_results: platformResults,
-          scheduled_for: isScheduled ? params.scheduledFor?.toISOString() : null,
-          published_at: isScheduled ? null : new Date().toISOString(),
-          author_name: params.authorName || 'Ralion User',
-          social_connection_id: explicitConnection?.id || params.socialConnectionId || null,
-        })
-        .select()
-        .maybeSingle();
-      postRecord = data;
-    } catch (dbErr: any) {
-      console.warn('[SocialPublishing] Post record notice:', dbErr.message);
+    let persistenceWarning = false;
+    let persistenceError: 'PUBLICATION_HISTORY_PERSISTENCE_FAILED' | undefined;
+
+    if (isSuccessfulDispatch) {
+      try {
+        const { data, error: insertError } = await supabase
+          .from('social_posts')
+          .insert({
+            user_id: params.userId,
+            workspace_id: params.workspaceId,
+            organization_id: params.organizationId,
+            title: params.title || null,
+            body: params.body,
+            media_urls: normalizedMediaUrls,
+            media_types: params.mediaTypes || [],
+            platforms: params.platforms,
+            status: isScheduled ? 'SCHEDULED' : overallStatus,
+            platform_post_ids: platformPostIds,
+            platform_results: platformResults,
+            scheduled_for: isScheduled ? params.scheduledFor?.toISOString() : null,
+            published_at: isScheduled ? null : new Date().toISOString(),
+            author_name: params.authorName || 'Ralion User',
+            social_connection_id: explicitConnection?.id || params.socialConnectionId || null,
+          })
+          .select()
+          .maybeSingle();
+
+        if (insertError) {
+          persistenceWarning = true;
+          persistenceError = 'PUBLICATION_HISTORY_PERSISTENCE_FAILED';
+          console.warn('[OPERATIONAL_ALERT] Publication history persistence failed.', {
+            alertCode: persistenceError,
+            errorCode: insertError.code || 'POSTGREST_ERROR',
+            requestId: persistenceRequestId,
+            correlationHash,
+          });
+        } else {
+          postRecord = data;
+        }
+      } catch {
+        persistenceWarning = true;
+        persistenceError = 'PUBLICATION_HISTORY_PERSISTENCE_FAILED';
+        console.warn('[OPERATIONAL_ALERT] Publication history persistence failed.', {
+          alertCode: persistenceError,
+          errorCode: 'DATABASE_EXCEPTION',
+          requestId: persistenceRequestId,
+          correlationHash,
+        });
+      }
     }
 
-    // 8. Emit Audit Event
+    if (persistenceWarning && overallStatus === 'PUBLISHED') {
+      overallStatus = 'PUBLISHED_WITH_PERSISTENCE_WARNING';
+    }
+
+    // 8. Emit a sanitized audit event.
     try {
       await AuditLoggerService.log({
         eventType: overallStatus === 'FAILED' ? 'SOCIAL_POST_FAILED' : 'SOCIAL_POST_PUBLISHED',
@@ -1053,7 +1220,7 @@ export class SocialPublishingService {
         userId: params.userId,
         success: overallStatus !== 'FAILED',
         resourceType: 'social_post',
-        resourceId: postRecord?.id,
+        resourceId: postRecord?.id || syntheticReceiptId,
         metadata: {
           action: 'multi_platform_publish',
           platforms: params.platforms,
@@ -1062,16 +1229,20 @@ export class SocialPublishingService {
           conflict: hasConflict,
           success_count: successes,
           total_count: total,
-          idempotencyKey,
+          correlationHash,
+          persistenceWarning,
         },
       });
-    } catch (auditErr: any) {
-      console.warn('[SocialPublishing] Audit log notice:', auditErr.message);
+    } catch {
+      console.warn('[OPERATIONAL_ALERT] Social publication audit persistence failed.', {
+        alertCode: 'SOCIAL_AUDIT_PERSISTENCE_FAILED',
+        requestId: persistenceRequestId,
+        correlationHash,
+      });
     }
 
-    const isSuccessfulDispatch = overallStatus === 'PUBLISHED' || overallStatus === 'QUEUED' || overallStatus === 'PARTIALLY_PUBLISHED';
     const finalPostId: string | null = isSuccessfulDispatch
-      ? (postRecord?.id || `pub_rec_${idempotencyKey}`)
+      ? (postRecord?.id || syntheticReceiptId)
       : null;
 
     if (claim.claimId) {
@@ -1096,9 +1267,14 @@ export class SocialPublishingService {
       }
     }
 
-    if (overallStatus === 'PUBLISHED' || overallStatus === 'QUEUED') {
+    if (
+      overallStatus === 'PUBLISHED'
+      || overallStatus === 'QUEUED'
+      || overallStatus === 'PARTIALLY_PUBLISHED'
+      || overallStatus === 'PUBLISHED_WITH_PERSISTENCE_WARNING'
+    ) {
       this.publishedPosts.push({
-        id: finalPostId || `pub_rec_${idempotencyKey}`,
+        id: finalPostId || syntheticReceiptId,
         userId: params.userId,
         workspaceId: params.workspaceId,
         organizationId: params.organizationId,
@@ -1122,6 +1298,8 @@ export class SocialPublishingService {
       conflict: hasConflict,
       conflictDetails,
       errors,
+      persistenceWarning: persistenceWarning || undefined,
+      persistenceError,
     };
     } catch (publishErr: any) {
       if (claimId) {
@@ -1136,5 +1314,53 @@ export class SocialPublishingService {
     } finally {
       inFlightDispatches.delete(dispatchLockKey);
     }
+  }
+
+  /**
+   * Returns publication history through the privileged server client while
+   * enforcing organization, workspace and optional user scope in the query.
+   */
+  static async getPublicationHistory(params: {
+    workspaceId: string;
+    organizationId: string;
+    userId?: string;
+    limit?: number;
+    offset?: number;
+    platform?: string;
+  }): Promise<{ posts: any[]; total: number; limit: number; offset: number }> {
+    if (!params.organizationId || !params.workspaceId) {
+      throw publishingInputError('TENANT_CONTEXT_REQUIRED', 'Canonical tenant context is required.');
+    }
+
+    const limit = Math.min(Math.max(Number.isInteger(params.limit) ? params.limit! : 50, 1), 100);
+    const offset = Math.max(Number.isInteger(params.offset) ? params.offset! : 0, 0);
+    let query = getServiceSupabase()
+      .from('social_posts')
+      .select(
+        'id, user_id, workspace_id, organization_id, title, body, media_urls, media_types, platforms, status, platform_post_ids, platform_results, scheduled_for, published_at, author_name, social_connection_id, content_id, created_at, updated_at',
+        { count: 'exact' }
+      )
+      .eq('organization_id', params.organizationId)
+      .eq('workspace_id', params.workspaceId)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (params.userId) query = query.eq('user_id', params.userId);
+    if (params.platform) query = query.contains('platforms', [params.platform]);
+
+    const { data, error, count } = await query;
+    if (error) {
+      const historyError = new Error('Publication history query failed.');
+      (historyError as any).publicCode = 'PUBLICATION_HISTORY_UNAVAILABLE';
+      throw historyError;
+    }
+
+    return {
+      posts: data || [],
+      total: count ?? 0,
+      limit,
+      offset,
+    };
   }
 }
