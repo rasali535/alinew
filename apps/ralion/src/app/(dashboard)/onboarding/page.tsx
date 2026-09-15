@@ -21,11 +21,11 @@ import {
   Briefcase
 } from 'lucide-react';
 import { useOrganization } from '@ralion/auth';
-import { getRalionApiUrl } from '@/lib/api-config';
+import { authFetch } from '@/lib/api-config';
 
 export default function RalionOnboardingPage() {
   const router = useRouter();
-  const { setOrganization, organization, user } = useOrganization();
+  const { setOrganization, organization, workspace, user } = useOrganization();
 
   const [step, setStep] = useState(1);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -85,10 +85,13 @@ export default function RalionOnboardingPage() {
       let wk: any = null;
 
       try {
-        const apiUrl = getRalionApiUrl('/api/mari/knowledge/website-sync');
-        const res = await fetch(apiUrl, {
+        const res = await authFetch('/api/mari/knowledge/website-sync', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(organization?.id ? { 'x-organization-id': organization.id } : {}),
+            ...(workspace?.id ? { 'x-workspace-id': workspace.id } : {}),
+          },
           body: JSON.stringify({
             organizationId: targetOrgId,
             websiteUrl: normalizedUrl,

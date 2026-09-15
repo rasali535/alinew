@@ -592,7 +592,7 @@ export default function PlatformAdminPortal() {
             <div className="font-semibold text-white">{adminFb?.pageName || 'Ras Ali Labs'}</div>
             <div className="text-zinc-400 text-[11px] mt-0.5">{adminFb?.pageUsername ? `@${adminFb.pageUsername}` : 'Facebook Business Page'}</div>
             <span className="inline-block mt-2 px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 text-[10px] font-bold">
-              ● {adminFb?.connectionStatus === 'CONNECTED' ? 'Live Connected Page' : 'Platform Channel'}
+              ● {adminFb?.connectionStatus?.toUpperCase() === 'CONNECTED' ? 'Live Connected Page' : 'Platform Channel'}
             </span>
           </div>
 

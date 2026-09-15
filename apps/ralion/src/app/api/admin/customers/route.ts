@@ -8,6 +8,7 @@ import {
 import { BillingDatabaseService } from '@ralion/database';
 import { PlatformAdminService, CustomerSummaryItem } from '@ralion/auth/server';
 import { getPrivilegedSupabase } from '@/lib/supabase/server';
+import { isActiveFacebookConnection } from '@/lib/services/social/socialConnectionStatus';
 
 export async function GET(request: NextRequest) {
   const auth = await verifyPlatformAdminRequest(request);
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest) {
 
     const [profsRes, connsRes, zRes, destsRes] = await Promise.allSettled([
       supabase.from('profiles').select('id, full_name, email, created_at'),
-      supabase.from('social_connections').select('organization_id, workspace_id, user_id, connection_status, provider, account_name, followers_count, metadata'),
+      supabase.from('social_connections').select('organization_id, workspace_id, user_id, connection_status, token_status, disconnected_at, provider, account_name, followers_count, metadata'),
       supabase.from('social_provider_profiles').select('organization_id, workspace_id, user_id, status, provider'),
       supabase.from('social_destinations').select('organization_id, workspace_id, user_id, status, platform, page_name, followers_count'),
     ]);
@@ -52,7 +53,7 @@ export async function GET(request: NextRequest) {
             if (!socialMap[org]) {
               socialMap[org] = { meta: 'DISCONNECTED', zernio: 'DISCONNECTED' };
             }
-            if (c.provider === 'facebook' && (c.connection_status === 'CONNECTED' || c.connection_status === 'ACTIVE' || c.connection_status === 'connected')) {
+            if (isActiveFacebookConnection(c)) {
               socialMap[org].meta = 'CONNECTED';
               socialMap[org].facebookPage = c.account_name || c.metadata?.pageName || c.metadata?.page_name || socialMap[org].facebookPage;
               socialMap[org].facebookFollowers = Number(c.followers_count || c.metadata?.followers_count || c.metadata?.fanCount || socialMap[org].facebookFollowers || 0);

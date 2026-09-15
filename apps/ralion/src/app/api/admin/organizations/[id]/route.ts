@@ -12,6 +12,7 @@ import { BillingDatabaseService } from '@ralion/database';
 import { PlatformAdminService } from '@ralion/auth/server';
 import { getSocialConnectionCapabilities } from '@ralion/integrations';
 import { getPrivilegedSupabase } from '@/lib/supabase/server';
+import { isActiveFacebookConnection } from '@/lib/services/social/socialConnectionStatus';
 
 export async function GET(
   request: NextRequest,
@@ -79,7 +80,7 @@ export async function GET(
     const supabase = getPrivilegedSupabase();
     const { data: conns, error: connectionsError } = await supabase
       .from('social_connections')
-      .select('id, provider, provider_account_id, account_name, username, account_type, connection_status, token_status, followers_count, metadata, last_sync_at, created_at')
+      .select('id, provider, provider_account_id, account_name, username, account_type, connection_status, token_status, followers_count, metadata, last_sync_at, disconnected_at, created_at')
       .eq('organization_id', organizationId);
 
     if (connectionsError) {
@@ -110,14 +111,7 @@ export async function GET(
         };
       });
 
-      const activeFacebookConnections = conns.filter(c => {
-        const provider = String(c.provider || '').toLowerCase();
-        const connectionStatus = String(c.connection_status || '').toUpperCase();
-        const tokenStatus = String(c.token_status || '').toUpperCase();
-        return provider === 'facebook' &&
-          (connectionStatus === 'CONNECTED' || connectionStatus === 'ACTIVE') &&
-          (!tokenStatus || tokenStatus === 'TOKEN_VALID' || tokenStatus === 'TOKEN_EXPIRING');
-      });
+      const activeFacebookConnections = conns.filter(isActiveFacebookConnection);
 
       if (activeFacebookConnections.length > 0) {
         metaStatus = 'CONNECTED';

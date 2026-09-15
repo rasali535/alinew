@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../../lib/cors';
 import { WebsiteIngestionService, BusinessContextService, BusinessKnowledgeProfileService } from '@ralion/ai/server';
-import { getCurrentRalionContext } from '../../../../../lib/auth/serverAuth';
+import { requireRalionContext } from '../../../../../lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,17 +32,11 @@ function normalizeWebsiteUrl(raw: unknown): string | null {
  */
 export async function GET(request: NextRequest) {
   try {
-    const serverCtx = await getCurrentRalionContext(request, { requireAuth: true });
+    const auth = await requireRalionContext(request);
+    if (!auth.context) return auth.response;
+    const serverCtx = auth.context;
     const { searchParams } = new URL(request.url);
     const requestedOrgId = searchParams.get('organizationId') || request.headers.get('x-organization-id');
-
-    if (!serverCtx) {
-      return corsJsonResponse(
-        { success: false, code: 'AUTHENTICATION_REQUIRED', error: 'Authentication required' },
-        { status: 401 },
-        request
-      );
-    }
 
     const canonicalOrgId = serverCtx.organization.id;
     if (requestedOrgId && requestedOrgId !== canonicalOrgId && requestedOrgId !== serverCtx.workspace.id) {
@@ -89,17 +83,11 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const serverCtx = await getCurrentRalionContext(request, { requireAuth: true });
+    const auth = await requireRalionContext(request);
+    if (!auth.context) return auth.response;
+    const serverCtx = auth.context;
     const body = await request.json().catch(() => ({}));
     const requestedOrgId = body.organizationId || request.headers.get('x-organization-id');
-
-    if (!serverCtx) {
-      return corsJsonResponse(
-        { success: false, code: 'AUTHENTICATION_REQUIRED', error: 'Authentication required' },
-        { status: 401 },
-        request
-      );
-    }
 
     const canonicalOrgId = serverCtx.organization.id;
     if (requestedOrgId && requestedOrgId !== canonicalOrgId && requestedOrgId !== serverCtx.workspace.id) {

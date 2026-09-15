@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyPlatformAdminRequest } from '../../../../lib/auth/adminAuth';
 import { getSocialConnectionCapabilities } from '@ralion/integrations';
 import { getPrivilegedSupabase } from '@/lib/supabase/server';
+import { isActiveSocialConnection } from '@/lib/services/social/socialConnectionStatus';
 
 export async function GET(request: NextRequest) {
   const auth = await verifyPlatformAdminRequest(request);
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
     // 1. Fetch live social connections
     const { data: conns, error: connErr } = await supabase
       .from('social_connections')
-      .select('*')
+      .select('id, organization_id, workspace_id, user_id, provider, provider_account_id, account_name, username, account_type, connection_status, token_status, followers_count, infrastructure_provider, connected_at, disconnected_at, created_at, metadata')
       .order('created_at', { ascending: false });
 
     if (connErr) {
@@ -32,18 +33,18 @@ export async function GET(request: NextRequest) {
     // 2. Fetch Zernio provider profiles
     const { data: zConns, error: zErr } = await supabase
       .from('social_provider_profiles')
-      .select('*');
+      .select('id, organization_id, workspace_id, user_id, provider, provider_profile_id, profile_name, status, updated_at');
 
     if (zErr) {
       console.warn('[Admin Connected Users] Warning querying social_provider_profiles:', zErr.message);
     }
 
     const allSocialConns = conns || [];
-    const activeConns = allSocialConns.filter(c => c.connection_status === 'CONNECTED');
+    const activeConns = allSocialConns.filter(isActiveSocialConnection);
 
     // 3. Query user profiles from Supabase to attach real user names and emails
     const userIds = Array.from(
-      new Set(allSocialConns.map(c => c.user_id).filter(Boolean))
+      new Set(activeConns.map(c => c.user_id).filter(Boolean))
     );
 
     const userProfiles: Record<string, { full_name?: string; email?: string }> = {};
@@ -65,7 +66,7 @@ export async function GET(request: NextRequest) {
     // 4. Construct distinct connected users
     const userMap = new Map<string, any>();
 
-    allSocialConns.forEach(c => {
+    activeConns.forEach(c => {
       const uId = c.user_id || c.workspace_id || 'unknown';
       const prof = userProfiles[c.user_id] || {};
       const caps = getSocialConnectionCapabilities(c);
@@ -81,8 +82,8 @@ export async function GET(request: NextRequest) {
         isPersonalProfile: caps.isPersonalProfile,
         isBusinessPage: caps.isBusinessPage,
         username: c.username || c.metadata?.pageUsername || null,
-        connectionStatus: c.connection_status || 'CONNECTED',
-        status: c.connection_status || 'CONNECTED',
+        connectionStatus: 'CONNECTED',
+        status: 'CONNECTED',
         tokenStatus: c.token_status || 'TOKEN_VALID',
         followersCount: Number(c.followers_count || c.metadata?.followers_count || 0),
         organizationId: c.organization_id || c.workspace_id || 'ras-ali-labs',

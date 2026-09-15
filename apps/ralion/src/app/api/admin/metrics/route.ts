@@ -9,6 +9,10 @@ import { BillingDatabaseService } from '@ralion/database';
 import { PlatformAdminService } from '@ralion/auth/server';
 import { getSocialConnectionCapabilities } from '@ralion/integrations';
 import { getPrivilegedSupabase } from '@/lib/supabase/server';
+import { isActiveFacebookConnection, isActiveSocialConnection } from '@/lib/services/social/socialConnectionStatus';
+
+const RAS_ALI_LABS_ORGANIZATION_ID = '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf';
+const RAS_ALI_LABS_FACEBOOK_PAGE_ID = '477334159265235';
 
 export async function GET(request: NextRequest) {
   const auth = await verifyPlatformAdminRequest(request);
@@ -30,8 +34,11 @@ export async function GET(request: NextRequest) {
 
       const [profsRes, connsRes, zRes] = await Promise.allSettled([
         supabase.from('profiles').select('id, full_name, email, created_at'),
-        supabase.from('social_connections').select('*').order('created_at', { ascending: false }),
-        supabase.from('social_provider_profiles').select('*'),
+        supabase
+          .from('social_connections')
+          .select('id, organization_id, workspace_id, user_id, provider, provider_account_id, account_name, username, account_type, connection_status, token_status, followers_count, infrastructure_provider, connected_at, disconnected_at, created_at, metadata')
+          .order('created_at', { ascending: false }),
+        supabase.from('social_provider_profiles').select('id, organization_id, workspace_id, user_id, provider, provider_profile_id, account_id, profile_name, status, updated_at'),
       ]);
 
         if (profsRes.status === 'fulfilled' && profsRes.value.data) {
@@ -138,15 +145,16 @@ export async function GET(request: NextRequest) {
     let allConnections: any[] = [];
 
     if (fbConns.length > 0) {
-      const activeConns = fbConns.filter(c => c.connection_status === 'CONNECTED');
-      connectedMetaCount = activeConns.length;
+      const activeConns = fbConns.filter(isActiveSocialConnection);
+      const activeFacebookConns = activeConns.filter(isActiveFacebookConnection);
+      connectedMetaCount = activeFacebookConns.length;
 
       const userProfilesMap: Record<string, { full_name?: string; email?: string }> = {};
       registeredProfiles.forEach(p => {
         userProfilesMap[p.id] = { full_name: p.full_name, email: p.email };
       });
 
-      allConnections = fbConns.map(c => {
+      allConnections = activeConns.map(c => {
         const caps = getSocialConnectionCapabilities(c);
         return {
           id: c.id,
@@ -159,8 +167,8 @@ export async function GET(request: NextRequest) {
           isPersonalProfile: caps.isPersonalProfile,
           isBusinessPage: caps.isBusinessPage,
           username: c.username || c.metadata?.pageUsername || null,
-          connectionStatus: c.connection_status || 'CONNECTED',
-          status: c.connection_status || 'CONNECTED',
+          connectionStatus: 'CONNECTED',
+          status: 'CONNECTED',
           tokenStatus: c.token_status || 'TOKEN_VALID',
           followersCount: Number(c.followers_count || c.metadata?.followers_count || 0),
           organizationId: c.organization_id || c.workspace_id || 'ras-ali-labs',
@@ -190,8 +198,8 @@ export async function GET(request: NextRequest) {
           accountTypeLabel: caps.accountTypeLabel,
           isPersonalProfile: caps.isPersonalProfile,
           isBusinessPage: caps.isBusinessPage,
-          connectionStatus: c.connection_status || 'CONNECTED',
-          status: c.connection_status || 'CONNECTED',
+          connectionStatus: 'CONNECTED',
+          status: 'CONNECTED',
           tokenStatus: c.token_status || 'TOKEN_VALID',
           connectedAt: c.connected_at || c.created_at,
         };
@@ -221,8 +229,15 @@ export async function GET(request: NextRequest) {
       connectedUsersCount = connectedUsersList.length;
 
       const masterFb =
-        fbConns.find(c => c.provider === 'facebook' && (c.metadata?.pageId === '477334159265235' || c.account_name === 'Ras Ali Labs')) ||
-        fbConns.find(c => c.provider === 'facebook');
+        activeFacebookConns.find(c =>
+          c.organization_id === RAS_ALI_LABS_ORGANIZATION_ID &&
+          getSocialConnectionCapabilities(c).isBusinessPage &&
+          (c.provider_account_id === RAS_ALI_LABS_FACEBOOK_PAGE_ID || c.metadata?.pageId === RAS_ALI_LABS_FACEBOOK_PAGE_ID)
+        ) ||
+        activeFacebookConns.find(c =>
+          c.organization_id === RAS_ALI_LABS_ORGANIZATION_ID &&
+          getSocialConnectionCapabilities(c).isBusinessPage
+        );
 
       if (masterFb) {
         adminFacebook = {
@@ -231,11 +246,11 @@ export async function GET(request: NextRequest) {
           classification: 'PLATFORM_OWNED',
           isLocked: true,
           protected: true,
-          pageId: masterFb.metadata?.pageId || masterFb.provider_account_id || '477334159265235',
+          pageId: masterFb.metadata?.pageId || masterFb.provider_account_id || RAS_ALI_LABS_FACEBOOK_PAGE_ID,
           pageName: masterFb.metadata?.pageName || masterFb.account_name || 'Ras Ali Labs',
           pageUsername: masterFb.metadata?.pageUsername || masterFb.username || 'rasalibass',
-          organizationId: masterFb.organization_id || masterFb.workspace_id || 'ras-ali-labs',
-          connectionStatus: masterFb.connection_status || 'CONNECTED',
+          organizationId: masterFb.organization_id,
+          connectionStatus: 'CONNECTED',
           tokenStatus: masterFb.token_status || 'TOKEN_VALID',
           followersCount: masterFb.followers_count || 108,
           capabilities: masterFb.metadata?.capabilities || {

@@ -47,7 +47,7 @@ import {
   BarChart3,
   Globe
 } from 'lucide-react';
-import { getRalionApiUrl, getRalionAuthHeaders, MARI_BUILD_VERSION } from '@/lib/api-config';
+import { authFetch, getRalionApiUrl, getRalionAuthHeaders, MARI_BUILD_VERSION } from '@/lib/api-config';
 import { useOrganization } from '@ralion/auth';
 import { MariMarkdownMessage } from '@/components/MariMarkdownMessage';
 import type {
@@ -152,15 +152,11 @@ export default function MariAiPage() {
       // Hydrate website knowledge from API / durable storage
       if (activeOrgId) {
         try {
-          const apiUrl = getRalionApiUrl(`/api/mari/knowledge/website-sync?organizationId=${encodeURIComponent(activeOrgId)}`);
-          const authHeaders = await getRalionAuthHeaders();
-          await fetch(apiUrl, {
+          await authFetch(`/api/mari/knowledge/website-sync?organizationId=${encodeURIComponent(activeOrgId)}`, {
             headers: {
-              ...authHeaders,
               'x-organization-id': activeOrgId,
-              'x-workspace-id': activeWorkspaceId || activeOrgId,
+              ...(activeWorkspaceId ? { 'x-workspace-id': activeWorkspaceId } : {}),
             },
-            credentials: 'include',
           });
         } catch {}
       }
@@ -557,17 +553,13 @@ export default function MariAiPage() {
       let success = false;
 
       try {
-        const apiUrl = getRalionApiUrl('/api/mari/knowledge/website-sync');
-        const authHeaders = await getRalionAuthHeaders();
-        const res = await fetch(apiUrl, {
+        const res = await authFetch('/api/mari/knowledge/website-sync', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...authHeaders,
             'x-organization-id': orgId,
-            'x-workspace-id': orgId,
+            'x-workspace-id': activeWorkspaceId,
           },
-          credentials: 'include',
           body: JSON.stringify({
             organizationId: orgId,
             websiteUrl: url,
@@ -1272,17 +1264,13 @@ export default function MariAiPage() {
                         let wkData: any = null;
 
                         try {
-                          const apiUrl = getRalionApiUrl('/api/mari/knowledge/website-sync');
-                          const authHeaders = await getRalionAuthHeaders();
-                          const res = await fetch(apiUrl, {
+                          const res = await authFetch('/api/mari/knowledge/website-sync', {
                             method: 'POST',
                             headers: {
                               'Content-Type': 'application/json',
-                              ...authHeaders,
                               'x-organization-id': targetOrgId,
-                              'x-workspace-id': targetOrgId,
+                              'x-workspace-id': activeWorkspaceId,
                             },
-                            credentials: 'include',
                             body: JSON.stringify({
                               organizationId: targetOrgId,
                               websiteUrl: normalizedUrl,

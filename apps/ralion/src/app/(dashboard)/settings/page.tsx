@@ -4,12 +4,12 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, Button, Badge } from '@ralion/ui';
 import { Settings, Building2, Shield, Users, MapPin, Key, Laptop, Check, RefreshCw, HardDrive, BrainCircuit, Globe, BookOpen, CheckCircle2, ShieldCheck, Database, Activity, Sparkles } from 'lucide-react';
 import { REGISTERED_MODULES } from '@ralion/modules';
-import { getRalionApiUrl } from '@/lib/api-config';
+import { authFetch } from '@/lib/api-config';
 import { useOrganization } from '@ralion/auth';
 import Link from 'next/link';
 
 export default function SettingsPage() {
-  const { organization, isLoading } = useOrganization();
+  const { organization, workspace, isLoading } = useOrganization();
   const activeOrgId = organization?.id || '';
   const isRasAli = activeOrgId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf';
 
@@ -33,8 +33,12 @@ export default function SettingsPage() {
       return;
     }
     try {
-      const apiUrl = getRalionApiUrl(`/api/mari/knowledge/website-sync?organizationId=${encodeURIComponent(activeOrgId)}`);
-      const res = await fetch(apiUrl);
+      const res = await authFetch(`/api/mari/knowledge/website-sync?organizationId=${encodeURIComponent(activeOrgId)}`, {
+        headers: {
+          'x-organization-id': activeOrgId,
+          ...(workspace?.id ? { 'x-workspace-id': workspace.id } : {}),
+        },
+      });
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.websiteKnowledge) {
@@ -67,10 +71,13 @@ export default function SettingsPage() {
       }
 
       try {
-        const apiUrl = getRalionApiUrl('/api/mari/knowledge/website-sync');
-        const res = await fetch(apiUrl, {
+        const res = await authFetch('/api/mari/knowledge/website-sync', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-organization-id': orgId,
+            ...(workspace?.id ? { 'x-workspace-id': workspace.id } : {}),
+          },
           body: JSON.stringify({
             organizationId: orgId,
             websiteUrl: url,
