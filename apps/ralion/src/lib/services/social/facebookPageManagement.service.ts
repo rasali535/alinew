@@ -806,6 +806,7 @@ export class FacebookPageManagementService {
     userId?: string;
     pageId?: string;
     socialConnectionId?: string;
+    prefetchedPosts?: FacebookPagePostItem[];
   }): Promise<NormalizedPageAnalytics> {
     const tenantId = requireTenantId(params.organizationId, params.workspaceId);
     const userId = requireUserId(params.userId);
@@ -894,7 +895,7 @@ export class FacebookPageManagementService {
       } catch {}
     }
 
-    const livePosts = await this.getPagePosts({
+    const livePosts = params.prefetchedPosts || await this.getPagePosts({
       organizationId: params.organizationId || tenantId,
       workspaceId: params.workspaceId || tenantId,
       userId,
