@@ -46,6 +46,7 @@ export async function callAimlApi(
   options: AimlRequestOptions = {}
 ): Promise<string> {
   const {
+    model = 'gemini-3.5-flash',
     maxTokens = 1024,
     temperature = 0.7,
   } = options;
@@ -57,7 +58,7 @@ export async function callAimlApi(
   for (const key of GEMINI_API_KEYS) {
     try {
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

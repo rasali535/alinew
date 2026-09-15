@@ -334,7 +334,8 @@ export async function POST(request: NextRequest) {
     console.error('[Mari Chat API] Exception:', err);
     return corsJsonResponse({
       success: false,
-      error: err.message || "Mari couldn't complete that request right now. Please retry.",
+      code: 'MARI_REQUEST_FAILED',
+      error: "Mari couldn't complete that request right now. Please retry.",
     }, { status: 500 }, request);
   }
 }

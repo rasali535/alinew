@@ -42,7 +42,7 @@ export class MariTokenTelemetryService {
    * Records a verified provider usage event.
    * Idempotent by requestId — duplicate calls with the same requestId are ignored.
    */
-  static recordUsage(params: {
+  static async recordUsage(params: {
     organizationId: string;
     userId?: string;
     requestId: string;
@@ -51,7 +51,7 @@ export class MariTokenTelemetryService {
     inputTokens: number;
     outputTokens: number;
     totalTokens?: number;
-  }): TokenUsageRecord {
+  }): Promise<TokenUsageRecord> {
     const { organizationId, userId, requestId, provider = 'google', model, inputTokens, outputTokens } = params;
     const totalTokens = params.totalTokens ?? (inputTokens + outputTokens);
 
@@ -79,18 +79,19 @@ export class MariTokenTelemetryService {
     this.records.set(organizationId, list);
     this.recordedRequestIds.add(requestId);
 
-    // Durable persistence to security audit log (server-side only, non-blocking)
+// Durable persistence is awaited so serverless teardown cannot drop a usage event.
     if (typeof window === 'undefined' && typeof process !== 'undefined' && process.env) {
       const env = process.env;
       const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL || env.SUPABASE_URL;
       const serviceKey = env['SUPABASE_SECRET_KEY'] || env['SUPABASE_SERVICE_ROLE_KEY'] || env['SUPABASE_SERVICE_KEY'];
-
+    
       if (supabaseUrl && serviceKey) {
-        import('@supabase/supabase-js').then(({ createClient }) => {
+        try {
+          const { createClient } = await import('@supabase/supabase-js');
           const client = createClient(supabaseUrl, serviceKey, {
             auth: { persistSession: false, autoRefreshToken: false },
           });
-          Promise.resolve(client.from('security_audit_logs').insert({
+          const { error } = await client.from('security_audit_logs').insert({
             event_type: 'MARI_PAGE_ANALYSIS',
             event_category: 'MARI_AI',
             success: true,
@@ -109,8 +110,13 @@ export class MariTokenTelemetryService {
             },
             timestamp: record.timestamp,
             created_at: record.timestamp,
-          })).catch(() => {});
-        }).catch(() => {});
+          });
+          if (error) {
+            console.warn('[MariTokenTelemetry] Durable usage insert failed:', error.code || 'DB_ERROR');
+          }
+        } catch {
+          console.warn('[MariTokenTelemetry] Durable usage insert failed: PROVIDER_ERROR');
+        }
       }
     }
 
@@ -146,35 +152,91 @@ export class MariTokenTelemetryService {
   }
 
   /**
-   * Authoritative count of Mari interactions for an organization.
-   */
-  static async getAuthoritativeUsageCount(organizationId: string): Promise<number> {
-    const memCount = (this.records.get(organizationId) || []).length;
+ * Gets durable, tenant-scoped Mari usage and merges any in-memory events
+ * that have not reached the audit log yet. This survives serverless cold starts.
+ */
+static async getAuthoritativeUsage(organizationId: string): Promise<{
+  totalPromptTokens: number;
+  totalCompletionTokens: number;
+  totalTokens: number;
+  requestCount: number;
+}> {
+  const merged = new Map<string, { inputTokens: number; outputTokens: number; totalTokens: number }>();
 
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
-
-    if (supabaseUrl && serviceKey) {
-        try {
-          const { createClient } = await import('@supabase/supabase-js');
-          const client = createClient(supabaseUrl, serviceKey, {
-            auth: { persistSession: false, autoRefreshToken: false },
-          });
-
-          const { count, error } = await client
-            .from('security_audit_logs')
-            .select('id', { count: 'exact', head: true })
-            .eq('event_category', 'MARI_AI')
-            .eq('resource_id', organizationId);
-
-          if (!error && typeof count === 'number' && count > 0) {
-            return Math.max(memCount, count);
-          }
-        } catch {}
-      }
-
-    return memCount;
+  for (const record of this.records.get(organizationId) || []) {
+    merged.set(record.requestId, {
+      inputTokens: record.inputTokens,
+      outputTokens: record.outputTokens,
+      totalTokens: record.totalTokens,
+    });
   }
+
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+
+  if (supabaseUrl && serviceKey) {
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const client = createClient(supabaseUrl, serviceKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+
+      const pageSize = 1000;
+      let from = 0;
+      while (true) {
+        const { data, error } = await client
+          .from('security_audit_logs')
+          .select('id, metadata')
+          .eq('event_category', 'MARI_AI')
+          .eq('resource_id', organizationId)
+          .range(from, from + pageSize - 1);
+
+        if (error) break;
+        const rows = data || [];
+        for (const row of rows) {
+          const metadata = (row as any)?.metadata || {};
+          const requestId = String(metadata.requestId || (row as any)?.id || '');
+          if (!requestId) continue;
+          const inputTokens = Number(metadata.inputTokens || 0);
+          const outputTokens = Number(metadata.outputTokens || 0);
+          const totalTokens = Number(metadata.totalTokens ?? (inputTokens + outputTokens));
+          merged.set(requestId, {
+            inputTokens: Number.isFinite(inputTokens) ? inputTokens : 0,
+            outputTokens: Number.isFinite(outputTokens) ? outputTokens : 0,
+            totalTokens: Number.isFinite(totalTokens) ? totalTokens : 0,
+          });
+        }
+
+        if (rows.length < pageSize) break;
+        from += pageSize;
+      }
+    } catch {}
+  }
+
+  let totalPromptTokens = 0;
+  let totalCompletionTokens = 0;
+  let totalTokens = 0;
+  for (const usage of merged.values()) {
+    totalPromptTokens += usage.inputTokens;
+    totalCompletionTokens += usage.outputTokens;
+    totalTokens += usage.totalTokens;
+  }
+
+  return {
+    totalPromptTokens,
+    totalCompletionTokens,
+    totalTokens,
+    requestCount: merged.size,
+  };
+}
+
+/**
+ * Authoritative count of Mari interactions for an organization.
+ */
+static async getAuthoritativeUsageCount(organizationId: string): Promise<number> {
+  const usage = await this.getAuthoritativeUsage(organizationId);
+  return usage.requestCount;
+}
 
   /**
    * Resets records for testing purposes.

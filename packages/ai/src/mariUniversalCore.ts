@@ -256,10 +256,8 @@ Classification Rules:
   });
 
   const modelsToTry = [
-    'gemini-3.5-flash-lite',
-    'gemini-3.6-flash',
+    'gemini-2.5-flash-lite',
     'gemini-3.5-flash',
-    'gemini-3.1-pro-preview',
   ];
 
   for (const modelName of modelsToTry) {
@@ -332,7 +330,7 @@ Classification Rules:
         modelErrors,
       };
     } catch (err: any) {
-      modelErrors[modelName] = `EXCEPTION_${err?.message || 'NETWORK_ERROR'}`;
+      modelErrors[modelName] = 'PROVIDER_EXCEPTION';
       continue;
     }
   }
@@ -909,7 +907,7 @@ async function callGeminiNeuralCore(
     return {
       text: '',
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-      model: 'gemini-3.5-flash-lite',
+      model: 'gemini-3.5-flash',
       modelsAttempted,
       modelErrors: { all: 'API_KEY_MISSING' },
       error: 'API_KEY_MISSING',
@@ -941,10 +939,8 @@ async function callGeminiNeuralCore(
   });
 
   const modelsToTry = [
-    'gemini-3.5-flash-lite',
-    'gemini-3.6-flash',
     'gemini-3.5-flash',
-    'gemini-3.1-pro-preview',
+    'gemini-2.5-flash-lite',
   ];
   let lastError = '';
 
@@ -1006,8 +1002,8 @@ async function callGeminiNeuralCore(
         modelErrors,
       };
     } catch (err: any) {
-      lastError = `EXCEPTION_${err.message}`;
-      modelErrors[modelName] = `EXCEPTION_${err.message}`;
+      lastError = 'PROVIDER_EXCEPTION';
+      modelErrors[modelName] = 'PROVIDER_EXCEPTION';
       console.warn(`[MariCore] Gemini (${modelName}) API exception:`, err.message);
     }
   }
@@ -1015,7 +1011,7 @@ async function callGeminiNeuralCore(
   return {
     text: '',
     usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-    model: modelsAttempted[0] || 'gemini-3.5-flash-lite',
+    model: modelsAttempted[0] || 'gemini-3.5-flash',
     modelsAttempted,
     modelErrors,
     error: lastError || 'ALL_MODELS_FAILED',
@@ -1301,7 +1297,7 @@ export class MariUniversalCore {
       };
       semanticDecisionSource = 'DETERMINISTIC_CLASSIFICATION';
     } else if (!request.forceLocalOnly) {
-      classificationModelAttempted = 'gemini-3.5-flash-lite';
+      classificationModelAttempted = 'gemini-2.5-flash-lite';
       const modelClassification = await callGeminiSemanticClassifier(
         cleanOriginalPrompt,
         conversationHistory,
@@ -1318,7 +1314,7 @@ export class MariUniversalCore {
           Object.assign(modelFailureCodes, modelClassification.modelErrors);
         }
         if (modelClassification.model) {
-          classificationModelAttempted = modelClassification.modelsAttempted[0] || 'gemini-3.5-flash-lite';
+          classificationModelAttempted = modelClassification.modelsAttempted[0] || 'gemini-2.5-flash-lite';
           classificationModelSucceeded = true;
           classificationTokens = modelClassification.usage;
           semanticDecision = modelClassification.decision;
@@ -1777,8 +1773,8 @@ export class MariUniversalCore {
     let usage: MariTokenUsage = { ...classificationTokens };
     let suggestedActions: MariActionPayload[] = [];
 
-    responseModelAttempted = 'gemini-3.5-flash-lite';
-    modelAttempted = 'gemini-3.5-flash-lite';
+    responseModelAttempted = 'gemini-3.5-flash';
+    modelAttempted = 'gemini-3.5-flash';
 
     if (!request.forceLocalOnly) {
       const geminiResult = await callGeminiNeuralCore(
@@ -1808,8 +1804,8 @@ export class MariUniversalCore {
           };
           actualModelUsed = geminiResult.model;
           modelUsed = `Mari Neural Engine (${geminiResult.model})`;
-          modelAttempted = geminiResult.modelsAttempted[0] || 'gemini-3.5-flash-lite';
-          responseModelAttempted = geminiResult.modelsAttempted[0] || 'gemini-3.5-flash-lite';
+          modelAttempted = geminiResult.modelsAttempted[0] || 'gemini-3.5-flash';
+          responseModelAttempted = geminiResult.modelsAttempted[0] || 'gemini-3.5-flash';
           responseModelSucceeded = true;
           responseSource = 'gemini';
           modelSucceeded = true;
@@ -1935,7 +1931,7 @@ export class MariUniversalCore {
     // 8. Authoritative Exactly-Once Telemetry Recording
     let usageRecordId: string | undefined = undefined;
     try {
-      const record = MariTokenTelemetryService.recordUsage({
+      const record = await MariTokenTelemetryService.recordUsage({
         organizationId: orgId,
         userId: request.userId || 'anonymous',
         requestId,

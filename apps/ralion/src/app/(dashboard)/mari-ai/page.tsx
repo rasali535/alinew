@@ -427,11 +427,12 @@ export default function MariAiPage() {
             'Content-Type': 'application/json',
             ...authHeaders,
             'x-organization-id': effectiveOrgId,
-            'x-workspace-id': effectiveOrgId,
+            'x-workspace-id': activeWorkspaceId || effectiveOrgId,
           },
           body: JSON.stringify({
             query: cleanQuery,
             organizationId: effectiveOrgId,
+            workspaceId: activeWorkspaceId || undefined,
             userId: (user as any)?.id || (user as any)?.userId,
             activeScreen: { route: '/mari-ai', label: 'Mari Business Growth Partner' },
             messages: [...messages, userMsg],
@@ -447,7 +448,7 @@ export default function MariAiPage() {
             suggestedActions = data.actionsSuggested || [];
             ragContext = data.ragContext || undefined;
             tokens = data.usage;
-            modelUsed = data.modelUsed || 'Mari Enterprise Intelligence (gemini-2.5-flash)';
+            modelUsed = data.modelUsed || 'Mari Enterprise Intelligence (gemini-3.5-flash)';
             responseSource = data.responseSource || 'SERVER_MARI_CHAT_API';
             fallbackUsed = typeof data.fallbackUsed === 'boolean' ? data.fallbackUsed : (data.semanticDecisionSource === 'FALLBACK' || !data.modelSucceeded);
             detectedIntent = data.detectedIntent;
@@ -467,10 +468,10 @@ export default function MariAiPage() {
       // 2. Secondary Fallback: ONLY if network failed or server was completely unreachable
       if (!answerText) {
         fallbackUsed = true;
-        responseSource = 'CLIENT_FALLBACK';
+        responseSource = 'SERVER_ERROR';
         semanticDecisionSource = 'FALLBACK';
-        fallbackReason = 'NETWORK_OR_SERVER_UNREACHABLE';
-        answerText = "I am ready to assist with your growth strategy, campaign planning, and business analysis. How can I help you today?";
+        fallbackReason = httpStatus ? `HTTP_${httpStatus}` : 'NETWORK_OR_SERVER_UNREACHABLE';
+        throw new Error('Mari server response unavailable');
         suggestedActions = [];
       }
 
@@ -495,7 +496,7 @@ export default function MariAiPage() {
       const mariMsg: ChatMessage = {
         id: `mari-${Date.now()}`,
         sender: 'MARI',
-        text: answerText || "I've reviewed your business context and am ready to assist with growth strategy and campaign execution.",
+        text: answerText,
         actionsSuggested: suggestedActions,
         ragContext,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -508,7 +509,7 @@ export default function MariAiPage() {
       const errorMsg: ChatMessage = {
         id: `mari-err-${Date.now()}`,
         sender: 'MARI',
-        text: `Mari couldn't complete that request right now. Please retry. (${err.message || 'Connection error'})`,
+        text: `Mari couldn't complete that request right now. Please retry.`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       setMessages(prev => [...prev, errorMsg]);
