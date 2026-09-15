@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyPlatformAdminRequest } from '../../../../../lib/auth/adminAuth';
-import { createClient } from '@supabase/supabase-js';
 import { SystemHealthMetric } from '@ralion/auth/server';
+import { getPrivilegedSupabase } from '@/lib/supabase/server';
 
 export async function GET(request: NextRequest) {
   const auth = await verifyPlatformAdminRequest(request);
@@ -17,48 +17,34 @@ export async function GET(request: NextRequest) {
 
   // 1. Probe Supabase Database
   const startDb = Date.now();
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || '';
-
-  if (supabaseUrl && serviceKey) {
-    try {
-      const supabase = createClient(supabaseUrl, serviceKey);
-      const { error } = await supabase.from('profiles').select('id', { count: 'exact', head: true });
-      const lat = Date.now() - startDb;
-      metrics.push({
-        service: 'Supabase Database (PostgreSQL)',
-        status: error ? 'DEGRADED' : 'UP',
-        latencyMs: lat,
-        lastChecked: now,
-        lastError: error?.message,
-        failureCount: error ? 1 : 0,
-      });
-    } catch (e: any) {
-      metrics.push({
-        service: 'Supabase Database (PostgreSQL)',
-        status: 'DOWN',
-        latencyMs: Date.now() - startDb,
-        lastChecked: now,
-        lastError: e.message,
-        failureCount: 1,
-      });
-    }
-  } else {
+  let supabase;
+  try {
+    supabase = getPrivilegedSupabase();
+    const { error } = await supabase.from('profiles').select('id', { count: 'exact', head: true });
+    const lat = Date.now() - startDb;
     metrics.push({
-      service: 'Supabase Database',
-      status: 'DEGRADED',
-      latencyMs: 0,
+      service: 'Supabase Database (PostgreSQL)',
+      status: error ? 'DEGRADED' : 'UP',
+      latencyMs: lat,
       lastChecked: now,
-      lastError: 'Missing SUPABASE_URL credentials in environment',
+      lastError: error?.message,
+      failureCount: error ? 1 : 0,
+    });
+  } catch (e: any) {
+    metrics.push({
+      service: 'Supabase Database (PostgreSQL)',
+      status: 'DOWN',
+      latencyMs: Date.now() - startDb,
+      lastChecked: now,
+      lastError: e.message,
       failureCount: 1,
     });
   }
 
   // 2. Probe Supabase Storage
   const startStorage = Date.now();
-  if (supabaseUrl && serviceKey) {
+  if (supabase) {
     try {
-      const supabase = createClient(supabaseUrl, serviceKey);
       const { data, error } = await supabase.storage.from('creatives').list('', { limit: 1 });
       metrics.push({
         service: 'Supabase Storage ("creatives" bucket)',

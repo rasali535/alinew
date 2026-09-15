@@ -7,8 +7,8 @@ import {
 } from '@ralion/ai/server';
 import { BillingDatabaseService } from '@ralion/database';
 import { PlatformAdminService } from '@ralion/auth/server';
-import { createClient } from '@supabase/supabase-js';
 import { getSocialConnectionCapabilities } from '@ralion/integrations';
+import { getPrivilegedSupabase } from '@/lib/supabase/server';
 
 export async function GET(request: NextRequest) {
   const auth = await verifyPlatformAdminRequest(request);
@@ -20,23 +20,19 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
-
     let supabase: any = null;
     let registeredProfiles: any[] = [];
     let fbConns: any[] = [];
     let zConns: any[] = [];
 
-    if (supabaseUrl && serviceKey) {
-      try {
-        supabase = createClient(supabaseUrl, serviceKey);
+    try {
+      supabase = getPrivilegedSupabase();
 
-        const [profsRes, connsRes, zRes] = await Promise.allSettled([
-          supabase.from('profiles').select('id, full_name, email, created_at'),
-          supabase.from('social_connections').select('*').order('created_at', { ascending: false }),
-          supabase.from('social_provider_profiles').select('*'),
-        ]);
+      const [profsRes, connsRes, zRes] = await Promise.allSettled([
+        supabase.from('profiles').select('id, full_name, email, created_at'),
+        supabase.from('social_connections').select('*').order('created_at', { ascending: false }),
+        supabase.from('social_provider_profiles').select('*'),
+      ]);
 
         if (profsRes.status === 'fulfilled' && profsRes.value.data) {
           registeredProfiles = profsRes.value.data;
@@ -55,9 +51,8 @@ export async function GET(request: NextRequest) {
         } else if (zRes.status === 'rejected' || (zRes.status === 'fulfilled' && zRes.value.error)) {
           console.warn('[Admin Metrics] Warning loading social_provider_profiles:', zRes.status === 'rejected' ? zRes.reason : zRes.value.error);
         }
-      } catch (dbErr: any) {
-        console.error('[Admin Metrics] Supabase connection error:', dbErr.message);
-      }
+    } catch (dbErr: any) {
+      console.error('[Admin Metrics] Supabase connection error:', dbErr.message);
     }
 
     // 1. Live customer tenant discovery strictly from canonical Supabase user profiles (excluding platform admin)

@@ -11,17 +11,13 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, User } from '@supabase/supabase-js';
 import { corsJsonResponse } from '../cors';
+import {
+  CANONICAL_SUPABASE_URL,
+  getPrivilegedSupabase,
+  resolvePrivilegedSupabaseKey,
+} from '../supabase/server';
 
-export const CANONICAL_SUPABASE_URL = 'https://yidsfihagwttlmhfynmf.supabase.co';
-
-function requireSupabaseUrl(): string {
-  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const isProd = process.env.NODE_ENV === 'production';
-  if (isProd && (!url || url.includes('localhost') || url.includes('127.0.0.1'))) {
-    return CANONICAL_SUPABASE_URL;
-  }
-  return url || CANONICAL_SUPABASE_URL;
-}
+export { CANONICAL_SUPABASE_URL, resolvePrivilegedSupabaseKey };
 
 /**
  * Publishable-key client used exclusively for user JWT verification (auth.getUser).
@@ -55,24 +51,7 @@ export function getVerifierSupabase() {
  * migrated to the modern key format. It must NOT win when SUPABASE_SECRET_KEY
  * is explicitly set, because it may hold a disabled legacy JWT.
  */
-export function getServiceSupabase() {
-  // Modern sb_secret_ key is checked first; legacy service-role JWT is fallback only.
-  const keySource =
-    process.env.SUPABASE_SECRET_KEY       ? 'SUPABASE_SECRET_KEY'       :
-    process.env.SUPABASE_SERVICE_ROLE_KEY ? 'SUPABASE_SERVICE_ROLE_KEY' :
-    null;
-  const serviceKey = keySource ? process.env[keySource] : null;
-  if (!serviceKey || !keySource) {
-    const err = new Error('[ServerAuth] SUPABASE_SECRET_KEY (or fallback SUPABASE_SERVICE_ROLE_KEY) environment variable is required.');
-    (err as any).code = 'SUPABASE_CONFIG_ERROR';
-    throw err;
-  }
-  // Log only the variable name that was selected — never the value.
-  console.log(`[ServerAuth] Privileged client initialised using ${keySource}.`);
-  return createClient(requireSupabaseUrl(), serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
-  });
-}
+export const getServiceSupabase = getPrivilegedSupabase;
 
 function canonicalUuid(raw?: string | null): string | null {
   if (!raw) return null;

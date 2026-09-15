@@ -6,27 +6,8 @@
  */
 
 import 'server-only';
-import { createClient } from '@supabase/supabase-js';
 import { encryptToken, decryptToken } from '@ralion/integrations/server';
-
-// Service-role Supabase client (server-side only)
-function getServiceSupabase() {
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!serviceKey) {
-    throw new Error('[SocialService] Missing SUPABASE_SERVICE_ROLE_KEY environment variable.');
-  }
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co',
-    serviceKey,
-    {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-        detectSessionInUrl: false,
-      },
-    }
-  );
-}
+import { getPrivilegedSupabase as getServiceSupabase } from '@/lib/supabase/server';
 
 // Types
 export interface SocialAccountRecord {

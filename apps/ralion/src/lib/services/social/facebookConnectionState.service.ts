@@ -16,24 +16,8 @@
  */
 
 import 'server-only';
-import { createClient } from '@supabase/supabase-js';
 import { decryptToken } from '@ralion/integrations/server';
-
-function getServiceSupabase() {
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl) {
-    throw new Error('SUPABASE_URL is not configured for Facebook connection state resolution.');
-  }
-  if (!serviceKey) {
-    throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured for Facebook connection state resolution.');
-  }
-
-  return createClient(supabaseUrl, serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false }
-  });
-}
+import { getPrivilegedSupabase as getServiceSupabase } from '@/lib/supabase/server';
 
 export const AUTHORITATIVE_META_APP_ID = '1759273775121373';
 export const AUTHORITATIVE_META_APP_NAME = 'Ralion growth';

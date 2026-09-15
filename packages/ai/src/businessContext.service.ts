@@ -310,7 +310,10 @@ export class BusinessContextService {
       try {
         const { createClient } = require('@supabase/supabase-js');
         const sUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const sKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        const sKey =
+          process.env.SUPABASE_SECRET_KEY ||
+          process.env.SUPABASE_SERVICE_ROLE_KEY ||
+          process.env.SUPABASE_SERVICE_KEY;
         if (!sUrl || !sKey) {
           throw new Error('Supabase server credentials are not configured for Mari business context resolution.');
         }

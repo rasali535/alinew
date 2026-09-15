@@ -1,8 +1,7 @@
 import 'server-only';
 import { NextRequest } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { PlatformAdminService } from '@ralion/auth/server';
-import { extractAuthToken } from './serverAuth';
+import { extractAuthToken, getVerifierSupabase } from './serverAuth';
 
 export interface AdminAuthResult {
   authorized: boolean;
@@ -46,19 +45,8 @@ export async function verifyPlatformAdminRequest(request: NextRequest): Promise<
 
   // 2. Validate Supabase user session token if present
   if (token) {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || '';
-
-    if (!supabaseUrl || !serviceKey) {
-      return {
-        authorized: false,
-        statusCode: 500,
-        error: 'Platform auth configuration unavailable.',
-      };
-    }
-
     try {
-      const supabase = createClient(supabaseUrl, serviceKey);
+      const supabase = getVerifierSupabase();
       const { data: userData, error: userErr } = await supabase.auth.getUser(token);
 
       if (userErr || !userData.user) {

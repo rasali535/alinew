@@ -7,7 +7,7 @@ import {
 } from '@ralion/ai/server';
 import { BillingDatabaseService } from '@ralion/database';
 import { PlatformAdminService, CustomerSummaryItem } from '@ralion/auth/server';
-import { createClient } from '@supabase/supabase-js';
+import { getPrivilegedSupabase } from '@/lib/supabase/server';
 
 export async function GET(request: NextRequest) {
   const auth = await verifyPlatformAdminRequest(request);
@@ -21,9 +21,6 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get('q')?.toLowerCase() || '';
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
-
   let registeredProfiles: any[] = [];
   let socialConns: any[] = [];
   let socialDests: any[] = [];
@@ -34,16 +31,15 @@ export async function GET(request: NextRequest) {
     facebookFollowers?: number;
   }> = {};
 
-  if (supabaseUrl && serviceKey) {
-    try {
-      const supabase = createClient(supabaseUrl, serviceKey);
+  try {
+    const supabase = getPrivilegedSupabase();
 
-      const [profsRes, connsRes, zRes, destsRes] = await Promise.allSettled([
-        supabase.from('profiles').select('id, full_name, email, created_at'),
-        supabase.from('social_connections').select('organization_id, workspace_id, user_id, connection_status, provider, account_name, followers_count, metadata'),
-        supabase.from('social_provider_profiles').select('organization_id, workspace_id, user_id, status, provider'),
-        supabase.from('social_destinations').select('organization_id, workspace_id, user_id, status, platform, page_name, followers_count'),
-      ]);
+    const [profsRes, connsRes, zRes, destsRes] = await Promise.allSettled([
+      supabase.from('profiles').select('id, full_name, email, created_at'),
+      supabase.from('social_connections').select('organization_id, workspace_id, user_id, connection_status, provider, account_name, followers_count, metadata'),
+      supabase.from('social_provider_profiles').select('organization_id, workspace_id, user_id, status, provider'),
+      supabase.from('social_destinations').select('organization_id, workspace_id, user_id, status, platform, page_name, followers_count'),
+    ]);
 
       if (profsRes.status === 'fulfilled' && profsRes.value.data) {
         registeredProfiles = profsRes.value.data;
@@ -93,9 +89,8 @@ export async function GET(request: NextRequest) {
           });
         });
       }
-    } catch (err: any) {
-      console.warn('[Admin Customers] Supabase query warning:', err.message);
-    }
+  } catch (err: any) {
+    console.warn('[Admin Customers] Supabase query warning:', err.message);
   }
 
   const profiles = BusinessKnowledgeProfileService.listProfiles();

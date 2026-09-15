@@ -5,24 +5,9 @@
  */
 
 import * as crypto from 'crypto';
-import { createClient } from '@supabase/supabase-js';
 import { SocialPlatformType } from '@ralion/integrations';
 import { AuditLoggerService } from '../auditLogger.service';
-
-function getServiceSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co';
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!key) {
-    throw new Error('[SocialWebhook] Missing SUPABASE_SERVICE_ROLE_KEY environment variable.');
-  }
-  return createClient(url, key, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-  });
-}
+import { getPrivilegedSupabase as getServiceSupabase } from '@/lib/supabase/server';
 
 export class SocialWebhookService {
   /**

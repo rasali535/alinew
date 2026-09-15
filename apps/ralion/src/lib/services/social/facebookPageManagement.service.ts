@@ -7,13 +7,13 @@
  */
 
 import 'server-only';
-import { createClient } from '@supabase/supabase-js';
 import { ZernioSocialService, META_GRAPH_API_VERSION } from '@ralion/integrations/server';
 import { EntitlementService } from '@ralion/auth';
 import { AuditLoggerService } from '../auditLogger.service';
 import { SocialTokenManager } from './socialTokenManager.service';
 import { FacebookCommentsService } from './facebookComments.service';
 import { FacebookConnectionStateService } from './facebookConnectionState.service';
+import { getPrivilegedSupabase as getServiceSupabase } from '@/lib/supabase/server';
 
 export { META_GRAPH_API_VERSION };
 
@@ -49,22 +49,6 @@ export async function resolvePageAccessToken(userToken: string, targetPageId: st
   }
 
   return null;
-}
-
-function getServiceSupabase() {
-  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!url) throw new Error('SUPABASE_URL is not configured for Facebook Page management.');
-  if (!key) throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured for Facebook Page management.');
-
-  return createClient(url, key, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-  });
 }
 
 function toCanonicalUuid(raw?: string | null): string | null {

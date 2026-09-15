@@ -11,7 +11,6 @@ import 'server-only';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { createClient } from '@supabase/supabase-js';
 import {
   SocialPlatformType,
   PublishResponse,
@@ -24,23 +23,9 @@ import { SocialContentValidator } from './socialContentValidator.service';
 import { SocialTokenManager } from './socialTokenManager.service';
 import { SocialProviderRouter } from './socialProviderRouter.service';
 import { AuditLoggerService } from '../auditLogger.service';
+import { getPrivilegedSupabase as getServiceSupabase } from '@/lib/supabase/server';
 
 import { resolvePageAccessToken } from './facebookPageManagement.service';
-
-function getServiceSupabase() {
-  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co';
-  const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!key) {
-    throw new Error('[SocialPublishing] Missing SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY environment variable.');
-  }
-  return createClient(url, key, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-  });
-}
 
 export interface PublishRequest {
   userId: string;

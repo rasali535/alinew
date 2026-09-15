@@ -10,7 +10,7 @@ import {
 } from '@ralion/ai/server';
 import { BillingDatabaseService } from '@ralion/database';
 import { PlatformAdminService } from '@ralion/auth/server';
-import { createClient } from '@supabase/supabase-js';
+import { getPrivilegedSupabase } from '@/lib/supabase/server';
 
 export async function GET(
   request: NextRequest,
@@ -70,31 +70,26 @@ export async function GET(
 
   // 7. Supabase Social Connections
   let socialConnections: any[] = [];
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
-
-  if (supabaseUrl && serviceKey) {
-    try {
-      const supabase = createClient(supabaseUrl, serviceKey);
-      const { data: conns } = await supabase
-        .from('social_connections')
-        .select('*')
-        .eq('organization_id', organizationId);
-      if (conns) {
-        // Redact any private access tokens before returning to admin
-        socialConnections = conns.map(c => ({
-          id: c.id,
-          provider: c.provider,
-          account_name: c.account_name,
-          connection_status: c.connection_status,
-          token_status: c.token_status,
-          followers_count: c.followers_count,
-          last_sync_at: c.last_sync_at,
-          created_at: c.created_at,
-        }));
-      }
-    } catch {}
-  }
+  try {
+    const supabase = getPrivilegedSupabase();
+    const { data: conns } = await supabase
+      .from('social_connections')
+      .select('*')
+      .eq('organization_id', organizationId);
+    if (conns) {
+      // Redact any private access tokens before returning to admin
+      socialConnections = conns.map(c => ({
+        id: c.id,
+        provider: c.provider,
+        account_name: c.account_name,
+        connection_status: c.connection_status,
+        token_status: c.token_status,
+        followers_count: c.followers_count,
+        last_sync_at: c.last_sync_at,
+        created_at: c.created_at,
+      }));
+    }
+  } catch {}
 
   // 8. Tenant-specific Audit History
   const tenantAuditHistory = PlatformAdminService.getAuditLogs({ targetId: organizationId });

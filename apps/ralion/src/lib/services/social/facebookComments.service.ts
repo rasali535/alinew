@@ -5,9 +5,9 @@
  */
 
 import 'server-only';
-import { createClient } from '@supabase/supabase-js';
 import { ZernioSocialService } from '@ralion/integrations/server';
 import { AuditLoggerService } from '../auditLogger.service';
+import { getPrivilegedSupabase as getServiceSupabase } from '@/lib/supabase/server';
 
 export interface FacebookComment {
   id: string;
@@ -30,21 +30,6 @@ export interface FacebookCommentReply {
   replyText: string;
   createdAt: string;
   isPageOwner: boolean;
-}
-
-function getServiceSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co';
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!key) {
-    throw new Error('[FacebookComments] Missing SUPABASE_SERVICE_ROLE_KEY environment variable.');
-  }
-  return createClient(url, key, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-  });
 }
 
 export class FacebookCommentsService {
@@ -329,4 +314,3 @@ export class FacebookCommentsService {
     return reply;
   }
 }
-

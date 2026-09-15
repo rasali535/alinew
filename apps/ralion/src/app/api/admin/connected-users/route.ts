@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyPlatformAdminRequest } from '../../../../lib/auth/adminAuth';
-import { createClient } from '@supabase/supabase-js';
 import { getSocialConnectionCapabilities } from '@ralion/integrations';
+import { getPrivilegedSupabase } from '@/lib/supabase/server';
 
 export async function GET(request: NextRequest) {
   const auth = await verifyPlatformAdminRequest(request);
@@ -12,19 +12,8 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
-
-  if (!supabaseUrl || !serviceKey) {
-    console.error('[Admin Connected Users] Supabase configuration missing in environment.');
-    return NextResponse.json(
-      { success: false, error: 'Database configuration missing in environment.' },
-      { status: 500 }
-    );
-  }
-
   try {
-    const supabase = createClient(supabaseUrl, serviceKey);
+    const supabase = getPrivilegedSupabase();
 
     // 1. Fetch live social connections
     const { data: conns, error: connErr } = await supabase

@@ -3,7 +3,7 @@
  *
  * Authoritative production storage provider for Ralion OS creative assets.
  * Backed by private Supabase Storage `creatives` bucket.
- * Uses SUPABASE_SERVICE_ROLE_KEY strictly server-side.
+ * Uses a privileged Supabase key strictly server-side.
  */
 
 import 'server-only';
@@ -28,7 +28,10 @@ export class SupabaseStorageProvider implements AssetStorageProvider {
     if (this.client) return this.client;
 
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yidsfihagwttlmhfynmf.supabase.co';
-    const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const key =
+      process.env.SUPABASE_SECRET_KEY ||
+      process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.SUPABASE_SERVICE_KEY;
 
     if (!key) {
       throw new Error(
