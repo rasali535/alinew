@@ -48,14 +48,26 @@ export function getVerifierSupabase() {
 /**
  * Service-role admin client used exclusively for privileged DB queries.
  * Never call auth.getUser() on this client — it must not validate user JWTs.
+ *
+ * Priority: SUPABASE_SERVICE_ROLE_KEY (canonical Supabase name) is preferred.
+ * SUPABASE_SECRET_KEY is accepted as a legacy alias only when the canonical
+ * variable is absent — this prevents a stale secret-key value from silently
+ * overriding a valid service-role key.
  */
 export function getServiceSupabase() {
-  const serviceKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!serviceKey) {
-    const err = new Error('[ServerAuth] SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY environment variable is required.');
+  // Canonical variable is checked first; legacy alias is a fallback only.
+  const keySource =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ? 'SUPABASE_SERVICE_ROLE_KEY' :
+    process.env.SUPABASE_SECRET_KEY       ? 'SUPABASE_SECRET_KEY'       :
+    null;
+  const serviceKey = keySource ? process.env[keySource] : null;
+  if (!serviceKey || !keySource) {
+    const err = new Error('[ServerAuth] SUPABASE_SERVICE_ROLE_KEY (or legacy SUPABASE_SECRET_KEY) environment variable is required.');
     (err as any).code = 'SUPABASE_CONFIG_ERROR';
     throw err;
   }
+  // Log only the variable name that was selected — never the value.
+  console.log(`[ServerAuth] Privileged client initialised using ${keySource}.`);
   return createClient(requireSupabaseUrl(), serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
   });
@@ -413,7 +425,20 @@ export async function resolveRalionAuthContext(
       .maybeSingle();
 
     if (ownedWorkspaceError) {
-      console.error('[ServerAuth] Database error looking up owned workspaces:', { code: ownedWorkspaceError.code });
+      // Log error category, HTTP status and message for Render diagnostics.
+      // Keys, tokens and URLs containing credentials are never logged.
+      const dbErrCode    = ownedWorkspaceError.code    ?? 'undefined';
+      const dbErrStatus  = (ownedWorkspaceError as any).status  ?? 'undefined';
+      const dbErrMessage = ownedWorkspaceError.message ?? 'undefined';
+      const isAuthRejection =
+        /api.?key|apikey|invalid key|service_role|jwt|unauthorized|forbidden/i.test(dbErrMessage) ||
+        dbErrStatus === 401 || dbErrStatus === 403;
+      console.error('[ServerAuth] Database error looking up owned workspaces:', {
+        code:        dbErrCode,
+        httpStatus:  dbErrStatus,
+        message:     dbErrMessage,
+        category:    isAuthRejection ? 'PRIVILEGED_KEY_REJECTION' : 'QUERY_ERROR',
+      });
       return {
         status: 'TENANT_DATABASE_ERROR',
         context: null,
