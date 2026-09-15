@@ -48,15 +48,22 @@ export class FacebookCommentsService {
     // 1. Resolve connected tenant's Zernio profile and account mapping strictly for this workspace / user
     let connQuery = supabase
       .from('social_connections')
-      .select('zernio_profile_id, zernio_account_id, workspace_id, user_id')
+      .select('zernio_profile_id, zernio_account_id, workspace_id, organization_id, user_id')
       .eq('provider', 'facebook')
       .eq('connection_status', 'CONNECTED');
 
-    if (params.workspaceId && params.workspaceId !== 'default' && params.workspaceId !== 'default-org') {
-      connQuery = connQuery.or(`workspace_id.eq.${params.workspaceId},user_id.eq.${params.userId || params.workspaceId}`);
-    } else if (params.userId && params.userId !== 'default-user') {
-      connQuery = connQuery.eq('user_id', params.userId);
-    } else {
+    const hasOrganizationScope = Boolean(params.organizationId && params.organizationId !== 'default-org');
+    const hasWorkspaceScope = Boolean(params.workspaceId && params.workspaceId !== 'default' && params.workspaceId !== 'default-org');
+    const hasUserScope = Boolean(params.userId && params.userId !== 'default-user');
+
+    if (hasOrganizationScope) connQuery = connQuery.eq('organization_id', params.organizationId!);
+    if (hasUserScope) {
+      connQuery = connQuery.eq('user_id', params.userId!);
+    } else if (!hasOrganizationScope && hasWorkspaceScope) {
+      connQuery = connQuery.eq('workspace_id', params.workspaceId!);
+    }
+
+    if (!hasOrganizationScope && !hasWorkspaceScope && !hasUserScope) {
       // Unscoped request -> return empty comments (zero cross-tenant leakage)
       return [];
     }
@@ -233,15 +240,22 @@ export class FacebookCommentsService {
     // 1. Resolve connected tenant's Zernio profile and account mapping strictly for this workspace / user
     let connQuery = supabase
       .from('social_connections')
-      .select('zernio_account_id, account_name, workspace_id, user_id')
+      .select('zernio_account_id, account_name, workspace_id, organization_id, user_id')
       .eq('provider', 'facebook')
       .eq('connection_status', 'CONNECTED');
 
-    if (params.workspaceId && params.workspaceId !== 'default' && params.workspaceId !== 'default-org') {
-      connQuery = connQuery.or(`workspace_id.eq.${params.workspaceId},user_id.eq.${params.userId || params.workspaceId}`);
-    } else if (params.userId && params.userId !== 'default-user') {
-      connQuery = connQuery.eq('user_id', params.userId);
-    } else {
+    const hasOrganizationScope = Boolean(params.organizationId && params.organizationId !== 'default-org');
+    const hasWorkspaceScope = Boolean(params.workspaceId && params.workspaceId !== 'default' && params.workspaceId !== 'default-org');
+    const hasUserScope = Boolean(params.userId && params.userId !== 'default-user');
+
+    if (hasOrganizationScope) connQuery = connQuery.eq('organization_id', params.organizationId!);
+    if (hasUserScope) {
+      connQuery = connQuery.eq('user_id', params.userId!);
+    } else if (!hasOrganizationScope && hasWorkspaceScope) {
+      connQuery = connQuery.eq('workspace_id', params.workspaceId!);
+    }
+
+    if (!hasOrganizationScope && !hasWorkspaceScope && !hasUserScope) {
       throw new Error('Authentication/workspace context required to reply to comment.');
     }
 
