@@ -19,7 +19,7 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
   onClose,
   onNavigate
 }) => {
-  const { organization, user } = useOrganization();
+  const { organization, workspace, user } = useOrganization();
   const [messages, setMessages] = useState<Array<{ sender: 'USER' | 'MARI'; text: string; actions?: any[]; tokens?: { totalTokens?: number } }>>([
     {
       sender: 'MARI',
@@ -54,7 +54,7 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
 
       try {
         const authHeaders = await getRalionAuthHeaders();
-        let activeOrgId: string = organization?.id || (user as any)?.id || (user as any)?.userId || '';
+        let activeOrgId: string = organization?.id || '';
         try {
           const stored = typeof window !== 'undefined'
             ? (localStorage.getItem('ralion_active_org_id') || localStorage.getItem('ralion_active_workspace_id') || localStorage.getItem('ralion_workspace_id'))
@@ -70,12 +70,13 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
             'Content-Type': 'application/json',
             ...authHeaders,
             'x-organization-id': activeOrgId,
-            'x-workspace-id': activeOrgId,
+            'x-workspace-id': workspace?.id || activeOrgId,
           },
           body: JSON.stringify({
             query: userText,
             prompt: userText,
             organizationId: activeOrgId,
+            workspaceId: workspace?.id || undefined,
             activeScreen: { route: '/mari-ai', label: 'Mari Business Drawer' },
             messages: newHistory.map(m => ({
               role: m.sender === 'USER' ? 'user' : 'model',
@@ -88,7 +89,8 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
 
         if (res.ok) {
           const data = await res.json();
-          respText = data.answer || data.text || "I've reviewed your business intelligence.";
+          respText = data.answer || data.text || '';
+          if (!data.success || !respText) throw new Error('Invalid Mari server response');
           responseSource = data.responseSource || 'SERVER_MARI_CHAT_API';
           fallbackUsed = data.fallbackUsed !== undefined ? data.fallbackUsed : (responseSource === 'local_grounded' && data.detectedIntent !== 'GREETING' && data.detectedIntent !== 'FACEBOOK_CONNECTION_STATUS' && data.detectedIntent !== 'CREATIVE_STUDIO');
           buildVersion = data.buildVersion || MARI_BUILD_VERSION;
@@ -109,8 +111,8 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
         } else {
           fallbackUsed = true;
           fallbackReason = `HTTP_${httpStatus}`;
-          respText = "I am ready to assist with your growth strategy, campaign planning, and business analysis.";
-          responseSource = 'HTTP_NON_200_FALLBACK';
+          respText = "Mari couldn't complete that request right now. Please retry.";
+          responseSource = 'HTTP_ERROR';
           setMessages(prev => [
             ...prev,
             {
@@ -121,9 +123,9 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
         }
       } catch (err: any) {
         fallbackUsed = true;
-        fallbackReason = `NETWORK_ERROR_${err.message || 'EXCEPTION'}`;
-        respText = "I'm having trouble connecting to my neural reasoning core right now. Please check your network connection.";
-        responseSource = 'NETWORK_ERROR_FALLBACK';
+        fallbackReason = 'NETWORK_ERROR';
+        respText = "Mari couldn't reach the server right now. Please retry.";
+        responseSource = 'NETWORK_ERROR';
         setMessages(prev => [
           ...prev,
           {

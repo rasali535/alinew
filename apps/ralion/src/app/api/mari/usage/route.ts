@@ -11,27 +11,27 @@ export async function OPTIONS(request: NextRequest) {
 
 /**
  * GET /api/mari/usage
- * Authoritative tenant-scoped Mari AI usage stats.
+ * Authoritative authenticated tenant-scoped Mari AI usage stats.
  */
 export async function GET(request: NextRequest) {
   try {
-    const serverCtx = await getCurrentRalionContext(request, { requireAuth: false });
-    const orgId =
-      request.nextUrl.searchParams.get('organizationId') ||
-      serverCtx?.workspace.id ||
-      serverCtx?.user.id ||
-      request.headers.get('x-organization-id') ||
-      request.headers.get('x-workspace-id') ||
-      'ras-ali-labs';
+    const serverCtx = await getCurrentRalionContext(request, { requireAuth: true });
+    if (!serverCtx) {
+      return authRequiredResponse(request, 'Authentication required to view Mari usage.');
+    }
 
-    const count = await MariTokenTelemetryService.getAuthoritativeUsageCount(orgId);
-    const telemetry = MariTokenTelemetryService.getTotalUsage(orgId);
+    const orgId =
+      serverCtx.organization?.id ||
+      serverCtx.workspace.organization_id ||
+      serverCtx.workspace.id;
+
+    const telemetry = await MariTokenTelemetryService.getAuthoritativeUsage(orgId);
 
     return corsJsonResponse({
       success: true,
       data: {
         organizationId: orgId,
-        queryCount: Math.max(count, telemetry.requestCount),
+        queryCount: telemetry.requestCount,
         totalPromptTokens: telemetry.totalPromptTokens,
         totalCompletionTokens: telemetry.totalCompletionTokens,
         totalTokens: telemetry.totalTokens,
@@ -39,9 +39,11 @@ export async function GET(request: NextRequest) {
       },
     }, undefined, request);
   } catch (err: any) {
+    console.error('[Mari Usage API] Failed to retrieve usage:', err?.message || err);
     return corsJsonResponse({
       success: false,
-      error: err.message || 'Failed to retrieve Mari usage',
+      code: 'MARI_USAGE_UNAVAILABLE',
+      error: 'Mari usage is temporarily unavailable. Please retry.',
     }, { status: 500 }, request);
   }
 }
