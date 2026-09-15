@@ -49,20 +49,21 @@ export function getVerifierSupabase() {
  * Service-role admin client used exclusively for privileged DB queries.
  * Never call auth.getUser() on this client — it must not validate user JWTs.
  *
- * Priority: SUPABASE_SERVICE_ROLE_KEY (canonical Supabase name) is preferred.
- * SUPABASE_SECRET_KEY is accepted as a legacy alias only when the canonical
- * variable is absent — this prevents a stale secret-key value from silently
- * overriding a valid service-role key.
+ * Priority: SUPABASE_SECRET_KEY is the canonical variable for the modern
+ * Supabase sb_secret_* server key and is always preferred.
+ * SUPABASE_SERVICE_ROLE_KEY is a fallback for environments that have not yet
+ * migrated to the modern key format. It must NOT win when SUPABASE_SECRET_KEY
+ * is explicitly set, because it may hold a disabled legacy JWT.
  */
 export function getServiceSupabase() {
-  // Canonical variable is checked first; legacy alias is a fallback only.
+  // Modern sb_secret_ key is checked first; legacy service-role JWT is fallback only.
   const keySource =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ? 'SUPABASE_SERVICE_ROLE_KEY' :
     process.env.SUPABASE_SECRET_KEY       ? 'SUPABASE_SECRET_KEY'       :
+    process.env.SUPABASE_SERVICE_ROLE_KEY ? 'SUPABASE_SERVICE_ROLE_KEY' :
     null;
   const serviceKey = keySource ? process.env[keySource] : null;
   if (!serviceKey || !keySource) {
-    const err = new Error('[ServerAuth] SUPABASE_SERVICE_ROLE_KEY (or legacy SUPABASE_SECRET_KEY) environment variable is required.');
+    const err = new Error('[ServerAuth] SUPABASE_SECRET_KEY (or fallback SUPABASE_SERVICE_ROLE_KEY) environment variable is required.');
     (err as any).code = 'SUPABASE_CONFIG_ERROR';
     throw err;
   }

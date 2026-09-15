@@ -51,12 +51,15 @@ services:
         sync: false
       - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
         sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false
-      # Legacy alias — must be empty or absent in Render dashboard if SUPABASE_SERVICE_ROLE_KEY is set.
-      # serverAuth.ts now prefers SUPABASE_SERVICE_ROLE_KEY; a stale SUPABASE_SECRET_KEY
-      # previously overrode the valid key. Keep this entry so it is visible and clearable.
+      # SUPABASE_SECRET_KEY holds the modern sb_secret_* server key and is always
+      # preferred by getServiceSupabase(). Set this to the active modern secret key
+      # from the Supabase dashboard (Project Settings → API → Secret key).
       - key: SUPABASE_SECRET_KEY
+        sync: false
+      # SUPABASE_SERVICE_ROLE_KEY is a fallback for unmigrated environments only.
+      # When SUPABASE_SECRET_KEY is set to a valid sb_secret_ key, clear or delete
+      # this variable so the disabled legacy JWT cannot be selected as fallback.
+      - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
       - key: NEXT_PUBLIC_APP_URL
         value: https://rasalilabs.com/ralion
