@@ -22,65 +22,64 @@ jobs:
         run: |
           python <<'PY'
           from pathlib import Path
+          import re
+          import textwrap
 
-          def replace_exact(path: str, old: str, new: str, expected: int = 1):
-              p = Path(path)
-              text = p.read_text()
+          def replace_required(text: str, old: str, new: str, label: str, expected: int = 1) -> str:
               count = text.count(old)
               if count != expected:
-                  raise SystemExit(f"{path}: expected {expected} occurrence(s), found {count}: {old[:100]!r}")
-              p.write_text(text.replace(old, new, expected))
+                  raise SystemExit(f"{label}: expected {expected} match(es), found {count}: {old[:100]!r}")
+              return text.replace(old, new, expected)
 
-          core_path = 'packages/ai/src/mariUniversalCore.ts'
-          p = Path(core_path)
-          core = p.read_text()
-          old_models = """  const modelsToTry = [
-            'gemini-3.5-flash-lite',
-            'gemini-3.6-flash',
-            'gemini-3.5-flash',
-            'gemini-3.1-pro-preview',
-          ];"""
-          if core.count(old_models) != 2:
-              raise SystemExit(f"{core_path}: expected exactly 2 legacy model chains, found {core.count(old_models)}")
-          classifier_models = """  const modelsToTry = [
-            'gemini-2.5-flash-lite',
-            'gemini-3.5-flash',
-          ];"""
-          response_models = """  const modelsToTry = [
-            'gemini-3.5-flash',
-            'gemini-2.5-flash-lite',
-          ];"""
-          core = core.replace(old_models, classifier_models, 1)
-          core = core.replace(old_models, response_models, 1)
-          core = core.replace("classificationModelAttempted = 'gemini-3.5-flash-lite';", "classificationModelAttempted = 'gemini-2.5-flash-lite';")
-          core = core.replace("modelClassification.modelsAttempted[0] || 'gemini-3.5-flash-lite'", "modelClassification.modelsAttempted[0] || 'gemini-2.5-flash-lite'")
-          core = core.replace("model: 'gemini-3.5-flash-lite',\n      modelsAttempted,\n      modelErrors: { all: 'API_KEY_MISSING' },", "model: 'gemini-3.5-flash',\n      modelsAttempted,\n      modelErrors: { all: 'API_KEY_MISSING' },")
-          core = core.replace("model: modelsAttempted[0] || 'gemini-3.5-flash-lite',", "model: modelsAttempted[0] || 'gemini-3.5-flash',")
-          core = core.replace("responseModelAttempted = 'gemini-3.5-flash-lite';\n    modelAttempted = 'gemini-3.5-flash-lite';", "responseModelAttempted = 'gemini-3.5-flash';\n    modelAttempted = 'gemini-3.5-flash';")
-          core = core.replace("geminiResult.modelsAttempted[0] || 'gemini-3.5-flash-lite'", "geminiResult.modelsAttempted[0] || 'gemini-3.5-flash'")
-          core = core.replace("modelErrors[modelName] = `EXCEPTION_${err?.message || 'NETWORK_ERROR'}`;", "modelErrors[modelName] = 'PROVIDER_EXCEPTION';")
-          core = core.replace("lastError = `EXCEPTION_${err.message}`;\n      modelErrors[modelName] = `EXCEPTION_${err.message}`;", "lastError = 'PROVIDER_EXCEPTION';\n      modelErrors[modelName] = 'PROVIDER_EXCEPTION';")
-          if 'gemini-3.6-flash' in core or 'gemini-3.1-pro-preview' in core or 'gemini-3.5-flash-lite' in core:
-              raise SystemExit(f"{core_path}: legacy/non-production Gemini model identifier remains")
-          if core.count("'gemini-2.5-flash-lite'") < 2 or core.count("'gemini-3.5-flash'") < 2:
-              raise SystemExit(f"{core_path}: production Gemini model policy was not applied")
-          p.write_text(core)
+          # 1) Mari model policy: classifier uses Flash-Lite; answers use Flash; max two attempts per stage.
+          core_path = Path('packages/ai/src/mariUniversalCore.ts')
+          core = core_path.read_text()
+          legacy_chain = re.compile(
+              r"  const modelsToTry = \[\n"
+              r"\s*'gemini-3\.5-flash-lite',\n"
+              r"\s*'gemini-3\.6-flash',\n"
+              r"\s*'gemini-3\.5-flash',\n"
+              r"\s*'gemini-3\.1-pro-preview',\n"
+              r"\s*\];"
+          )
+          if len(legacy_chain.findall(core)) != 2:
+              raise SystemExit(f"mariUniversalCore.ts: expected 2 legacy model chains, found {len(legacy_chain.findall(core))}")
+          classifier_chain = "  const modelsToTry = [\n    'gemini-2.5-flash-lite',\n    'gemini-3.5-flash',\n  ];"
+          response_chain = "  const modelsToTry = [\n    'gemini-3.5-flash',\n    'gemini-2.5-flash-lite',\n  ];"
+          core = legacy_chain.sub(classifier_chain, core, count=1)
+          core = legacy_chain.sub(response_chain, core, count=1)
+          core = replace_required(core, "classificationModelAttempted = 'gemini-3.5-flash-lite';", "classificationModelAttempted = 'gemini-2.5-flash-lite';", 'classifier default')
+          core = replace_required(core, "modelClassification.modelsAttempted[0] || 'gemini-3.5-flash-lite'", "modelClassification.modelsAttempted[0] || 'gemini-2.5-flash-lite'", 'classifier attempt fallback')
+          core = replace_required(core, "model: 'gemini-3.5-flash-lite',", "model: 'gemini-3.5-flash',", 'response missing-key model')
+          core = replace_required(core, "model: modelsAttempted[0] || 'gemini-3.5-flash-lite',", "model: modelsAttempted[0] || 'gemini-3.5-flash',", 'response failed model')
+          core = replace_required(core, "responseModelAttempted = 'gemini-3.5-flash-lite';\n    modelAttempted = 'gemini-3.5-flash-lite';", "responseModelAttempted = 'gemini-3.5-flash';\n    modelAttempted = 'gemini-3.5-flash';", 'response defaults')
+          core = replace_required(core, "geminiResult.modelsAttempted[0] || 'gemini-3.5-flash-lite'", "geminiResult.modelsAttempted[0] || 'gemini-3.5-flash'", 'response attempted model', expected=2)
+          core = replace_required(core, "modelErrors[modelName] = `EXCEPTION_${err?.message || 'NETWORK_ERROR'}`;", "modelErrors[modelName] = 'PROVIDER_EXCEPTION';", 'classifier provider error')
+          core = replace_required(core, "lastError = `EXCEPTION_${err.message}`;\n      modelErrors[modelName] = `EXCEPTION_${err.message}`;", "lastError = 'PROVIDER_EXCEPTION';\n      modelErrors[modelName] = 'PROVIDER_EXCEPTION';", 'response provider error')
+          core = replace_required(core, "const record = MariTokenTelemetryService.recordUsage({", "const record = await MariTokenTelemetryService.recordUsage({", 'await durable telemetry')
+          if any(x in core for x in ('gemini-3.6-flash', 'gemini-3.1-pro-preview', 'gemini-3.5-flash-lite')):
+              raise SystemExit('mariUniversalCore.ts: obsolete Gemini identifier remains')
+          core_path.write_text(core)
 
-          # Core legacy helper must respect requested model rather than silently hard-code an older answer model.
-          aiml_path = 'packages/ai/src/aimlClient.ts'
-          aiml = Path(aiml_path).read_text()
-          aiml = aiml.replace(
+          # 2) Legacy shared LLM helper must honor requested model and default to the answer model.
+          aiml_path = Path('packages/ai/src/aimlClient.ts')
+          aiml = aiml_path.read_text()
+          aiml = replace_required(
+              aiml,
               "  const {\n    maxTokens = 1024,\n    temperature = 0.7,\n  } = options;",
-              "  const {\n    model = 'gemini-3.5-flash',\n    maxTokens = 1024,\n    temperature = 0.7,\n  } = options;"
+              "  const {\n    model = 'gemini-3.5-flash',\n    maxTokens = 1024,\n    temperature = 0.7,\n  } = options;",
+              'aiml model default'
           )
-          aiml = aiml.replace(
+          aiml = replace_required(
+              aiml,
               "`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`",
-              "`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`"
+              "`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`",
+              'aiml hardcoded model'
           )
-          Path(aiml_path).write_text(aiml)
+          aiml_path.write_text(aiml)
 
-          # Usage must be authenticated and derive the tenant exclusively from authoritative server context.
-          usage_route = '''import { NextRequest } from 'next/server';
+          # 3) Usage route: require authenticated server tenant context; never trust query/header tenant IDs directly.
+          usage_route = """import { NextRequest } from 'next/server';
           import { corsJsonResponse, handleCorsPreflight } from '../../../../lib/cors';
           import { getCurrentRalionContext, authRequiredResponse } from '@/lib/auth/serverAuth';
           import { MariTokenTelemetryService } from '@ralion/ai/server';
@@ -129,46 +128,71 @@ jobs:
               }, { status: 500 }, request);
             }
           }
-          '''
-          # Remove indentation introduced by the embedded Python block.
-          import textwrap
+          """
           Path('apps/ralion/src/app/api/mari/usage/route.ts').write_text(textwrap.dedent(usage_route))
 
-          # Persisted token totals must survive cold starts. Merge durable audit events with any not-yet-flushed in-memory records by requestId.
-          telemetry_path = 'packages/ai/src/tokenTelemetry.service.ts'
-          telemetry = Path(telemetry_path).read_text()
-          old_method = '''  /**
-           * Authoritative count of Mari interactions for an organization.
-           */
-          static async getAuthoritativeUsageCount(organizationId: string): Promise<number> {
-            const memCount = (this.records.get(organizationId) || []).length;
+          # 4) Telemetry: await durable audit persistence, and rebuild totals from durable tenant-scoped rows after cold starts.
+          telemetry_path = Path('packages/ai/src/tokenTelemetry.service.ts')
+          telemetry = telemetry_path.read_text()
+          telemetry = replace_required(
+              telemetry,
+              "  static recordUsage(params: {",
+              "  static async recordUsage(params: {",
+              'async recordUsage'
+          )
+          telemetry = replace_required(
+              telemetry,
+              "  }): TokenUsageRecord {",
+              "  }): Promise<TokenUsageRecord> {",
+              'async recordUsage return'
+          )
+          persist_start = telemetry.index('    // Durable persistence to security audit log')
+          persist_end = telemetry.index('\n\n    return record;', persist_start)
+          durable_block = """    // Durable persistence is awaited so serverless teardown cannot drop a usage event.
+              if (typeof window === 'undefined' && typeof process !== 'undefined' && process.env) {
+                const env = process.env;
+                const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL || env.SUPABASE_URL;
+                const serviceKey = env['SUPABASE_SECRET_KEY'] || env['SUPABASE_SERVICE_ROLE_KEY'] || env['SUPABASE_SERVICE_KEY'];
 
-            const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-            const serviceKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
-
-            if (supabaseUrl && serviceKey) {
-                try {
-                  const { createClient } = await import('@supabase/supabase-js');
-                  const client = createClient(supabaseUrl, serviceKey, {
-                    auth: { persistSession: false, autoRefreshToken: false },
-                  });
-
-                  const { count, error } = await client
-                    .from('security_audit_logs')
-                    .select('id', { count: 'exact', head: true })
-                    .eq('event_category', 'MARI_AI')
-                    .eq('resource_id', organizationId);
-
-                  if (!error && typeof count === 'number' && count > 0) {
-                    return Math.max(memCount, count);
+                if (supabaseUrl && serviceKey) {
+                  try {
+                    const { createClient } = await import('@supabase/supabase-js');
+                    const client = createClient(supabaseUrl, serviceKey, {
+                      auth: { persistSession: false, autoRefreshToken: false },
+                    });
+                    const { error } = await client.from('security_audit_logs').insert({
+                      event_type: 'MARI_PAGE_ANALYSIS',
+                      event_category: 'MARI_AI',
+                      success: true,
+                      user_id: userId || null,
+                      actor_user_id: userId || null,
+                      resource_type: 'TENANT_WORKSPACE',
+                      resource_id: organizationId,
+                      metadata: {
+                        requestId,
+                        provider,
+                        model,
+                        inputTokens,
+                        outputTokens,
+                        totalTokens,
+                        action: 'MARI_AI_QUERY',
+                      },
+                      timestamp: record.timestamp,
+                      created_at: record.timestamp,
+                    });
+                    if (error) {
+                      console.warn('[MariTokenTelemetry] Durable usage insert failed:', error.code || 'DB_ERROR');
+                    }
+                  } catch {
+                    console.warn('[MariTokenTelemetry] Durable usage insert failed: PROVIDER_ERROR');
                   }
-                } catch {}
-              }
+                }
+              }"""
+          telemetry = telemetry[:persist_start] + textwrap.dedent(durable_block).replace('\n', '\n    ').lstrip() + telemetry[persist_end:]
 
-            return memCount;
-          }
-          '''
-          new_method = '''  /**
+          method_start = telemetry.index('  /**\n   * Authoritative count of Mari interactions for an organization.')
+          method_end = telemetry.index('  /**\n   * Resets records for testing purposes.', method_start)
+          durable_getter = """  /**
            * Gets durable, tenant-scoped Mari usage and merges any in-memory events
            * that have not reached the audit log yet. This survives serverless cold starts.
            */
@@ -254,98 +278,67 @@ jobs:
             const usage = await this.getAuthoritativeUsage(organizationId);
             return usage.requestCount;
           }
-          '''
-          if old_method not in telemetry:
-              raise SystemExit(f"{telemetry_path}: authoritative usage method did not match expected source")
-          telemetry = telemetry.replace(old_method, new_method, 1)
-          Path(telemetry_path).write_text(telemetry)
 
-          # Never expose provider exception text from the public chat route.
-          replace_exact(
-              'apps/ralion/src/app/api/mari/chat/route.ts',
-              '''  } catch (err: any) {
-              console.error('[Mari Chat API] Exception:', err);
-              return corsJsonResponse({
-                success: false,
-                error: err.message || "Mari couldn't complete that request right now. Please retry.",
-              }, { status: 500 }, request);
-            }
-          }''',
-              '''  } catch (err: any) {
-              console.error('[Mari Chat API] Exception:', err);
-              return corsJsonResponse({
-                success: false,
-                code: 'MARI_REQUEST_FAILED',
-                error: "Mari couldn't complete that request right now. Please retry.",
-              }, { status: 500 }, request);
-            }
-          }'''
+          """
+          telemetry = telemetry[:method_start] + textwrap.dedent(durable_getter) + telemetry[method_end:]
+          telemetry_path.write_text(telemetry)
+
+          # 5) Chat route: retain internal logs, return only stable public error code/message.
+          chat_path = Path('apps/ralion/src/app/api/mari/chat/route.ts')
+          chat = chat_path.read_text()
+          chat = replace_required(
+              chat,
+              "      success: false,\n      error: err.message || \"Mari couldn't complete that request right now. Please retry.\",",
+              "      success: false,\n      code: 'MARI_REQUEST_FAILED',\n      error: \"Mari couldn't complete that request right now. Please retry.\",",
+              'chat public provider error'
           )
+          chat_path.write_text(chat)
 
-          # Main Mari screen: send the real workspace when known and surface server failure instead of a fabricated AI answer.
-          page_path = 'apps/ralion/src/app/(dashboard)/mari-ai/page.tsx'
-          page = Path(page_path).read_text()
-          page = page.replace("'x-workspace-id': effectiveOrgId,", "'x-workspace-id': activeWorkspaceId || effectiveOrgId,")
-          page = page.replace("organizationId: effectiveOrgId,\n            userId:", "organizationId: effectiveOrgId,\n            workspaceId: activeWorkspaceId || undefined,\n            userId:")
-          page = page.replace("data.modelUsed || 'Mari Enterprise Intelligence (gemini-2.5-flash)'", "data.modelUsed || 'Mari Enterprise Intelligence (gemini-3.5-flash)'")
-          old_page_fallback = '''      // 2. Secondary Fallback: ONLY if network failed or server was completely unreachable
-          if (!answerText) {
-            fallbackUsed = true;
-            responseSource = 'CLIENT_FALLBACK';
-            semanticDecisionSource = 'FALLBACK';
-            fallbackReason = 'NETWORK_OR_SERVER_UNREACHABLE';
-            answerText = "I am ready to assist with your growth strategy, campaign planning, and business analysis. How can I help you today?";
-            suggestedActions = [];
-          }
-          '''
-          new_page_fallback = '''      // Never fabricate a successful Mari answer when the server failed.
-          if (!answerText) {
-            fallbackUsed = true;
-            responseSource = 'SERVER_ERROR';
-            semanticDecisionSource = 'FALLBACK';
-            fallbackReason = httpStatus ? `HTTP_${httpStatus}` : 'NETWORK_OR_SERVER_UNREACHABLE';
-            throw new Error('Mari server response unavailable');
-          }
-          '''
-          if old_page_fallback not in page:
-              raise SystemExit(f"{page_path}: legacy client fallback block not found")
-          page = page.replace(old_page_fallback, new_page_fallback, 1)
-          page = page.replace("text: answerText || \"I've reviewed your business context and am ready to assist with growth strategy and campaign execution.\",", "text: answerText,")
-          page = page.replace("text: `Mari couldn't complete that request right now. Please retry. (${err.message || 'Connection error'})`,", "text: `Mari couldn't complete that request right now. Please retry.`,")
-          Path(page_path).write_text(page)
+          # 6) Main Mari screen: send real workspace and never turn server failure into a fake successful reply.
+          page_path = Path('apps/ralion/src/app/(dashboard)/mari-ai/page.tsx')
+          page = page_path.read_text()
+          page = replace_required(page, "'x-workspace-id': effectiveOrgId,", "'x-workspace-id': activeWorkspaceId || effectiveOrgId,", 'main workspace header')
+          page = replace_required(page, "organizationId: effectiveOrgId,\n            userId:", "organizationId: effectiveOrgId,\n            workspaceId: activeWorkspaceId || undefined,\n            userId:", 'main workspace body')
+          page = replace_required(page, "data.modelUsed || 'Mari Enterprise Intelligence (gemini-2.5-flash)'", "data.modelUsed || 'Mari Enterprise Intelligence (gemini-3.5-flash)'", 'main model label')
+          page = replace_required(page, "responseSource = 'CLIENT_FALLBACK';", "responseSource = 'SERVER_ERROR';", 'main fake fallback source')
+          page = replace_required(page, "fallbackReason = 'NETWORK_OR_SERVER_UNREACHABLE';", "fallbackReason = httpStatus ? `HTTP_${httpStatus}` : 'NETWORK_OR_SERVER_UNREACHABLE';", 'main fallback reason')
+          page = replace_required(page, "answerText = \"I am ready to assist with your growth strategy, campaign planning, and business analysis. How can I help you today?\";", "throw new Error('Mari server response unavailable');", 'main fake answer')
+          page = replace_required(page, "text: answerText || \"I've reviewed your business context and am ready to assist with growth strategy and campaign execution.\",", "text: answerText,", 'main final fake answer')
+          page = replace_required(page, "text: `Mari couldn't complete that request right now. Please retry. (${err.message || 'Connection error'})`,", "text: `Mari couldn't complete that request right now. Please retry.`,", 'main raw client error')
+          page_path.write_text(page)
 
-          # Floating Mari: errors must look like errors, not successful business advice; use authoritative workspace hints.
-          floating_path = 'apps/ralion/src/components/FloatingMariAi.tsx'
-          floating = Path(floating_path).read_text()
-          floating = floating.replace("const { organization, user } = useOrganization();", "const { organization, workspace, user } = useOrganization();")
-          floating = floating.replace("let activeOrgId: string = organization?.id || (user as any)?.id || (user as any)?.userId || '';", "let activeOrgId: string = organization?.id || '';")
-          floating = floating.replace("'x-workspace-id': activeOrgId,", "'x-workspace-id': workspace?.id || activeOrgId,")
-          floating = floating.replace("organizationId: activeOrgId,\n          messages:", "organizationId: activeOrgId,\n          workspaceId: workspace?.id || undefined,\n          messages:")
-          floating = floating.replace("responseText = data.answer || data.text || \"I'm analyzing your business data right now.\";", "responseText = data.answer || data.text || '';\n        if (!data.success || !responseText) throw new Error('Invalid Mari server response');")
-          floating = floating.replace("responseText = \"I am currently synchronizing with your live business data. You can access Growth Studio, CRM, and Campaign tools directly from your workspace.\";\n        responseSource = 'HTTP_NON_200_FALLBACK';", "responseText = \"Mari couldn't complete that request right now. Please retry.\";\n        responseSource = 'HTTP_ERROR';")
-          floating = floating.replace("fallbackReason = `NETWORK_ERROR_${err.message || 'EXCEPTION'}`;\n      responseText = \"I'm having trouble connecting to my neural reasoning core right now. Please check your network connection.\";\n      responseSource = 'NETWORK_ERROR_FALLBACK';", "fallbackReason = 'NETWORK_ERROR';\n      responseText = \"Mari couldn't reach the server right now. Please retry.\";\n      responseSource = 'NETWORK_ERROR';")
-          Path(floating_path).write_text(floating)
+          # 7) Floating Mari: authoritative org/workspace hints and fail-closed UI errors.
+          floating_path = Path('apps/ralion/src/components/FloatingMariAi.tsx')
+          floating = floating_path.read_text()
+          floating = replace_required(floating, "const { organization, user } = useOrganization();", "const { organization, workspace, user } = useOrganization();", 'floating workspace context')
+          floating = replace_required(floating, "let activeOrgId: string = organization?.id || (user as any)?.id || (user as any)?.userId || '';", "let activeOrgId: string = organization?.id || '';", 'floating org fallback')
+          floating = replace_required(floating, "'x-workspace-id': activeOrgId,", "'x-workspace-id': workspace?.id || activeOrgId,", 'floating workspace header')
+          floating = replace_required(floating, "organizationId: activeOrgId,\n          messages:", "organizationId: activeOrgId,\n          workspaceId: workspace?.id || undefined,\n          messages:", 'floating workspace body')
+          floating = replace_required(floating, "responseText = data.answer || data.text || \"I'm analyzing your business data right now.\";", "responseText = data.answer || data.text || '';\n        if (!data.success || !responseText) throw new Error('Invalid Mari server response');", 'floating fake success')
+          floating = replace_required(floating, "responseText = \"I am currently synchronizing with your live business data. You can access Growth Studio, CRM, and Campaign tools directly from your workspace.\";\n        responseSource = 'HTTP_NON_200_FALLBACK';", "responseText = \"Mari couldn't complete that request right now. Please retry.\";\n        responseSource = 'HTTP_ERROR';", 'floating http fallback')
+          floating = replace_required(floating, "fallbackReason = `NETWORK_ERROR_${err.message || 'EXCEPTION'}`;\n      responseText = \"I'm having trouble connecting to my neural reasoning core right now. Please check your network connection.\";\n      responseSource = 'NETWORK_ERROR_FALLBACK';", "fallbackReason = 'NETWORK_ERROR';\n      responseText = \"Mari couldn't reach the server right now. Please retry.\";\n      responseSource = 'NETWORK_ERROR';", 'floating network fallback')
+          floating_path.write_text(floating)
 
-          # Drawer Mari: same fail-closed client behavior and workspace hinting.
-          drawer_path = 'apps/ralion/src/components/MariAiDrawer.tsx'
-          drawer = Path(drawer_path).read_text()
-          drawer = drawer.replace("const { organization, user } = useOrganization();", "const { organization, workspace, user } = useOrganization();")
-          drawer = drawer.replace("let activeOrgId: string = organization?.id || (user as any)?.id || (user as any)?.userId || '';", "let activeOrgId: string = organization?.id || '';")
-          drawer = drawer.replace("'x-workspace-id': activeOrgId,", "'x-workspace-id': workspace?.id || activeOrgId,")
-          drawer = drawer.replace("organizationId: activeOrgId,\n            activeScreen:", "organizationId: activeOrgId,\n            workspaceId: workspace?.id || undefined,\n            activeScreen:")
-          drawer = drawer.replace("respText = data.answer || data.text || \"I've reviewed your business intelligence.\";", "respText = data.answer || data.text || '';\n          if (!data.success || !respText) throw new Error('Invalid Mari server response');")
-          drawer = drawer.replace("respText = \"I am ready to assist with your growth strategy, campaign planning, and business analysis.\";\n          responseSource = 'HTTP_NON_200_FALLBACK';", "respText = \"Mari couldn't complete that request right now. Please retry.\";\n          responseSource = 'HTTP_ERROR';")
-          drawer = drawer.replace("fallbackReason = `NETWORK_ERROR_${err.message || 'EXCEPTION'}`;\n        respText = \"I'm having trouble connecting to my neural reasoning core right now. Please check your network connection.\";\n        responseSource = 'NETWORK_ERROR_FALLBACK';", "fallbackReason = 'NETWORK_ERROR';\n        respText = \"Mari couldn't reach the server right now. Please retry.\";\n        responseSource = 'NETWORK_ERROR';")
-          Path(drawer_path).write_text(drawer)
+          # 8) Drawer Mari: same fail-closed behavior and canonical workspace hinting.
+          drawer_path = Path('apps/ralion/src/components/MariAiDrawer.tsx')
+          drawer = drawer_path.read_text()
+          drawer = replace_required(drawer, "const { organization, user } = useOrganization();", "const { organization, workspace, user } = useOrganization();", 'drawer workspace context')
+          drawer = replace_required(drawer, "let activeOrgId: string = organization?.id || (user as any)?.id || (user as any)?.userId || '';", "let activeOrgId: string = organization?.id || '';", 'drawer org fallback')
+          drawer = replace_required(drawer, "'x-workspace-id': activeOrgId,", "'x-workspace-id': workspace?.id || activeOrgId,", 'drawer workspace header')
+          drawer = replace_required(drawer, "organizationId: activeOrgId,\n            activeScreen:", "organizationId: activeOrgId,\n            workspaceId: workspace?.id || undefined,\n            activeScreen:", 'drawer workspace body')
+          drawer = replace_required(drawer, "respText = data.answer || data.text || \"I've reviewed your business intelligence.\";", "respText = data.answer || data.text || '';\n          if (!data.success || !respText) throw new Error('Invalid Mari server response');", 'drawer fake success')
+          drawer = replace_required(drawer, "respText = \"I am ready to assist with your growth strategy, campaign planning, and business analysis.\";\n          responseSource = 'HTTP_NON_200_FALLBACK';", "respText = \"Mari couldn't complete that request right now. Please retry.\";\n          responseSource = 'HTTP_ERROR';", 'drawer http fallback')
+          drawer = replace_required(drawer, "fallbackReason = `NETWORK_ERROR_${err.message || 'EXCEPTION'}`;\n        respText = \"I'm having trouble connecting to my neural reasoning core right now. Please check your network connection.\";\n        responseSource = 'NETWORK_ERROR_FALLBACK';", "fallbackReason = 'NETWORK_ERROR';\n        respText = \"Mari couldn't reach the server right now. Please retry.\";\n        responseSource = 'NETWORK_ERROR';", 'drawer network fallback')
+          drawer_path.write_text(drawer)
 
-          # Focused invariants before TypeScript compilation.
+          # Focused source invariants before compiler checks.
           checks = {
-              core_path: ['gemini-2.5-flash-lite', 'gemini-3.5-flash', "lastError = 'PROVIDER_EXCEPTION'"],
+              str(core_path): ["'gemini-2.5-flash-lite'", "'gemini-3.5-flash'", "lastError = 'PROVIDER_EXCEPTION'", 'await MariTokenTelemetryService.recordUsage'],
               'apps/ralion/src/app/api/mari/usage/route.ts': ['requireAuth: true', 'getAuthoritativeUsage(orgId)'],
-              telemetry_path: ['static async getAuthoritativeUsage(', ".eq('resource_id', organizationId)"],
-              page_path: ["responseSource = 'SERVER_ERROR'", "workspaceId: activeWorkspaceId || undefined"],
-              floating_path: ["responseSource = 'HTTP_ERROR'", "workspaceId: workspace?.id || undefined"],
-              drawer_path: ["responseSource = 'HTTP_ERROR'", "workspaceId: workspace?.id || undefined"],
+              str(telemetry_path): ['static async recordUsage(', 'static async getAuthoritativeUsage(', ".eq('resource_id', organizationId)"],
+              str(page_path): ["responseSource = 'SERVER_ERROR'", 'workspaceId: activeWorkspaceId || undefined'],
+              str(floating_path): ["responseSource = 'HTTP_ERROR'", 'workspaceId: workspace?.id || undefined'],
+              str(drawer_path): ["responseSource = 'HTTP_ERROR'", 'workspaceId: workspace?.id || undefined'],
           }
           for path, needles in checks.items():
               text = Path(path).read_text()
@@ -354,10 +347,10 @@ jobs:
                       raise SystemExit(f"{path}: missing invariant {needle!r}")
 
           forbidden = {
-              core_path: ['gemini-3.6-flash', 'gemini-3.1-pro-preview', 'gemini-3.5-flash-lite'],
-              page_path: ["responseSource = 'CLIENT_FALLBACK'", 'I am ready to assist with your growth strategy, campaign planning, and business analysis. How can I help you today?'],
-              floating_path: ['HTTP_NON_200_FALLBACK', 'NETWORK_ERROR_FALLBACK'],
-              drawer_path: ['HTTP_NON_200_FALLBACK', 'NETWORK_ERROR_FALLBACK'],
+              str(core_path): ['gemini-3.6-flash', 'gemini-3.1-pro-preview', 'gemini-3.5-flash-lite'],
+              str(page_path): ["responseSource = 'CLIENT_FALLBACK'", 'How can I help you today?";'],
+              str(floating_path): ['HTTP_NON_200_FALLBACK', 'NETWORK_ERROR_FALLBACK'],
+              str(drawer_path): ['HTTP_NON_200_FALLBACK', 'NETWORK_ERROR_FALLBACK'],
           }
           for path, needles in forbidden.items():
               text = Path(path).read_text()
