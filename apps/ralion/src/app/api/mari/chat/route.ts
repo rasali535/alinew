@@ -7,6 +7,7 @@ import {
   classifyCapabilityMode,
   MARI_BUILD_VERSION,
   setMariFacebookPageService,
+  TenantCreditsService,
 } from '@ralion/ai/server';
 import { getCurrentRalionContext } from '../../../../lib/auth/serverAuth';
 import { FacebookPageManagementService } from '../../../../lib/services/social/facebookPageManagement.service';
@@ -14,6 +15,7 @@ import {
   MariBusinessIntelligenceService,
   type MariBusinessIntelligenceSnapshot,
 } from '../../../../lib/services/mari/mariBusinessIntelligence.service';
+import { MariCreditsService } from '../../../../lib/services/mari/mariCredits.service';
 
 setMariFacebookPageService(FacebookPageManagementService);
 
@@ -248,8 +250,6 @@ export async function POST(request: NextRequest) {
     }
 
     for (const reqWs of suppliedWorkspaceIds) {
-      // Legacy clients may still send the canonical organization ID in the workspace header.
-      // It is accepted only as a routing hint and is NEVER used as the authoritative workspace ID.
       if (reqWs !== canonicalWorkspaceId && reqWs !== canonicalTenantId) {
         console.warn('[Mari Chat API] Security rejection: workspace mismatch', {
           authenticatedUserId,
@@ -275,15 +275,8 @@ export async function POST(request: NextRequest) {
     const companyName = resolvedIdentity.companyName || serverCtx.organization?.name || serverCtx.workspace?.name || '';
 
     const requestId = body.requestId || `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // STEP 1: INTENT CLASSIFICATION ON EXACT ORIGINAL USER MESSAGE
-    // ─────────────────────────────────────────────────────────────────────────
     const { mode: capabilityMode, intent: detectedIntent } = classifyCapabilityMode(cleanQuery);
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // STEP 2: GREETING SHORT-CIRCUIT (Before context, RAG, Facebook, Gemini, or credit deduction)
-    // ─────────────────────────────────────────────────────────────────────────
     if (detectedIntent === 'GREETING') {
       const greetingResult = await MariUniversalCore.processQuery({
         prompt: cleanQuery,
@@ -361,7 +354,6 @@ export async function POST(request: NextRequest) {
 
     if (!localOverrides.fbPage) {
       try {
-        const { FacebookPageManagementService } = await import('../../../../lib/services/social/facebookPageManagement.service');
         const activePage = await FacebookPageManagementService.getPrimaryPage({
           organizationId: orgId,
           workspaceId,
@@ -408,7 +400,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Assemble the tenant's verified business context with explicit canonical org, workspace, and user parameters
     let partnerContext: any = null;
     try {
       partnerContext = await BusinessContextService.assembleContext(orgId, {
@@ -440,21 +431,174 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    let creditReservation: Awaited<ReturnType<typeof MariCreditsService.reserveReasoning>> | null = null;
+    try {
+      creditReservation = await MariCreditsService.reserveReasoning({
+        organizationId: orgId,
+        userId: authenticatedUserId,
+        requestId,
+        provider: 'google',
+        model: 'gemini-3.5-flash',
+        reason: `Mari AI reasoning: ${cleanQuery.slice(0, 80)}`,
+        metadata: { detectedIntent, capabilityMode },
+      });
+
+      if (!creditReservation.allowed) {
+        const credits = await MariCreditsService.getSummary(orgId).catch(() => null);
+        if (businessIntelligence) {
+          return corsJsonResponse({
+            success: true,
+            answer: buildDeterministicBusinessIntelligenceAnswer(businessIntelligence, companyName),
+            actionsSuggested: [],
+            ragContext: null,
+            modelUsed: 'Mari Business Intelligence Engine v1 (Deterministic)',
+            detectedIntent: /\b(facebook|fb|meta|social(?:\s+media)?)\b/i.test(cleanQuery) ? 'FACEBOOK_INSIGHTS' : detectedIntent,
+            capabilityMode,
+            semanticDecisionSource: 'DETERMINISTIC_CLASSIFICATION',
+            requestedAction: 'NONE',
+            requestedSources: ['FACEBOOK', 'GROWTH'],
+            toolsActuallyExecuted: ['MariBusinessIntelligenceService.getBusinessIntelligence'],
+            modelAttempted: null,
+            modelSucceeded: false,
+            responseSource: 'deterministic_business_intelligence',
+            fallbackUsed: false,
+            fallbackReason: null,
+            buildVersion: MARI_BUILD_VERSION,
+            contextSources: ['BusinessPartnerContext', 'MariBusinessIntelligenceV1'],
+            businessIntelligence,
+            credits,
+            creditGate: 'DETERMINISTIC_FREE',
+            usage: {
+              promptTokens: 0,
+              completionTokens: 0,
+              totalTokens: 0,
+              creditsDeducted: 0,
+              creditsRemaining: credits?.remainingCredits ?? creditReservation.remainingCredits,
+            },
+            requestId,
+            tenantId: orgId,
+            companyName,
+          }, undefined, request);
+        }
+
+        return corsJsonResponse({
+          success: true,
+          code: 'INSUFFICIENT_MARI_CREDITS',
+          answer: 'Your monthly Mari AI reasoning credits have been used. Deterministic business intelligence remains available at zero credit cost, and your reasoning allowance will renew with the next monthly cycle.',
+          actionsSuggested: [],
+          modelUsed: 'Mari Credit Gate',
+          detectedIntent,
+          capabilityMode,
+          modelSucceeded: false,
+          responseSource: 'credit_gate',
+          fallbackUsed: false,
+          fallbackReason: 'INSUFFICIENT_CREDITS',
+          credits,
+          usage: {
+            promptTokens: 0,
+            completionTokens: 0,
+            totalTokens: 0,
+            creditsDeducted: 0,
+            creditsRemaining: credits?.remainingCredits ?? creditReservation.remainingCredits,
+          },
+          requestId,
+          tenantId: orgId,
+          companyName,
+        }, undefined, request);
+      }
+
+      // Keep the legacy in-process mirror aligned with the authoritative plan.
+      // Durable Supabase accounting below is the source of truth.
+      TenantCreditsService.getOrCreateWallet(orgId, creditReservation.planId);
+    } catch (creditErr: any) {
+      console.error('[Mari Chat API] Credit reservation failed:', creditErr?.message || creditErr);
+      if (businessIntelligence) {
+        return corsJsonResponse({
+          success: true,
+          answer: buildDeterministicBusinessIntelligenceAnswer(businessIntelligence, companyName),
+          actionsSuggested: [],
+          modelUsed: 'Mari Business Intelligence Engine v1 (Deterministic)',
+          detectedIntent: /\b(facebook|fb|meta|social(?:\s+media)?)\b/i.test(cleanQuery) ? 'FACEBOOK_INSIGHTS' : detectedIntent,
+          capabilityMode,
+          modelSucceeded: false,
+          responseSource: 'deterministic_business_intelligence',
+          fallbackUsed: false,
+          fallbackReason: null,
+          businessIntelligence,
+          creditGate: 'CREDIT_SERVICE_UNAVAILABLE_DETERMINISTIC_FREE',
+          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0, creditsDeducted: 0 },
+          requestId,
+          tenantId: orgId,
+          companyName,
+        }, undefined, request);
+      }
+      return corsJsonResponse({
+        success: false,
+        code: 'MARI_CREDIT_SERVICE_UNAVAILABLE',
+        error: 'Mari AI reasoning is temporarily unavailable because credit accounting could not be verified. No credits were used.',
+      }, { status: 503 }, request);
+    }
+
     const partnerPrompt = buildPartnerPrompt(cleanQuery, partnerContext, companyName, businessIntelligence);
 
-    const result = await MariUniversalCore.processQuery({
-      prompt: cleanQuery,
-      originalUserPrompt: cleanQuery,
-      contextualPrompt: partnerPrompt,
-      businessContext: partnerContext,
-      organizationId: orgId,
-      workspaceId,
-      userId: authenticatedUserId,
-      companyName,
-      activeScreen: body.activeScreen,
-      conversationHistory,
-      localOverrides,
-      requestId,
+    let result: Awaited<ReturnType<typeof MariUniversalCore.processQuery>>;
+    try {
+      result = await MariUniversalCore.processQuery({
+        prompt: cleanQuery,
+        originalUserPrompt: cleanQuery,
+        contextualPrompt: partnerPrompt,
+        businessContext: partnerContext,
+        organizationId: orgId,
+        workspaceId,
+        userId: authenticatedUserId,
+        companyName,
+        activeScreen: body.activeScreen,
+        conversationHistory,
+        localOverrides,
+        requestId,
+      });
+    } catch (coreErr: any) {
+      await MariCreditsService.finalizeReasoning({
+        organizationId: orgId,
+        requestId,
+        success: false,
+        provider: 'google',
+        model: 'gemini-3.5-flash',
+        metadata: { releaseReason: 'core_exception' },
+      }).catch((finalizeErr: any) => {
+        console.error('[Mari Chat API] Failed to release credit reservation after core exception:', finalizeErr?.message || finalizeErr);
+      });
+      throw coreErr;
+    }
+
+    const shouldChargeCredit = Boolean(result.modelSucceeded && !result.fallbackUsed);
+    let creditFinalization: Awaited<ReturnType<typeof MariCreditsService.finalizeReasoning>>;
+    try {
+      creditFinalization = await MariCreditsService.finalizeReasoning({
+        organizationId: orgId,
+        requestId,
+        success: shouldChargeCredit,
+        provider: result.responseSource === 'gemini' ? 'google' : result.responseSource,
+        model: result.modelUsed || result.modelAttempted || null,
+        metadata: {
+          detectedIntent: result.detectedIntent,
+          promptTokens: result.usage?.promptTokens || 0,
+          completionTokens: result.usage?.completionTokens || 0,
+          totalTokens: result.usage?.totalTokens || 0,
+        },
+      });
+    } catch (finalizeErr: any) {
+      console.error('[Mari Chat API] Credit finalization failed:', finalizeErr?.message || finalizeErr);
+      return corsJsonResponse({
+        success: false,
+        code: 'MARI_CREDIT_FINALIZATION_FAILED',
+        error: 'Mari completed the reasoning request but could not safely finalize credit accounting. Please retry; the response was withheld to prevent incorrect charging.',
+      }, { status: 503 }, request);
+    }
+
+    const durableCredits = await MariCreditsService.getSummary(orgId).catch((summaryErr: any) => {
+      console.warn('[Mari Chat API] Credit summary refresh notice:', summaryErr?.message || summaryErr);
+      return null;
     });
 
     const useDeterministicBusinessIntelligence = Boolean(
@@ -463,6 +607,15 @@ export async function POST(request: NextRequest) {
     const responseAnswer = useDeterministicBusinessIntelligence && businessIntelligence
       ? buildDeterministicBusinessIntelligenceAnswer(businessIntelligence, companyName)
       : result.answer;
+
+    const durableUsage = {
+      ...(result.usage || {}),
+      creditsBefore: creditReservation
+        ? creditReservation.remainingCredits + (creditFinalization.creditsDeducted || 0)
+        : durableCredits?.remainingCredits,
+      creditsDeducted: creditFinalization.creditsDeducted,
+      creditsRemaining: durableCredits?.remainingCredits ?? creditFinalization.remainingCredits,
+    };
 
     return corsJsonResponse({
       success: true,
@@ -496,9 +649,12 @@ export async function POST(request: NextRequest) {
         ...(result.contextSources || []),
         partnerContext ? 'BusinessPartnerContext' : null,
         businessIntelligence ? 'MariBusinessIntelligenceV1' : null,
+        'MariDurableCredits',
       ].filter(Boolean))),
       businessIntelligence,
-      usage: result.usage,
+      credits: durableCredits,
+      creditGate: shouldChargeCredit ? 'CHARGED' : 'RELEASED',
+      usage: durableUsage,
       usageRecordId: result.usageRecordId,
       requestId: result.requestId,
       tenantId: result.tenantId,

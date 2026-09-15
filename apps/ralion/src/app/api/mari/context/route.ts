@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../lib/cors';
 import { BusinessContextService } from '@ralion/ai/server';
 import { getCurrentRalionContext, authRequiredResponse } from '../../../../lib/auth/serverAuth';
+import { MariCreditsService } from '@/lib/services/mari/mariCredits.service';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,7 +24,6 @@ export async function POST(request: NextRequest) {
     if (serverCtx) {
       canonicalOrgId = serverCtx.organization?.id || serverCtx.workspace.organization_id || serverCtx.workspace.id;
     } else if (body.organizationId && body.organizationId !== 'org_demo' && body.organizationId !== 'default') {
-      // Unauthenticated caller attempting to supply tenant
       return corsJsonResponse(
         { success: false, code: 'AUTHENTICATION_REQUIRED', error: 'Authentication required' },
         { status: 401 },
@@ -54,6 +54,27 @@ export async function POST(request: NextRequest) {
       forceRefresh,
       localOverrides: body.localOverrides,
     });
+
+    if (serverCtx && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId)) {
+      try {
+        const durableCredits = await MariCreditsService.getSummary(orgId);
+        context.credits = {
+          totalAllocated: durableCredits.allocatedCredits,
+          used: durableCredits.usedCredits,
+          remaining: durableCredits.remainingCredits,
+          tier: durableCredits.planId,
+          planName: durableCredits.planId === 'COMMUNITY'
+            ? 'Community Plan'
+            : durableCredits.planId === 'STARTER'
+              ? 'Starter Plan'
+              : durableCredits.planId === 'PROFESSIONAL'
+                ? 'Professional Plan'
+                : 'Enterprise Plan',
+        };
+      } catch (creditErr: any) {
+        console.warn('[Mari Context API] Durable credit hydration notice:', creditErr?.message || creditErr);
+      }
+    }
 
     return corsJsonResponse({
       success: true,

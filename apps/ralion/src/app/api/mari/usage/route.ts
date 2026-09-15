@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../lib/cors';
 import { getCurrentRalionContext, authRequiredResponse } from '@/lib/auth/serverAuth';
 import { MariTokenTelemetryService } from '@ralion/ai/server';
+import { MariCreditsService } from '@/lib/services/mari/mariCredits.service';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +12,8 @@ export async function OPTIONS(request: NextRequest) {
 
 /**
  * GET /api/mari/usage
- * Authoritative authenticated tenant-scoped Mari AI usage stats.
+ * Authoritative authenticated tenant-scoped Mari AI usage and credit stats.
+ * Tokens are telemetry; credits are the durable product allowance.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -25,7 +27,10 @@ export async function GET(request: NextRequest) {
       serverCtx.workspace.organization_id ||
       serverCtx.workspace.id;
 
-    const telemetry = await MariTokenTelemetryService.getAuthoritativeUsage(orgId);
+    const [telemetry, credits] = await Promise.all([
+      MariTokenTelemetryService.getAuthoritativeUsage(orgId),
+      MariCreditsService.getSummary(orgId),
+    ]);
 
     return corsJsonResponse({
       success: true,
@@ -35,6 +40,7 @@ export async function GET(request: NextRequest) {
         totalPromptTokens: telemetry.totalPromptTokens,
         totalCompletionTokens: telemetry.totalCompletionTokens,
         totalTokens: telemetry.totalTokens,
+        credits,
         timestamp: new Date().toISOString(),
       },
     }, undefined, request);
