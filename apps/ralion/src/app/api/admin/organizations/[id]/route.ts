@@ -10,6 +10,7 @@ import {
 } from '@ralion/ai/server';
 import { BillingDatabaseService } from '@ralion/database';
 import { PlatformAdminService } from '@ralion/auth/server';
+import { getSocialConnectionCapabilities } from '@ralion/integrations';
 import { getPrivilegedSupabase } from '@/lib/supabase/server';
 
 export async function GET(
@@ -70,26 +71,83 @@ export async function GET(
 
   // 7. Supabase Social Connections
   let socialConnections: any[] = [];
+  let metaStatus: 'CONNECTED' | 'DISCONNECTED' = 'DISCONNECTED';
+  let facebookStatus: 'CONNECTED' | 'DISCONNECTED' = 'DISCONNECTED';
+  let facebookPage: string | undefined;
+  let facebookFollowers: number | undefined;
   try {
     const supabase = getPrivilegedSupabase();
-    const { data: conns } = await supabase
+    const { data: conns, error: connectionsError } = await supabase
       .from('social_connections')
-      .select('*')
+      .select('id, provider, provider_account_id, account_name, username, account_type, connection_status, token_status, followers_count, metadata, last_sync_at, created_at')
       .eq('organization_id', organizationId);
+
+    if (connectionsError) {
+      console.warn('[Admin Organization Inspector] Social connection query failed:', {
+        code: connectionsError.code || 'QUERY_ERROR',
+      });
+    }
+
     if (conns) {
       // Redact any private access tokens before returning to admin
-      socialConnections = conns.map(c => ({
-        id: c.id,
-        provider: c.provider,
-        account_name: c.account_name,
-        connection_status: c.connection_status,
-        token_status: c.token_status,
-        followers_count: c.followers_count,
-        last_sync_at: c.last_sync_at,
-        created_at: c.created_at,
-      }));
+      socialConnections = conns.map(c => {
+        const capabilities = getSocialConnectionCapabilities(c);
+        return {
+          id: c.id,
+          provider: c.provider,
+          provider_account_id: c.provider_account_id,
+          account_name: c.account_name,
+          username: c.username,
+          account_type: capabilities.classification,
+          account_type_label: capabilities.accountTypeLabel,
+          is_business_page: capabilities.isBusinessPage,
+          is_personal_profile: capabilities.isPersonalProfile,
+          connection_status: c.connection_status,
+          token_status: c.token_status,
+          followers_count: c.followers_count,
+          last_sync_at: c.last_sync_at,
+          created_at: c.created_at,
+        };
+      });
+
+      const activeFacebookConnections = conns.filter(c => {
+        const provider = String(c.provider || '').toLowerCase();
+        const connectionStatus = String(c.connection_status || '').toUpperCase();
+        const tokenStatus = String(c.token_status || '').toUpperCase();
+        return provider === 'facebook' &&
+          (connectionStatus === 'CONNECTED' || connectionStatus === 'ACTIVE') &&
+          (!tokenStatus || tokenStatus === 'TOKEN_VALID' || tokenStatus === 'TOKEN_EXPIRING');
+      });
+
+      if (activeFacebookConnections.length > 0) {
+        metaStatus = 'CONNECTED';
+        facebookStatus = 'CONNECTED';
+
+        const preferredPage = activeFacebookConnections.find(c =>
+          getSocialConnectionCapabilities(c).isBusinessPage
+        );
+
+        if (preferredPage) {
+          facebookPage = preferredPage.account_name ||
+            preferredPage.metadata?.pageName ||
+            preferredPage.metadata?.page_name ||
+            undefined;
+
+          const followerValue = Number(
+            preferredPage.followers_count ||
+            preferredPage.metadata?.followers_count ||
+            preferredPage.metadata?.fanCount ||
+            0
+          );
+          facebookFollowers = Number.isFinite(followerValue) ? followerValue : undefined;
+        }
+      }
     }
-  } catch {}
+  } catch (error: any) {
+    console.warn('[Admin Organization Inspector] Social connection resolution failed:', {
+      code: error?.code || 'SOCIAL_CONNECTION_RESOLUTION_ERROR',
+    });
+  }
 
   // 8. Tenant-specific Audit History
   const tenantAuditHistory = PlatformAdminService.getAuditLogs({ targetId: organizationId });
@@ -109,6 +167,10 @@ export async function GET(
       assets,
       activityStream,
       socialConnections,
+      metaStatus,
+      facebookStatus,
+      facebookPage,
+      facebookFollowers,
       auditHistory: tenantAuditHistory,
     },
   });
