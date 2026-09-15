@@ -7,6 +7,7 @@ export * from './creativeAsset.service';
 export * from './creativeProviders';
 export * from './creativeOrchestrator.service';
 export * from './tenantCredits.service';
+export * from './mariCreditGateway.service';
 export * from './mariCreativeIntelligence.service';
 export * from './creativeComposition.service';
 export * from './visualSemanticEvaluator.service';
@@ -30,4 +31,27 @@ export {
   callMariAiApi,
   generateLocalStrategicResponse,
 } from './mariChat';
-export * from './mariUniversalCore';
+export {
+  getMariBuildVersion,
+  MARI_BUILD_VERSION,
+  setMariFacebookPageService,
+  getMariFacebookPageService,
+  isPureGreeting,
+  callGeminiSemanticClassifier,
+  decideSemanticIntent,
+  decideSemanticIntentHeuristic,
+  classifyCapabilityMode,
+  type MariCapabilityMode,
+  type RequestedContextSource,
+  type SemanticDecisionSource,
+  type ChatHistoryTurn,
+  type SemanticEntities,
+  type SemanticDecision,
+  type MariQueryRequest,
+  type MariQueryResponse as MariUniversalQueryResponse,
+} from './mariUniversalCore';
+export {
+  MariProductionCore as MariUniversalCore,
+  processMariQuery,
+  sanitizeMariAnswerArtifacts,
+} from './mariProductionCore';
