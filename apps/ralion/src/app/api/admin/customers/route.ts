@@ -10,6 +10,8 @@ import { PlatformAdminService, CustomerSummaryItem } from '@ralion/auth/server';
 import { getPrivilegedSupabase } from '@/lib/supabase/server';
 import { isActiveFacebookConnection } from '@/lib/services/social/socialConnectionStatus';
 
+const RAS_ALI_LABS_ORGANIZATION_ID = '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf';
+
 export async function GET(request: NextRequest) {
   const auth = await verifyPlatformAdminRequest(request);
   if (!auth.authorized) {
@@ -97,15 +99,31 @@ export async function GET(request: NextRequest) {
   const profiles = BusinessKnowledgeProfileService.listProfiles();
   const subs = BillingDatabaseService.listSubscriptions();
 
-  // Canonical customer tenants derive strictly from registered user profiles in Supabase (excluding platform admin)
-  const canonicalCustomers = registeredProfiles.filter(p => {
+  // The Command Centre represents every live tenant, including the platform-owned
+  // Ras Ali Labs organization. Preserve the historical profile-derived customer
+  // list for tenants that have not yet been promoted into the organizations table,
+  // while normalizing the platform admin profile into one organization row.
+  const rasAliLabsProfile = registeredProfiles.find(p =>
+    p.id === RAS_ALI_LABS_ORGANIZATION_ID || p.email === 'ali@rasalilabs.com'
+  );
+  const customerProfiles = registeredProfiles.filter(p => {
     return (
       p.id &&
-      p.id !== '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf' &&
+      p.id !== RAS_ALI_LABS_ORGANIZATION_ID &&
       p.email !== 'ali@rasalilabs.com' &&
       p.email !== 'admin@rasalilabs.com'
     );
   });
+  const canonicalCustomers = rasAliLabsProfile
+    ? [
+        {
+          ...rasAliLabsProfile,
+          id: RAS_ALI_LABS_ORGANIZATION_ID,
+          full_name: 'Ras Ali Labs',
+        },
+        ...customerProfiles,
+      ]
+    : customerProfiles;
 
   // Alias lookup map for secondary stores that may use slug names instead of user UUID
   const aliasMap: Record<string, string[]> = {

@@ -32,6 +32,10 @@ const onboardingSource = fs.readFileSync(
   path.join(root, 'apps/ralion/src/app/(dashboard)/onboarding/page.tsx'),
   'utf8'
 );
+const customersSource = fs.readFileSync(
+  path.join(root, 'apps/ralion/src/app/api/admin/customers/route.ts'),
+  'utf8'
+);
 
 const checks = [
   [
@@ -104,6 +108,17 @@ const checks = [
         path.join(root, 'apps/ralion/src/app/api/mari/knowledge/website-sync/route.ts'),
         'utf8'
       ).includes("code: 'AUTHENTICATION_REQUIRED'"),
+  ],
+  [
+    'Customers includes one normalized Ras Ali Labs platform organization row',
+    customersSource.includes('const rasAliLabsProfile = registeredProfiles.find') &&
+      customersSource.includes("full_name: 'Ras Ali Labs'") &&
+      customersSource.includes('...customerProfiles'),
+  ],
+  [
+    'Ras Ali Labs connection resolves through the canonical organization UUID',
+    customersSource.includes("const RAS_ALI_LABS_ORGANIZATION_ID = '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf'") &&
+      customersSource.includes('const orgId = registeredUser.id'),
   ],
 ];
 
