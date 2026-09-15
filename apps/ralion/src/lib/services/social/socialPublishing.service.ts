@@ -70,6 +70,17 @@ const PUBLISHABLE_PLATFORMS = new Set<string>([
 ]);
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const MAX_INLINE_MEDIA_BYTES = 25 * 1024 * 1024;
+const INLINE_MEDIA_PATTERN = /^data:((?:image|video)\/[a-z0-9.+-]+);base64,([a-z0-9+/]*={0,2})$/i;
+const ALLOWED_INLINE_MEDIA_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'video/mp4',
+  'video/quicktime',
+  'video/webm',
+]);
 
 function publishingInputError(code: string, message: string): Error {
   const error = new Error(message);
@@ -137,10 +148,29 @@ function validateMediaInputs(mediaUrls?: unknown, mediaTypes?: unknown): {
     throw publishingInputError('INVALID_MEDIA_TYPE', 'mediaTypes must correspond one-to-one with mediaUrls.');
   }
 
+  const inferredTypes: Array<string | null> = [];
   const safeUrls = urls.map((candidate) => {
     if (typeof candidate !== 'string') {
-      throw publishingInputError('INVALID_MEDIA', 'Every media item must be an HTTPS URL.');
+      throw publishingInputError('INVALID_MEDIA', 'Every media item must be a public HTTPS URL or supported upload.');
     }
+
+    if (candidate.startsWith('data:')) {
+      const match = candidate.match(INLINE_MEDIA_PATTERN);
+      const mimeType = match?.[1]?.toLowerCase();
+      const encoded = match?.[2] || '';
+      if (!mimeType || !encoded || encoded.length % 4 !== 0 || !ALLOWED_INLINE_MEDIA_TYPES.has(mimeType)) {
+        throw publishingInputError('INVALID_MEDIA', 'Uploaded media must be a supported base64 image or video.');
+      }
+
+      const paddingBytes = encoded.endsWith('==') ? 2 : encoded.endsWith('=') ? 1 : 0;
+      const decodedBytes = Math.floor((encoded.length * 3) / 4) - paddingBytes;
+      if (decodedBytes <= 0 || decodedBytes > MAX_INLINE_MEDIA_BYTES) {
+        throw publishingInputError('INVALID_MEDIA', 'Uploaded media must not exceed 25 MiB.');
+      }
+      inferredTypes.push(mimeType);
+      return candidate;
+    }
+
     let parsed: URL;
     try {
       parsed = new URL(candidate);
@@ -150,14 +180,27 @@ function validateMediaInputs(mediaUrls?: unknown, mediaTypes?: unknown): {
     if (parsed.protocol !== 'https:' || parsed.username || parsed.password || isPrivateOrLocalHostname(parsed.hostname)) {
       throw publishingInputError('INVALID_MEDIA', 'Media URLs must use public HTTPS addresses.');
     }
+    inferredTypes.push(null);
     return parsed.toString();
   });
 
-  const safeTypes = types.map((candidate) => {
-    if (typeof candidate !== 'string' || !/^(image|video)\/[a-z0-9.+-]+$/i.test(candidate)) {
+  const safeTypes = types.map((candidate, index) => {
+    if (typeof candidate !== 'string') {
       throw publishingInputError('INVALID_MEDIA_TYPE', 'Every media type must be a valid image or video MIME type.');
     }
-    return candidate.toLowerCase();
+    const normalized = candidate.trim().toLowerCase();
+    const resolved = normalized === 'image'
+      ? inferredTypes[index] || 'image/jpeg'
+      : normalized === 'video'
+        ? inferredTypes[index] || 'video/mp4'
+        : normalized;
+    if (!/^(image|video)\/[a-z0-9.+-]+$/i.test(resolved) || resolved === 'image/svg+xml') {
+      throw publishingInputError('INVALID_MEDIA_TYPE', 'Every media type must be a valid image or video MIME type.');
+    }
+    if (inferredTypes[index] && inferredTypes[index] !== resolved) {
+      throw publishingInputError('INVALID_MEDIA_TYPE', 'Uploaded media content and mediaTypes must match.');
+    }
+    return resolved;
   });
 
   return { mediaUrls: safeUrls, mediaTypes: safeTypes };
@@ -592,33 +635,39 @@ export class SocialPublishingService {
       const item = rawMediaUrls[i];
       if (typeof item === 'string' && item.startsWith('data:')) {
         try {
-          const match = item.match(/^data:([^;]+);base64,(.+)$/);
-          if (match) {
-            const mimeType = match[1];
-            const base64Data = match[2];
-            const buffer = Buffer.from(base64Data, 'base64');
-            const ext = mimeType.split('/')[1]?.replace('jpeg', 'jpg').split('+')[0] || 'png';
-            const fileName = `pub_${Date.now()}_${i}_${crypto.randomBytes(3).toString('hex')}.${ext}`;
-            const storagePath = `social/${fileName}`;
-
-            const { error: upErr } = await supabase.storage
-              .from('social-media-assets')
-              .upload(storagePath, buffer, { contentType: mimeType, upsert: true });
-
-            if (!upErr) {
-              const { data: pubData } = supabase.storage
-                .from('social-media-assets')
-                .getPublicUrl(storagePath);
-              if (pubData?.publicUrl) {
-                processed.push(pubData.publicUrl);
-                continue;
-              }
-            } else {
-              console.warn('[SocialPublishing] Storage upload warning:', upErr.message);
-            }
+          const match = item.match(INLINE_MEDIA_PATTERN);
+          if (!match) {
+            throw new Error('INVALID_INLINE_MEDIA');
           }
+          const mimeType = match[1].toLowerCase();
+          const buffer = Buffer.from(match[2], 'base64');
+          const ext = mimeType.split('/')[1]?.replace('jpeg', 'jpg').split('+')[0] || 'bin';
+          const fileName = `pub_${Date.now()}_${i}_${crypto.randomBytes(3).toString('hex')}.${ext}`;
+          const storagePath = `social/${fileName}`;
+
+          const { error: upErr } = await supabase.storage
+            .from('social-media-assets')
+            .upload(storagePath, buffer, { contentType: mimeType, upsert: false });
+          if (upErr) throw new Error('STORAGE_UPLOAD_FAILED');
+
+          const { data: pubData } = supabase.storage
+            .from('social-media-assets')
+            .getPublicUrl(storagePath);
+          const publicUrl = pubData?.publicUrl;
+          if (!publicUrl || !publicUrl.startsWith('https://')) {
+            throw new Error('STORAGE_PUBLIC_URL_FAILED');
+          }
+          processed.push(publicUrl);
+          continue;
         } catch (e: any) {
-          console.warn('[SocialPublishing] Media normalization notice:', e.message);
+          console.warn('[SocialPublishing] Media storage normalization failed:', {
+            code: e?.message || 'MEDIA_STORAGE_ERROR',
+            mediaIndex: i,
+          });
+          const storageError = new Error('Uploaded media could not be prepared for publication. No provider request was sent.');
+          (storageError as any).statusCode = 502;
+          (storageError as any).publicCode = 'MEDIA_STORAGE_FAILED';
+          throw storageError;
         }
       }
       if (typeof item === 'string' && item.trim()) {

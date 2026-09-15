@@ -5,7 +5,14 @@
  */
 
 import 'server-only';
-import { SocialPlatformType, SocialProviderRegistry, ZernioSocialService } from '@ralion/integrations/server';
+import {
+  SocialPlatformType,
+  SocialProviderRegistry,
+  ZernioSocialService,
+  assertMasterZernioAuthorization,
+  MASTER_PLATFORM_ZERNIO_ACCOUNT_ID,
+  MASTER_PLATFORM_ZERNIO_PROFILE_ID,
+} from '@ralion/integrations/server';
 import { SocialTokenManager } from './socialTokenManager.service';
 import { getPrivilegedSupabase as getServiceSupabase } from '@/lib/supabase/server';
 
@@ -31,7 +38,10 @@ export class SocialInboxService {
 
     const userId = typeof params === 'string' ? params : params.userId;
     const workspaceId = typeof params === 'object' ? params.workspaceId : undefined;
+    const organizationId = typeof params === 'object' ? params.organizationId : undefined;
     const provider = typeof params === 'object' ? params.provider : legacyProvider;
+
+    if (!userId || !workspaceId || !organizationId) return [];
 
     // 1. Resolve connected tenant's Zernio profile and account mapping strictly for this workspace / user
     let profileId: string | null = null;
@@ -42,18 +52,15 @@ export class SocialInboxService {
         .from('social_connections')
         .select('zernio_profile_id, zernio_account_id, workspace_id, user_id')
         .eq('provider', provider || 'facebook')
-        .eq('connection_status', 'CONNECTED');
+        .eq('connection_status', 'CONNECTED')
+        .eq('organization_id', organizationId)
+        .eq('workspace_id', workspaceId)
+        .eq('user_id', userId)
+        .not('zernio_profile_id', 'is', null)
+        .order('updated_at', { ascending: false });
 
-      if (workspaceId && workspaceId !== 'default' && workspaceId !== 'default-org') {
-        connQuery = connQuery.or(`workspace_id.eq.${workspaceId},user_id.eq.${userId || workspaceId}`);
-      } else if (userId && userId !== 'default-user') {
-        connQuery = connQuery.eq('user_id', userId);
-      } else {
-        // Unscoped request -> return empty conversations (zero tenant cross-leakage)
-        return [];
-      }
-
-      const { data: conns } = await connQuery.limit(1);
+      const { data: conns, error: connError } = await connQuery.limit(1);
+      if (connError) return [];
       const conn = Array.isArray(conns) && conns.length > 0 ? conns[0] : null;
       if (conn?.zernio_profile_id) {
         profileId = conn.zernio_profile_id;
@@ -68,12 +75,23 @@ export class SocialInboxService {
       return [];
     }
 
+    if (profileId === MASTER_PLATFORM_ZERNIO_PROFILE_ID) {
+      assertMasterZernioAuthorization({
+        userId,
+        organizationId,
+        workspaceId,
+        targetProfileId: profileId,
+        action: 'read_social_inbox',
+      });
+      accountId = accountId || MASTER_PLATFORM_ZERNIO_ACCOUNT_ID;
+    }
+
     const conversationMap = new Map<string, any>();
 
     // 2. Query live conversations from Zernio
     if (profileId) {
       try {
-        const convData = await ZernioSocialService.getInboxConversations(profileId);
+        const convData = await ZernioSocialService.getInboxConversations(profileId, accountId || undefined);
         const convList = convData?.data || (Array.isArray(convData) ? convData : []);
 
         if (Array.isArray(convList) && convList.length > 0) {
@@ -141,11 +159,10 @@ export class SocialInboxService {
       if (provider) {
         query = query.eq('provider', provider);
       }
-      if (workspaceId && workspaceId !== 'default' && workspaceId !== 'default-org') {
-        query = query.or(`workspace_id.eq.${workspaceId},sender_id.eq.${userId || workspaceId}`);
-      } else if (userId && userId !== 'default-user') {
-        query = query.eq('sender_id', userId);
-      }
+      query = query
+        .eq('organization_id', organizationId)
+        .eq('workspace_id', workspaceId)
+        .eq('sender_id', userId);
 
       const { data, error } = await query;
 
@@ -196,6 +213,13 @@ export class SocialInboxService {
     organizationId?: string;
     senderName?: string;
   }) {
+    if (!params.userId || !params.workspaceId || !params.organizationId) {
+      const tenantError: any = new Error('[SocialInboxService] Canonical tenant context is required.');
+      tenantError.statusCode = 400;
+      tenantError.code = 'TENANT_CONTEXT_REQUIRED';
+      throw tenantError;
+    }
+
     const supabase = getServiceSupabase();
     const provider = params.provider || 'facebook';
 
@@ -205,37 +229,53 @@ export class SocialInboxService {
     if (params.connectionId && !params.connectionId.startsWith('acc-') && !params.connectionId.startsWith('fb-page-')) {
       const { data } = await supabase
         .from('social_connections')
-        .select('*')
+        .select('id, provider, access_token, infrastructure_provider, zernio_profile_id, zernio_account_id, organization_id, workspace_id, user_id')
         .eq('id', params.connectionId)
+        .eq('provider', provider)
+        .eq('connection_status', 'CONNECTED')
+        .eq('organization_id', params.organizationId)
+        .eq('workspace_id', params.workspaceId)
+        .eq('user_id', params.userId)
         .maybeSingle();
       conn = data;
     }
 
     if (!conn) {
       // Find active connection for this tenant/workspace/user
-      const orgOrUser = params.workspaceId || params.organizationId || params.userId;
       const { data } = await supabase
         .from('social_connections')
-        .select('*')
+        .select('id, provider, access_token, infrastructure_provider, zernio_profile_id, zernio_account_id, organization_id, workspace_id, user_id')
         .eq('provider', provider)
         .eq('connection_status', 'CONNECTED')
-        .or(`workspace_id.eq.${orgOrUser},user_id.eq.${params.userId}`)
-        .order('created_at', { ascending: false })
+        .eq('organization_id', params.organizationId)
+        .eq('workspace_id', params.workspaceId)
+        .eq('user_id', params.userId)
+        .order('updated_at', { ascending: false })
         .limit(1);
       conn = Array.isArray(data) && data.length > 0 ? data[0] : null;
     }
 
-    // Fallback for Master Admin workspace strictly
-    if (!conn && (params.organizationId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf' || params.workspaceId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf' || params.userId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf')) {
-      conn = {
-        id: 'f8656d3c-789b-4890-bc80-83920ce91870',
-        infrastructure_provider: 'zernio',
-        zernio_profile_id: '6a82deac1a69158ef81cb2cd',
-        zernio_account_id: '6a82df7277555aae018b92b4',
-      };
+    if (!conn) {
+      const connectionError: any = new Error('[SocialInboxService] No active tenant connection is available.');
+      connectionError.statusCode = 409;
+      connectionError.code = 'SOCIAL_CONNECTION_REQUIRED';
+      throw connectionError;
     }
 
-    const isZernio = conn?.infrastructure_provider === 'zernio' || Boolean(conn?.zernio_account_id);
+    const isMasterProfile = conn.zernio_profile_id === MASTER_PLATFORM_ZERNIO_PROFILE_ID;
+    if (isMasterProfile) {
+      assertMasterZernioAuthorization({
+        userId: params.userId,
+        organizationId: params.organizationId,
+        workspaceId: params.workspaceId,
+        targetProfileId: conn.zernio_profile_id,
+        action: 'send_inbox_reply',
+      });
+    }
+
+    const resolvedZernioAccountId = conn.zernio_account_id
+      || (isMasterProfile ? MASTER_PLATFORM_ZERNIO_ACCOUNT_ID : undefined);
+    const isZernio = conn.infrastructure_provider === 'zernio' || Boolean(conn.zernio_profile_id);
     let result: any = null;
 
     if (isZernio) {
@@ -244,24 +284,13 @@ export class SocialInboxService {
         conversationId: params.conversationId,
         recipientId: params.recipientId,
         messageText: params.messageText,
-        accountId: conn?.zernio_account_id || '6a82df7277555aae018b92b4',
+        accountId: resolvedZernioAccountId,
       });
     } else {
       // Resolve valid token
       let token = conn?.access_token;
       if (!token && conn?.id) {
         token = await SocialTokenManager.getValidToken(conn.id, provider);
-      }
-
-      if (!token) {
-        // Check social_account_tokens table
-        const { data: tokenRow } = await supabase
-          .from('social_account_tokens')
-          .select('access_token')
-          .eq('user_id', params.userId)
-          .eq('provider', provider)
-          .maybeSingle();
-        token = tokenRow?.access_token;
       }
 
       if (!token) {
@@ -285,6 +314,8 @@ export class SocialInboxService {
     try {
       await supabase.from('social_inbox_messages').insert({
         connection_id: resolvedConnectionId,
+        organization_id: params.organizationId,
+        workspace_id: params.workspaceId,
         provider,
         conversation_id: params.conversationId,
         sender_id: params.userId,
