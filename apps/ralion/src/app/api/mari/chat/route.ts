@@ -277,7 +277,7 @@ export async function POST(request: NextRequest) {
               workspaceId,
               userId: authenticatedUserId,
               pageId: activePage.pageId,
-              limit: 10,
+              limit: 50,
             });
           } catch (postErr: any) {
             console.warn('[Mari Chat API] Recent posts fetch notice:', postErr?.message);
