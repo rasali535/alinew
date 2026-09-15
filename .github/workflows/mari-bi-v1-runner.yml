@@ -1,0 +1,163 @@
+name: Mari BI v1 one-shot runner
+
+on:
+  push:
+    branches:
+      - feat/mari-business-intelligence-v1
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/mari-business-intelligence-v1
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply Mari BI v1 integration patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new, label):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f"Missing matcher for {label} in {path}")
+              text = text.replace(old, new, 1)
+              p.write_text(text)
+
+          fb = 'apps/ralion/src/lib/services/social/facebookPageManagement.service.ts'
+          replace_once(
+              fb,
+              """    socialConnectionId?: string;\n  }): Promise<NormalizedPageAnalytics> {""",
+              """    socialConnectionId?: string;\n    prefetchedPosts?: FacebookPagePostItem[];\n  }): Promise<NormalizedPageAnalytics> {""",
+              'analytics prefetched posts type',
+          )
+          replace_once(
+              fb,
+              """    const livePosts = await this.getPagePosts({\n      organizationId: params.organizationId || tenantId,\n      workspaceId: params.workspaceId || tenantId,\n      userId,\n      socialConnectionId: conn.id,\n      limit: 50,\n    });""",
+              """    const livePosts = params.prefetchedPosts || await this.getPagePosts({\n      organizationId: params.organizationId || tenantId,\n      workspaceId: params.workspaceId || tenantId,\n      userId,\n      socialConnectionId: conn.id,\n      limit: 50,\n    });""",
+              'analytics prefetched posts reuse',
+          )
+
+          comments = 'apps/ralion/src/lib/services/social/facebookComments.service.ts'
+          replace_once(
+              comments,
+              """    let connQuery = supabase\n      .from('social_connections')\n      .select('zernio_profile_id, zernio_account_id, workspace_id, user_id')\n      .eq('provider', 'facebook')\n      .eq('connection_status', 'CONNECTED');\n\n    if (params.workspaceId && params.workspaceId !== 'default' && params.workspaceId !== 'default-org') {\n      connQuery = connQuery.or(`workspace_id.eq.${params.workspaceId},user_id.eq.${params.userId || params.workspaceId}`);\n    } else if (params.userId && params.userId !== 'default-user') {\n      connQuery = connQuery.eq('user_id', params.userId);\n    } else {\n      // Unscoped request -> return empty comments (zero cross-tenant leakage)\n      return [];\n    }""",
+              """    let connQuery = supabase\n      .from('social_connections')\n      .select('zernio_profile_id, zernio_account_id, workspace_id, organization_id, user_id')\n      .eq('provider', 'facebook')\n      .eq('connection_status', 'CONNECTED');\n\n    const hasOrganizationScope = Boolean(params.organizationId && params.organizationId !== 'default-org');\n    const hasWorkspaceScope = Boolean(params.workspaceId && params.workspaceId !== 'default' && params.workspaceId !== 'default-org');\n    const hasUserScope = Boolean(params.userId && params.userId !== 'default-user');\n\n    if (hasOrganizationScope) connQuery = connQuery.eq('organization_id', params.organizationId!);\n    if (hasUserScope) {\n      connQuery = connQuery.eq('user_id', params.userId!);\n    } else if (!hasOrganizationScope && hasWorkspaceScope) {\n      connQuery = connQuery.eq('workspace_id', params.workspaceId!);\n    }\n\n    if (!hasOrganizationScope && !hasWorkspaceScope && !hasUserScope) {\n      // Unscoped request -> return empty comments (zero cross-tenant leakage)\n      return [];\n    }""",
+              'comment read tenant scope',
+          )
+          replace_once(
+              comments,
+              """    let connQuery = supabase\n      .from('social_connections')\n      .select('zernio_account_id, account_name, workspace_id, user_id')\n      .eq('provider', 'facebook')\n      .eq('connection_status', 'CONNECTED');\n\n    if (params.workspaceId && params.workspaceId !== 'default' && params.workspaceId !== 'default-org') {\n      connQuery = connQuery.or(`workspace_id.eq.${params.workspaceId},user_id.eq.${params.userId || params.workspaceId}`);\n    } else if (params.userId && params.userId !== 'default-user') {\n      connQuery = connQuery.eq('user_id', params.userId);\n    } else {\n      throw new Error('Authentication/workspace context required to reply to comment.');\n    }""",
+              """    let connQuery = supabase\n      .from('social_connections')\n      .select('zernio_account_id, account_name, workspace_id, organization_id, user_id')\n      .eq('provider', 'facebook')\n      .eq('connection_status', 'CONNECTED');\n\n    const hasOrganizationScope = Boolean(params.organizationId && params.organizationId !== 'default-org');\n    const hasWorkspaceScope = Boolean(params.workspaceId && params.workspaceId !== 'default' && params.workspaceId !== 'default-org');\n    const hasUserScope = Boolean(params.userId && params.userId !== 'default-user');\n\n    if (hasOrganizationScope) connQuery = connQuery.eq('organization_id', params.organizationId!);\n    if (hasUserScope) {\n      connQuery = connQuery.eq('user_id', params.userId!);\n    } else if (!hasOrganizationScope && hasWorkspaceScope) {\n      connQuery = connQuery.eq('workspace_id', params.workspaceId!);\n    }\n\n    if (!hasOrganizationScope && !hasWorkspaceScope && !hasUserScope) {\n      throw new Error('Authentication/workspace context required to reply to comment.');\n    }""",
+              'comment reply tenant scope',
+          )
+
+          route = 'apps/ralion/src/app/api/mari/chat/route.ts'
+          replace_once(
+              route,
+              """import { FacebookPageManagementService } from '../../../../lib/services/social/facebookPageManagement.service';""",
+              """import { FacebookPageManagementService } from '../../../../lib/services/social/facebookPageManagement.service';\nimport {\n  MariBusinessIntelligenceService,\n  type MariBusinessIntelligenceSnapshot,\n} from '../../../../lib/services/mari/mariBusinessIntelligence.service';""",
+              'Mari BI import',
+          )
+          replace_once(
+              route,
+              """function buildPartnerPrompt(query: string, context: any, companyName: string): string {""",
+              """function shouldLoadBusinessIntelligence(query: string, intent: string, mode: string): boolean {\n  if (mode !== 'BUSINESS' || intent === 'GREETING') return false;\n  const normalizedIntent = String(intent || '').toUpperCase();\n  const intelligenceIntents = new Set([\n    'BUSINESS_PERFORMANCE',\n    'GROWTH_STRATEGY',\n    'BUSINESS_SYNTHESIS',\n    'COMPARE_WEBSITE_VS_SOCIAL',\n    'WEEKLY_FOCUS',\n    'TARGET_CUSTOMERS',\n    'FACEBOOK_ANALYTICS',\n    'FACEBOOK_INSIGHTS',\n    'SOCIAL_ANALYTICS',\n    'SOCIAL_INSIGHTS',\n  ]);\n  if (intelligenceIntents.has(normalizedIntent)) return true;\n  return /\\b(grow|growth|performance|performing|doing|engagement|reach|followers?|facebook|social media|posts?|comments?|audience|customers?|leads?|marketing|content performance)\\b/i.test(query);\n}\n\nfunction buildPartnerPrompt(\n  query: string,\n  context: any,\n  companyName: string,\n  intelligence?: MariBusinessIntelligenceSnapshot | null\n): string {""",
+              'Mari BI load helper and prompt signature',
+          )
+          replace_once(
+              route,
+              """  ].join('\\n');\n\n  return `${query.trim()}\\n\\n[SERVER-VERIFIED MARI PARTNER CONTEXT]\\n${snapshot}\\n\\n[MARI CONVERSATION BEHAVIOR]""",
+              """  ].join('\\n');\n  const intelligenceContext = intelligence\n    ? `\\n\\n${MariBusinessIntelligenceService.toPromptContext(intelligence)}`\n    : '';\n\n  return `${query.trim()}\\n\\n[SERVER-VERIFIED MARI PARTNER CONTEXT]\\n${snapshot}${intelligenceContext}\\n\\n[MARI CONVERSATION BEHAVIOR]""",
+              'Mari BI prompt context',
+          )
+          replace_once(
+              route,
+              """    let localOverrides = body.localOverrides || {};\n\n    if (localOverrides.fbPage) {""",
+              """    let localOverrides = body.localOverrides || {};\n    let resolvedFacebookPage: any = null;\n    let resolvedFacebookPosts: any[] = [];\n\n    if (localOverrides.fbPage) {""",
+              'Mari BI resolved Facebook holders',
+          )
+          replace_once(
+              route,
+              """        const activePage = await FacebookPageManagementService.getPrimaryPage({\n          organizationId: orgId,\n          workspaceId,\n          userId: authenticatedUserId,\n        });\n\n        if (activePage) {""",
+              """        const activePage = await FacebookPageManagementService.getPrimaryPage({\n          organizationId: orgId,\n          workspaceId,\n          userId: authenticatedUserId,\n        });\n        resolvedFacebookPage = activePage;\n\n        if (activePage) {""",
+              'Mari BI Facebook page reuse',
+          )
+          replace_once(
+              route,
+              """          } catch (postErr: any) {\n            console.warn('[Mari Chat API] Recent posts fetch notice:', postErr?.message);\n          }\n\n          localOverrides = {""",
+              """          } catch (postErr: any) {\n            console.warn('[Mari Chat API] Recent posts fetch notice:', postErr?.message);\n          }\n          resolvedFacebookPosts = recentPosts;\n\n          localOverrides = {""",
+              'Mari BI Facebook posts reuse',
+          )
+          replace_once(
+              route,
+              """    } catch (ctxErr: any) {\n      console.warn('[Mari Chat API] Partner context assembly notice:', ctxErr?.message);\n    }\n\n    const partnerPrompt = buildPartnerPrompt(cleanQuery, partnerContext, companyName);""",
+              """    } catch (ctxErr: any) {\n      console.warn('[Mari Chat API] Partner context assembly notice:', ctxErr?.message);\n    }\n\n    let businessIntelligence: MariBusinessIntelligenceSnapshot | null = null;\n    if (shouldLoadBusinessIntelligence(cleanQuery, detectedIntent, capabilityMode)) {\n      try {\n        businessIntelligence = await MariBusinessIntelligenceService.getBusinessIntelligence({\n          organizationId: orgId,\n          workspaceId,\n          userId: authenticatedUserId,\n          companyName,\n          businessContext: partnerContext || undefined,\n          facebookPage: resolvedFacebookPage || undefined,\n          facebookPosts: resolvedFacebookPage ? resolvedFacebookPosts : undefined,\n        });\n      } catch (intelligenceErr: any) {\n        console.warn('[Mari Chat API] Business intelligence snapshot notice:', intelligenceErr?.message);\n      }\n    }\n\n    const partnerPrompt = buildPartnerPrompt(cleanQuery, partnerContext, companyName, businessIntelligence);""",
+              'Mari BI snapshot assembly',
+          )
+          replace_once(
+              route,
+              """      contextSources: Array.from(new Set([...(result.contextSources || []), partnerContext ? 'BusinessPartnerContext' : null].filter(Boolean))),\n      usage: result.usage,""",
+              """      contextSources: Array.from(new Set([\n        ...(result.contextSources || []),\n        partnerContext ? 'BusinessPartnerContext' : null,\n        businessIntelligence ? 'MariBusinessIntelligenceV1' : null,\n      ].filter(Boolean))),\n      businessIntelligence,\n      usage: result.usage,""",
+              'Mari BI response metadata',
+          )
+          PY
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build AI package
+        run: npm run build --workspace=@ralion/ai
+
+      - name: Type-check Ralion app
+        run: npx tsc --noEmit -p apps/ralion/tsconfig.json
+
+      - name: Verify intelligence invariants
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          service = Path('apps/ralion/src/lib/services/mari/mariBusinessIntelligence.service.ts').read_text()
+          route = Path('apps/ralion/src/app/api/mari/chat/route.ts').read_text()
+          comments = Path('apps/ralion/src/lib/services/social/facebookComments.service.ts').read_text()
+          fb = Path('apps/ralion/src/lib/services/social/facebookPageManagement.service.ts').read_text()
+          checks = {
+              'deterministic snapshot service': 'class MariBusinessIntelligenceService' in service,
+              '30 day metrics': 'posts30d' in service and 'engagementRatePct' in service,
+              'no fake follower growth': 'followerGrowth30dPct: null' in service,
+              'comment signal analysis': 'unansweredQuestions' in service and 'leadSignals' in service,
+              'chat intelligence wiring': 'MariBusinessIntelligenceV1' in route,
+              'strict comment organization scope': ".eq('organization_id', params.organizationId!)" in comments,
+              'prefetched post reuse': 'params.prefetchedPosts || await this.getPagePosts' in fb,
+          }
+          failed = [name for name, ok in checks.items() if not ok]
+          if failed:
+              raise SystemExit('Invariant failure: ' + ', '.join(failed))
+          print('Mari BI v1 invariants passed:', ', '.join(checks))
+          PY
+
+      - name: Commit tested source and remove one-shot runner
+        shell: bash
+        run: |
+          rm -f .github/workflows/mari-bi-v1-runner.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/ralion/src/app/api/mari/chat/route.ts \
+                  apps/ralion/src/lib/services/social/facebookPageManagement.service.ts \
+                  apps/ralion/src/lib/services/social/facebookComments.service.ts \
+                  .github/workflows/mari-bi-v1-runner.yml
+          git commit -m "feat(mari): wire business intelligence into chat" || true
+          git push origin HEAD:feat/mari-business-intelligence-v1
