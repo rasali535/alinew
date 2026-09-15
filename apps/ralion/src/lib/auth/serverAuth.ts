@@ -29,9 +29,14 @@ function requireSupabaseUrl(): string {
  * sent in Authorization: Bearer. Never mix roles: do NOT use this for DB writes.
  */
 export function getVerifierSupabase() {
-  const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const publishableKey =
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!publishableKey) {
-    const err = new Error('[ServerAuth] SUPABASE_PUBLISHABLE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY is required for JWT verification.');
+    const err = new Error(
+      '[ServerAuth] SUPABASE_PUBLISHABLE_KEY, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, or NEXT_PUBLIC_SUPABASE_ANON_KEY is required for JWT verification.'
+    );
     (err as any).code = 'SUPABASE_CONFIG_ERROR';
     throw err;
   }
@@ -200,7 +205,26 @@ export async function resolveRalionAuthContext(
   try {
     const { data, error } = await verifier.auth.getUser(token);
     if (error || !data?.user) {
-      console.warn('[ServerAuth] JWT verification failed:', { code: error?.code, status: error?.status });
+      const errMessage = String(error?.message || '');
+      const errCode = String(error?.code || '');
+      const errStatus = error?.status;
+      const isConfigError =
+        /invalid api key|apikey|configuration|legacy api key|unregistered api key|SUPABASE_CONFIG/i.test(errMessage) ||
+        /invalid_api_key|api_key_invalid|bad_api_key/i.test(errCode) ||
+        (errStatus === 500 && !/jwt|token|expired|claim|signature/i.test(errMessage));
+
+      if (isConfigError) {
+        console.error('[ServerAuth] JWT verifier returned API key or configuration error:', errMessage, { code: errCode, status: errStatus });
+        return {
+          status: 'TENANT_DATABASE_ERROR',
+          context: null,
+          errorCode: 'SUPABASE_CONFIG_ERROR',
+          errorMessage: 'Authentication service configuration error.',
+          httpStatus: 500,
+        };
+      }
+
+      console.warn('[ServerAuth] JWT verification failed:', { code: error?.code, status: error?.status, message: errMessage });
       return {
         status: 'AUTHENTICATION_REQUIRED',
         context: null,
@@ -215,7 +239,10 @@ export async function resolveRalionAuthContext(
     // API key issues produce messages about 'Invalid API key' or 'apikey', whereas
     // genuine JWT rejections produce auth-specific codes.
     const msg: string = String(err?.message || '');
-    const isConfigError = /invalid api key|apikey|configuration|SUPABASE_CONFIG/i.test(msg);
+    const code: string = String(err?.code || '');
+    const isConfigError =
+      /invalid api key|apikey|configuration|legacy api key|unregistered api key|SUPABASE_CONFIG/i.test(msg) ||
+      /invalid_api_key|api_key_invalid/i.test(code);
     if (isConfigError) {
       console.error('[ServerAuth] JWT verifier API key error:', msg);
       return {

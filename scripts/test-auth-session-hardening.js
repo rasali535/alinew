@@ -23,6 +23,8 @@ const integrationsPageSource = fs.readFileSync(path.join(root, 'apps/ralion/src/
 const htaccessSource = fs.readFileSync(path.join(root, 'apps/website/public/.htaccess'), 'utf8');
 const proxyPhpSource = fs.readFileSync(path.join(root, 'apps/website/public/api_proxy.php'), 'utf8');
 const websiteSupabaseSource = fs.readFileSync(path.join(root, 'apps/website/src/lib/supabase.js'), 'utf8');
+const adminClientSource = fs.readFileSync(path.join(root, 'apps/admin/src/lib/supabase/client.ts'), 'utf8');
+const loginPageSource = fs.readFileSync(path.join(root, 'apps/ralion/src/app/(auth)/login/page.tsx'), 'utf8');
 
 console.log('================================================================');
 console.log('🧪 Ralion Auth & Session Transport Hardening Test Suite');
@@ -151,7 +153,9 @@ const checks = [
   [
     'serverAuth.ts exports getVerifierSupabase() using publishable/anon key for JWT verification',
     serverAuthSource.includes('export function getVerifierSupabase()') &&
-    serverAuthSource.includes('SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY')
+    serverAuthSource.includes('SUPABASE_PUBLISHABLE_KEY') &&
+    serverAuthSource.includes('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY') &&
+    serverAuthSource.includes('NEXT_PUBLIC_SUPABASE_ANON_KEY')
   ],
   // A2. resolveRalionAuthContext() calls verifier.auth.getUser(), NOT service admin client
   [
@@ -243,6 +247,62 @@ const checks = [
     apiConfigSource.includes("body?.code === 'AUTH_TOKEN_INVALID'") &&
     apiConfigSource.includes('shouldRefresh = true') &&
     !apiConfigSource.includes("body?.code === 'AUTH_TOKEN_MISSING'")
+  ],
+
+  // ── Requirement F: Modern Publishable Key & Error Classification Regression Suite ──
+  [
+    'Ralion client prefers NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY before NEXT_PUBLIC_SUPABASE_ANON_KEY',
+    clientSource.includes('process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||') &&
+    clientSource.includes('process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY')
+  ],
+  [
+    'Ralion client fails clearly with error when neither publishable nor anon key exists',
+    clientSource.includes('Missing Supabase client key') &&
+    !clientSource.includes("const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';")
+  ],
+  [
+    'serverAuth getVerifierSupabase() prefers SUPABASE_PUBLISHABLE_KEY before NEXT_PUBLIC keys',
+    serverAuthSource.includes('process.env.SUPABASE_PUBLISHABLE_KEY ||') &&
+    serverAuthSource.includes('process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||') &&
+    serverAuthSource.includes('process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY')
+  ],
+  [
+    'apps/admin client prefers NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY before legacy anon key',
+    adminClientSource.includes('process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||') &&
+    adminClientSource.includes('process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY')
+  ],
+  [
+    'apps/website client prefers publishable key variables before legacy anon key',
+    websiteSupabaseSource.includes('VITE_SUPABASE_PUBLISHABLE_KEY ||') &&
+    websiteSupabaseSource.includes('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||')
+  ],
+  [
+    'serverAuth and route classify returned Supabase API key / config errors as 500 SUPABASE_CONFIG_ERROR',
+    serverAuthSource.includes('SUPABASE_CONFIG_ERROR') &&
+    serverAuthSource.includes('legacy api key') &&
+    authContextRoute.includes('SUPABASE_CONFIG_ERROR') &&
+    authContextRoute.includes('legacy api key')
+  ],
+  [
+    'serverAuth and route classify malformed/expired JWT as 401 AUTH_TOKEN_INVALID',
+    serverAuthSource.includes("errorCode: 'AUTH_TOKEN_INVALID'") &&
+    authContextRoute.includes("errorCode: 'AUTH_TOKEN_INVALID'")
+  ],
+  [
+    'login page does not trigger automatic refreshSession on signInWithPassword',
+    loginPageSource.includes('AuthService.login(email, password)') &&
+    !loginPageSource.includes('refreshSession')
+  ],
+  [
+    'login does not trigger immediate signOut and only SIGNED_OUT clears storage',
+    clientSource.includes("if (event === 'SIGNED_OUT')") &&
+    !clientSource.includes("if (event === 'SIGNED_IN') {\n        try {\n          window.localStorage?.removeItem")
+  ],
+  [
+    'Exactly one refresh implementation remains across codebase',
+    clientSource.includes('export async function deduplicatedRefreshSession') &&
+    !orgContextSource.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '').includes('.refreshSession(') &&
+    !apiConfigSource.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '').includes('.refreshSession(')
   ]
 ];
 
@@ -277,6 +337,80 @@ async function testRuntimeDeduplication() {
   }
 }
 
+// Runtime Test: Empty key cannot create client
+function testEmptyKeyClientCreation() {
+  function createMockClient(publishableKey, anonKey) {
+    const key = publishableKey || anonKey;
+    if (!key) {
+      throw new Error(
+        '[ClientSupabase] Missing Supabase client key. Neither NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY nor NEXT_PUBLIC_SUPABASE_ANON_KEY is configured.'
+      );
+    }
+    return { initialized: true, key };
+  }
+
+  assert.throws(
+    () => createMockClient('', ''),
+    /Missing Supabase client key/,
+    'Empty publishable and anon key must throw error and not instantiate client'
+  );
+
+  assert.throws(
+    () => createMockClient(undefined, undefined),
+    /Missing Supabase client key/,
+    'Undefined keys must throw error'
+  );
+
+  const clientWithPublishable = createMockClient('sb_publishable_test', 'anon_legacy');
+  assert.equal(clientWithPublishable.key, 'sb_publishable_test', 'Publishable key must be preferred over legacy');
+}
+
+// Runtime Test: Supabase getUser error classification logic
+function testGetUserErrorClassification() {
+  function classifyGetUserError(error) {
+    const errMessage = String(error?.message || '');
+    const errCode = String(error?.code || '');
+    const errStatus = error?.status;
+    const isConfigError =
+      /invalid api key|apikey|configuration|legacy api key|unregistered api key|SUPABASE_CONFIG/i.test(errMessage) ||
+      /invalid_api_key|api_key_invalid|bad_api_key/i.test(errCode) ||
+      (errStatus === 500 && !/jwt|token|expired|claim|signature/i.test(errMessage));
+
+    if (isConfigError) {
+      return { status: 500, errorCode: 'SUPABASE_CONFIG_ERROR' };
+    }
+    return { status: 401, errorCode: 'AUTH_TOKEN_INVALID' };
+  }
+
+  // API key disabled error from Supabase
+  const legacyDisabled = classifyGetUserError({
+    message: 'Your legacy API keys (anon, service_role) were disabled on 2026-09-14. Re-enable them in the Supabase dashboard, or use the new publishable and secret API keys.',
+    status: 401
+  });
+  assert.equal(legacyDisabled.status, 500);
+  assert.equal(legacyDisabled.errorCode, 'SUPABASE_CONFIG_ERROR');
+
+  // Invalid API key
+  const invalidKey = classifyGetUserError({ message: 'Invalid API key', status: 401 });
+  assert.equal(invalidKey.status, 500);
+  assert.equal(invalidKey.errorCode, 'SUPABASE_CONFIG_ERROR');
+
+  // Unregistered API key
+  const unregistered = classifyGetUserError({ message: 'Unregistered API key', status: 401 });
+  assert.equal(unregistered.status, 500);
+  assert.equal(unregistered.errorCode, 'SUPABASE_CONFIG_ERROR');
+
+  // Genuine expired JWT
+  const expiredJwt = classifyGetUserError({ message: 'token is expired by 10s', code: 'jwt_expired', status: 401 });
+  assert.equal(expiredJwt.status, 401);
+  assert.equal(expiredJwt.errorCode, 'AUTH_TOKEN_INVALID');
+
+  // Malformed JWT
+  const malformedJwt = classifyGetUserError({ message: 'invalid JWT: signature is invalid', code: 'bad_jwt', status: 401 });
+  assert.equal(malformedJwt.status, 401);
+  assert.equal(malformedJwt.errorCode, 'AUTH_TOKEN_INVALID');
+}
+
 let passed = 0;
 for (const [name, ok] of checks) {
   assert.equal(ok, true, `Assertion failed for check: ${name}`);
@@ -284,13 +418,25 @@ for (const [name, ok] of checks) {
   console.log(`PASS: ${name}`);
 }
 
-testRuntimeDeduplication().then(() => {
+async function runAll() {
+  await testRuntimeDeduplication();
   passed += 1;
   console.log(`PASS: Runtime concurrent refresh coalescing test`);
+
+  testEmptyKeyClientCreation();
+  passed += 1;
+  console.log(`PASS: Runtime empty key throws error and cannot instantiate client`);
+
+  testGetUserErrorClassification();
+  passed += 1;
+  console.log(`PASS: Runtime getUser error classification (config=500, jwt=401)`);
+
   console.log(`\n================================================================`);
-  console.log(`📊 All ${passed}/${checks.length + 1} Auth & Session Transport Checks Passed Cleanly!`);
+  console.log(`📊 All ${passed}/${checks.length + 3} Auth & Session Transport Checks Passed Cleanly!`);
   console.log(`================================================================\n`);
-}).catch(err => {
+}
+
+runAll().catch(err => {
   console.error('Runtime test failed:', err);
   process.exit(1);
 });

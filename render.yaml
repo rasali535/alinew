@@ -22,9 +22,10 @@ services:
         generateValue: true
       - key: SUPABASE_URL
         value: https://yidsfihagwttlmhfynmf.supabase.co
-      # Supabase anon key is intentionally public; privileged service-role keys are not.
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
       - key: SUPABASE_KEY
-        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpZHNmaWhhZ3d0dGxtaGZ5bm1mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4MjM5NDUsImV4cCI6MjA5ODM5OTk0NX0.r-hhC-BT3WCf9JLq-HeTHXIFkulM5XkorUEfkqMhc-g
+        sync: false
       - key: DATABASE_SSL
         value: "true"
       - key: RUN_MIGRATIONS
@@ -44,8 +45,12 @@ services:
         value: 3000
       - key: NEXT_PUBLIC_SUPABASE_URL
         value: https://yidsfihagwttlmhfynmf.supabase.co
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+        sync: false
       - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
-        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpZHNmaWhhZ3d0dGxtaGZ5bm1mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4MjM5NDUsImV4cCI6MjA5ODM5OTk0NX0.r-hhC-BT3WCf9JLq-HeTHXIFkulM5XkorUEfkqMhc-g
+        sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
       - key: NEXT_PUBLIC_APP_URL

@@ -72,9 +72,17 @@ function getOrCreateBrowserClient(): SupabaseClient {
 
   const isDesktop = typeof window !== 'undefined' && ((window as any).__RALION_DESKTOP__ || window.location.protocol === 'file:');
   const supabaseUrl = resolveSupabaseUrl();
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+  const supabaseKey =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  const instance = createSupabaseClient(supabaseUrl, supabaseAnonKey, {
+  if (!supabaseKey) {
+    throw new Error(
+      '[ClientSupabase] Missing Supabase client key. Neither NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY nor NEXT_PUBLIC_SUPABASE_ANON_KEY is configured.'
+    );
+  }
+
+  const instance = createSupabaseClient(supabaseUrl, supabaseKey, {
     auth: {
       storageKey: CANONICAL_STORAGE_KEY,
       persistSession: true,

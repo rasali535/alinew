@@ -62,11 +62,29 @@ async function verifyRequestUser(request: NextRequest) {
   try {
     const { data, error } = await verifier.auth.getUser(token);
     if (error || !data?.user) {
+      const errMessage = String(error?.message || '');
+      const errCode = String(error?.code || '');
+      const errStatus = error?.status;
+      const isConfigError =
+        /invalid api key|apikey|configuration|legacy api key|unregistered api key|SUPABASE_CONFIG/i.test(errMessage) ||
+        /invalid_api_key|api_key_invalid|bad_api_key/i.test(errCode) ||
+        (errStatus === 500 && !/jwt|token|expired|claim|signature/i.test(errMessage));
+      if (isConfigError) {
+        return { token, user: null, reason: 'config_error' as const, errorStatus: 500, errorCode: 'SUPABASE_CONFIG_ERROR' };
+      }
       return { token, user: null, reason: 'invalid' as const, errorStatus: 401, errorCode: 'AUTH_TOKEN_INVALID' };
     }
     return { token, user: data.user, reason: null, errorStatus: 200, errorCode: null };
   } catch (err: any) {
-    console.error('[AuthContext API] User verification error:', err?.message);
+    const msg = String(err?.message || '');
+    const code = String(err?.code || '');
+    const isConfigError =
+      /invalid api key|apikey|configuration|legacy api key|unregistered api key|SUPABASE_CONFIG/i.test(msg) ||
+      /invalid_api_key|api_key_invalid/i.test(code);
+    if (isConfigError) {
+      return { token, user: null, reason: 'config_error' as const, errorStatus: 500, errorCode: 'SUPABASE_CONFIG_ERROR' };
+    }
+    console.error('[AuthContext API] User verification error:', msg);
     return { token, user: null, reason: 'invalid' as const, errorStatus: 401, errorCode: 'AUTH_TOKEN_INVALID' };
   }
 }

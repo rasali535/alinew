@@ -58,6 +58,15 @@ export async function verifyPlatformAdminRequest(request: NextRequest): Promise<
     const { data: userData, error: userErr } = await supabase.auth.getUser(token);
 
     if (userErr || !userData.user) {
+      const errMessage = String(userErr?.message || '');
+      const isConfigError = /invalid api key|apikey|configuration|legacy api keys are disabled|unregistered api key|SUPABASE_CONFIG/i.test(errMessage);
+      if (isConfigError) {
+        return {
+          authorized: false,
+          statusCode: 500,
+          error: 'Platform auth configuration error.',
+        };
+      }
       return {
         authorized: false,
         statusCode: 401,
