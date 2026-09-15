@@ -5,8 +5,9 @@
  */
 
 import 'server-only';
-import { ZernioSocialService } from '@ralion/integrations/server';
+import { ZernioSocialService, META_GRAPH_API_VERSION } from '@ralion/integrations/server';
 import { AuditLoggerService } from '../auditLogger.service';
+import { SocialTokenManager } from './socialTokenManager.service';
 import { getPrivilegedSupabase as getServiceSupabase } from '@/lib/supabase/server';
 
 export interface FacebookComment {
@@ -32,9 +33,65 @@ export interface FacebookCommentReply {
   isPageOwner: boolean;
 }
 
+async function resolveNativePageAccessToken(connectionId: string, pageId: string): Promise<string | null> {
+  let token: string | null = null;
+  try {
+    token = await SocialTokenManager.getValidToken(connectionId, 'facebook');
+  } catch (error: any) {
+    console.warn('[FacebookCommentsService] Token resolution notice:', error?.message || error);
+  }
+
+  if (!token) return null;
+
+  try {
+    const accountsRes = await fetch(
+      `https://graph.facebook.com/${META_GRAPH_API_VERSION}/me/accounts?limit=100`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(8000),
+      }
+    );
+    if (accountsRes.ok) {
+      const accounts = await accountsRes.json();
+      const page = (accounts?.data || []).find((item: any) => String(item?.id || '') === pageId);
+      if (page?.access_token) return page.access_token;
+    }
+  } catch (error: any) {
+    console.warn('[FacebookCommentsService] Page token resolution notice:', error?.message || error);
+  }
+
+  // Some stored Facebook connections already contain a Page-capable token.
+  return token;
+}
+
+function toFacebookComment(cm: any, postId: string, pageId: string): FacebookComment {
+  return {
+    id: String(cm?.id || ''),
+    postId,
+    authorName: cm?.from?.name || cm?.authorName || 'Facebook User',
+    authorId: cm?.from?.id || cm?.authorId,
+    authorAvatarUrl: cm?.from?.picture?.data?.url || cm?.from?.picture || cm?.authorAvatarUrl,
+    commentText: cm?.message || cm?.commentText || '',
+    createdAt: cm?.created_time || cm?.createdTime || cm?.createdAt || new Date().toISOString(),
+    likesCount: Number(cm?.like_count || cm?.likeCount || cm?.likesCount || 0),
+    isPageOwner: String(cm?.from?.id || '') === pageId || Boolean(cm?.from?.isOwner || cm?.isPageOwner),
+    replies: (cm?.comments?.data || cm?.replies?.data || cm?.replies || []).map((r: any) => ({
+      id: String(r?.id || ''),
+      commentId: String(cm?.id || ''),
+      authorName: r?.from?.name || r?.authorName || 'Facebook User',
+      authorAvatarUrl: r?.from?.picture?.data?.url || r?.from?.picture || r?.authorAvatarUrl,
+      replyText: r?.message || r?.replyText || '',
+      createdAt: r?.created_time || r?.createdTime || r?.createdAt || new Date().toISOString(),
+      isPageOwner: String(r?.from?.id || '') === pageId || Boolean(r?.from?.isOwner || r?.isPageOwner),
+    })),
+  };
+}
+
 export class FacebookCommentsService {
   /**
-   * Fetch all comments across published Facebook posts (or for a specific post)
+   * Fetch all comments across published Facebook posts (or for a specific post).
+   * Prefers a tenant-scoped Zernio account when available and falls back to the
+   * same native Meta Page token path used by FacebookPageManagementService.
    */
   static async getComments(params: {
     postId?: string;
@@ -45,12 +102,12 @@ export class FacebookCommentsService {
   }): Promise<FacebookComment[]> {
     const supabase = getServiceSupabase();
 
-    // 1. Resolve connected tenant's Zernio profile and account mapping strictly for this workspace / user
+    // 1. Resolve the connected tenant's Facebook Page mapping strictly for this org/user/page.
     let connQuery = supabase
       .from('social_connections')
-      .select('zernio_profile_id, zernio_account_id, workspace_id, organization_id, user_id')
+      .select('id, zernio_profile_id, zernio_account_id, provider_account_id, account_name, metadata, workspace_id, organization_id, user_id')
       .eq('provider', 'facebook')
-      .eq('connection_status', 'CONNECTED');
+      .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected']);
 
     const hasOrganizationScope = Boolean(params.organizationId && params.organizationId !== 'default-org');
     const hasWorkspaceScope = Boolean(params.workspaceId && params.workspaceId !== 'default' && params.workspaceId !== 'default-org');
@@ -62,65 +119,44 @@ export class FacebookCommentsService {
     } else if (!hasOrganizationScope && hasWorkspaceScope) {
       connQuery = connQuery.eq('workspace_id', params.workspaceId!);
     }
+    if (params.pageId) connQuery = connQuery.eq('provider_account_id', params.pageId);
 
     if (!hasOrganizationScope && !hasWorkspaceScope && !hasUserScope) {
-      // Unscoped request -> return empty comments (zero cross-tenant leakage)
       return [];
     }
 
-    const { data: conn } = await connQuery.maybeSingle();
+    const { data: conns } = await connQuery.order('updated_at', { ascending: false }).limit(20);
+    const conn = (conns || []).find((candidate: any) =>
+      (params.pageId && String(candidate.provider_account_id || '') === params.pageId) ||
+      candidate.metadata?.is_page === true ||
+      candidate.metadata?.provider_account_type === 'FACEBOOK_PAGE'
+    ) || null;
 
-    if (!conn || !conn.zernio_profile_id) {
-      return [];
-    }
+    if (!conn) return [];
 
     const profileId = conn.zernio_profile_id;
     const accountId = conn.zernio_account_id;
+    const resolvedPageId = String(params.pageId || conn.provider_account_id || conn.metadata?.pageId || '');
 
     const comments: FacebookComment[] = [];
     const seenIds = new Set<string>();
 
-    const addCommentIfUnique = (c: FacebookComment) => {
-      if (!c.id || seenIds.has(c.id)) return;
-      seenIds.add(c.id);
-      comments.push(c);
+    const addCommentIfUnique = (comment: FacebookComment) => {
+      if (!comment.id || seenIds.has(comment.id)) return;
+      seenIds.add(comment.id);
+      comments.push(comment);
     };
 
-    // 2. Query live comments from Zernio
+    // 2. Query live comments from Zernio when this Page has a mapped Zernio account.
     if (accountId) {
       try {
         if (params.postId) {
-          // Specific post requested
           const res = await ZernioSocialService.getPostComments(params.postId, accountId);
           const list = res?.comments || (Array.isArray(res) ? res : []);
-
-          list.forEach((cm: any) => {
-            addCommentIfUnique({
-              id: cm.id,
-              postId: params.postId!,
-              authorName: cm.from?.name || cm.authorName || 'Facebook User',
-              authorId: cm.from?.id || cm.authorId,
-              authorAvatarUrl: cm.from?.picture || cm.authorAvatarUrl,
-              commentText: cm.message || cm.commentText || '',
-              createdAt: cm.createdTime ? new Date(cm.createdTime).toLocaleString() : (cm.createdAt || 'Recent'),
-              likesCount: Number(cm.likeCount || cm.likesCount || 0),
-              isPageOwner: Boolean(cm.from?.isOwner || cm.isPageOwner),
-              replies: cm.replies?.map((r: any) => ({
-                id: r.id,
-                commentId: cm.id,
-                authorName: r.from?.name || r.authorName || 'Page Reply',
-                authorAvatarUrl: r.from?.picture || r.authorAvatarUrl,
-                replyText: r.message || r.replyText || '',
-                createdAt: r.createdTime ? new Date(r.createdTime).toLocaleString() : (r.createdAt || 'Recent'),
-                isPageOwner: true,
-              })),
-            });
-          });
-        } else {
-          // General page comments request: inspect feed posts that have comments
+          list.forEach((cm: any) => addCommentIfUnique(toFacebookComment(cm, params.postId!, resolvedPageId)));
+        } else if (profileId) {
           const feedData = await ZernioSocialService.getHistoricalFacebookPosts(profileId, accountId);
           const feedPosts = feedData?.data || (Array.isArray(feedData) ? feedData : []);
-
           const postsWithComments = feedPosts.filter((p: any) => Number(p.commentCount) > 0).slice(0, 8);
 
           await Promise.allSettled(
@@ -128,45 +164,94 @@ export class FacebookCommentsService {
               try {
                 const res = await ZernioSocialService.getPostComments(p.id, accountId);
                 const list = res?.comments || (Array.isArray(res) ? res : []);
-                list.forEach((cm: any) => {
-                  addCommentIfUnique({
-                    id: cm.id,
-                    postId: p.id,
-                    authorName: cm.from?.name || cm.authorName || 'Facebook User',
-                    authorId: cm.from?.id || cm.authorId,
-                    authorAvatarUrl: cm.from?.picture || cm.authorAvatarUrl,
-                    commentText: cm.message || cm.commentText || '',
-                    createdAt: cm.createdTime ? new Date(cm.createdTime).toLocaleString() : (cm.createdAt || 'Recent'),
-                    likesCount: Number(cm.likeCount || cm.likesCount || 0),
-                    isPageOwner: Boolean(cm.from?.isOwner || cm.isPageOwner),
-                    replies: cm.replies?.map((r: any) => ({
-                      id: r.id,
-                      commentId: cm.id,
-                      authorName: r.from?.name || r.authorName || 'Page Reply',
-                      authorAvatarUrl: r.from?.picture || r.authorAvatarUrl,
-                      replyText: r.message || r.replyText || '',
-                      createdAt: r.createdTime ? new Date(r.createdTime).toLocaleString() : (r.createdAt || 'Recent'),
-                      isPageOwner: true,
-                    })),
-                  });
-                });
+                list.forEach((cm: any) => addCommentIfUnique(toFacebookComment(cm, p.id, resolvedPageId)));
               } catch {}
             })
           );
         }
       } catch (zErr) {
-        console.warn('[FacebookCommentsService] Live comments fetch notice:', zErr);
+        console.warn('[FacebookCommentsService] Live Zernio comments fetch notice:', zErr);
       }
     }
 
-    // 3. Merge with database cached comments
+    // 3. Native Meta fallback. This is required for Page connections that have a
+    // valid Page token/profile mapping but no zernio_account_id.
+    if (resolvedPageId) {
+      try {
+        const pageToken = await resolveNativePageAccessToken(conn.id, resolvedPageId);
+        if (pageToken) {
+          if (params.postId) {
+            const commentFields = 'id,message,created_time,from,like_count,comments.limit(25){id,message,created_time,from,like_count}';
+            const commentsRes = await fetch(
+              `https://graph.facebook.com/${META_GRAPH_API_VERSION}/${encodeURIComponent(params.postId)}/comments?fields=${encodeURIComponent(commentFields)}&limit=100`,
+              {
+                headers: { Authorization: `Bearer ${pageToken}` },
+                signal: AbortSignal.timeout(8000),
+              }
+            );
+            if (commentsRes.ok) {
+              const payload = await commentsRes.json();
+              (payload?.data || []).forEach((cm: any) => addCommentIfUnique(toFacebookComment(cm, params.postId!, resolvedPageId)));
+            } else {
+              const metaError = await commentsRes.json().catch(() => ({}));
+              console.warn('[FacebookCommentsService] Native Meta post comments notice:', metaError?.error?.message || commentsRes.status);
+            }
+          } else {
+            const postFields = 'id,created_time,comments.limit(0).summary(true)';
+            const postsRes = await fetch(
+              `https://graph.facebook.com/${META_GRAPH_API_VERSION}/${encodeURIComponent(resolvedPageId)}/posts?fields=${encodeURIComponent(postFields)}&limit=50`,
+              {
+                headers: { Authorization: `Bearer ${pageToken}` },
+                signal: AbortSignal.timeout(8000),
+              }
+            );
+
+            if (postsRes.ok) {
+              const postsPayload = await postsRes.json();
+              const postsWithComments = (postsPayload?.data || [])
+                .filter((post: any) => Number(post?.comments?.summary?.total_count || 0) > 0)
+                .slice(0, 8);
+
+              const commentFields = 'id,message,created_time,from,like_count,comments.limit(25){id,message,created_time,from,like_count}';
+              await Promise.allSettled(
+                postsWithComments.map(async (post: any) => {
+                  const commentsRes = await fetch(
+                    `https://graph.facebook.com/${META_GRAPH_API_VERSION}/${encodeURIComponent(post.id)}/comments?fields=${encodeURIComponent(commentFields)}&limit=100`,
+                    {
+                      headers: { Authorization: `Bearer ${pageToken}` },
+                      signal: AbortSignal.timeout(8000),
+                    }
+                  );
+                  if (!commentsRes.ok) {
+                    const metaError = await commentsRes.json().catch(() => ({}));
+                    console.warn('[FacebookCommentsService] Native Meta comments notice:', metaError?.error?.message || commentsRes.status);
+                    return;
+                  }
+                  const payload = await commentsRes.json();
+                  (payload?.data || []).forEach((cm: any) => addCommentIfUnique(toFacebookComment(cm, post.id, resolvedPageId)));
+                })
+              );
+            } else {
+              const metaError = await postsRes.json().catch(() => ({}));
+              console.warn('[FacebookCommentsService] Native Meta comment-post discovery notice:', metaError?.error?.message || postsRes.status);
+            }
+          }
+        }
+      } catch (metaErr: any) {
+        console.warn('[FacebookCommentsService] Native Meta comments fetch notice:', metaErr?.message || metaErr);
+      }
+    }
+
+    // 4. Merge with database cached comments when the optional cache exists.
     try {
       let query = supabase
         .from('social_post_comments')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (params.workspaceId && params.workspaceId !== 'default' && params.workspaceId !== 'default-org') {
+      if (params.organizationId && params.organizationId !== 'default-org') {
+        query = query.eq('organization_id', params.organizationId);
+      } else if (params.workspaceId && params.workspaceId !== 'default' && params.workspaceId !== 'default-org') {
         query = query.eq('workspace_id', params.workspaceId);
       } else if (params.userId && params.userId !== 'default-user') {
         query = query.eq('user_id', params.userId);
@@ -188,14 +273,14 @@ export class FacebookCommentsService {
             authorId: c.author_id,
             authorAvatarUrl: c.author_avatar_url,
             commentText: c.comment_text || c.message || '',
-            createdAt: c.created_at ? new Date(c.created_at).toLocaleString() : 'Recent',
+            createdAt: c.created_at || new Date().toISOString(),
             likesCount: Number(c.likes_count || 0),
             isPageOwner: Boolean(c.is_page_owner),
           });
         });
       }
     } catch {
-      // Database query optional
+      // Database cache is optional. Native/Zernio reads remain authoritative.
     }
 
     return comments;
