@@ -49,7 +49,7 @@ export function normalizeMarkdownText(raw: string): string {
   text = text.replace(/[\u200B-\u200D\u2060\uFEFF]/g, '');
 
   // 1. Unescape escaped markdown backslashes (\**, \*, \_, \#, \[, \], \(, \), \`, \~)
-  text = text.replace(/\\([*_#\[\]()\`~\\-])/g, '$1');
+  text = text.replace(/\\+([*_#\[\]()\`~\\-])/g, '$1');
 
   // 2. Strip raw SVG markup and artifact button tags
   text = text

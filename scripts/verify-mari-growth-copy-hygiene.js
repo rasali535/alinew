@@ -1,5 +1,6 @@
 const fs = require('fs');
 
+const core = fs.readFileSync('packages/ai/src/mariUniversalCore.ts', 'utf8');
 const component = fs.readFileSync('apps/ralion/src/components/MariMarkdownMessage.tsx', 'utf8');
 const route = fs.readFileSync('apps/ralion/src/app/api/social/facebook/pages/[pageId]/mari-growth/route.ts', 'utf8');
 
@@ -10,6 +11,8 @@ function assert(condition, message) {
   }
 }
 
+assert(core.includes(String.raw`replace(/\\+([*_#`), 'Universal Mari sanitizer must collapse repeated Markdown escape layers.');
+assert(component.includes(String.raw`replace(/\\+([*_#`), 'Mari renderer must collapse repeated Markdown escape layers.');
 assert(component.includes('decodeMarkdownHtmlEntities'), 'Mari renderer must decode HTML entities before Markdown rendering.');
 assert(component.includes(".replace(/&#(\\d+);/g"), 'Mari renderer must decode decimal HTML entities such as &#039;.');
 assert(component.includes(".replace(/&#x([0-9a-f]+);/gi"), 'Mari renderer must decode hexadecimal HTML entities.');
