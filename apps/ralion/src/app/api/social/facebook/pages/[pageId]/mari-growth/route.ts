@@ -91,26 +91,32 @@ function buildGroundedGrowthStrategyFallback(params: {
 
   const marketGap = Array.isArray(briefing?.marketGaps) && briefing.marketGaps.length ? String(briefing.marketGaps[0]) : '';
   const observedFormat = performance.topContentType || 'text';
+  const verifiedOffer = String(
+    profile.valueProposition ||
+    (Array.isArray(profile.productsAndServices) && profile.productsAndServices.length
+      ? profile.productsAndServices.slice(0, 2).join(' + ')
+      : `${company}'s verified offer`)
+  );
 
   const tests = [
-    `1. **Positioning test:** Test ${company}'s combination of creative production and intelligent software/business systems as a differentiation hypothesis${marketGap ? `, informed by this public-market gap: ${marketGap}` : ''}. Compare it with a simpler single-service message; do not assume the hybrid message wins until measured.`,
+    `1. **Positioning test:** Test an outcome-led message built around "${verifiedOffer}"${marketGap ? `, informed by this public-market gap: ${marketGap}` : ''}. Compare it with a simpler single-offer message; treat the result as a hypothesis until measured.`,
     `2. **Format test:** Use the observed ${observedFormat} signal as one variant, then test it against a different format with the same message and CTA. Hold the offer constant so the format comparison is interpretable.`,
     `3. **CTA test:** Compare a low-friction conversation CTA (for example, asking people to comment a keyword) with the current direct-contact path. Measure qualified replies or enquiries rather than raw reactions alone.`,
   ];
 
   const contentFormat = observedFormat === 'video' ? 'Short video/reel with a concise text caption' : observedFormat === 'image' ? 'Single visual with a concise proof-led caption' : 'Text-first milestone / behind-the-scenes post';
   const contentIdea = [
-    `**Objective:** Test whether the creative + intelligent-systems positioning earns meaningful enquiries.`,
+    `**Objective:** Test whether a clearer outcome-led expression of the verified offer earns meaningful enquiries.`,
     `**Format:** ${contentFormat}.`,
     `**Draft copy:**`,
     '',
-    `What changes when creative production and business technology stop working in separate lanes?`,
+    `What would change if the right people understood exactly what ${company} can help them achieve?`,
     '',
-    `At ${company}, we're building that answer in practice - combining creative work with intelligent systems such as Ralion OS so a campaign can connect more directly to how a business operates, learns and grows.`,
+    `Our current focus is simple: ${verifiedOffer}.`,
     '',
-    `We're testing this approach openly rather than calling it proven before the data says so.`,
+    `We are testing this message against real audience response rather than calling it proven before the data says so.`,
     '',
-    `Want to see one workflow in action? Comment **BUILD** and we'll show you the idea behind it.`,
+    `Want to see how it works in practice? Comment **BUILD** and let's start the conversation.`,
   ].join('\n');
 
   return [
