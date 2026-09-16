@@ -32,6 +32,7 @@ const helperStart = route.indexOf('function buildGroundedGrowthStrategyFallback'
 const helperEnd = route.indexOf('export async function OPTIONS', helperStart);
 assert(helperStart >= 0 && helperEnd > helperStart, 'Unable to isolate grounded Growth fallback helper.');
 const helper = route.slice(helperStart, helperEnd);
+assert(helper.trim().endsWith("].join('\\n').replace(/\\*\\*/g, '');\n}"), 'Grounded Growth fallback must remove inline bold markers at the final return boundary.');
 assert(!helper.includes('Ralion OS'), 'Fallback helper must remain tenant-generic.');
 
 console.log('PASS: Mari Growth copy hygiene and proof-led fallback invariants verified.');

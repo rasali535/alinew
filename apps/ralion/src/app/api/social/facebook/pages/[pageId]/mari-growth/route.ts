@@ -212,7 +212,7 @@ function buildGroundedGrowthStrategyFallback(params: {
     '',
     '### 5. Facebook Content Idea',
     contentIdea,
-  ].join('\n');
+  ].join('\n').replace(/\*\*/g, '');
 }
 
 export async function OPTIONS(request: NextRequest) {

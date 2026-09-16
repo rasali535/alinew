@@ -10,9 +10,11 @@ function assert(condition, message) {
   }
 }
 
-assert(core.includes('MARI_RESPONSE_PROVIDER_BUDGET_MS || 12000'), 'Mari response provider budget must default to 12 seconds.');
-assert(core.includes("generationConfig.thinkingConfig = { thinkingLevel: 'low' }"), 'Gemini 3 response calls must use low thinking for bounded latency.');
-assert(core.includes("/^gemini-3(?:\\.|-)/i.test(modelName)"), 'Low-thinking config must be scoped to Gemini 3.x models.');
+assert(core.includes('MARI_RESPONSE_PROVIDER_BUDGET_MS || 18000'), 'Mari response provider budget must leave room for primary and failover attempts.');
+assert(core.includes('MARI_RESPONSE_PRIMARY_ATTEMPT_BUDGET_MS || 9000'), 'Mari primary response attempt must be capped so failover retains time.');
+assert(core.includes("'gemini-3.5-flash-lite'"), 'Mari response path must include a real low-latency failover model.');
+assert(core.includes("generationConfig.thinkingConfig = { thinkingLevel: /flash-lite/i.test(modelName) ? 'minimal' : 'low' }"), 'Gemini response calls must use low/minimal thinking for bounded latency.');
+assert(core.includes("/^gemini-3(?:\\.|-)/i.test(modelName)"), 'Thinking-level config must be scoped to Gemini 3.x models.');
 
 assert(route.includes('MariCompetitiveIntelligenceService'), 'Growth route must load Competitive Intelligence evidence.');
 assert(route.includes('MariMarketingLearningService'), 'Growth route must load Marketing Learning evidence.');
