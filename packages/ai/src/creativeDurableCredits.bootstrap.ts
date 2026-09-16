@@ -152,8 +152,6 @@ if (!globalState.__ralionCreativeDurableCreditsPatched) {
         organizationId,
         correlationId,
         success: chargeable,
-        provider: chargeable ? result.receipt?.provider : undefined,
-        model: chargeable ? result.receipt?.model : undefined,
         metadata: {
           assetId: result.receipt?.assetId || null,
           lifecycleState: result.status,
