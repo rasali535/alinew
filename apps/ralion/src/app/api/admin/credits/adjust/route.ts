@@ -1,6 +1,7 @@
+import { randomUUID } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyPlatformAdminRequest } from '../../../../../lib/auth/adminAuth';
-import { TenantCreditsService } from '@ralion/ai/server';
+import { DurableTenantCreditsService } from '@ralion/ai/server';
 import { PlatformAdminService } from '@ralion/auth/server';
 
 export async function POST(request: NextRequest) {
@@ -22,9 +23,9 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (typeof amount !== 'number' || amount === 0 || isNaN(amount)) {
+  if (typeof amount !== 'number' || !Number.isInteger(amount) || amount === 0) {
     return NextResponse.json(
-      { success: false, error: 'A non-zero numeric amount is required for adjustment.' },
+      { success: false, error: 'A non-zero integer amount is required for adjustment.' },
       { status: 400 }
     );
   }
@@ -37,26 +38,22 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    let txId = '';
-    if (amount > 0) {
-      const grantRes = TenantCreditsService.addCredits(
-        organizationId,
-        amount,
-        `ADMIN_GRANT: ${reason.trim()} (by ${auth.user!.email})`
-      );
-      txId = grantRes.transactionId;
-    } else {
-      const deductRes = TenantCreditsService.deductCredits(
-        organizationId,
-        Math.abs(amount),
-        `ADMIN_DEDUCT: ${reason.trim()} (by ${auth.user!.email})`
-      );
-      txId = deductRes.transactionId;
-    }
+    const correlationId = typeof body.correlationId === 'string' && body.correlationId.trim()
+      ? body.correlationId.trim()
+      : `admin-credit:${randomUUID()}`;
+    const adjustment = await DurableTenantCreditsService.adjustCredits({
+      organizationId,
+      userId: auth.user!.id,
+      amount,
+      correlationId,
+      reason: `${amount > 0 ? 'ADMIN_GRANT' : 'ADMIN_DEDUCT'}: ${reason.trim()} (by ${auth.user!.email})`,
+      metadata: {
+        adminEmail: auth.user!.email,
+        requestedAmount: amount,
+      },
+    });
+    const currentWallet = await DurableTenantCreditsService.getSummary(organizationId);
 
-    const currentWallet = TenantCreditsService.getOrCreateWallet(organizationId);
-
-    // Record immutable admin audit log
     PlatformAdminService.recordAuditLog({
       adminUserId: auth.user!.id,
       adminEmail: auth.user!.email,
@@ -66,10 +63,13 @@ export async function POST(request: NextRequest) {
       result: 'SUCCESS',
       reason: reason.trim(),
       details: {
-        adjustmentAmount: amount,
-        newBalance: currentWallet.balance,
-        lifetimeConsumed: currentWallet.lifetimeConsumed,
-        transactionId: txId,
+        requestedAdjustmentAmount: amount,
+        appliedAdjustmentAmount: adjustment.amount,
+        newBalance: currentWallet.remainingCredits,
+        lifetimeConsumed: currentWallet.lifetimeCreditsConsumed || 0,
+        transactionId: adjustment.transactionId,
+        correlationId,
+        idempotent: adjustment.idempotent,
       },
     });
 
@@ -77,12 +77,15 @@ export async function POST(request: NextRequest) {
       success: true,
       data: {
         organizationId,
-        adjustmentAmount: amount,
-        newBalance: currentWallet.balance,
+        requestedAdjustmentAmount: amount,
+        appliedAdjustmentAmount: adjustment.amount,
+        newBalance: currentWallet.remainingCredits,
         wallet: currentWallet,
-        transactionId: txId,
+        transactionId: adjustment.transactionId,
+        correlationId,
+        idempotent: adjustment.idempotent,
       },
-      message: `Successfully adjusted credits by ${amount > 0 ? '+' : ''}${amount} for ${organizationId}.`,
+      message: `Successfully adjusted credits by ${adjustment.amount > 0 ? '+' : ''}${adjustment.amount} for ${organizationId}.`,
     });
   } catch (err: any) {
     return NextResponse.json(
