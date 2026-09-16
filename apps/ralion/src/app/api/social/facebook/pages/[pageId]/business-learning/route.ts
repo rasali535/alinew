@@ -1,7 +1,8 @@
 import { NextRequest } from 'next/server';
 import { MariBusinessLearningService } from '@/lib/services/social/mariBusinessLearning.service';
+import { resolveFacebookPageRouteConnection } from '@/lib/services/social/facebookPageRouteAccess.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
-import { getCurrentRalionContext, authRequiredResponse, forbiddenResponse, getServiceSupabase } from '@/lib/auth/serverAuth';
+import { getCurrentRalionContext, authRequiredResponse, forbiddenResponse } from '@/lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,26 +25,16 @@ export async function GET(
       return authRequiredResponse(request);
     }
 
-    const supabase = getServiceSupabase();
-    const { data: conn } = await supabase
-      .from('social_connections')
-      .select('provider_account_id, zernio_account_id, account_name, created_at, metadata')
-      .eq('provider', 'facebook')
-      .eq('connection_status', 'CONNECTED')
-      .or(`workspace_id.eq.${context.workspace.id},user_id.eq.${context.user.id}`)
-      .maybeSingle();
+    const organizationId = context.organization?.id || context.workspace.organization_id || context.workspace.id;
+    const conn = await resolveFacebookPageRouteConnection({
+      organizationId,
+      workspaceId: context.workspace.id,
+      userId: context.user.id,
+      pageId,
+    });
 
-    if (pageId && pageId !== 'default') {
-      const pageMatched =
-        conn &&
-        (conn.provider_account_id === pageId ||
-          conn.zernio_account_id === pageId ||
-          conn.metadata?.pageId === pageId ||
-          conn.metadata?.zernioAccountId === pageId);
-
-      if (!pageMatched) {
-        return forbiddenResponse(request, 'You do not have access to this Facebook Page');
-      }
+    if (pageId && pageId !== 'default' && !conn) {
+      return forbiddenResponse(request, 'You do not have access to this Facebook Page');
     }
 
     if (!conn) {
@@ -53,9 +44,10 @@ export async function GET(
       }, undefined, request);
     }
 
+    const resolvedPageId = conn.provider_account_id || conn.metadata?.pageId || pageId;
     const knowledge = MariBusinessLearningService.getBusinessKnowledge({
-      organizationId: context.workspace.id,
-      pageId: conn.provider_account_id || pageId,
+      organizationId,
+      pageId: resolvedPageId,
       pageName: conn.account_name || conn.metadata?.pageName || context.workspace.name || 'Business Knowledge',
       connectedAt: conn.created_at || undefined,
     });
@@ -84,11 +76,28 @@ export async function POST(
       return authRequiredResponse(request);
     }
 
+    const organizationId = context.organization?.id || context.workspace.organization_id || context.workspace.id;
+    const conn = await resolveFacebookPageRouteConnection({
+      organizationId,
+      workspaceId: context.workspace.id,
+      userId: context.user.id,
+      pageId,
+    });
+
+    if (pageId && pageId !== 'default' && !conn) {
+      return forbiddenResponse(request, 'You do not have access to this Facebook Page');
+    }
+
+    if (!conn) {
+      return corsJsonResponse({ success: false, error: 'Connect a Facebook Page before updating business learning.' }, { status: 409 }, request);
+    }
+
     const body = await request.json();
+    const resolvedPageId = conn.provider_account_id || conn.metadata?.pageId || pageId;
 
     const updated = await MariBusinessLearningService.updateBrandVoice({
-      organizationId: context.workspace.id,
-      pageId,
+      organizationId,
+      pageId: resolvedPageId,
       userId: context.user.id,
       customTone: body.customTone,
       customKeywords: body.customKeywords,
