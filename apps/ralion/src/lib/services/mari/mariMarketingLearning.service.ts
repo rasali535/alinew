@@ -136,7 +136,10 @@ export class MariMarketingLearningService {
       if (!platformPostId) continue;
 
       const observedPost = liveById.get(platformPostId);
-      if (!observedPost) continue;
+      // getPagePosts also appends canonical social_posts as a final fallback. A row
+      // whose id equals this publication is our own storage record, not independent
+      // platform evidence, so it must never create an outcome or a learned pattern.
+      if (!observedPost || observedPost.id === publication.id) continue;
       matchedPublications += 1;
 
       const contentType = normalizeContentType(publication.media_types, observedPost);
