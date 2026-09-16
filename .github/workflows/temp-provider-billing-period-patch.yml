@@ -1,0 +1,36 @@
+name: Temporary Provider Billing Period Patch
+
+on:
+  push:
+    branches:
+      - fix/ralion-billing-credits-persistence-v2
+    paths:
+      - .github/workflows/temp-provider-billing-period-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/ralion-billing-credits-persistence-v2
+      - name: Patch PayPal completed-payment period handling
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('packages/integrations/src/billing/paypalDurable.service.ts')
+          text = p.read_text()
+          old = """          const renewed = await DurableBillingDatabaseService.saveSubscription({\n            ...existing,\n            status: 'ACTIVE',\n            currentPeriodEnd: addMonth(existing.currentPeriodEnd),\n            metadata: { ...(existing.metadata || {}), lastPayPalWebhookId: eventId },\n            updatedAt: new Date().toISOString(),\n          });\n"""
+          new = """          const verified = await PayPalService.verifySubscription(agreementId);\n          const providerPeriodEnd = verified.success && verified.data?.billing_info?.next_billing_time\n            ? String(verified.data.billing_info.next_billing_time)\n            : existing.currentPeriodEnd;\n          const renewed = await DurableBillingDatabaseService.saveSubscription({\n            ...existing,\n            status: 'ACTIVE',\n            currentPeriodEnd: providerPeriodEnd,\n            metadata: {\n              ...(existing.metadata || {}),\n              lastPayPalWebhookId: eventId,\n              periodSource: verified.success ? 'paypal_next_billing_time' : 'existing_period_preserved',\n            },\n            updatedAt: new Date().toISOString(),\n          });\n"""
+          if old not in text:
+              raise SystemExit('Target payment renewal block not found')
+          p.write_text(text.replace(old, new, 1))
+          PY
+          git config user.name "Ralion CI Patch"
+          git config user.email "actions@users.noreply.github.com"
+          git add packages/integrations/src/billing/paypalDurable.service.ts
+          git commit -m "fix(billing): trust PayPal billing period on completed payments"
+          git push origin HEAD:fix/ralion-billing-credits-persistence-v2
