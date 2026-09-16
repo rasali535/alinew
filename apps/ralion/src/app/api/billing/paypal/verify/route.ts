@@ -1,7 +1,8 @@
 import { NextRequest } from 'next/server';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../../lib/cors';
-import { PayPalService } from '@ralion/integrations/server';
-import { SubscriptionPlanId, BillingCycle } from '@ralion/database';
+import { requireRalionContext } from '../../../../../lib/auth/serverAuth';
+import { DurablePayPalService } from '@ralion/integrations/server';
+import { SubscriptionPlanId } from '@ralion/database';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,42 +12,70 @@ export async function OPTIONS(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json().catch(() => ({}));
-    const { organizationId, planId, billingCycle = 'MONTHLY', subscriptionId, userId } = body;
+    const required = await requireRalionContext(request);
+    if (required.response) return required.response;
+    const serverCtx = required.context;
 
-    if (!organizationId) {
+    if (!['owner', 'admin'].includes(serverCtx.membership.role)) {
       return corsJsonResponse(
-        { success: false, error: 'organizationId is required' },
-        { status: 400 },
+        { success: false, code: 'BILLING_ADMIN_REQUIRED', error: 'Only an organization owner or administrator can verify a subscription.' },
+        { status: 403 },
         request
       );
     }
 
+    const body = await request.json().catch(() => ({}));
+    const subscriptionId = String(body.subscriptionId || '').trim();
     if (!subscriptionId) {
       return corsJsonResponse(
-        { success: false, error: 'PayPal subscriptionId is required' },
+        { success: false, error: 'PayPal subscriptionId is required.' },
         { status: 400 },
         request
       );
     }
 
-    const validPlan: SubscriptionPlanId = ['COMMUNITY', 'STARTER', 'PROFESSIONAL', 'ENTERPRISE'].includes(
-      planId?.toUpperCase()
-    )
-      ? (planId.toUpperCase() as SubscriptionPlanId)
-      : 'STARTER';
+    const planRaw = String(body.planId || '').toUpperCase();
+    const validPlan = ['STARTER', 'PROFESSIONAL', 'ENTERPRISE'].includes(planRaw)
+      ? planRaw as SubscriptionPlanId
+      : null;
+    if (!validPlan) {
+      return corsJsonResponse(
+        { success: false, error: 'A valid paid Ralion plan is required.' },
+        { status: 400 },
+        request
+      );
+    }
 
-    const result = await PayPalService.activateVerifiedSubscription({
+    const requestedCycle = String(body.billingCycle || 'MONTHLY').toUpperCase();
+    if (requestedCycle !== 'MONTHLY') {
+      return corsJsonResponse(
+        { success: false, code: 'BILLING_CYCLE_UNAVAILABLE', error: 'Only MONTHLY PayPal billing is currently enabled.' },
+        { status: 400 },
+        request
+      );
+    }
+
+    const organizationId = serverCtx.organization?.id || serverCtx.workspace.organization_id || serverCtx.workspace.id;
+    const suppliedOrganizationId = body.organizationId || request.headers.get('x-organization-id');
+    if (suppliedOrganizationId && suppliedOrganizationId !== organizationId && suppliedOrganizationId !== serverCtx.workspace.id) {
+      return corsJsonResponse(
+        { success: false, code: 'TENANT_CONTEXT_MISMATCH', error: 'The requested billing organization does not match the authenticated tenant.' },
+        { status: 403 },
+        request
+      );
+    }
+
+    const result = await DurablePayPalService.activateVerifiedSubscription({
       organizationId,
       planId: validPlan,
-      billingCycle: billingCycle.toUpperCase() as BillingCycle,
+      billingCycle: 'MONTHLY',
       subscriptionId,
-      userId,
+      userId: serverCtx.user.id,
     });
 
     if (!result.success) {
       return corsJsonResponse(
-        { success: false, error: result.error || 'Subscription activation failed' },
+        { success: false, error: result.error || 'Subscription activation failed.' },
         { status: 403 },
         request
       );
@@ -55,7 +84,7 @@ export async function POST(request: NextRequest) {
     return corsJsonResponse(
       {
         success: true,
-        message: `Successfully activated ${validPlan} plan for organization ${organizationId}`,
+        message: `Successfully activated ${validPlan} plan.`,
         subscription: result.subscription,
       },
       undefined,
@@ -64,7 +93,7 @@ export async function POST(request: NextRequest) {
   } catch (err: any) {
     console.error('[PayPal Verify API] Error:', err);
     return corsJsonResponse(
-      { success: false, error: 'Internal server error verifying PayPal subscription' },
+      { success: false, error: 'Internal server error verifying PayPal subscription.' },
       { status: 500 },
       request
     );
