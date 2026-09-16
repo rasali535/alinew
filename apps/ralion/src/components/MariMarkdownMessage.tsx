@@ -39,7 +39,8 @@ export function normalizeMarkdownText(raw: string): string {
     .replace(/\bsvgSend to Studio\b/gi, '')
     .replace(/svgSend to Studio/gi, '')
     .replace(/svg[A-Za-z0-9 ]*Send to Studio/gi, '')
-    .replace(/\bsvg[A-Z][a-zA-Z0-9 ]*/g, '')
+    .replace(/(^|\n)(\s*#{1,6}\s+)svg(?=[A-Z0-9])/g, '$1$2')
+    .replace(/(^|\n)(\s*(?:[-*•]\s+)?)svg(?=[A-Z0-9])/g, '$1$2')
     .replace(/(?:^|\s)svg(?:\s|$)/g, ' ');
 
   // 2.5. Normalize malformed bold bullet tokens like "**•**Source**" or "**•**"
@@ -266,6 +267,18 @@ function renderMarkdownParagraphs(content: string): React.ReactNode[] {
     if (line === '---' || line === '***' || line === '___') {
       flushList();
       nodes.push(<hr key={`hr-${blockKey++}`} className="my-3 border-zinc-800" />);
+      continue;
+    }
+
+    // Heading 4-6: normalize deeper Markdown headings into compact Mari subheadings
+    if (/^#{4,6}\s+/.test(line)) {
+      flushList();
+      const headingText = line.replace(/^#{4,6}\s+/, '');
+      nodes.push(
+        <h4 key={`h4-${blockKey++}`} className="text-xs font-bold text-zinc-100 mt-3 mb-1.5">
+          {renderInlineFormatted(headingText)}
+        </h4>
+      );
       continue;
     }
 

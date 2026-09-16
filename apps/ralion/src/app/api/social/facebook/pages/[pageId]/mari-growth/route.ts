@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { BusinessContextService, MariUniversalCore } from '@ralion/ai/server';
+import { BusinessContextService, MariUniversalCore, MARI_BUILD_VERSION, sanitizeMariModelOutput } from '@ralion/ai/server';
 import { FacebookPageManagementService } from '@/lib/services/social/facebookPageManagement.service';
 import { resolveFacebookPageRouteConnection } from '@/lib/services/social/facebookPageRouteAccess.service';
 import { MariFacebookGrowthService, MariPageContext } from '@/lib/services/social/mariFacebookGrowth.service';
@@ -204,7 +204,7 @@ export async function POST(
       return corsJsonResponse({
         success: true,
         chat: {
-          answer: result.answer,
+          answer: sanitizeMariModelOutput(result.answer),
           recommendedAction: firstAction?.label,
           suggestedPrompt: firstAction?.payload?.prompt || firstAction?.payload?.suggestedPrompt,
           evidence: {
@@ -212,6 +212,8 @@ export async function POST(
             responseSource: result.responseSource,
             modelSucceeded: result.modelSucceeded,
             businessIntelligenceLoaded: Boolean(businessIntelligence),
+            buildVersion: MARI_BUILD_VERSION,
+            outputSanitizer: 'MARI_UNIVERSAL_V2',
           },
         },
       }, undefined, request);
