@@ -67,3 +67,24 @@ services:
         value: https://rasalilabs.com
       - key: NEXT_STANDALONE
         value: "1"
+      # PayPal subscription checkout is live-only for production Ralion billing.
+      # Credentials and webhook IDs remain Render-managed secrets; live plan IDs are
+      # public provider identifiers and are pinned here to prevent config drift.
+      - key: PAYPAL_MODE
+        value: live
+      - key: PAYPAL_ENV
+        value: live
+      - key: PAYPAL_API_BASE
+        value: https://api-m.paypal.com
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false
+      - key: PAYPAL_PLAN_ID_STARTER
+        value: P-6PM95410S65731425NKLT7TQ
+      - key: PAYPAL_PLAN_ID_PROFESSIONAL
+        value: P-3MR29753W57981825NKLT7TY
+      - key: PAYPAL_PLAN_ID_ENTERPRISE
+        value: P-7A1329455A563464TNKLT7UA
