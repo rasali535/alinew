@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../../lib/cors';
-import { PayPalCardVaultService } from '@ralion/integrations/server';
+import { PayPalCardRenewalService } from '@ralion/integrations/server';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
     const limit = Math.max(1, Math.min(Number(body?.limit || 25), 50));
-    const result = await PayPalCardVaultService.runDueRenewals(limit);
+    const result = await PayPalCardRenewalService.runDueRenewals(limit);
     return corsJsonResponse({ success: true, ...result }, undefined, request);
   } catch (error: any) {
     console.error('[PayPal Renewal Scheduler] Error:', error);
