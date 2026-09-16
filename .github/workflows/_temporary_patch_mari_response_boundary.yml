@@ -1,0 +1,94 @@
+name: Temporary patch Mari response boundary
+
+on:
+  push:
+    branches:
+      - fix/mari-facebook-response-boundary
+    paths:
+      - .github/workflows/_temporary_patch_mari_response_boundary.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/mari-facebook-response-boundary
+          fetch-depth: 0
+      - name: Patch Mari response boundary and renderer
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          route = Path('apps/ralion/src/app/api/social/facebook/pages/[pageId]/mari-growth/route.ts')
+          src = route.read_text()
+          old = "import { BusinessContextService, MariUniversalCore } from '@ralion/ai/server';"
+          new = "import { BusinessContextService, MariUniversalCore, MARI_BUILD_VERSION, sanitizeMariModelOutput } from '@ralion/ai/server';"
+          if old not in src:
+              raise SystemExit('route import anchor not found')
+          src = src.replace(old, new, 1)
+          if 'answer: result.answer,' not in src:
+              raise SystemExit('route answer anchor not found')
+          src = src.replace('answer: result.answer,', 'answer: sanitizeMariModelOutput(result.answer),', 1)
+          marker = '            businessIntelligenceLoaded: Boolean(businessIntelligence),'
+          if marker not in src:
+              raise SystemExit('route telemetry anchor not found')
+          src = src.replace(marker, marker + "\n            buildVersion: MARI_BUILD_VERSION,\n            outputSanitizer: 'MARI_UNIVERSAL_V2',", 1)
+          route.write_text(src)
+
+          comp = Path('apps/ralion/src/components/MariMarkdownMessage.tsx')
+          src = comp.read_text()
+          broad = "    .replace(/\\bsvg[A-Z][a-zA-Z0-9 ]*/g, '')"
+          precise = "    .replace(/(^|\\n)(\\s*#{1,6}\\s+)svg(?=[A-Z0-9])/g, '$1$2')\n    .replace(/(^|\\n)(\\s*(?:[-*•]\\s+)?)svg(?=[A-Z0-9])/g, '$1$2')"
+          if broad not in src:
+              raise SystemExit('broad svg client anchor not found')
+          src = src.replace(broad, precise, 1)
+
+          heading3 = "    // Heading 3: ### Title\n    if (line.startsWith('### ')) {"
+          if heading3 not in src:
+              raise SystemExit('heading3 anchor not found')
+          h456 = "    // Heading 4-6: normalize deeper Markdown headings into compact Mari subheadings\n    if (/^#{4,6}\\s+/.test(line)) {\n      flushList();\n      const headingText = line.replace(/^#{4,6}\\s+/, '');\n      nodes.push(\n        <h4 key={`h4-${blockKey++}`} className=\"text-xs font-bold text-zinc-100 mt-3 mb-1.5\">\n          {renderInlineFormatted(headingText)}\n        </h4>\n      );\n      continue;\n    }\n\n"
+          src = src.replace(heading3, h456 + heading3, 1)
+          comp.write_text(src)
+
+          verifier = Path('scripts/verify-mari-facebook-response-boundary.js')
+          verifier.write_text(r'''const fs = require('fs');
+const path = require('path');
+const assert = require('assert');
+
+const root = path.resolve(__dirname, '..');
+const route = fs.readFileSync(path.join(root, 'apps/ralion/src/app/api/social/facebook/pages/[pageId]/mari-growth/route.ts'), 'utf8');
+const markdown = fs.readFileSync(path.join(root, 'apps/ralion/src/components/MariMarkdownMessage.tsx'), 'utf8');
+
+assert(route.includes('sanitizeMariModelOutput(result.answer)'), 'Facebook Growth must sanitize at API response boundary');
+assert(route.includes("outputSanitizer: 'MARI_UNIVERSAL_V2'"), 'Facebook Growth must expose sanitizer telemetry');
+assert(route.includes('buildVersion: MARI_BUILD_VERSION'), 'Facebook Growth must expose Mari build version telemetry');
+assert(markdown.includes(".replace(/(^|\\n)(\\s*#{1,6}\\s+)svg(?=[A-Z0-9])/g, '$1$2')"), 'client must strip only svg heading prefix');
+assert(!markdown.includes(".replace(/\\bsvg[A-Z][a-zA-Z0-9 ]*/g, '')"), 'client must not use broad svg text eraser');
+assert(markdown.includes("if (/^#{4,6}\\s+/.test(line))"), 'Mari renderer must support heading levels 4-6');
+console.log('Mari Facebook response-boundary verification passed.');
+''')
+
+          pkg = Path('package.json')
+          src = pkg.read_text()
+          old = 'node ./scripts/verify-mari-output-sanitization.js"'
+          new = 'node ./scripts/verify-mari-output-sanitization.js && node ./scripts/verify-mari-facebook-response-boundary.js"'
+          if old not in src:
+              raise SystemExit('package root test anchor not found')
+          src = src.replace(old, new, 1)
+          script_anchor = '    "test:mari-output-sanitization": "node ./scripts/verify-mari-output-sanitization.js",'
+          if script_anchor not in src:
+              raise SystemExit('package script anchor not found')
+          src = src.replace(script_anchor, script_anchor + '\n    "test:mari-facebook-response-boundary": "node ./scripts/verify-mari-facebook-response-boundary.js",', 1)
+          pkg.write_text(src)
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/ralion/src/app/api/social/facebook/pages/'[pageId]'/mari-growth/route.ts apps/ralion/src/components/MariMarkdownMessage.tsx scripts/verify-mari-facebook-response-boundary.js package.json
+          git diff --cached --check
+          git commit -m "fix(mari): harden Facebook response boundary formatting"
+          git push origin HEAD:fix/mari-facebook-response-boundary
