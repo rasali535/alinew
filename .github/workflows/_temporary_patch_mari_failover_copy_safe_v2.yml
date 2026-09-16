@@ -1,0 +1,128 @@
+name: Temporary patch Mari provider failover and copy-safe fallback v2
+
+on:
+  push:
+    branches:
+      - fix/mari-provider-failover-copy-safe
+    paths:
+      - .github/workflows/_temporary_patch_mari_failover_copy_safe_v2.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/mari-provider-failover-copy-safe
+          fetch-depth: 0
+      - name: Patch provider failover and copy-safe fallback
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          core_path = Path('packages/ai/src/mariUniversalCore.ts')
+          core = core_path.read_text()
+
+          replacements = [
+              ("const MARI_CLASSIFIER_MODEL = process.env.MARI_GEMINI_CLASSIFIER_MODEL || 'gemini-3.5-flash';", "const MARI_CLASSIFIER_MODEL = process.env.MARI_GEMINI_CLASSIFIER_MODEL || 'gemini-3.5-flash-lite';"),
+              ("const MARI_CLASSIFIER_PROVIDER_BUDGET_MS = Math.max(1000, Number(process.env.MARI_CLASSIFIER_PROVIDER_BUDGET_MS || 2500));", "const MARI_CLASSIFIER_PROVIDER_BUDGET_MS = Math.max(1000, Number(process.env.MARI_CLASSIFIER_PROVIDER_BUDGET_MS || 3000));"),
+              ("const MARI_RESPONSE_PROVIDER_BUDGET_MS = Math.max(5000, Number(process.env.MARI_RESPONSE_PROVIDER_BUDGET_MS || 12000));", "const MARI_RESPONSE_PROVIDER_BUDGET_MS = Math.max(8000, Number(process.env.MARI_RESPONSE_PROVIDER_BUDGET_MS || 18000));\nconst MARI_RESPONSE_PRIMARY_ATTEMPT_BUDGET_MS = Math.max(4000, Number(process.env.MARI_RESPONSE_PRIMARY_ATTEMPT_BUDGET_MS || 9000));"),
+              ("return Array.from(new Set([configuredModel.trim(), 'gemini-3.5-flash'].filter(Boolean))).slice(0, 2);", "return Array.from(new Set([configuredModel.trim(), 'gemini-3.5-flash', 'gemini-3.5-flash-lite'].filter(Boolean))).slice(0, 3);"),
+          ]
+          for old, new in replacements:
+              if old not in core:
+                  raise SystemExit(f'core anchor not found: {old[:80]}')
+              core = core.replace(old, new, 1)
+
+          classifier_start = core.index('export async function callGeminiSemanticClassifier(')
+          classifier_end = core.index('/**\n * Semantic intent classifier wrapper.', classifier_start)
+          classifier = core[classifier_start:classifier_end]
+          if 'temperature: 0.1,\n' not in classifier:
+              raise SystemExit('classifier temperature anchor not found')
+          classifier = classifier.replace('temperature: 0.1,\n', '', 1)
+          classifier_anchor = "responseMimeType: 'application/json',"
+          if classifier_anchor not in classifier:
+              raise SystemExit('classifier responseMimeType anchor not found')
+          classifier = classifier.replace(classifier_anchor, classifier_anchor + "\n            thinkingConfig: { thinkingLevel: 'minimal' },", 1)
+          core = core[:classifier_start] + classifier + core[classifier_end:]
+
+          neural_start = core.index('async function callGeminiNeuralCore(')
+          neural_end = core.index('// ─────────────────────────────────────────────────────────────────────────────\n// 3. SAFE LOCAL STRATEGIC', neural_start)
+          neural = core[neural_start:neural_end]
+          loop_anchor = """    if (remainingProviderMs <= 0) {
+              lastError = 'PROVIDER_TIMEOUT';
+              modelErrors[modelName] = 'PROVIDER_TIMEOUT';
+              break;
+            }
+            modelsAttempted.push(modelName);"""
+          loop_replacement = """    if (remainingProviderMs <= 0) {
+              lastError = 'PROVIDER_TIMEOUT';
+              modelErrors[modelName] = 'PROVIDER_TIMEOUT';
+              break;
+            }
+            const attemptBudgetMs = modelName === modelsToTry[0]
+              ? Math.min(remainingProviderMs, MARI_RESPONSE_PRIMARY_ATTEMPT_BUDGET_MS)
+              : remainingProviderMs;
+            modelsAttempted.push(modelName);"""
+          if loop_anchor not in neural:
+              raise SystemExit('response loop anchor not found')
+          neural = neural.replace(loop_anchor, loop_replacement, 1)
+          thinking_anchor = "generationConfig.thinkingConfig = { thinkingLevel: 'low' };"
+          thinking_replacement = "generationConfig.thinkingConfig = { thinkingLevel: /flash-lite/i.test(modelName) ? 'minimal' : 'low' };"
+          if thinking_anchor not in neural:
+              raise SystemExit('response thinking anchor not found')
+          neural = neural.replace(thinking_anchor, thinking_replacement, 1)
+          if 'signal: AbortSignal.timeout(remainingProviderMs),' not in neural:
+              raise SystemExit('response timeout anchor not found')
+          neural = neural.replace('signal: AbortSignal.timeout(remainingProviderMs),', 'signal: AbortSignal.timeout(attemptBudgetMs),', 1)
+          core = core[:neural_start] + neural + core[neural_end:]
+          core_path.write_text(core)
+
+          route_path = Path('apps/ralion/src/app/api/social/facebook/pages/[pageId]/mari-growth/route.ts')
+          route = route_path.read_text()
+          helper_start = route.index('function buildGroundedGrowthStrategyFallback')
+          helper_end = route.index('export async function OPTIONS', helper_start)
+          helper = route[helper_start:helper_end]
+          if "].join('\\n');" not in helper:
+              raise SystemExit('fallback join anchor not found')
+          helper = helper.replace("].join('\\n');", "].join('\\n').replace(/\\*\\*/g, '');", 1)
+          route = route[:helper_start] + helper + route[helper_end:]
+          route_path.write_text(route)
+
+          provider_test = Path('scripts/verify-mari-provider-timeout.js')
+          test = provider_test.read_text()
+          anchor = "assert(core.includes('MARI_RESPONSE_PROVIDER_BUDGET_MS'), 'response provider budget must exist');"
+          if anchor not in test:
+              raise SystemExit('provider verifier anchor not found')
+          addition = anchor + "\n" + "\n".join([
+              "assert(core.includes('MARI_RESPONSE_PRIMARY_ATTEMPT_BUDGET_MS'), 'primary response attempt budget must exist');",
+              "assert(core.includes(\"'gemini-3.5-flash-lite'\"), 'Mari must have a real low-latency Gemini failover model');",
+              "assert(core.includes('attemptBudgetMs'), 'response provider attempts must have independent bounded budgets');",
+              "assert(core.includes(\"thinkingLevel: /flash-lite/i.test(modelName) ? 'minimal' : 'low'\"), 'Flash-Lite failover must use minimal thinking for latency');",
+              "assert(core.includes(\"thinkingConfig: { thinkingLevel: 'minimal' }\"), 'classifier must use minimal thinking for low latency');",
+          ])
+          test = test.replace(anchor, addition, 1)
+          old_abort = "assert(core.includes('signal: AbortSignal.timeout(remainingProviderMs)'), 'Gemini fetches must be abortable');"
+          new_abort = "assert(core.includes('signal: AbortSignal.timeout(remainingProviderMs)') && core.includes('signal: AbortSignal.timeout(attemptBudgetMs)'), 'Gemini classifier and response fetches must be abortable');"
+          if old_abort not in test:
+              raise SystemExit('provider abort verifier anchor not found')
+          test = test.replace(old_abort, new_abort, 1)
+          provider_test.write_text(test)
+
+          copy_test = Path('scripts/verify-mari-growth-copy-hygiene.js')
+          test = copy_test.read_text()
+          anchor = "assert(route.includes('proof-led'), 'Grounded Growth fallback must recommend proof-led experimentation.');"
+          if anchor not in test:
+              raise SystemExit('copy verifier anchor not found')
+          test = test.replace(anchor, anchor + "\nassert(route.includes(\"].join('\\\\n').replace(/\\\\*\\\\*/g, '')\"), 'Grounded Growth fallback must remove inline bold markers for copy-safe output.');", 1)
+          copy_test.write_text(test)
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/ai/src/mariUniversalCore.ts 'apps/ralion/src/app/api/social/facebook/pages/[pageId]/mari-growth/route.ts' scripts/verify-mari-provider-timeout.js scripts/verify-mari-growth-copy-hygiene.js
+          git diff --cached --check
+          git commit -m "fix(mari): add low-latency provider failover"
+          git push origin HEAD:fix/mari-provider-failover-copy-safe
