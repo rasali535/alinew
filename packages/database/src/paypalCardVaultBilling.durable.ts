@@ -112,7 +112,7 @@ export class PayPalCardVaultBillingStore {
     if (error) throw new Error(`[PayPalCardVaultBilling] renewal query failed: ${error.message}`);
     return (data || [])
       .map(mapSubscription)
-      .filter(sub => sub.metadata?.billingMode === 'paypal_card_vault' && Boolean(sub.metadata?.paypalVaultId));
+      .filter(sub => sub.metadata?.billingMode === 'paypal_card_vault' && (Boolean(sub.metadata?.paypalVaultId) || Boolean(sub.providerCustomerId)));
   }
 
   static async markRenewalFailure(organizationId: string, message: string): Promise<void> {
