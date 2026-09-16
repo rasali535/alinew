@@ -21,6 +21,7 @@ import { AnalyticsSource, MetricState } from '@/lib/services/social/facebookAnal
 import type { MariRecommendationContract } from '@ralion/ai';
 import { SecureImage, SecureVideo, resolveSecureAssetUrl } from '@/components/SecureMedia';
 import { useOrganization } from '@ralion/auth';
+import CompetitiveIntelligencePanel from '@/components/growth/CompetitiveIntelligencePanel';
 
 function resolveSafeImageUrl(src?: string, fallbackTitle: string = 'Ralion Creative'): string {
   if (!src || typeof src !== 'string') {
@@ -4242,7 +4243,8 @@ function GrowthPageContent() {
             )}
 
             {/* Sub-Tab 5: MARKET RESEARCH & COMPETITIVE INTELLIGENCE */}
-            {pageWorkspaceTab === 'MARKET_INTEL' && (
+            {pageWorkspaceTab === 'MARKET_INTEL' && <CompetitiveIntelligencePanel />}
+            {false && pageWorkspaceTab === 'MARKET_INTEL' && (
               <div className="flex flex-col gap-6">
                 {marketResearchReport ? (
                   <>
