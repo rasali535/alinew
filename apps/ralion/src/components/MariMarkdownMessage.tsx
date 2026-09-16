@@ -2,7 +2,6 @@
 
 import React from 'react';
 import {
-  Sparkles,
   ExternalLink,
   Film,
   Image as ImageIcon,
@@ -11,6 +10,28 @@ import {
 interface MariMarkdownMessageProps {
   text: string;
   isUser?: boolean;
+}
+
+function decodeMarkdownHtmlEntities(value: string): string {
+  return value
+    .replace(/&#(\d+);/g, (match, decimal) => {
+      const codePoint = Number(decimal);
+      return Number.isInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff
+        ? String.fromCodePoint(codePoint)
+        : match;
+    })
+    .replace(/&#x([0-9a-f]+);/gi, (match, hex) => {
+      const codePoint = Number.parseInt(hex, 16);
+      return Number.isInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff
+        ? String.fromCodePoint(codePoint)
+        : match;
+    })
+    .replace(/&apos;/gi, "'")
+    .replace(/&quot;/gi, '"')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>');
 }
 
 /**
@@ -24,7 +45,7 @@ interface MariMarkdownMessageProps {
 export function normalizeMarkdownText(raw: string): string {
   if (!raw) return '';
 
-  let text = raw;
+  let text = decodeMarkdownHtmlEntities(raw);
   text = text.replace(/[\u200B-\u200D\u2060\uFEFF]/g, '');
 
   // 1. Unescape escaped markdown backslashes (\**, \*, \_, \#, \[, \], \(, \), \`, \~)
@@ -251,7 +272,7 @@ function renderMarkdownParagraphs(content: string): React.ReactNode[] {
         );
       } else {
         nodes.push(
-          <ul key={`ul-${blockKey++}`} className="space-y-1.5 my-2 pl-0.5 text-zinc-200">
+          <ul key={`ul-${blockKey++}`} className="space-y-1.5 my-2 ml-4 list-disc list-outside text-zinc-200 marker:text-purple-400">
             {currentList}
           </ul>
         );
@@ -293,9 +314,8 @@ function renderMarkdownParagraphs(content: string): React.ReactNode[] {
       flushList();
       const headingText = line.replace(/^###\s+/, '');
       nodes.push(
-        <h3 key={`h3-${blockKey++}`} className="text-sm font-bold text-white mt-3.5 mb-1.5 flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-          <span>{renderInlineFormatted(headingText)}</span>
+        <h3 key={`h3-${blockKey++}`} className="text-sm font-bold text-white mt-3.5 mb-1.5">
+          {renderInlineFormatted(headingText)}
         </h3>
       );
       continue;
@@ -342,9 +362,8 @@ function renderMarkdownParagraphs(content: string): React.ReactNode[] {
       listType = 'bullet';
       const itemText = line.replace(/^(?:[•\-*]\s*)+/, '').trim();
       currentList.push(
-        <li key={`li-${blockKey++}`} className="flex items-start gap-2 text-zinc-200">
-          <span className="text-purple-400 font-bold shrink-0 mt-0.5">•</span>
-          <span className="flex-1">{renderInlineFormatted(itemText)}</span>
+        <li key={`li-${blockKey++}`} className="text-zinc-200 pl-1">
+          {renderInlineFormatted(itemText)}
         </li>
       );
       continue;

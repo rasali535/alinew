@@ -11,6 +11,33 @@ import { getCurrentRalionContext, authRequiredResponse, forbiddenResponse } from
 
 export const dynamic = 'force-dynamic';
 
+function cleanFallbackText(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&#(\d+);/g, (match, decimal) => {
+      const codePoint = Number(decimal);
+      return Number.isInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff
+        ? String.fromCodePoint(codePoint)
+        : match;
+    })
+    .replace(/&#x([0-9a-f]+);/gi, (match, hex) => {
+      const codePoint = Number.parseInt(hex, 16);
+      return Number.isInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff
+        ? String.fromCodePoint(codePoint)
+        : match;
+    })
+    .replace(/&apos;/gi, "'")
+    .replace(/&quot;/gi, '"')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function stripTerminalPunctuation(value: unknown): string {
+  return cleanFallbackText(value).replace(/[.!?]+\s*$/, '').trim();
+}
 
 function buildGroundedGrowthStrategyFallback(params: {
   companyName: string;
@@ -44,8 +71,10 @@ function buildGroundedGrowthStrategyFallback(params: {
   if (facebook.connected) {
     evidence.push(`- **Facebook Page:** ${facebook.pageName || 'Connected Page'}${facebook.followers != null ? ` with ${facebook.followers} followers` : ''}.`);
   }
-  evidence.push(`- **Publishing baseline:** ${Number(performance.posts30d || 0)} posts in 30 days (about ${Number(performance.postingFrequencyPerWeek || 0).toFixed(2)} per week).`);
+  const posts30d = Number(performance.posts30d || 0);
+  const postingFrequencyPerWeek = Number(performance.postingFrequencyPerWeek || 0);
   const interactions = Number(performance.totalReactions30d || 0) + Number(performance.totalComments30d || 0) + Number(performance.totalShares30d || 0);
+  evidence.push(`- **Publishing baseline:** ${posts30d} posts in 30 days (about ${postingFrequencyPerWeek.toFixed(2)} per week).`);
   evidence.push(`- **Visible interactions:** ${interactions} total (${Number(performance.totalReactions30d || 0)} reactions, ${Number(performance.totalComments30d || 0)} comments, ${Number(performance.totalShares30d || 0)} shares).`);
   if (performance.totalReach30d != null) {
     evidence.push(`- **Measured reach:** ${performance.totalReach30d}${performance.engagementRatePct != null ? `; engagement rate ${performance.engagementRatePct}%` : ''}.`);
@@ -67,12 +96,12 @@ function buildGroundedGrowthStrategyFallback(params: {
   if (watchlist.length) {
     competitorLines.push(`- **Public competitor watchlist:** ${watchlist.map((item: any) => item.name).join(', ')}.`);
     competitorLines.push(`- **Evidence ledger:** ${observations.length} recent public-source observations are available.`);
-    if (briefing?.summary) competitorLines.push(`- **Latest market briefing:** ${briefing.summary}`);
+    if (briefing?.summary) competitorLines.push(`- **Latest market briefing:** ${cleanFallbackText(briefing.summary)}`);
     if (Array.isArray(briefing?.marketMoves) && briefing.marketMoves.length) {
-      competitorLines.push(`- **Observed market moves:** ${briefing.marketMoves.slice(0, 3).join(' | ')}`);
+      competitorLines.push(`- **Observed market moves:** ${briefing.marketMoves.slice(0, 3).map((item: unknown) => cleanFallbackText(item)).join(' | ')}`);
     }
     if (Array.isArray(briefing?.marketGaps) && briefing.marketGaps.length) {
-      competitorLines.push(`- **Potential gaps to test:** ${briefing.marketGaps.slice(0, 3).join(' | ')}`);
+      competitorLines.push(`- **Potential gaps to test:** ${briefing.marketGaps.slice(0, 3).map((item: unknown) => cleanFallbackText(item)).join(' | ')}`);
     }
   } else {
     competitorLines.push('- No verified competitor observations are currently available in the tenant ledger, so no competitor-specific claim is made.');
@@ -89,34 +118,73 @@ function buildGroundedGrowthStrategyFallback(params: {
   if (!learnings.length) gaps.push('- There is not yet enough matched experiment/outcome history to claim a repeatable winning content pattern.');
   if (!observations.length) gaps.push('- Competitor conclusions are limited until more public observations are collected.');
 
-  const marketGap = Array.isArray(briefing?.marketGaps) && briefing.marketGaps.length ? String(briefing.marketGaps[0]) : '';
+  const marketGap = Array.isArray(briefing?.marketGaps) && briefing.marketGaps.length
+    ? stripTerminalPunctuation(briefing.marketGaps[0])
+    : '';
   const observedFormat = performance.topContentType || 'text';
-  const verifiedOffer = String(
+  const verifiedOffer = stripTerminalPunctuation(
     profile.valueProposition ||
     (Array.isArray(profile.productsAndServices) && profile.productsAndServices.length
       ? profile.productsAndServices.slice(0, 2).join(' + ')
       : `${company}'s verified offer`)
   );
+  const topObservedTopic = topPost
+    ? stripTerminalPunctuation(
+        cleanFallbackText(topPost.excerpt || '')
+          .replace(/\s+#\S+/g, '')
+          .slice(0, 220)
+      )
+    : '';
+
+  const strategicDirection: string[] = [];
+  if (posts30d > 0 && interactions < posts30d) {
+    strategicDirection.push(
+      `- **Shift from volume to proof-led posts:** ${posts30d} posts produced ${interactions} visible interactions in this 30-day sample. That does not prove posting frequency caused the result, but it is enough to test fewer, stronger posts with clearer proof and a single outcome per post before increasing volume.`
+    );
+  } else {
+    strategicDirection.push(
+      '- **Prioritize proof over generic promotion:** keep each post focused on one customer outcome, one proof point and one action.'
+    );
+  }
+  if (topObservedTopic) {
+    strategicDirection.push(
+      `- **Build on the strongest observed topic:** the best-performing post in the sample centered on "${topObservedTopic}". Create a follow-up that explains the problem, what changed and why the result matters instead of simply repeating the announcement.`
+    );
+  }
+  if (marketGap) {
+    strategicDirection.push(
+      `- **Differentiate with concrete outcomes:** public competitor evidence suggests this testable gap: ${marketGap}. Use customer proof, demonstrations and before/after explanations rather than mirroring crowded market language.`
+    );
+  }
+  strategicDirection.push(
+    '- **Build the learning loop:** every next post should have one hypothesis, one primary CTA and a captured outcome so Mari can move from baseline observations to evidence-backed learnings.'
+  );
 
   const tests = [
-    `1. **Positioning test:** Test an outcome-led message built around "${verifiedOffer}"${marketGap ? `, informed by this public-market gap: ${marketGap}` : ''}. Compare it with a simpler single-offer message; treat the result as a hypothesis until measured.`,
-    `2. **Format test:** Use the observed ${observedFormat} signal as one variant, then test it against a different format with the same message and CTA. Hold the offer constant so the format comparison is interpretable.`,
-    `3. **CTA test:** Compare a low-friction conversation CTA (for example, asking people to comment a keyword) with the current direct-contact path. Measure qualified replies or enquiries rather than raw reactions alone.`,
+    `1. **Message test:** Compare one outcome-led message built around "${verifiedOffer}" with a narrower single-offer message. Keep the format and CTA the same so the positioning difference is interpretable.`,
+    `2. **Proof-format test:** Use the observed ${observedFormat} format as one variant${topObservedTopic ? ` around the "${topObservedTopic}" topic` : ''}, then test a second format with the same message and CTA. Do not treat the current format signal as proven until the sample grows.`,
+    `3. **CTA test:** Compare a low-friction conversation CTA, such as asking people to comment a keyword, with the current direct-contact path. Measure qualified replies or enquiries rather than raw reactions alone.`,
   ];
 
-  const contentFormat = observedFormat === 'video' ? 'Short video/reel with a concise text caption' : observedFormat === 'image' ? 'Single visual with a concise proof-led caption' : 'Text-first milestone / behind-the-scenes post';
+  const contentFormat = observedFormat === 'video'
+    ? 'Short video/reel with a concise proof-led caption'
+    : observedFormat === 'image'
+      ? 'Single visual with a concise proof-led caption'
+      : 'Text-first proof / behind-the-build post';
   const contentIdea = [
-    `**Objective:** Test whether a clearer outcome-led expression of the verified offer earns meaningful enquiries.`,
+    `**Objective:** Test whether a concrete proof-led post earns more meaningful response than a broad company-positioning post.`,
     `**Format:** ${contentFormat}.`,
     `**Draft copy:**`,
     '',
-    `What would change if the right people understood exactly what ${company} can help them achieve?`,
+    `Most businesses do not need another broad promise. They need something concrete.`,
     '',
-    `Our current focus is simple: ${verifiedOffer}.`,
+    topObservedTopic
+      ? `One thing we recently put into the market: ${topObservedTopic}.`
+      : `One thing we can show clearly: ${verifiedOffer}.`,
     '',
-    `We are testing this message against real audience response rather than calling it proven before the data says so.`,
+    `The useful question is not just what we built — it is what problem it solves, what changes for the customer, and how we can prove it.`,
     '',
-    `Want to see how it works in practice? Comment **BUILD** and let's start the conversation.`,
+    `Want the breakdown? Comment **BUILD** and we'll show the thinking behind it.`,
   ].join('\n');
 
   return [
@@ -136,10 +204,13 @@ function buildGroundedGrowthStrategyFallback(params: {
     '### 2. What We Do Not Have Enough Evidence For',
     ...gaps,
     '',
-    '### 3. What We Should Test Next',
+    '### 3. Strategic Direction',
+    ...strategicDirection,
+    '',
+    '### 4. What We Should Test Next',
     ...tests,
     '',
-    '### 4. Facebook Content Idea',
+    '### 5. Facebook Content Idea',
     contentIdea,
   ].join('\n');
 }
