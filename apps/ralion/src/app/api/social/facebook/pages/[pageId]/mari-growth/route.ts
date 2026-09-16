@@ -185,7 +185,7 @@ function buildGroundedGrowthStrategyFallback(params: {
     `The useful question is not just what we built — it is what problem it solves, what changes for the customer, and how we can prove it.`,
     '',
     `Want the breakdown? Comment **BUILD** and we'll show the thinking behind it.`,
-  ].join('\n');
+  ].join('\n').replace(/\*\*/g, '');
 
   return [
     `## Marketing Strategy for ${company}`,

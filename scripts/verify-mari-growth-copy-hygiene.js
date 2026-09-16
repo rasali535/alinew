@@ -26,6 +26,7 @@ assert(route.includes("'### 3. Strategic Direction'"), 'Grounded Growth fallback
 assert(route.includes('does not prove posting frequency caused the result'), 'Low visible response must be framed as a test signal, not a causal conclusion.');
 assert(route.includes('topObservedTopic'), 'Grounded Growth fallback must use the strongest observed content topic when available.');
 assert(route.includes('proof-led'), 'Grounded Growth fallback must recommend proof-led experimentation.');
+assert(route.includes("].join('\\n').replace(/\\*\\*/g, '')"), 'Grounded Growth fallback must remove inline bold markers for copy-safe output.');
 assert(!route.includes('Our current focus is simple:'), 'Fallback content must not merely repeat the stored value proposition.');
 
 const helperStart = route.indexOf('function buildGroundedGrowthStrategyFallback');

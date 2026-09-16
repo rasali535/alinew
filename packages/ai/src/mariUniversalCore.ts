@@ -36,13 +36,14 @@ import { TenantCreditsService, CREDIT_COSTS } from './tenantCredits.service';
 import { CreativeOrchestrator } from './creativeOrchestrator.service';
 import { CreativeAssetService } from './creativeAsset.service';
 
-const MARI_CLASSIFIER_MODEL = process.env.MARI_GEMINI_CLASSIFIER_MODEL || 'gemini-3.5-flash';
+const MARI_CLASSIFIER_MODEL = process.env.MARI_GEMINI_CLASSIFIER_MODEL || 'gemini-3.5-flash-lite';
 const MARI_RESPONSE_MODEL = process.env.MARI_GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-3.5-flash';
-const MARI_CLASSIFIER_PROVIDER_BUDGET_MS = Math.max(1000, Number(process.env.MARI_CLASSIFIER_PROVIDER_BUDGET_MS || 2500));
-const MARI_RESPONSE_PROVIDER_BUDGET_MS = Math.max(5000, Number(process.env.MARI_RESPONSE_PROVIDER_BUDGET_MS || 12000));
+const MARI_CLASSIFIER_PROVIDER_BUDGET_MS = Math.max(1000, Number(process.env.MARI_CLASSIFIER_PROVIDER_BUDGET_MS || 3000));
+const MARI_RESPONSE_PROVIDER_BUDGET_MS = Math.max(8000, Number(process.env.MARI_RESPONSE_PROVIDER_BUDGET_MS || 18000));
+const MARI_RESPONSE_PRIMARY_ATTEMPT_BUDGET_MS = Math.max(4000, Number(process.env.MARI_RESPONSE_PRIMARY_ATTEMPT_BUDGET_MS || 9000));
 
 function modelsWithStableFallback(configuredModel: string): string[] {
-  return Array.from(new Set([configuredModel.trim(), 'gemini-3.5-flash'].filter(Boolean))).slice(0, 2);
+  return Array.from(new Set([configuredModel.trim(), 'gemini-3.5-flash', 'gemini-3.5-flash-lite'].filter(Boolean))).slice(0, 3);
 }
 
 export function getMariBuildVersion(): string {
@@ -286,9 +287,9 @@ Classification Rules:
           },
           contents,
           generationConfig: {
-            temperature: 0.1,
             maxOutputTokens: 800,
             responseMimeType: 'application/json',
+            thinkingConfig: { thinkingLevel: 'minimal' },
           },
         }),
         signal: AbortSignal.timeout(remainingProviderMs),
@@ -1029,13 +1030,16 @@ SERVER CONTEXT RULES:
       modelErrors[modelName] = 'PROVIDER_TIMEOUT';
       break;
     }
+    const attemptBudgetMs = modelName === modelsToTry[0]
+    ? Math.min(remainingProviderMs, MARI_RESPONSE_PRIMARY_ATTEMPT_BUDGET_MS)
+    : remainingProviderMs;
     modelsAttempted.push(modelName);
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiKey}`;
 
     try {
       const generationConfig: Record<string, any> = { maxOutputTokens: 1800 };
       if (/^gemini-3(?:\.|-)/i.test(modelName)) {
-        generationConfig.thinkingConfig = { thinkingLevel: 'low' };
+        generationConfig.thinkingConfig = { thinkingLevel: /flash-lite/i.test(modelName) ? 'minimal' : 'low' };
       }
       const response = await fetch(url, {
         method: 'POST',
@@ -1047,7 +1051,7 @@ SERVER CONTEXT RULES:
           contents,
           generationConfig,
         }),
-        signal: AbortSignal.timeout(remainingProviderMs),
+        signal: AbortSignal.timeout(attemptBudgetMs),
       });
 
       if (!response.ok) {
