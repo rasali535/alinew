@@ -1,5 +1,5 @@
 -- Ralion OS — Operational core persistence
--- Durable workspace-scoped Tasks, Calendar, Documents, Workflows and audit context.
+-- Durable workspace-scoped Tasks, Calendar, Documents, Workflows and admin state.
 
 begin;
 
@@ -152,7 +152,22 @@ alter table public.workflow_runs force row level security;
 revoke all on table public.workflow_runs from anon, authenticated;
 grant select, insert, update, delete on table public.workflow_runs to service_role;
 
--- Audit context ----------------------------------------------------------------
+-- Durable platform-admin tenant controls --------------------------------------
+create table if not exists public.tenant_admin_state (
+  organization_id uuid primary key references public.organizations(id) on delete cascade,
+  status text not null default 'ACTIVE',
+  suspension_reason text,
+  suspended_at timestamptz,
+  suspended_by uuid references auth.users(id) on delete set null,
+  updated_at timestamptz not null default now(),
+  constraint tenant_admin_state_status_check check (status = any (array['ACTIVE'::text,'SUSPENDED'::text]))
+);
+alter table public.tenant_admin_state enable row level security;
+alter table public.tenant_admin_state force row level security;
+revoke all on table public.tenant_admin_state from anon, authenticated;
+grant select, insert, update, delete on table public.tenant_admin_state to service_role;
+
+-- Audit context ---------------------------------------------------------------
 alter table public.audit_logs
   add column if not exists workspace_id uuid references public.workspaces(id) on delete set null;
 create index if not exists audit_logs_org_created_idx on public.audit_logs(organization_id, created_at desc);
