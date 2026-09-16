@@ -2,6 +2,7 @@ import 'server-only';
 import './mariCompetitiveContext.bootstrap';
 import './mariMarketingLearningContext.bootstrap';
 import './mariDurableCredits.bootstrap';
+import './creativeDurableCredits.bootstrap';
 
 export * from './client';
 export * from './storage';
