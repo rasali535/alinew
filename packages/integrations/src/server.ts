@@ -1,4 +1,5 @@
 import 'server-only';
+import './billing/paypalConfigHardening.bootstrap';
 import './billing/paypalOpaqueCheckout.bootstrap';
 
 export * from './client';
