@@ -1,4 +1,5 @@
 import 'server-only';
+import './mariCompetitiveContext.bootstrap';
 
 export * from './client';
 export * from './storage';
