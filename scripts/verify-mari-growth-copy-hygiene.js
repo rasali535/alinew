@@ -11,8 +11,8 @@ function assert(condition, message) {
   }
 }
 
-assert(core.includes('replace(/\\+([*_#'), 'Universal Mari sanitizer must collapse repeated Markdown escape layers.');
-assert(component.includes('replace(/\\+([*_#'), 'Mari renderer must collapse repeated Markdown escape layers.');
+assert(core.includes(String.raw`replace(/\\+([*_#`), 'Universal Mari sanitizer must collapse repeated Markdown escape layers.');
+assert(component.includes(String.raw`replace(/\\+([*_#`), 'Mari renderer must collapse repeated Markdown escape layers.');
 assert(component.includes('decodeMarkdownHtmlEntities'), 'Mari renderer must decode HTML entities before Markdown rendering.');
 assert(component.includes(".replace(/&#(\\d+);/g"), 'Mari renderer must decode decimal HTML entities such as &#039;.');
 assert(component.includes(".replace(/&#x([0-9a-f]+);/gi"), 'Mari renderer must decode hexadecimal HTML entities.');
