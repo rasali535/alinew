@@ -1,0 +1,57 @@
+name: Temporary Wire Competitive Intelligence
+
+on:
+  push:
+    branches:
+      - fix/competitive-intelligence-dashboard
+
+permissions:
+  contents: write
+
+jobs:
+  patch-growth-page:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/competitive-intelligence-dashboard
+          fetch-depth: 0
+      - name: Patch Growth market intelligence tab
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('apps/ralion/src/app/(dashboard)/growth/page.tsx')
+          text = path.read_text()
+
+          import_anchor = "import { useOrganization } from '@ralion/auth';"
+          import_line = "import CompetitiveIntelligencePanel from '@/components/growth/CompetitiveIntelligencePanel';"
+          if import_line not in text:
+              if text.count(import_anchor) != 1:
+                  raise SystemExit(f'Expected exactly one import anchor, found {text.count(import_anchor)}')
+              text = text.replace(import_anchor, import_anchor + "\n" + import_line, 1)
+
+          marker = """            {/* Sub-Tab 5: MARKET RESEARCH & COMPETITIVE INTELLIGENCE */}\n            {pageWorkspaceTab === 'MARKET_INTEL' && ("""
+          replacement = """            {/* Sub-Tab 5: MARKET RESEARCH & COMPETITIVE INTELLIGENCE */}\n            {pageWorkspaceTab === 'MARKET_INTEL' && <CompetitiveIntelligencePanel />}\n            {false && pageWorkspaceTab === 'MARKET_INTEL' && ("""
+          if replacement not in text:
+              if text.count(marker) != 1:
+                  raise SystemExit(f'Expected exactly one Market Intel render marker, found {text.count(marker)}')
+              text = text.replace(marker, replacement, 1)
+
+          path.write_text(text)
+          PY
+          git diff --check
+      - name: Commit surgical Growth wiring
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No patch required"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add 'apps/ralion/src/app/(dashboard)/growth/page.tsx'
+          git commit -m "fix(growth): show competitive intelligence panel"
+          git push origin HEAD:fix/competitive-intelligence-dashboard
