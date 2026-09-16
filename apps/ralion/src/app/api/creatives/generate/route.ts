@@ -14,7 +14,6 @@ export async function POST(request: NextRequest) {
   const requestId = `req_gen_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
 
   try {
-    // 1. Require authenticated server session
     const authResult = await requireRalionContext(request);
     if (authResult.response || !authResult.context) {
       return authResult.response || corsJsonResponse(
@@ -31,6 +30,7 @@ export async function POST(request: NextRequest) {
 
     const authenticatedOrgId = authResult.context.organization.id;
     const authenticatedWorkspaceId = authResult.context.workspace.id;
+    const authenticatedUserId = authResult.context.user.id;
 
     const body = await request.json().catch(() => ({}));
     const {
@@ -45,7 +45,6 @@ export async function POST(request: NextRequest) {
       mockFailure,
     } = body;
 
-    // 2. Reject mismatched client hints
     if (body.organizationId && body.organizationId !== authenticatedOrgId) {
       return corsJsonResponse(
         {
@@ -72,9 +71,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await CreativeOrchestrator.generate({
+    const result = await (CreativeOrchestrator.generate as any)({
       organizationId: authenticatedOrgId,
       workspaceId: authenticatedWorkspaceId,
+      userId: authenticatedUserId,
+      requestId,
       type: type === 'video' ? 'VIDEO_REEL' : (type === 'image' ? 'POSTER_IMAGE' : type),
       prompt,
       title,
@@ -87,12 +88,19 @@ export async function POST(request: NextRequest) {
     });
 
     if (!result.success || !result.receipt) {
-      const httpStatus = result.errorDetails?.errorCode === 'INVALID_PROMPT' ? 400 : 502;
+      const errorCode = result.errorDetails?.errorCode || 'GENERATION_FAILED';
+      const httpStatus = errorCode === 'INVALID_PROMPT'
+        ? 400
+        : errorCode === 'INSUFFICIENT_CREDITS'
+          ? 402
+          : errorCode === 'ENTITLEMENT_REQUIRED'
+            ? 403
+            : 502;
       return corsJsonResponse({
         success: false,
         status: result.status,
         error: result.userFacingMessage || 'Creative generation failed.',
-        errorCode: result.errorDetails?.errorCode || 'GENERATION_FAILED',
+        errorCode,
         userFacingMessage: result.userFacingMessage,
         requestId,
       }, { status: httpStatus }, request);
