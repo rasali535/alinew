@@ -45,7 +45,9 @@ export async function createPayPalSubscriptionWithDiagnostics(
   if (billingCycle !== 'MONTHLY') {
     return { success: false, error: 'Only MONTHLY PayPal billing is currently enabled.' };
   }
-  if (organizationId.length > 127) {
+
+  const customId = JSON.stringify({ organizationId });
+  if (customId.length > 127) {
     return { success: false, error: 'Organization billing identifier exceeds the PayPal custom_id limit.' };
   }
 
@@ -55,10 +57,10 @@ export async function createPayPalSubscriptionWithDiagnostics(
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://rasalilabs.com/ralion';
     const payload = {
       plan_id: paypalPlanId,
-      // PayPal custom_id is capped at 127 characters. Keep only the canonical,
-      // server-verified tenant identifier here; plan identity is independently
-      // verified from PayPal's plan_id during activation/webhook processing.
-      custom_id: organizationId,
+      // PayPal custom_id is capped at 127 characters. Persist only the canonical,
+      // server-verified tenant identifier. The plan is independently verified
+      // against PayPal's plan_id during activation and webhook processing.
+      custom_id: customId,
       application_context: {
         brand_name: 'Ralion OS',
         locale: 'en-US',
