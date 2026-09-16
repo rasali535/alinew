@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     const end = new Date(now);
     end.setUTCMonth(end.getUTCMonth() + 1);
     const existing = await DurableBillingDatabaseService.getSubscription(organizationId);
-    await DurableBillingDatabaseService.saveSubscription({
+    const saved = await DurableBillingDatabaseService.saveSubscription({
       ...existing,
       organizationId,
       planId: result.planId,
@@ -47,10 +47,9 @@ export async function POST(request: NextRequest) {
       },
       updatedAt: now.toISOString(),
     });
-    await DurableBillingDatabaseService.saveTransaction({
-      id: `paypal_${result.captureId}`,
+    await DurableBillingDatabaseService.recordTransaction({
       organizationId,
-      subscriptionId: existing.id,
+      subscriptionId: saved.id,
       provider: 'paypal',
       providerTransactionId: result.captureId,
       amount: result.amount,
@@ -58,7 +57,6 @@ export async function POST(request: NextRequest) {
       status: 'COMPLETED',
       eventType: 'PAYMENT_COMPLETED',
       description: `Ralion OS ${result.planId} initial card payment`,
-      createdAt: now.toISOString(),
     });
     await TenantCreditsService.addCredits(organizationId, PLAN_CATALOG[result.planId].monthlyCreditQuota, `PayPal card subscription activated (${PLAN_CATALOG[result.planId].name})`);
     return corsJsonResponse({ success: true, planId: result.planId, status: 'ACTIVE', vaultStatus: result.vaultStatus || 'PENDING' }, undefined, request);
