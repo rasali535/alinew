@@ -86,12 +86,21 @@ export class MariMarketingLearningService {
    * Refreshes the durable experiment/outcome ledger from canonical Ralion publication
    * history matched to live Facebook post evidence. The BI snapshot parameter remains
    * for API compatibility, but top-post samples are intentionally not used for learning.
+   * When BI has already fetched the full post set it is passed here to avoid duplicate
+   * provider calls on the same request.
    */
-  static async refreshFromBusinessIntelligence(params: TenantParams, _snapshot: any): Promise<LearningRefreshResult> {
-    return this.refreshFromPublishedPerformance(params);
+  static async refreshFromBusinessIntelligence(
+    params: TenantParams,
+    _snapshot: any,
+    prefetchedPosts?: FacebookPagePostItem[]
+  ): Promise<LearningRefreshResult> {
+    return this.refreshFromPublishedPerformance(params, prefetchedPosts);
   }
 
-  static async refreshFromPublishedPerformance(params: TenantParams): Promise<LearningRefreshResult> {
+  static async refreshFromPublishedPerformance(
+    params: TenantParams,
+    prefetchedPosts?: FacebookPagePostItem[]
+  ): Promise<LearningRefreshResult> {
     const organizationId = uuid(params.organizationId, 'organizationId');
     const workspaceId = uuid(params.workspaceId, 'workspaceId');
     const userId = uuid(params.userId, 'userId');
@@ -111,11 +120,13 @@ export class MariMarketingLearningService {
       return { matchedPublications: 0, experimentsCreated: 0, outcomesCreated: 0, learned: 0, reason: 'NO_CANONICAL_PUBLICATION_HISTORY' };
     }
 
-    let livePosts: FacebookPagePostItem[] = [];
-    try {
-      livePosts = await FacebookPageManagementService.getPagePosts({ organizationId, workspaceId, userId, limit: 100 });
-    } catch (error: any) {
-      console.warn('[MariMarketingLearning] Live Facebook evidence unavailable:', error?.message || error);
+    let livePosts: FacebookPagePostItem[] = Array.isArray(prefetchedPosts) ? prefetchedPosts : [];
+    if (prefetchedPosts === undefined) {
+      try {
+        livePosts = await FacebookPageManagementService.getPagePosts({ organizationId, workspaceId, userId, limit: 100 });
+      } catch (error: any) {
+        console.warn('[MariMarketingLearning] Live Facebook evidence unavailable:', error?.message || error);
+      }
     }
     if (!livePosts.length) {
       return { matchedPublications: 0, experimentsCreated: 0, outcomesCreated: 0, learned: 0, reason: 'NO_LIVE_POST_EVIDENCE' };
