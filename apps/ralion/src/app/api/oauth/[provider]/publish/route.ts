@@ -2,8 +2,9 @@ import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import {
   loadOAuthTokens, markTokenExpired,
-  linkedinAdapter, metaAdapter, xAdapter,
+  linkedinAdapter, xAdapter,
 } from "@/lib/services/social.service";
+import { metaAdapterV26 } from "@/lib/services/metaAdapter.service";
 import { corsJsonResponse, handleCorsPreflight } from "@/lib/cors";
 
 export const dynamic = 'force-dynamic';
@@ -65,7 +66,7 @@ export async function POST(
         if (!record.page_id || !record.extra_meta?.pageAccessToken) {
           return corsJsonResponse({ success: false, error: "Facebook Page token not found" }, { status: 400 }, request);
         }
-        result = await metaAdapter.publishFacebookPost(record.page_id, record.extra_meta.pageAccessToken, content);
+        result = await metaAdapterV26.publishFacebookPost(record.page_id, record.extra_meta.pageAccessToken, content);
         break;
       case "instagram":
         if (!record.extra_meta?.igUserId || !record.extra_meta?.pageAccessToken) {
@@ -74,13 +75,14 @@ export async function POST(
         if (!imageUrl) {
           return corsJsonResponse({ success: false, error: "Instagram publishing requires an image URL" }, { status: 400 }, request);
         }
-        result = await metaAdapter.publishInstagramPost(record.extra_meta.igUserId, record.extra_meta.pageAccessToken, content, imageUrl);
+        result = await metaAdapterV26.publishInstagramPost(record.extra_meta.igUserId, record.extra_meta.pageAccessToken, content, imageUrl);
         break;
       case "x":
-      case "twitter":
+      case "twitter": {
         const tweetText = content.length > 280 ? content.substring(0, 277) + "..." : content;
         result = await xAdapter.publishTweet(accessToken, tweetText);
         break;
+      }
       default:
         return corsJsonResponse({ success: false, error: "Publishing to " + provider + " is not supported yet." }, { status: 400 }, request);
     }
