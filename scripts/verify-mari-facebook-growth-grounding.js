@@ -37,7 +37,8 @@ for (const claim of forbiddenClaims) {
   assert(!service.includes(claim), `legacy fabricated claim must be removed: ${claim}`);
 }
 
-assert(service.includes('internal heuristic, not an external industry benchmark'), 'growth score must disclose its heuristic nature');
+assert(service.includes('Ralion activity heuristic derived from measured Page metrics'), 'growth score must disclose its heuristic nature');
+assert(service.includes('not an external industry benchmark or predicted business outcome'), 'growth score must reject benchmark and prediction interpretation');
 assert(service.includes('Timing Evidence Not Yet Calibrated'), 'timing insight must admit missing timing evidence');
 assert(service.includes('test window'), '7-day plan timings must be labeled as test windows');
 assert(service.includes('Experimental plan only'), '7-day plan must not claim predicted impact');
