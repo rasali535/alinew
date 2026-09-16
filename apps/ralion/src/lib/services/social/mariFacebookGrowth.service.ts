@@ -2,12 +2,10 @@
  * Ralion OS — Mari AI Facebook Growth Intelligence Service
  * Ras Ali Labs (Pty) Ltd
  *
- * Implements context-scoped, data-minimized AI growth strategy, performance analysis,
- * anomaly detection, and 7-day content planning for connected Facebook Pages.
- *
- * STRICT SECURITY PRINCIPLE:
- * Mari AI NEVER receives credentials, API keys, access tokens, or raw secrets.
- * Only sanitized, aggregated metrics and non-sensitive performance summaries are provided.
+ * Deterministic Facebook growth helpers used for diagnostics and experimental plans.
+ * User chat is routed through MariUniversalCore by the page API. This service must
+ * never present generic benchmarks, timing assumptions or predicted outcomes as
+ * measured tenant facts.
  */
 
 import { AuditLoggerService } from '../auditLogger.service';
@@ -29,7 +27,7 @@ export interface MariPageContext {
 }
 
 export interface MariGrowthScore {
-  total: number; // e.g. 78 / 100
+  total: number;
   breakdown: {
     contentQuality: number;
     engagement: number;
@@ -73,9 +71,14 @@ export interface MariGrowthPlanResult {
   generatedAt: string;
 }
 
+function clampScore(value: number): number {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
 export class MariFacebookGrowthService {
   /**
-   * Compute deterministic Facebook Page Growth Score based on verified methodology
+   * Internal activity score. This is not an industry benchmark and should not be
+   * presented as proof that a page is performing well or poorly relative to peers.
    */
   static calculateGrowthScore(analytics: NormalizedPageAnalytics): MariGrowthScore {
     if (analytics.totalPosts30d === 0 && analytics.totalReach30d === 0) {
@@ -87,47 +90,29 @@ export class MariFacebookGrowthService {
           consistency: 0,
           growthVelocity: 0,
         },
-        summary: 'Mari needs more data to provide a reliable recommendation. Publish posts to calibrate your growth score.',
+        summary: 'Mari needs more measured Page activity before a growth score is useful.',
       };
     }
 
-    // 1. Content score (based on active publishing)
-    const contentQuality = Math.min(95, Math.max(30, 40 + analytics.totalPosts30d * 6));
-
-    // 2. Engagement score (benchmark standard is 3.5% for business pages)
-    const engagement = analytics.engagementRate > 0 
-      ? Math.min(98, Math.max(20, Math.round((analytics.engagementRate / 3.5) * 65)))
+    const contentQuality = clampScore(30 + Math.min(60, analytics.totalPosts30d * 5));
+    const engagement = analytics.engagementRate > 0
+      ? clampScore(30 + Math.min(65, analytics.engagementRate * 10))
       : 20;
-
-    // 3. Consistency score
-    const consistency = Math.min(90, Math.max(20, analytics.totalPosts30d >= 8 ? 85 : analytics.totalPosts30d * 10));
-
-    // 4. Growth velocity score
-    const growthVelocity = Math.min(95, Math.max(20, Math.round(30 + analytics.followerGrowthPercentage * 2.5)));
-
+    const consistency = clampScore(20 + Math.min(70, analytics.totalPosts30d * 7));
+    const growthVelocity = analytics.followerGrowthPercentage > 0
+      ? clampScore(30 + Math.min(60, analytics.followerGrowthPercentage * 3))
+      : 30;
     const total = Math.round((contentQuality + engagement + consistency + growthVelocity) / 4);
-
-    let summary = 'Your Page demonstrates rising engagement across social channels.';
-    if (total < 50) {
-      summary = 'Publishing frequency needs acceleration to unlock broader algorithmic reach.';
-    } else if (total > 80) {
-      summary = 'Exceptional performance! High organic engagement and rapid audience growth.';
-    }
 
     return {
       total,
-      breakdown: {
-        contentQuality,
-        engagement,
-        consistency,
-        growthVelocity,
-      },
-      summary,
+      breakdown: { contentQuality, engagement, consistency, growthVelocity },
+      summary: 'This is a Ralion activity heuristic derived from measured Page metrics, not an external industry benchmark or predicted business outcome.',
     };
   }
 
   /**
-   * Generate structured, data-grounded growth insights and anomaly reports
+   * Generate deterministic insights that remain inside the evidence boundary.
    */
   static async generateGrowthInsights(params: {
     context: MariPageContext;
@@ -142,52 +127,53 @@ export class MariFacebookGrowthService {
     });
 
     const hasData = params.context.totalPosts30d > 0 || params.context.totalReach30d > 0;
+    const measuredCadence = Number(params.context.postingFrequencyPerWeek || 0);
+    const topType = params.context.topContentType || 'text';
 
     const insights: MariInsightItem[] = hasData
       ? [
           {
             id: 'ins_1',
             type: 'PERFORMANCE_INSIGHT',
-            title: `Active Publishing: ${params.context.totalPosts30d} Posts Tracked`,
-            summary: 'Your posts are active in the feed with real-time engagement tracking.',
-            evidence: `Current calculated engagement rate: ${params.context.engagementRate}%.`,
+            title: `Measured Facebook Activity: ${params.context.totalPosts30d} Posts`,
+            summary: 'This insight uses the Page metrics Ralion can currently verify and does not infer unavailable outcomes.',
+            evidence: `Observed engagement rate: ${params.context.engagementRate}%; measured reach: ${params.context.totalReach30d}; highest observed content type: ${topType}.`,
             impact: 'HIGH',
-            actionLabel: 'Create Post',
-            actionType: 'CREATE_CONTENT',
-            suggestedPrompt: `Create a product demonstration reel highlighting ${params.context.pageName} solutions.`,
+            actionLabel: 'View Analytics',
+            actionType: 'VIEW_ANALYTICS',
           },
           {
             id: 'ins_2',
             type: 'GROWTH_OPPORTUNITY',
-            title: 'Optimize Posting Consistency',
-            summary: 'Maintaining 3 to 4 posts weekly compounds algorithmic visibility.',
-            evidence: `Currently tracking ${params.context.totalPosts30d} posts in this cycle.`,
-            impact: 'HIGH',
-            actionLabel: 'Generate 7-Day Plan',
+            title: 'Test Cadence Instead of Assuming an Optimum',
+            summary: `The measured publishing pace is ${measuredCadence.toFixed(1)} posts/week. Change cadence as a controlled test and compare outcomes before scaling.`,
+            evidence: `Cadence is derived from ${params.context.totalPosts30d} tracked posts over the current 30-day window.`,
+            impact: 'OPPORTUNITY',
+            actionLabel: 'Generate Test Plan',
             actionType: 'CREATE_PLAN',
           },
           {
             id: 'ins_3',
             type: 'TIMING_INSIGHT',
-            title: 'Peak Audience Attention Window',
-            summary: 'Audience engagement peaks during midweek afternoon windows between 14:00 and 16:30 SAST.',
-            evidence: `Historical interaction density on ${params.context.pageName} peaks at 15:30 CAT.`,
-            impact: 'MEDIUM',
-            actionLabel: 'Schedule for Peak Window',
-            actionType: 'SCHEDULE_POST',
+            title: 'Timing Evidence Not Yet Calibrated',
+            summary: 'Ralion does not currently have enough verified time-of-day outcome evidence to claim an optimal posting window for this Page.',
+            evidence: 'No verified hourly or daypart performance distribution is present in the current Page context.',
+            impact: 'OPPORTUNITY',
+            actionLabel: 'Run Timing Test',
+            actionType: 'CREATE_PLAN',
           },
         ]
       : [
           {
             id: 'ins_init',
             type: 'GROWTH_OPPORTUNITY',
-            title: 'Publish Your First Post to Calibrate Growth Insights',
-            summary: 'Mari needs more data to provide a reliable recommendation.',
-            evidence: 'No active posts recorded for this cycle.',
+            title: 'Publish and Measure Before Optimizing',
+            summary: 'Mari needs real Page outcomes before making a reliable growth recommendation.',
+            evidence: 'No measurable publishing or reach evidence is available in the current cycle.',
             impact: 'HIGH',
-            actionLabel: 'Create First Post',
+            actionLabel: 'Create First Test',
             actionType: 'CREATE_CONTENT',
-            suggestedPrompt: 'Write an introductory announcement for our audience.',
+            suggestedPrompt: 'Create an introductory Facebook post designed as a measurable baseline test.',
           },
         ];
 
@@ -202,6 +188,7 @@ export class MariFacebookGrowthService {
         pageName: params.context.pageName,
         growthScore: score.total,
         insightsGenerated: insights.length,
+        evidenceBoundary: 'MEASURED_PAGE_METRICS_ONLY',
       },
     });
 
@@ -209,103 +196,107 @@ export class MariFacebookGrowthService {
   }
 
   /**
-   * Generate an actionable 7-Day Facebook Growth Plan grounded in Page performance
+   * Generate a 7-day experiment plan. Times and formats are explicit test windows,
+   * not claims about optimal timing or predicted performance.
    */
   static async generate7DayGrowthPlan(params: {
     context: MariPageContext;
     userId: string;
     focusObjective?: string;
   }): Promise<MariGrowthPlanResult> {
-    const brandName = (params.context.pageName && params.context.pageName !== 'No Connected Page') ? params.context.pageName : 'your business';
+    const brandName = (params.context.pageName && params.context.pageName !== 'No Connected Page')
+      ? params.context.pageName
+      : 'your business';
     const tagSlug = brandName.replace(/[^a-zA-Z0-9]/g, '');
+    const observedType = params.context.topContentType || 'text';
 
     const days: MariGrowthPlanDay[] = [
       {
         dayNumber: 1,
         dayName: 'Monday',
-        recommendedTime: '09:30 SAST',
+        recommendedTime: '09:30 (test window)',
         contentType: 'Educational Article',
-        topic: `Industry Leadership: Modern Operational Excellence for ${brandName}`,
-        goal: 'Thought leadership & client bookmarking',
-        suggestedCaption: `How modern leaders are scaling operational excellence with automated intelligence. #${tagSlug} #Leadership #Innovation`,
-        callToAction: 'Read the full guide on our portal.',
-        hashtags: [`#${tagSlug}`, '#EnterpriseOS', '#Leadership', '#Innovation'],
+        topic: `Customer Problem Education for ${brandName}`,
+        goal: 'Establish a measurable baseline for saves, comments and clicks',
+        suggestedCaption: `What recurring business problem should we unpack next? Here is one practical perspective from ${brandName}.`,
+        callToAction: 'Comment with the challenge you want us to cover next.',
+        hashtags: [`#${tagSlug}`, '#BusinessGrowth'],
       },
       {
         dayNumber: 2,
         dayName: 'Tuesday',
-        recommendedTime: '15:30 SAST',
-        contentType: 'Video Reel',
-        topic: `Inside Look: Workflow Automation in Action at ${brandName}`,
-        goal: 'Direct product engagement & video views',
-        suggestedCaption: `See how our unified architecture cuts manual processing time by up to 60%. #${tagSlug} #Automation #Efficiency`,
-        callToAction: 'Drop a comment or DM us to schedule a tailored walkthrough.',
-        hashtags: [`#${tagSlug}`, '#Automation', '#TechNews', '#BusinessGrowth'],
+        recommendedTime: '15:30 (test window)',
+        contentType: observedType === 'video' ? 'Video Reel' : 'Product Feature',
+        topic: `Capability Demonstration: ${brandName}`,
+        goal: 'Test product-interest signals without assuming the format is proven',
+        suggestedCaption: `A quick look at how ${brandName} approaches a real customer workflow.`,
+        callToAction: 'Ask for a walkthrough if this workflow is relevant to your business.',
+        hashtags: [`#${tagSlug}`, '#CustomerWorkflow'],
       },
       {
         dayNumber: 3,
         dayName: 'Wednesday',
-        recommendedTime: '11:00 SAST',
+        recommendedTime: '11:00 (test window)',
         contentType: 'Graphic Poster',
-        topic: `Client Impact: Measurable ROI Delivered by ${brandName}`,
-        goal: 'Social proof and credibility',
-        suggestedCaption: `Real results delivered with certified precision across Southern Africa. #${tagSlug} #ClientSuccess #Trust`,
-        callToAction: 'Explore our case studies today.',
-        hashtags: [`#${tagSlug}`, '#ClientSuccess', '#ProvenResults', '#Enterprise'],
+        topic: `One Clear Business Insight from ${brandName}`,
+        goal: 'Test save and share behaviour',
+        suggestedCaption: 'One practical principle worth testing in your own operation this week.',
+        callToAction: 'Save this for your next planning session.',
+        hashtags: [`#${tagSlug}`, '#BusinessInsight'],
       },
       {
         dayNumber: 4,
         dayName: 'Thursday',
-        recommendedTime: '16:00 SAST',
+        recommendedTime: '16:00 (test window)',
         contentType: 'Product Feature',
-        topic: `Core Capability: Automated Growth Intelligence for ${brandName}`,
-        goal: 'Feature discovery and lead capture',
-        suggestedCaption: `Discover why regional enterprises rely on our intelligent growth engine. #${tagSlug} #AI #EnterpriseGrowth`,
-        callToAction: 'Request your demo link in our bio.',
-        hashtags: [`#${tagSlug}`, '#GrowthEngine', '#AI', '#Enterprise'],
+        topic: `Feature-to-Outcome Explanation for ${brandName}`,
+        goal: 'Test enquiry intent',
+        suggestedCaption: 'Here is what this capability does, who it is for, and the problem it is designed to address.',
+        callToAction: 'Message us if you want to see whether it fits your workflow.',
+        hashtags: [`#${tagSlug}`, '#ProductEducation'],
       },
       {
         dayNumber: 5,
         dayName: 'Friday',
-        recommendedTime: '14:30 SAST',
+        recommendedTime: '14:30 (test window)',
         contentType: 'Video Reel',
-        topic: `Weekly Highlights: Key Milestones from ${brandName}`,
-        goal: 'Brand affinity and community connection',
-        suggestedCaption: `Wrapping up an impactful week of innovation and customer success. #${tagSlug} #FridayHighlights #Community`,
-        callToAction: 'What was your biggest win this week? Let us know below!',
-        hashtags: [`#${tagSlug}`, '#FridayHighlights', '#Innovation', '#Community'],
+        topic: `Behind the Work at ${brandName}`,
+        goal: 'Test human and behind-the-scenes engagement',
+        suggestedCaption: 'A short behind-the-scenes look at how we turn an idea into something useful for customers.',
+        callToAction: 'Tell us which part of the process you want to see next.',
+        hashtags: [`#${tagSlug}`, '#BehindTheScenes'],
       },
       {
         dayNumber: 6,
         dayName: 'Saturday',
-        recommendedTime: '10:00 SAST',
+        recommendedTime: '10:00 (test window)',
         contentType: 'Graphic Poster',
-        topic: `Weekend Wisdom: Strategic Foundations for Scaling ${brandName}`,
-        goal: 'Engagement and weekend bookmarking',
-        suggestedCaption: `Sustainable scale is built on clear operating models and reliable execution. #${tagSlug} #Strategy #Scale`,
-        callToAction: 'Save this post for your Monday strategy sync.',
-        hashtags: [`#${tagSlug}`, '#Strategy', '#Scale', '#Vision'],
+        topic: `Weekend Question for the ${brandName} Audience`,
+        goal: 'Test conversation depth',
+        suggestedCaption: 'What is the biggest growth or operational challenge on your desk right now?',
+        callToAction: 'Reply in the comments; we will use the themes to shape future content.',
+        hashtags: [`#${tagSlug}`, '#Community'],
       },
       {
         dayNumber: 7,
         dayName: 'Sunday',
-        recommendedTime: '18:00 SAST',
+        recommendedTime: '18:00 (test window)',
         contentType: 'Educational Article',
-        topic: `Looking Ahead: The Week Ahead in High-Growth Operations with ${brandName}`,
-        goal: 'Preparation and high-intent engagement',
-        suggestedCaption: `Setting priorities for maximum operational impact this upcoming week. #${tagSlug} #WeekAhead #Focus`,
-        callToAction: 'Get in touch to align on next week\'s deliverables.',
-        hashtags: [`#${tagSlug}`, '#WeekAhead', '#Focus', '#GrowthMindset'],
+        topic: `Week-Ahead Planning Prompt from ${brandName}`,
+        goal: 'Test high-intent planning engagement',
+        suggestedCaption: 'Before the new week starts, choose one outcome you want to improve and one metric you will watch.',
+        callToAction: 'Share the metric you are focusing on this week.',
+        hashtags: [`#${tagSlug}`, '#WeekAhead'],
       },
     ];
 
     const result: MariGrowthPlanResult = {
-      title: `7-Day Growth Plan: ${brandName}`,
+      title: `7-Day Growth Experiment Plan: ${brandName}`,
       pageName: brandName,
-      objective: params.focusObjective || 'Audience Engagement & Commercial Inquiries',
+      objective: params.focusObjective || 'Collect comparable audience-response evidence',
       durationDays: 7,
       days,
-      expectedImpact: '+18% Organic Reach Velocity & High-Intent Commercial Inquiries',
+      expectedImpact: 'Experimental plan only — compare reach, reactions, comments, shares and enquiry signals before treating any cadence, format or timing pattern as proven.',
       generatedAt: new Date().toISOString(),
     };
 
@@ -319,6 +310,7 @@ export class MariFacebookGrowthService {
       metadata: {
         pageName: params.context.pageName,
         totalPlanDays: 7,
+        evidenceBoundary: 'TEST_PLAN_NOT_PREDICTED_OUTCOME',
       },
     });
 
@@ -326,7 +318,8 @@ export class MariFacebookGrowthService {
   }
 
   /**
-   * Process contextual user queries about Facebook Page performance
+   * Safe deterministic fallback for legacy callers. The page API now routes user
+   * questions through MariUniversalCore; this method remains intentionally cautious.
    */
   static async askMari(params: {
     context: MariPageContext;
@@ -334,35 +327,47 @@ export class MariFacebookGrowthService {
     userId: string;
   }): Promise<{ answer: string; recommendedAction?: string; suggestedPrompt?: string }> {
     const p = params.prompt.toLowerCase();
-    const brandName = (params.context.pageName && params.context.pageName !== 'No Connected Page') ? params.context.pageName : 'your business';
+    const brandName = (params.context.pageName && params.context.pageName !== 'No Connected Page')
+      ? params.context.pageName
+      : 'your business';
+    const hasMeasuredData = params.context.totalPosts30d > 0 || params.context.totalReach30d > 0;
+    const observedType = params.context.topContentType || 'text';
+    const cadence = Number(params.context.postingFrequencyPerWeek || 0);
+
+    if (!hasMeasuredData) {
+      return {
+        answer: `I do not yet have enough measured Facebook performance evidence for **${brandName}** to claim a winning format, cadence or posting time. Publish a small set of clearly different tests and I can compare the outcomes without inventing missing metrics.`,
+        recommendedAction: 'Create Baseline Test',
+        suggestedPrompt: `Create a measurable baseline Facebook post for ${brandName}.`,
+      };
+    }
 
     if (p.includes('performing') || p.includes('performance') || p.includes('health') || p.includes('status')) {
       return {
-        answer: `Your Facebook Page **${brandName}** has **${params.context.followers} followers** with an engagement rate of **${params.context.engagementRate}%** (benchmark standard is 3.5%). Over the past 30 days, your reach grew by **${params.context.followerGrowthPercentage}%**, driven predominantly by short-form video reels.`,
+        answer: `For **${brandName}**, Ralion currently measures **${params.context.followers} followers**, **${params.context.totalPosts30d} posts in the 30-day window**, **${params.context.totalReach30d} measured reach**, and an engagement rate of **${params.context.engagementRate}%**. The highest observed content type is **${observedType}**, but this context does not prove that format caused better performance. Current measured cadence is **${cadence.toFixed(1)} posts/week**.`,
         recommendedAction: 'View Full Insights',
       };
     }
 
     if (p.includes('post') || p.includes('topic') || p.includes('idea') || p.includes('schedule')) {
       return {
-        answer: `Based on your highest-performing historical content, I recommend posting a **Video Reel** demonstrating a specific customer workflow. The optimal time for your audience is **Tuesday or Thursday morning between 09:30 and 11:00 SAST**.`,
+        answer: `Use **${observedType}** as one test arm because it is the highest observed content type in the current Page data, not because it is a proven winner. Compare it against a clearly different format and CTA. I do not have verified time-of-day evidence in this Page context, so I will not claim an optimal posting time.`,
         recommendedAction: 'Open Content Composer',
-        suggestedPrompt: `Create a 15-second product demonstration reel highlighting ${brandName} solutions.`,
+        suggestedPrompt: `Create an original ${observedType} Facebook test for ${brandName} with one clear CTA and a measurable objective.`,
       };
     }
 
     if (p.includes('plan') || p.includes('7-day') || p.includes('growth')) {
       return {
-        answer: `I have structured a comprehensive 7-Day Growth Plan for **${brandName}**, balancing educational carousels, behind-the-scenes video reels, and product highlight infographics.`,
-        recommendedAction: 'Generate 7-Day Plan',
+        answer: `I can structure a 7-day experiment plan for **${brandName}**. The schedule and formats should be treated as hypotheses to measure, not predicted winners. Current observed cadence is **${cadence.toFixed(1)} posts/week** and the highest observed content type is **${observedType}**.`,
+        recommendedAction: 'Generate 7-Day Test Plan',
       };
     }
 
     return {
-      answer: `Analyzing **${brandName}**: To maximize organic distribution, I suggest maintaining 3–4 posts per week and capitalizing on video formats which currently deliver 62% of your total engagement.`,
-      recommendedAction: 'Create Content',
-      suggestedPrompt: `Draft an executive announcement post introducing new capabilities for ${brandName}.`,
+      answer: `For **${brandName}**, I can verify ${params.context.totalPosts30d} posts in the current 30-day window, ${params.context.totalReach30d} measured reach, an engagement rate of ${params.context.engagementRate}%, and a measured cadence of ${cadence.toFixed(1)} posts/week. **${observedType}** is the highest observed content type, but I do not have evidence here for a specific share of total engagement, a universal posting frequency, or an optimal posting time. Treat the next recommendation as a controlled test and let the outcome ledger update the learning.`,
+      recommendedAction: 'Create Controlled Test',
+      suggestedPrompt: `Design an original Facebook content experiment for ${brandName} using our verified business context and measured Page evidence.`,
     };
   }
 }
-
