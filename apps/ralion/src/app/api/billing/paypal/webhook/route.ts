@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../../lib/cors';
-import { DurablePayPalService } from '@ralion/integrations/server';
+import { DurablePayPalService, PayPalCardVaultService } from '@ralion/integrations/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,7 +33,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await DurablePayPalService.processWebhookEvent(body);
+    const eventType = String(body?.event_type || '');
+    const isVaultEvent = eventType.startsWith('VAULT.PAYMENT-TOKEN.');
+    const result = isVaultEvent
+      ? await PayPalCardVaultService.processVaultWebhook(body)
+      : await DurablePayPalService.processWebhookEvent(body);
+
     if (!result.handled && result.error) {
       return corsJsonResponse(
         { success: false, handled: false, error: result.error },
