@@ -25,6 +25,7 @@ export function normalizeMarkdownText(raw: string): string {
   if (!raw) return '';
 
   let text = raw;
+  text = text.replace(/[\u200B-\u200D\u2060\uFEFF]/g, '');
 
   // 1. Unescape escaped markdown backslashes (\**, \*, \_, \#, \[, \], \(, \), \`, \~)
   text = text.replace(/\\([*_#\[\]()\`~\\-])/g, '$1');
@@ -91,7 +92,12 @@ export function normalizeMarkdownText(raw: string): string {
     return l;
   });
 
-  text = cleanedLines.join('\n');
+  text = cleanedLines
+    .map(line => line
+      .replace(/^(\s*#{1,6}\s+)svg(?=[A-Za-z0-9])/i, '$1')
+      .replace(/^(\s*(?:[-*•]\s+)?)svg(?=[A-Za-z0-9])/i, '$1'))
+    .filter(line => !/^\s*(?:[-*]\s+)?\*\*•\*\*\s*$/.test(line))
+    .join('\n');
 
   // 5. Clean trailing action brackets if any
   text = stripActionBracketsFromText(text);

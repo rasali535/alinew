@@ -181,7 +181,7 @@ export async function POST(
         ? `\n\n${MariBusinessIntelligenceService.toPromptContext(businessIntelligence)}`
         : '';
 
-      const contextualPrompt = `${cleanPrompt}\n\n[EXACT FACEBOOK PAGE EVIDENCE — SERVER VERIFIED]\n${exactPageEvidence}${intelligenceContext}\n\n[FACEBOOK GROWTH SURFACE RULES]\nUse the verified business context, competitive-intelligence evidence and tenant marketing-learning evidence available to Mari. Never invent an engagement share, benchmark, optimal posting frequency, timing window, growth percentage or predicted outcome. If evidence is missing, say it is missing. Treat content-type, timing and cadence patterns as hypotheses unless the evidence ledger supports them. Recommendations must be original and must not copy competitor creative or wording.`;
+      const contextualPrompt = `${cleanPrompt}\n\n[EXACT FACEBOOK PAGE EVIDENCE — SERVER VERIFIED]\n${exactPageEvidence}${intelligenceContext}\n\n[FACEBOOK GROWTH SURFACE RULES]\nUse the verified business context, competitive-intelligence evidence and tenant marketing-learning evidence available to Mari. Never invent an engagement share, benchmark, optimal posting frequency, timing window, growth percentage or predicted outcome. If evidence is missing, say it is missing. Treat content-type, timing and cadence patterns as hypotheses unless the evidence ledger supports them. Recommendations must be original and must not copy competitor creative or wording. Use standard Markdown only. Never prefix headings with the literal token 'svg', never emit decorative bullet tokens such as '**•**', and never escape Markdown heading markers.`;
 
       const result = await MariUniversalCore.processQuery({
         prompt: cleanPrompt,

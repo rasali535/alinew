@@ -901,6 +901,7 @@ export function sanitizeMariModelOutput(raw: string): string {
   if (!raw) return '';
 
   let text = raw
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, '')
     .replace(/\\([*_#\[\]()`~\\-])/g, '$1')
     .replace(/<svg[\s\S]*?<\/svg>/gi, '')
     .replace(/<svg[^>]*>/gi, '')
@@ -917,6 +918,17 @@ export function sanitizeMariModelOutput(raw: string): string {
     .replace(/([A-Za-z0-9),.])\*\*\s+([^*\n]{1,80}?)\s+\*\*(?=[A-Za-z])/g, '$1 **$2** ')
     .replace(/([A-Za-z0-9),.])\*\*\s+([^*\n]{1,80}?)\*\*(?=[\s.,;:!?]|$)/g, '$1 **$2**')
     .replace(/\*\*:\*\*/g, '**:')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  text = text
+    .split(/\r?\n/)
+    .map((line) => line
+      .replace(/^(\s*#{1,6}\s+)svg(?=[A-Za-z0-9])/i, '$1')
+      .replace(/^(\s*(?:[-*•]\s+)?)svg(?=[A-Za-z0-9])/i, '$1')
+      .replace(/^\s*[-*]\s+\*\*•\*\*\s*$/, '')
+      .replace(/^\s*\*\*•\*\*\s*$/, ''))
+    .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 
