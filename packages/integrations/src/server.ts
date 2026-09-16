@@ -17,3 +17,4 @@ export * from './social/adapters/ZernioProvider';
 export * from './social/services/ZernioSocialService';
 export * from './billing/paypal.service';
 export * from './billing/paypalDurable.service';
+export * from './billing/paypalCreateDiagnostics.service';
