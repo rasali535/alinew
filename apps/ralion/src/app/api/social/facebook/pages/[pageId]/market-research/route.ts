@@ -1,7 +1,8 @@
 import { NextRequest } from 'next/server';
 import { MariCompetitiveIntelligenceService } from '@/lib/services/social/mariCompetitiveIntelligence.service';
+import { resolveFacebookPageRouteConnection } from '@/lib/services/social/facebookPageRouteAccess.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
-import { getCurrentRalionContext, authRequiredResponse, forbiddenResponse, getServiceSupabase } from '@/lib/auth/serverAuth';
+import { getCurrentRalionContext, authRequiredResponse, forbiddenResponse } from '@/lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,26 +25,16 @@ export async function GET(
       return authRequiredResponse(request);
     }
 
-    const supabase = getServiceSupabase();
-    const { data: conn } = await supabase
-      .from('social_connections')
-      .select('provider_account_id, zernio_account_id, account_name, metadata')
-      .eq('provider', 'facebook')
-      .eq('connection_status', 'CONNECTED')
-      .or(`workspace_id.eq.${context.workspace.id},user_id.eq.${context.user.id}`)
-      .maybeSingle();
+    const organizationId = context.organization?.id || context.workspace.organization_id || context.workspace.id;
+    const conn = await resolveFacebookPageRouteConnection({
+      organizationId,
+      workspaceId: context.workspace.id,
+      userId: context.user.id,
+      pageId,
+    });
 
-    if (pageId && pageId !== 'default') {
-      const pageMatched =
-        conn &&
-        (conn.provider_account_id === pageId ||
-          conn.zernio_account_id === pageId ||
-          conn.metadata?.pageId === pageId ||
-          conn.metadata?.zernioAccountId === pageId);
-
-      if (!pageMatched) {
-        return forbiddenResponse(request, 'You do not have access to this Facebook Page');
-      }
+    if (pageId && pageId !== 'default' && !conn) {
+      return forbiddenResponse(request, 'You do not have access to this Facebook Page');
     }
 
     if (!conn) {
@@ -53,14 +44,15 @@ export async function GET(
       }, undefined, request);
     }
 
+    const resolvedPageId = conn.provider_account_id || conn.metadata?.pageId || pageId;
     const report = MariCompetitiveIntelligenceService.getMarketResearchReport({
-      pageId: conn.provider_account_id || pageId,
-      organizationId: context.workspace.id,
+      pageId: resolvedPageId,
+      organizationId,
     });
 
     await MariCompetitiveIntelligenceService.auditMarketResearchAccess({
       userId: context.user.id,
-      pageId: conn.provider_account_id || pageId,
+      pageId: resolvedPageId,
     });
 
     return corsJsonResponse({
