@@ -35,6 +35,8 @@ assert(creative.includes('reserveCredits'), 'Creative generation must reserve cr
 assert(creative.includes('finalizeCredits'), 'Creative generation must finalize/release credits');
 assert(paypal.includes('claimWebhookEvent'), 'PayPal webhook processing must be durable/idempotent');
 assert(paypal.includes('tenant metadata does not match'), 'PayPal activation must verify tenant metadata');
+assert(paypal.includes('paypal_next_billing_time'), 'Completed payments must use provider-authoritative next billing time');
+assert(!paypal.includes('currentPeriodEnd: addMonth(existing.currentPeriodEnd)'), 'Completed payments must not blindly extend an already-advanced billing period');
 assert(createRoute.includes('requireRalionContext'), 'PayPal create route must derive tenant from authenticated context');
 assert(verifyRoute.includes('requireRalionContext'), 'PayPal verify route must derive tenant from authenticated context');
 assert(subscriptionRoute.includes('DIRECT_SUBSCRIPTION_MUTATION_DISABLED'), 'Direct customer subscription mutation must be disabled');
