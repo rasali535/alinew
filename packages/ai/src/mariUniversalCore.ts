@@ -897,6 +897,32 @@ function composeSelectiveSystemPrompt(
   return sections.join('\n\n');
 }
 
+export function sanitizeMariModelOutput(raw: string): string {
+  if (!raw) return '';
+
+  let text = raw
+    .replace(/\\([*_#\[\]()`~\\-])/g, '$1')
+    .replace(/<svg[\s\S]*?<\/svg>/gi, '')
+    .replace(/<svg[^>]*>/gi, '')
+    .replace(/<\/?(?:path|rect|circle|g|defs|linearGradient|stop)[^>]*>/gi, '')
+    .replace(/\bsvgSend to Studio\b/gi, 'Send to Studio')
+    .replace(/(^|\n)(\s*#{1,6}\s+)svg(?=[A-Z0-9])/g, '$1$2')
+    .replace(/(^|\n)(\s*(?:[-*•]\s+)?)svg(?=[A-Z0-9])/g, '$1$2')
+    .replace(/\[(Open Growth Studio|View CRM Pipeline|Create Reel|Create Visual|Connect Facebook|Create Growth Campaign|Select Facebook Page)\]/gi, '')
+    .replace(/(^|\n)\s*[-*]\s+\*\*•\*\*\s*/g, '$1- ')
+    .replace(/(^|\n)\s*\*\*•\*\*\s*/g, '$1- ')
+    .replace(/(^|\n)\s*[-*•]\s*(?=\n|$)/g, '$1')
+    .replace(/(^|\n)(\s*[-*•]\s+)([A-Za-z0-9][A-Za-z0-9 /&()'’–—-]{1,80})\*\*:\s*/g, '$1$2**$3**: ')
+    .replace(/\b(The|A|An)\*\*\s+([^*\n]{1,80}?)\s+\*\*(?=[A-Za-z])/g, '$1 **$2** ')
+    .replace(/([A-Za-z0-9),.])\*\*\s+([^*\n]{1,80}?)\s+\*\*(?=[A-Za-z])/g, '$1 **$2** ')
+    .replace(/([A-Za-z0-9),.])\*\*\s+([^*\n]{1,80}?)\*\*(?=[\s.,;:!?]|$)/g, '$1 **$2**')
+    .replace(/\*\*:\*\*/g, '**:')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  return text;
+}
+
 async function callGeminiNeuralCore(
   cleanUserPrompt: string,
   context: BusinessContext | null,
@@ -1008,12 +1034,7 @@ SERVER CONTEXT RULES:
         continue;
       }
 
-      const cleanText = candidateText
-        .replace(/\\(\*|_|#|\[|\]|\(|\)|`)/g, '$1')
-        .replace(/svgSend to Studio/gi, 'Send to Studio')
-        .replace(/<svg[\s\S]*?<\/svg>/gi, '')
-        .replace(/\[(Open Growth Studio|View CRM Pipeline|Create Reel|Create Visual|Connect Facebook|Create Growth Campaign|Select Facebook Page)\]/gi, '')
-        .trim();
+      const cleanText = sanitizeMariModelOutput(candidateText);
 
       const promptTokens = data.usageMetadata?.promptTokenCount || estimateTokenCount(cleanUserPrompt);
       const completionTokens = data.usageMetadata?.candidatesTokenCount || estimateTokenCount(cleanText);
