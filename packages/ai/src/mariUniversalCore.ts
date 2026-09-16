@@ -39,7 +39,7 @@ import { CreativeAssetService } from './creativeAsset.service';
 const MARI_CLASSIFIER_MODEL = process.env.MARI_GEMINI_CLASSIFIER_MODEL || 'gemini-3.5-flash';
 const MARI_RESPONSE_MODEL = process.env.MARI_GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-3.5-flash';
 const MARI_CLASSIFIER_PROVIDER_BUDGET_MS = Math.max(1000, Number(process.env.MARI_CLASSIFIER_PROVIDER_BUDGET_MS || 2500));
-const MARI_RESPONSE_PROVIDER_BUDGET_MS = Math.max(2500, Number(process.env.MARI_RESPONSE_PROVIDER_BUDGET_MS || 7000));
+const MARI_RESPONSE_PROVIDER_BUDGET_MS = Math.max(5000, Number(process.env.MARI_RESPONSE_PROVIDER_BUDGET_MS || 12000));
 
 function modelsWithStableFallback(configuredModel: string): string[] {
   return Array.from(new Set([configuredModel.trim(), 'gemini-3.5-flash'].filter(Boolean))).slice(0, 2);
@@ -1033,6 +1033,10 @@ SERVER CONTEXT RULES:
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiKey}`;
 
     try {
+      const generationConfig: Record<string, any> = { maxOutputTokens: 1800 };
+      if (/^gemini-3(?:\.|-)/i.test(modelName)) {
+        generationConfig.thinkingConfig = { thinkingLevel: 'low' };
+      }
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1041,10 +1045,7 @@ SERVER CONTEXT RULES:
             parts: [{ text: systemInstruction }],
           },
           contents,
-          generationConfig: {
-            temperature: 0.4,
-            maxOutputTokens: 1500,
-          },
+          generationConfig,
         }),
         signal: AbortSignal.timeout(remainingProviderMs),
       });
