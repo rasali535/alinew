@@ -1,7 +1,9 @@
 import { NextRequest } from 'next/server';
+import { BusinessContextService, MariUniversalCore } from '@ralion/ai/server';
 import { FacebookPageManagementService } from '@/lib/services/social/facebookPageManagement.service';
 import { resolveFacebookPageRouteConnection } from '@/lib/services/social/facebookPageRouteAccess.service';
 import { MariFacebookGrowthService, MariPageContext } from '@/lib/services/social/mariFacebookGrowth.service';
+import { MariBusinessIntelligenceService } from '@/lib/services/mari/mariBusinessIntelligence.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 import { getCurrentRalionContext, authRequiredResponse, forbiddenResponse } from '@/lib/auth/serverAuth';
 
@@ -23,10 +25,14 @@ export async function POST(
     }
 
     const organizationId = serverCtx.organization?.id || serverCtx.workspace.organization_id || serverCtx.workspace.id;
+    const workspaceId = serverCtx.workspace.id;
+    const userId = serverCtx.user.id;
+    const companyName = serverCtx.organization?.name || serverCtx.workspace.name || '';
+
     const conn = await resolveFacebookPageRouteConnection({
       organizationId,
-      workspaceId: serverCtx.workspace.id,
-      userId: serverCtx.user.id,
+      workspaceId,
+      userId,
       pageId,
     });
 
@@ -34,7 +40,7 @@ export async function POST(
       return forbiddenResponse(request, 'You do not have access to this Facebook Page');
     }
 
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
 
     if (!conn) {
       const action = body.action || 'GET_INSIGHTS';
@@ -45,8 +51,8 @@ export async function POST(
         return corsJsonResponse({
           success: true,
           chat: {
-            text: 'Connect your Facebook Page to unlock real-time Mari AI audience growth intelligence.',
-            action: 'CONNECT_PAGE',
+            answer: 'Connect your Facebook Page to unlock real-time Mari AI audience growth intelligence.',
+            recommendedAction: 'Connect Page',
           },
         }, undefined, request);
       }
@@ -58,8 +64,8 @@ export async function POST(
     // Retrieve normalized analytics strictly for this tenant and exact Page.
     const analytics = await FacebookPageManagementService.getPageAnalytics({
       organizationId,
-      workspaceId: serverCtx.workspace.id,
-      userId: serverCtx.user.id,
+      workspaceId,
+      userId,
       pageId: resolvedPageId,
     });
 
@@ -72,8 +78,8 @@ export async function POST(
         return corsJsonResponse({
           success: true,
           chat: {
-            text: 'Connect your Facebook Page to unlock real-time Mari AI audience growth intelligence.',
-            action: 'CONNECT_PAGE',
+            answer: 'Connect your Facebook Page to unlock real-time Mari AI audience growth intelligence.',
+            recommendedAction: 'Connect Page',
           },
         }, undefined, request);
       }
@@ -92,7 +98,7 @@ export async function POST(
       totalReach30d: analytics.totalReach30d,
       totalImpressions30d: analytics.totalImpressions30d,
       topContentType: analytics.topContentType,
-      postingFrequencyPerWeek: 2,
+      postingFrequencyPerWeek: Number((((analytics.totalPosts30d || 0) / (30 / 7))).toFixed(2)),
     };
 
     const action = body.action || 'GET_INSIGHTS';
@@ -100,24 +106,120 @@ export async function POST(
     if (action === 'GET_PLAN') {
       const plan = await MariFacebookGrowthService.generate7DayGrowthPlan({
         context,
-        userId: serverCtx.user.id,
+        userId,
         focusObjective: body.objective,
       });
       return corsJsonResponse({ success: true, plan }, undefined, request);
     }
 
     if (action === 'ASK_MARI') {
-      const chatRes = await MariFacebookGrowthService.askMari({
-        context,
-        prompt: body.prompt || 'How is my page performing?',
-        userId: serverCtx.user.id,
+      const cleanPrompt = String(body.prompt || 'How is my Facebook Page performing?').trim();
+
+      let businessContext: any = null;
+      let businessIntelligence: any = null;
+      let facebookPosts: any[] = [];
+
+      try {
+        facebookPosts = await FacebookPageManagementService.getPagePosts({
+          organizationId,
+          workspaceId,
+          userId,
+          pageId: resolvedPageId,
+          limit: 100,
+        });
+      } catch (postError: any) {
+        console.warn('[Mari Growth API] Facebook post evidence notice:', postError?.message || postError);
+      }
+
+      try {
+        businessContext = await BusinessContextService.assembleContext(organizationId, {
+          organizationId,
+          workspaceId,
+          userId,
+          companyName,
+          activeScreen: {
+            route: '/growth',
+            label: 'Facebook Growth Intelligence',
+            entityId: resolvedPageId,
+          },
+        });
+      } catch (contextError: any) {
+        console.warn('[Mari Growth API] Business context notice:', contextError?.message || contextError);
+      }
+
+      try {
+        businessIntelligence = await MariBusinessIntelligenceService.getBusinessIntelligence({
+          organizationId,
+          workspaceId,
+          userId,
+          companyName,
+          businessContext: businessContext || undefined,
+          facebookPage: {
+            pageId: resolvedPageId,
+            name: analytics.pageName,
+            followersCount: analytics.followers,
+            status: 'CONNECTED',
+          } as any,
+          facebookPosts,
+        });
+      } catch (intelligenceError: any) {
+        console.warn('[Mari Growth API] Business intelligence notice:', intelligenceError?.message || intelligenceError);
+      }
+
+      const exactPageEvidence = [
+        `Facebook Page: ${analytics.pageName}`,
+        `Followers: ${analytics.followers}`,
+        `Posts in measured 30-day window: ${analytics.totalPosts30d}`,
+        `Measured reach: ${analytics.totalReach30d}`,
+        `Measured impressions: ${analytics.totalImpressions30d}`,
+        `Observed engagement rate: ${analytics.engagementRate}%`,
+        `Highest observed content type: ${analytics.topContentType || 'not established'}`,
+        `Measured publishing cadence: ${context.postingFrequencyPerWeek} posts/week`,
+      ].join('\n');
+
+      const intelligenceContext = businessIntelligence
+        ? `\n\n${MariBusinessIntelligenceService.toPromptContext(businessIntelligence)}`
+        : '';
+
+      const contextualPrompt = `${cleanPrompt}\n\n[EXACT FACEBOOK PAGE EVIDENCE — SERVER VERIFIED]\n${exactPageEvidence}${intelligenceContext}\n\n[FACEBOOK GROWTH SURFACE RULES]\nUse the verified business context, competitive-intelligence evidence and tenant marketing-learning evidence available to Mari. Never invent an engagement share, benchmark, optimal posting frequency, timing window, growth percentage or predicted outcome. If evidence is missing, say it is missing. Treat content-type, timing and cadence patterns as hypotheses unless the evidence ledger supports them. Recommendations must be original and must not copy competitor creative or wording.`;
+
+      const result = await MariUniversalCore.processQuery({
+        prompt: cleanPrompt,
+        originalUserPrompt: cleanPrompt,
+        contextualPrompt,
+        businessContext: businessContext || undefined,
+        organizationId,
+        workspaceId,
+        userId,
+        companyName,
+        activeScreen: {
+          route: '/growth',
+          label: 'Facebook Growth Intelligence',
+          entityId: resolvedPageId,
+        },
+        requestId: `fb_growth_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       });
-      return corsJsonResponse({ success: true, chat: chatRes }, undefined, request);
+
+      const firstAction = Array.isArray(result.suggestedActions) ? result.suggestedActions[0] : undefined;
+      return corsJsonResponse({
+        success: true,
+        chat: {
+          answer: result.answer,
+          recommendedAction: firstAction?.label,
+          suggestedPrompt: firstAction?.payload?.prompt || firstAction?.payload?.suggestedPrompt,
+          evidence: {
+            contextSources: result.contextSources || [],
+            responseSource: result.responseSource,
+            modelSucceeded: result.modelSucceeded,
+            businessIntelligenceLoaded: Boolean(businessIntelligence),
+          },
+        },
+      }, undefined, request);
     }
 
     const insights = await MariFacebookGrowthService.generateGrowthInsights({
       context,
-      userId: serverCtx.user.id,
+      userId,
     });
 
     return corsJsonResponse({
@@ -126,6 +228,7 @@ export async function POST(
       insights: insights.insights,
     }, undefined, request);
   } catch (err: any) {
+    console.error('[Mari Growth API] Exception:', err);
     return corsJsonResponse(
       { success: false, error: err.message || 'Failed to process Mari Growth Intelligence' },
       { status: 500 },
