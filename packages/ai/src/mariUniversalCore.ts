@@ -912,7 +912,7 @@ export function sanitizeMariModelOutput(raw: string): string {
 
   let text = raw
     .replace(/[\u200B-\u200D\u2060\uFEFF]/g, '')
-    .replace(/\\([*_#\[\]()`~\\-])/g, '$1')
+    .replace(/\\+([*_#\[\]()`~\\-])/g, '$1')
     .replace(/<svg[\s\S]*?<\/svg>/gi, '')
     .replace(/<svg[^>]*>/gi, '')
     .replace(/<\/?(?:path|rect|circle|g|defs|linearGradient|stop)[^>]*>/gi, '')
