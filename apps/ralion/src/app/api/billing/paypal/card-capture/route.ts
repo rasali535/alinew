@@ -1,9 +1,8 @@
 import { NextRequest } from 'next/server';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../../lib/cors';
 import { requireRalionContext } from '../../../../../lib/auth/serverAuth';
-import { DurableBillingDatabaseService } from '@ralion/database/server';
-import { TenantCreditsService } from '@ralion/ai/server';
-import { PLAN_CATALOG } from '@ralion/auth';
+import { DurableBillingDatabaseService, PayPalCardVaultBillingStore } from '@ralion/database/server';
+import { DurableTenantCreditsService } from '@ralion/ai/server';
 import { PayPalCardVaultService } from '@ralion/integrations/server';
 
 export const dynamic = 'force-dynamic';
@@ -17,13 +16,25 @@ export async function POST(request: NextRequest) {
     if (!['owner', 'admin'].includes(ctx.membership.role)) {
       return corsJsonResponse({ success: false, code: 'BILLING_ADMIN_REQUIRED', error: 'Only an organization owner or administrator can change the subscription.' }, { status: 403 }, request);
     }
+
     const { orderId } = await request.json().catch(() => ({}));
     const organizationId = ctx.organization?.id || ctx.workspace.organization_id || ctx.workspace.id;
     const result = await PayPalCardVaultService.captureOrder(String(orderId || ''), organizationId);
+    const existing = await DurableBillingDatabaseService.getSubscription(organizationId);
+
+    if (existing.metadata?.paypalCaptureId === result.captureId && existing.status === 'ACTIVE') {
+      return corsJsonResponse({
+        success: true,
+        idempotent: true,
+        planId: existing.planId,
+        status: existing.status,
+        vaultStatus: existing.metadata?.paypalVaultStatus || result.vaultStatus || 'PENDING',
+      }, undefined, request);
+    }
+
     const now = new Date();
     const end = new Date(now);
     end.setUTCMonth(end.getUTCMonth() + 1);
-    const existing = await DurableBillingDatabaseService.getSubscription(organizationId);
     const saved = await DurableBillingDatabaseService.saveSubscription({
       ...existing,
       organizationId,
@@ -32,21 +43,26 @@ export async function POST(request: NextRequest) {
       billingCycle: 'MONTHLY',
       provider: 'paypal',
       providerSubscriptionId: result.orderId,
-      providerCustomerId: result.customerId,
+      providerCustomerId: result.customerId || existing.providerCustomerId,
       providerPlanId: undefined,
       currentPeriodStart: now.toISOString(),
       currentPeriodEnd: end.toISOString(),
       cancelAtPeriodEnd: false,
+      canceledAt: undefined,
       metadata: {
         ...(existing.metadata || {}),
         billingMode: 'paypal_card_vault',
-        paypalVaultId: result.vaultId || null,
-        paypalVaultStatus: result.vaultStatus || null,
+        paypalVaultId: result.vaultId || existing.metadata?.paypalVaultId || null,
+        paypalVaultStatus: result.vaultStatus || existing.metadata?.paypalVaultStatus || 'PENDING',
         paypalCaptureId: result.captureId,
+        lastPayPalCaptureId: result.captureId,
+        paypalOrderId: result.orderId,
         billingReference: result.billingReference,
+        activatedAt: now.toISOString(),
       },
       updatedAt: now.toISOString(),
     });
+
     await DurableBillingDatabaseService.recordTransaction({
       organizationId,
       subscriptionId: saved.id,
@@ -55,11 +71,27 @@ export async function POST(request: NextRequest) {
       amount: result.amount,
       currency: result.currency,
       status: 'COMPLETED',
-      eventType: 'PAYMENT_COMPLETED',
+      eventType: 'PAYPAL_CARD_INITIAL_PAYMENT_COMPLETED',
       description: `Ralion OS ${result.planId} initial card payment`,
+      rawEventData: { orderId: result.orderId, billingReference: result.billingReference },
     });
-    await TenantCreditsService.addCredits(organizationId, PLAN_CATALOG[result.planId].monthlyCreditQuota, `PayPal card subscription activated (${PLAN_CATALOG[result.planId].name})`);
-    return corsJsonResponse({ success: true, planId: result.planId, status: 'ACTIVE', vaultStatus: result.vaultStatus || 'PENDING' }, undefined, request);
+
+    if (result.customerId) {
+      await PayPalCardVaultBillingStore.patchVaultMetadata({
+        organizationId,
+        vaultId: result.vaultId || null,
+        customerId: result.customerId,
+        vaultStatus: result.vaultStatus || (result.vaultId ? 'VAULTED' : 'APPROVED'),
+      });
+    }
+
+    await DurableTenantCreditsService.syncWallet(organizationId, result.planId);
+    return corsJsonResponse({
+      success: true,
+      planId: result.planId,
+      status: 'ACTIVE',
+      vaultStatus: result.vaultStatus || (result.vaultId ? 'VAULTED' : 'APPROVED'),
+    }, undefined, request);
   } catch (error: any) {
     console.error('[PayPal Card Capture] Error:', error);
     return corsJsonResponse({ success: false, error: error instanceof Error ? error.message : 'Unable to capture card checkout.' }, { status: 400 }, request);
