@@ -3,6 +3,7 @@ import { BusinessContextService } from '@ralion/ai/server';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../lib/cors';
 import { requireRalionContext } from '../../../../lib/auth/serverAuth';
 import { MariBusinessIntelligenceService } from '../../../../lib/services/mari/mariBusinessIntelligence.service';
+import { MariMarketingLearningService } from '../../../../lib/services/mari/mariMarketingLearning.service';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +13,8 @@ export async function OPTIONS(request: NextRequest) {
 
 /**
  * GET /api/mari/intelligence
- * Returns a deterministic, server-derived tenant Business Intelligence snapshot.
+ * Returns a deterministic, server-derived tenant Business Intelligence snapshot
+ * and refreshes evidence-backed marketing learnings from the same trusted data.
  * Client-supplied tenant IDs are never used as authority.
  */
 export async function GET(request: NextRequest) {
@@ -41,9 +43,19 @@ export async function GET(request: NextRequest) {
       businessContext,
     });
 
+    let learningRefresh: any = { learned: 0, reason: 'NOT_ATTEMPTED' };
+    try {
+      learningRefresh = await MariMarketingLearningService.refreshFromBusinessIntelligence({ organizationId, workspaceId, userId }, intelligence);
+    } catch (learningError: any) {
+      // BI remains available even when the learning ledger is temporarily unavailable.
+      console.error('[Mari Intelligence API] Marketing learning refresh failed:', learningError?.message || learningError);
+      learningRefresh = { learned: 0, reason: 'LEARNING_REFRESH_FAILED' };
+    }
+
     return corsJsonResponse({
       success: true,
       intelligence,
+      learningRefresh,
     }, undefined, request);
   } catch (error: any) {
     console.error('[Mari Intelligence API] Exception:', error);
