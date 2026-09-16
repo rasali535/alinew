@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../../lib/cors';
 import { requireRalionContext } from '../../../../../lib/auth/serverAuth';
-import { DurablePayPalService } from '@ralion/integrations/server';
+import { createPayPalSubscriptionWithDiagnostics } from '@ralion/integrations/server';
 import { DurableBillingDatabaseService } from '@ralion/database/server';
 import { SubscriptionPlanId } from '@ralion/database';
 
@@ -58,9 +58,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Never create a second PayPal subscription for an organization that still
-    // has a paid subscription relationship. Paid-to-paid plan changes must use
-    // an explicit provider revision flow rather than starting another checkout.
     const existing = await DurableBillingDatabaseService.getSubscription(organizationId);
     const periodEndMs = new Date(existing.currentPeriodEnd).getTime();
     const periodEnded = Number.isFinite(periodEndMs) && periodEndMs <= Date.now();
@@ -80,7 +77,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await DurablePayPalService.createSubscription({
+    const result = await createPayPalSubscriptionWithDiagnostics({
       organizationId,
       planId: validPlan,
       billingCycle: 'MONTHLY',
@@ -89,7 +86,12 @@ export async function POST(request: NextRequest) {
 
     if (!result.success) {
       return corsJsonResponse(
-        { success: false, error: result.error || 'Failed to create PayPal subscription.' },
+        {
+          success: false,
+          code: 'PAYPAL_CREATE_FAILED',
+          error: result.error || 'Failed to create PayPal subscription.',
+          providerError: result.providerError,
+        },
         { status: 400 },
         request
       );
