@@ -36,6 +36,16 @@ import { TenantCreditsService, CREDIT_COSTS } from './tenantCredits.service';
 import { CreativeOrchestrator } from './creativeOrchestrator.service';
 import { CreativeAssetService } from './creativeAsset.service';
 
+const MARI_CLASSIFIER_MODEL = process.env.MARI_GEMINI_CLASSIFIER_MODEL || 'gemini-3.5-flash-lite';
+const MARI_RESPONSE_MODEL = process.env.MARI_GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-3.5-flash';
+const MARI_CLASSIFIER_PROVIDER_BUDGET_MS = Math.max(1000, Number(process.env.MARI_CLASSIFIER_PROVIDER_BUDGET_MS || 3000));
+const MARI_RESPONSE_PROVIDER_BUDGET_MS = Math.max(8000, Number(process.env.MARI_RESPONSE_PROVIDER_BUDGET_MS || 18000));
+const MARI_RESPONSE_PRIMARY_ATTEMPT_BUDGET_MS = Math.max(4000, Number(process.env.MARI_RESPONSE_PRIMARY_ATTEMPT_BUDGET_MS || 9000));
+
+function modelsWithStableFallback(configuredModel: string): string[] {
+  return Array.from(new Set([configuredModel.trim(), 'gemini-3.5-flash', 'gemini-3.5-flash-lite'].filter(Boolean))).slice(0, 3);
+}
+
 export function getMariBuildVersion(): string {
   if (typeof process !== 'undefined' && process.env) {
     const envVer =
@@ -255,12 +265,15 @@ Classification Rules:
     parts: [{ text: `Classify the following user input:\n"${cleanUserPrompt}"` }],
   });
 
-  const modelsToTry = [
-    'gemini-2.5-flash-lite',
-    'gemini-3.5-flash',
-  ];
+  const modelsToTry = modelsWithStableFallback(MARI_CLASSIFIER_MODEL);
+  const providerDeadlineAt = Date.now() + MARI_CLASSIFIER_PROVIDER_BUDGET_MS;
 
   for (const modelName of modelsToTry) {
+    const remainingProviderMs = providerDeadlineAt - Date.now();
+    if (remainingProviderMs <= 0) {
+      modelErrors[modelName] = 'PROVIDER_TIMEOUT';
+      break;
+    }
     modelsAttempted.push(modelName);
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiKey}`;
 
@@ -274,11 +287,12 @@ Classification Rules:
           },
           contents,
           generationConfig: {
-            temperature: 0.1,
             maxOutputTokens: 800,
             responseMimeType: 'application/json',
+            thinkingConfig: { thinkingLevel: 'minimal' },
           },
         }),
+        signal: AbortSignal.timeout(remainingProviderMs),
       });
 
       if (!response.ok) {
@@ -330,7 +344,8 @@ Classification Rules:
         modelErrors,
       };
     } catch (err: any) {
-      modelErrors[modelName] = 'PROVIDER_EXCEPTION';
+      const isTimeout = err?.name === 'TimeoutError' || err?.name === 'AbortError';
+      modelErrors[modelName] = isTimeout ? 'PROVIDER_TIMEOUT' : 'PROVIDER_EXCEPTION';
       continue;
     }
   }
@@ -893,6 +908,44 @@ function composeSelectiveSystemPrompt(
   return sections.join('\n\n');
 }
 
+export function sanitizeMariModelOutput(raw: string): string {
+  if (!raw) return '';
+
+  let text = raw
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, '')
+    .replace(/\\+([*_#\[\]()`~\\-])/g, '$1')
+    .replace(/<svg[\s\S]*?<\/svg>/gi, '')
+    .replace(/<svg[^>]*>/gi, '')
+    .replace(/<\/?(?:path|rect|circle|g|defs|linearGradient|stop)[^>]*>/gi, '')
+    .replace(/\bsvgSend to Studio\b/gi, 'Send to Studio')
+    .replace(/(^|\n)(\s*#{1,6}\s+)svg(?=[A-Z0-9])/g, '$1$2')
+    .replace(/(^|\n)(\s*(?:[-*•]\s+)?)svg(?=[A-Z0-9])/g, '$1$2')
+    .replace(/\[(Open Growth Studio|View CRM Pipeline|Create Reel|Create Visual|Connect Facebook|Create Growth Campaign|Select Facebook Page)\]/gi, '')
+    .replace(/(^|\n)\s*[-*]\s+\*\*•\*\*\s*/g, '$1- ')
+    .replace(/(^|\n)\s*\*\*•\*\*\s*/g, '$1- ')
+    .replace(/(^|\n)\s*[-*•]\s*(?=\n|$)/g, '$1')
+    .replace(/(^|\n)(\s*[-*•]\s+)([A-Za-z0-9][A-Za-z0-9 /&()'’–—-]{1,80})\*\*:\s*/g, '$1$2**$3**: ')
+    .replace(/\b(The|A|An)\*\*\s+([^*\n]{1,80}?)\s+\*\*(?=[A-Za-z])/g, '$1 **$2** ')
+    .replace(/([A-Za-z0-9),.])\*\*\s+([^*\n]{1,80}?)\s+\*\*(?=[A-Za-z])/g, '$1 **$2** ')
+    .replace(/([A-Za-z0-9),.])\*\*\s+([^*\n]{1,80}?)\*\*(?=[\s.,;:!?]|$)/g, '$1 **$2**')
+    .replace(/\*\*:\*\*/g, '**:')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  text = text
+    .split(/\r?\n/)
+    .map((line) => line
+      .replace(/^(\s*#{1,6}\s+)svg(?=[A-Za-z0-9])/i, '$1')
+      .replace(/^(\s*(?:[-*•]\s+)?)svg(?=[A-Za-z0-9])/i, '$1')
+      .replace(/^\s*[-*]\s+\*\*•\*\*\s*$/, '')
+      .replace(/^\s*\*\*•\*\*\s*$/, ''))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  return text;
+}
+
 async function callGeminiNeuralCore(
   cleanUserPrompt: string,
   context: BusinessContext | null,
@@ -921,7 +974,7 @@ async function callGeminiNeuralCore(
     return {
       text: '',
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-      model: 'gemini-3.5-flash',
+      model: MARI_RESPONSE_MODEL,
       modelsAttempted,
       modelErrors: { all: 'API_KEY_MISSING' },
       error: 'API_KEY_MISSING',
@@ -966,17 +1019,28 @@ SERVER CONTEXT RULES:
     parts: [{ text: cleanUserPrompt }],
   });
 
-  const modelsToTry = [
-    'gemini-3.5-flash',
-    'gemini-2.5-flash-lite',
-  ];
+  const modelsToTry = modelsWithStableFallback(MARI_RESPONSE_MODEL);
   let lastError = '';
+  const providerDeadlineAt = Date.now() + MARI_RESPONSE_PROVIDER_BUDGET_MS;
 
   for (const modelName of modelsToTry) {
+    const remainingProviderMs = providerDeadlineAt - Date.now();
+    if (remainingProviderMs <= 0) {
+      lastError = 'PROVIDER_TIMEOUT';
+      modelErrors[modelName] = 'PROVIDER_TIMEOUT';
+      break;
+    }
+    const attemptBudgetMs = modelName === modelsToTry[0]
+    ? Math.min(remainingProviderMs, MARI_RESPONSE_PRIMARY_ATTEMPT_BUDGET_MS)
+    : remainingProviderMs;
     modelsAttempted.push(modelName);
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiKey}`;
 
     try {
+      const generationConfig: Record<string, any> = { maxOutputTokens: 1800 };
+      if (/^gemini-3(?:\.|-)/i.test(modelName)) {
+        generationConfig.thinkingConfig = { thinkingLevel: /flash-lite/i.test(modelName) ? 'minimal' : 'low' };
+      }
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -985,18 +1049,15 @@ SERVER CONTEXT RULES:
             parts: [{ text: systemInstruction }],
           },
           contents,
-          generationConfig: {
-            temperature: 0.4,
-            maxOutputTokens: 1500,
-          },
+          generationConfig,
         }),
+        signal: AbortSignal.timeout(attemptBudgetMs),
       });
 
       if (!response.ok) {
-        const errBody = await response.text().catch(() => '');
         lastError = `HTTP_${response.status}`;
         modelErrors[modelName] = `HTTP_${response.status}`;
-        console.warn(`[MariCore] Gemini (${modelName}) HTTP ${response.status}:`, errBody);
+        console.warn(`[MariCore] Gemini (${modelName}) request failed`, { status: response.status });
         continue;
       }
 
@@ -1008,12 +1069,7 @@ SERVER CONTEXT RULES:
         continue;
       }
 
-      const cleanText = candidateText
-        .replace(/\\(\*|_|#|\[|\]|\(|\)|`)/g, '$1')
-        .replace(/svgSend to Studio/gi, 'Send to Studio')
-        .replace(/<svg[\s\S]*?<\/svg>/gi, '')
-        .replace(/\[(Open Growth Studio|View CRM Pipeline|Create Reel|Create Visual|Connect Facebook|Create Growth Campaign|Select Facebook Page)\]/gi, '')
-        .trim();
+      const cleanText = sanitizeMariModelOutput(candidateText);
 
       const promptTokens = data.usageMetadata?.promptTokenCount || estimateTokenCount(cleanUserPrompt);
       const completionTokens = data.usageMetadata?.candidatesTokenCount || estimateTokenCount(cleanText);
@@ -1030,16 +1086,17 @@ SERVER CONTEXT RULES:
         modelErrors,
       };
     } catch (err: any) {
-      lastError = 'PROVIDER_EXCEPTION';
-      modelErrors[modelName] = 'PROVIDER_EXCEPTION';
-      console.warn(`[MariCore] Gemini (${modelName}) API exception:`, err.message);
+      const isTimeout = err?.name === 'TimeoutError' || err?.name === 'AbortError';
+      lastError = isTimeout ? 'PROVIDER_TIMEOUT' : 'PROVIDER_EXCEPTION';
+      modelErrors[modelName] = lastError;
+      console.warn(`[MariCore] Gemini (${modelName}) request ${isTimeout ? 'timed out' : 'exception'}`);
     }
   }
 
   return {
     text: '',
     usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-    model: modelsAttempted[0] || 'gemini-3.5-flash',
+    model: modelsAttempted[0] || MARI_RESPONSE_MODEL,
     modelsAttempted,
     modelErrors,
     error: lastError || 'ALL_MODELS_FAILED',
@@ -1337,7 +1394,7 @@ export class MariUniversalCore {
     };
     semanticDecisionSource = 'DETERMINISTIC_CLASSIFICATION';
   } else if (!request.forceLocalOnly) {
-      classificationModelAttempted = 'gemini-2.5-flash-lite';
+      classificationModelAttempted = MARI_CLASSIFIER_MODEL;
       const modelClassification = await callGeminiSemanticClassifier(
         cleanOriginalPrompt,
         conversationHistory,
@@ -1354,7 +1411,7 @@ export class MariUniversalCore {
           Object.assign(modelFailureCodes, modelClassification.modelErrors);
         }
         if (modelClassification.model) {
-          classificationModelAttempted = modelClassification.modelsAttempted[0] || 'gemini-2.5-flash-lite';
+          classificationModelAttempted = modelClassification.modelsAttempted[0] || MARI_CLASSIFIER_MODEL;
           classificationModelSucceeded = true;
           classificationTokens = modelClassification.usage;
           semanticDecision = modelClassification.decision;
@@ -1822,8 +1879,8 @@ export class MariUniversalCore {
     let usage: MariTokenUsage = { ...classificationTokens };
     let suggestedActions: MariActionPayload[] = [];
 
-    responseModelAttempted = 'gemini-3.5-flash';
-    modelAttempted = 'gemini-3.5-flash';
+    responseModelAttempted = MARI_RESPONSE_MODEL;
+    modelAttempted = MARI_RESPONSE_MODEL;
 
     if (!request.forceLocalOnly) {
       const geminiResult = await callGeminiNeuralCore(
@@ -1854,8 +1911,8 @@ export class MariUniversalCore {
           };
           actualModelUsed = geminiResult.model;
           modelUsed = `Mari Neural Engine (${geminiResult.model})`;
-          modelAttempted = geminiResult.modelsAttempted[0] || 'gemini-3.5-flash';
-          responseModelAttempted = geminiResult.modelsAttempted[0] || 'gemini-3.5-flash';
+          modelAttempted = geminiResult.modelsAttempted[0] || MARI_RESPONSE_MODEL;
+          responseModelAttempted = geminiResult.modelsAttempted[0] || MARI_RESPONSE_MODEL;
           responseModelSucceeded = true;
           responseSource = 'gemini';
           modelSucceeded = true;

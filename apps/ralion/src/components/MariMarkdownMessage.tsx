@@ -2,7 +2,6 @@
 
 import React from 'react';
 import {
-  Sparkles,
   ExternalLink,
   Film,
   Image as ImageIcon,
@@ -11,6 +10,28 @@ import {
 interface MariMarkdownMessageProps {
   text: string;
   isUser?: boolean;
+}
+
+function decodeMarkdownHtmlEntities(value: string): string {
+  return value
+    .replace(/&#(\d+);/g, (match, decimal) => {
+      const codePoint = Number(decimal);
+      return Number.isInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff
+        ? String.fromCodePoint(codePoint)
+        : match;
+    })
+    .replace(/&#x([0-9a-f]+);/gi, (match, hex) => {
+      const codePoint = Number.parseInt(hex, 16);
+      return Number.isInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff
+        ? String.fromCodePoint(codePoint)
+        : match;
+    })
+    .replace(/&apos;/gi, "'")
+    .replace(/&quot;/gi, '"')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>');
 }
 
 /**
@@ -24,10 +45,11 @@ interface MariMarkdownMessageProps {
 export function normalizeMarkdownText(raw: string): string {
   if (!raw) return '';
 
-  let text = raw;
+  let text = decodeMarkdownHtmlEntities(raw);
+  text = text.replace(/[\u200B-\u200D\u2060\uFEFF]/g, '');
 
   // 1. Unescape escaped markdown backslashes (\**, \*, \_, \#, \[, \], \(, \), \`, \~)
-  text = text.replace(/\\([*_#\[\]()\`~\\-])/g, '$1');
+  text = text.replace(/\\+([*_#\[\]()\`~\\-])/g, '$1');
 
   // 2. Strip raw SVG markup and artifact button tags
   text = text
@@ -39,7 +61,8 @@ export function normalizeMarkdownText(raw: string): string {
     .replace(/\bsvgSend to Studio\b/gi, '')
     .replace(/svgSend to Studio/gi, '')
     .replace(/svg[A-Za-z0-9 ]*Send to Studio/gi, '')
-    .replace(/\bsvg[A-Z][a-zA-Z0-9 ]*/g, '')
+    .replace(/(^|\n)(\s*#{1,6}\s+)svg(?=[A-Z0-9])/g, '$1$2')
+    .replace(/(^|\n)(\s*(?:[-*•]\s+)?)svg(?=[A-Z0-9])/g, '$1$2')
     .replace(/(?:^|\s)svg(?:\s|$)/g, ' ');
 
   // 2.5. Normalize malformed bold bullet tokens like "**•**Source**" or "**•**"
@@ -90,7 +113,12 @@ export function normalizeMarkdownText(raw: string): string {
     return l;
   });
 
-  text = cleanedLines.join('\n');
+  text = cleanedLines
+    .map(line => line
+      .replace(/^(\s*#{1,6}\s+)svg(?=[A-Za-z0-9])/i, '$1')
+      .replace(/^(\s*(?:[-*•]\s+)?)svg(?=[A-Za-z0-9])/i, '$1'))
+    .filter(line => !/^\s*(?:[-*]\s+)?\*\*•\*\*\s*$/.test(line))
+    .join('\n');
 
   // 5. Clean trailing action brackets if any
   text = stripActionBracketsFromText(text);
@@ -244,7 +272,7 @@ function renderMarkdownParagraphs(content: string): React.ReactNode[] {
         );
       } else {
         nodes.push(
-          <ul key={`ul-${blockKey++}`} className="space-y-1.5 my-2 pl-0.5 text-zinc-200">
+          <ul key={`ul-${blockKey++}`} className="space-y-1.5 my-2 ml-4 list-disc list-outside text-zinc-200 marker:text-purple-400">
             {currentList}
           </ul>
         );
@@ -269,14 +297,25 @@ function renderMarkdownParagraphs(content: string): React.ReactNode[] {
       continue;
     }
 
+    // Heading 4-6: normalize deeper Markdown headings into compact Mari subheadings
+    if (/^#{4,6}\s+/.test(line)) {
+      flushList();
+      const headingText = line.replace(/^#{4,6}\s+/, '');
+      nodes.push(
+        <h4 key={`h4-${blockKey++}`} className="text-xs font-bold text-zinc-100 mt-3 mb-1.5">
+          {renderInlineFormatted(headingText)}
+        </h4>
+      );
+      continue;
+    }
+
     // Heading 3: ### Title
     if (line.startsWith('### ')) {
       flushList();
       const headingText = line.replace(/^###\s+/, '');
       nodes.push(
-        <h3 key={`h3-${blockKey++}`} className="text-sm font-bold text-white mt-3.5 mb-1.5 flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-          <span>{renderInlineFormatted(headingText)}</span>
+        <h3 key={`h3-${blockKey++}`} className="text-sm font-bold text-white mt-3.5 mb-1.5">
+          {renderInlineFormatted(headingText)}
         </h3>
       );
       continue;
@@ -323,9 +362,8 @@ function renderMarkdownParagraphs(content: string): React.ReactNode[] {
       listType = 'bullet';
       const itemText = line.replace(/^(?:[•\-*]\s*)+/, '').trim();
       currentList.push(
-        <li key={`li-${blockKey++}`} className="flex items-start gap-2 text-zinc-200">
-          <span className="text-purple-400 font-bold shrink-0 mt-0.5">•</span>
-          <span className="flex-1">{renderInlineFormatted(itemText)}</span>
+        <li key={`li-${blockKey++}`} className="text-zinc-200 pl-1">
+          {renderInlineFormatted(itemText)}
         </li>
       );
       continue;

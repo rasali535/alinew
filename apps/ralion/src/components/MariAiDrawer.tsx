@@ -6,7 +6,7 @@ import { Button, Badge } from '@ralion/ui';
 import { MariMarkdownMessage } from './MariMarkdownMessage';
 import { useOrganization } from '@ralion/auth';
 
-import { getRalionApiUrl, getRalionAuthHeaders, MARI_BUILD_VERSION } from '@/lib/api-config';
+import { authFetch, getRalionApiUrl, MARI_BUILD_VERSION } from '@/lib/api-config';
 
 export interface MariAiDrawerProps {
   isOpen: boolean;
@@ -53,30 +53,24 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
       let fallbackReason: string | null = null;
 
       try {
-        const authHeaders = await getRalionAuthHeaders();
-        let activeOrgId: string = organization?.id || '';
-        try {
-          const stored = typeof window !== 'undefined'
-            ? (localStorage.getItem('ralion_active_org_id') || localStorage.getItem('ralion_active_workspace_id') || localStorage.getItem('ralion_workspace_id'))
-            : null;
-          if (stored && stored !== 'org_default' && stored !== 'default') {
-            if (!activeOrgId) activeOrgId = stored;
-          }
-        } catch {}
+        const activeOrgId = organization?.id || '';
+        const activeWorkspaceId = workspace?.id || '';
+        if (!activeOrgId || !activeWorkspaceId) {
+          throw new Error('Canonical organization workspace is not ready.');
+        }
 
-        const res = await fetch(apiUrl, {
+        const res = await authFetch('/api/mari/chat', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...authHeaders,
             'x-organization-id': activeOrgId,
-            'x-workspace-id': workspace?.id || activeOrgId,
+            'x-workspace-id': activeWorkspaceId,
           },
           body: JSON.stringify({
             query: userText,
             prompt: userText,
             organizationId: activeOrgId,
-            workspaceId: workspace?.id || undefined,
+            workspaceId: activeWorkspaceId,
             activeScreen: { route: '/mari-ai', label: 'Mari Business Drawer' },
             messages: newHistory.map(m => ({
               role: m.sender === 'USER' ? 'user' : 'model',

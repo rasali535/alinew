@@ -15,12 +15,13 @@ import Link from 'next/link';
 import { AuthService } from '@/lib/services/auth.service';
 import { createClient } from '@/lib/supabase/client';
 import { TierAccessGate } from '@/components/TierAccessGate';
-import { MariMarkdownMessage } from '@/components/MariMarkdownMessage';
+import { MariMarkdownMessage, normalizeMarkdownText } from '@/components/MariMarkdownMessage';
 import { getRalionApiUrl, fetchRalionApi, getRalionAuthHeaders, authFetch } from '@/lib/api-config';
 import { AnalyticsSource, MetricState } from '@/lib/services/social/facebookAnalyticsSemantics';
 import type { MariRecommendationContract } from '@ralion/ai';
 import { SecureImage, SecureVideo, resolveSecureAssetUrl } from '@/components/SecureMedia';
 import { useOrganization } from '@ralion/auth';
+import CompetitiveIntelligencePanel from '@/components/growth/CompetitiveIntelligencePanel';
 
 function resolveSafeImageUrl(src?: string, fallbackTitle: string = 'Ralion Creative'): string {
   if (!src || typeof src !== 'string') {
@@ -665,9 +666,18 @@ function GrowthPageContent() {
         if (data.chat) {
           setMariChatMessages(prev => [
             ...prev,
-            { role: 'mari', text: data.chat.answer, action: data.chat.recommendedAction, prompt: data.chat.suggestedPrompt },
+            { role: 'mari', text: normalizeMarkdownText(String(data.chat.answer || '')), action: data.chat.recommendedAction, prompt: data.chat.suggestedPrompt },
           ]);
         }
+      } else {
+        const errorPayload = await res.json().catch(() => ({}));
+        console.warn('[Growth] Mari request failed', { status: res.status, error: errorPayload?.error });
+        setMariChatMessages(prev => [
+          ...prev,
+          { role: 'mari', text: res.status === 502
+            ? 'Mari’s live reasoning provider took too long to respond. Your business data is safe — please retry the request.'
+            : `Mari could not complete this request (HTTP ${res.status}). Please retry.` },
+        ]);
       }
     } catch (err) {
       setMariChatMessages(prev => [
@@ -4242,172 +4252,7 @@ function GrowthPageContent() {
             )}
 
             {/* Sub-Tab 5: MARKET RESEARCH & COMPETITIVE INTELLIGENCE */}
-            {pageWorkspaceTab === 'MARKET_INTEL' && (
-              <div className="flex flex-col gap-6">
-                {marketResearchReport ? (
-                  <>
-                    {/* Compliance & Overview Banner */}
-                    <div className="p-6 rounded-3xl bg-gradient-to-br from-emerald-950/40 via-zinc-900 to-zinc-950 border border-emerald-500/30 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                      <div>
-                        <div className="flex items-center gap-2.5">
-                          <Globe className="w-5 h-5 text-emerald-400" />
-                          <h3 className="text-base font-black text-white">Ethical Market Research & Competitive Intelligence</h3>
-                          <Badge variant="success" className="text-[10px] font-bold">
-                            🛡️ 100% LEGAL & TOS COMPLIANT
-                          </Badge>
-                        </div>
-                        <p className="text-xs text-zinc-300 mt-1.5 leading-relaxed">
-                          Mari AI analyzes public industry benchmarks, macroeconomic indices, and open market signals—without illegal scraping or privacy violations—to give <strong>{activeFbPage?.name || fbConn?.label || 'your business'}</strong> a competitive growth advantage.
-                        </p>
-                      </div>
-
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => {
-                          fetchMarketResearchData();
-                          setOauthAlert({ type: 'success', message: '⚡ Market benchmarks synchronized with latest industry index!' });
-                        }}
-                        className="text-xs border-emerald-500/40 text-emerald-300 hover:bg-emerald-950 shrink-0"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5 mr-1" /> Re-Sync Market Data
-                      </Button>
-                    </div>
-
-                    {/* Benchmark Gauges */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="p-5 rounded-2xl bg-zinc-950 border border-zinc-800 flex flex-col justify-between">
-                        <div>
-                          <p className="text-[11px] text-zinc-400 uppercase font-semibold">Engagement vs Industry Benchmark</p>
-                          <div className="flex items-baseline gap-2 mt-1">
-                            <p className="text-2xl font-black text-emerald-400">{marketResearchReport?.benchmarks?.clientEngagementRate ?? marketResearchReport?.benchmarks?.rasAliLabsEngagementRate ?? (totalReach > 0 ? ((totalEngagement/totalReach)*100).toFixed(1) : 0)}%</p>
-                            <p className="text-xs text-zinc-500 line-through">Avg: {marketResearchReport?.benchmarks?.averageEngagementRate ?? 3.2}%</p>
-                          </div>
-                          <p className="text-[11px] text-emerald-400 mt-1 font-semibold">🟢 Stronger than industry average baseline</p>
-                        </div>
-                        <div className="w-full bg-zinc-900 rounded-full h-1.5 mt-3 overflow-hidden">
-                          <div className="bg-emerald-500 h-full rounded-full" style={{ width: '85%' }} />
-                        </div>
-                      </div>
-
-                      <div className="p-5 rounded-2xl bg-zinc-950 border border-zinc-800 flex flex-col justify-between">
-                        <div>
-                          <p className="text-[11px] text-zinc-400 uppercase font-semibold">Monthly Audience Growth Rate</p>
-                          <div className="flex items-baseline gap-2 mt-1">
-                            <p className="text-2xl font-black text-purple-400">+{marketResearchReport?.benchmarks?.clientGrowthMonthly ?? marketResearchReport?.benchmarks?.rasAliLabsGrowthMonthly ?? (posts.length > 0 ? (posts.length * 1.5).toFixed(1) : 0)}%</p>
-                            <p className="text-xs text-zinc-500 line-through">Avg: +{marketResearchReport?.benchmarks?.averageFollowerGrowthMonthly ?? 4.5}%</p>
-                          </div>
-                          <p className="text-[11px] text-purple-400 mt-1 font-semibold">🚀 Above industry median pace</p>
-                        </div>
-                        <div className="w-full bg-zinc-900 rounded-full h-1.5 mt-3 overflow-hidden">
-                          <div className="bg-purple-500 h-full rounded-full" style={{ width: '92%' }} />
-                        </div>
-                      </div>
-
-                      <div className="p-5 rounded-2xl bg-zinc-950 border border-zinc-800 flex flex-col justify-between">
-                        <div>
-                          <p className="text-[11px] text-zinc-400 uppercase font-semibold">Peak Executive Attention Window</p>
-                          <p className="text-xs font-bold text-white mt-1.5">Tue & Thu 09:30–11:00 SAST</p>
-                          <p className="text-[11px] text-zinc-400 mt-1">B2B decision-makers in Botswana & SA</p>
-                        </div>
-                        <div className="pt-2 border-t border-zinc-900 text-[10px] text-indigo-300 font-mono">
-                          ✨ 42% higher click-through on technical posts
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Competitive Differentiation Matrix */}
-                    <div className="p-5 rounded-3xl bg-zinc-950 border border-zinc-800 flex flex-col gap-4">
-                      <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-                        <div>
-                          <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                            <Layers className="w-4 h-4 text-indigo-400" /> Strategic Competitive Positioning Matrix
-                          </h4>
-                          <p className="text-xs text-zinc-400 mt-0.5">How your workspace out-positions foreign and regional alternatives</p>
-                        </div>
-                        <Badge variant="purple" className="text-[10px]">BLUE OCEAN STRATEGY</Badge>
-                      </div>
-
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left text-xs border-collapse">
-                          <thead>
-                            <tr className="border-b border-zinc-800 text-zinc-400 text-[11px]">
-                              <th className="py-2.5 px-3 font-semibold">Strategic Dimension</th>
-                              <th className="py-2.5 px-3 font-semibold text-zinc-500">Foreign Legacy SaaS</th>
-                              <th className="py-2.5 px-3 font-semibold text-zinc-500">Local Marketing Agencies</th>
-                              <th className="py-2.5 px-3 font-bold text-emerald-400">Ralion OS Sovereign Advantage</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-zinc-900 text-zinc-300">
-                            {(marketResearchReport?.positioningMatrix || []).map((row: any, idx: number) => (
-                              <tr key={idx} className="hover:bg-zinc-900/50 transition-colors">
-                                <td className="py-3 px-3 font-bold text-white">{row.dimension}</td>
-                                <td className="py-3 px-3 text-zinc-400 text-[11px]">{row.traditionalForeignSaaS}</td>
-                                <td className="py-3 px-3 text-zinc-400 text-[11px]">{row.localRegionalCompetitors}</td>
-                                <td className="py-3 px-3 text-emerald-300 font-semibold text-[11px] bg-emerald-950/20 border-l-2 border-emerald-500">
-                                  {row.ralionOsAdvantage}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-
-                    {/* High-Impact Blue Ocean Market Opportunities */}
-                    <div className="flex flex-col gap-3">
-                      <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
-                        Mari's High-Growth Market Opportunity Radar
-                      </h4>
-
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {(marketResearchReport?.opportunities || []).map((opp: any) => (
-                          <div key={opp.id} className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 flex flex-col justify-between gap-3 hover:border-zinc-700 transition-all">
-                            <div>
-                              <div className="flex items-center justify-between mb-1.5">
-                                <Badge variant="purple" className="text-[9px]">{opp.category?.replace('_', ' ') || 'OPPORTUNITY'}</Badge>
-                                <span className="text-[10px] text-emerald-400 font-mono font-bold">{opp.expectedGrowthImpact}</span>
-                              </div>
-                              <h5 className="text-sm font-bold text-white">{opp.title}</h5>
-                              <p className="text-xs text-zinc-400 mt-1 leading-relaxed">{opp.marketInsight}</p>
-                              <p className="text-[11px] text-purple-300/90 mt-2 font-mono italic">Recommended: {opp.recommendedAction}</p>
-                            </div>
-
-                            <div className="pt-3 border-t border-zinc-900">
-                              <Button 
-                                variant="primary" 
-                                size="sm" 
-                                onClick={() => {
-                                  setNewPost({
-                                    title: opp.title,
-                                    body: opp.suggestedPrompt,
-                                    platform: 'facebook',
-                                    hashtags: '#RalionOS #EnterpriseAI #TradeTech',
-                                    scheduledAt: '',
-                                  });
-                                  setIsCreateOpen(true);
-                                }}
-                                className="w-full text-xs bg-indigo-600 hover:bg-indigo-700 font-bold"
-                              >
-                                Deploy Strategy in Composer →
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="p-8 rounded-2xl bg-zinc-950/60 border border-zinc-800 text-center flex flex-col items-center gap-3">
-                    <Globe className="w-8 h-8 text-emerald-400" />
-                    <h4 className="text-sm font-bold text-white">Ethical Market Research & Competitive Intelligence</h4>
-                    <p className="text-xs text-zinc-400 max-w-md">
-                      {fbConn ? 'Synchronizing market research benchmarks and positioning matrices...' : 'Connect your Facebook Page to unlock market benchmarks and competitive positioning matrices.'}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
+            {pageWorkspaceTab === 'MARKET_INTEL' && <CompetitiveIntelligencePanel />}
           </div>
         )}
         </div>

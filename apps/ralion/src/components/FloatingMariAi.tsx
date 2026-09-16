@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Sparkles, X, Send, Bot, User, ChevronUp, Zap, ArrowRight } from 'lucide-react';
 import { MariMarkdownMessage } from './MariMarkdownMessage';
-import { getRalionApiUrl, getRalionAuthHeaders, MARI_BUILD_VERSION } from '@/lib/api-config';
+import { authFetch, getRalionApiUrl, MARI_BUILD_VERSION } from '@/lib/api-config';
 import { useOrganization } from '@ralion/auth';
 
 export const FloatingMariAi: React.FC = () => {
@@ -42,31 +42,24 @@ export const FloatingMariAi: React.FC = () => {
     let fallbackReason: string | null = null;
 
     try {
-      const authHeaders = await getRalionAuthHeaders();
-      let activeOrgId: string = organization?.id || '';
-      try {
-        const stored = typeof window !== 'undefined'
-          ? (localStorage.getItem('ralion_active_org_id') || localStorage.getItem('ralion_active_workspace_id') || localStorage.getItem('ralion_workspace_id'))
-          : null;
-        if (stored && stored !== 'org_default' && stored !== 'default') {
-          // Only trust localStorage if no authenticated org/user is resolved yet or if it matches
-          if (!activeOrgId) activeOrgId = stored;
-        }
-      } catch {}
+      const activeOrgId = organization?.id || '';
+      const activeWorkspaceId = workspace?.id || '';
+      if (!activeOrgId || !activeWorkspaceId) {
+        throw new Error('Canonical organization workspace is not ready.');
+      }
 
-      const res = await fetch(apiUrl, {
+      const res = await authFetch('/api/mari/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...authHeaders,
           'x-organization-id': activeOrgId,
-          'x-workspace-id': workspace?.id || activeOrgId,
+          'x-workspace-id': activeWorkspaceId,
         },
         body: JSON.stringify({
           query: text,
           prompt: text,
           organizationId: activeOrgId,
-          workspaceId: workspace?.id || undefined,
+          workspaceId: activeWorkspaceId,
           messages: newHistory.map(m => ({
             role: m.sender === 'USER' ? 'user' : 'model',
             text: m.text,
@@ -303,4 +296,3 @@ export const FloatingMariAi: React.FC = () => {
     </div>
   );
 };
-

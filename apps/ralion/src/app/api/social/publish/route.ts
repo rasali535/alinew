@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import * as crypto from 'crypto';
 import { SocialPublishingService } from '@/lib/services/social/socialPublishing.service';
+import { MariMarketingPublicationBridgeService } from '@/lib/services/mari/mariMarketingPublicationBridge.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 import { getCurrentRalionContext, authRequiredResponse } from '@/lib/auth/serverAuth';
 
@@ -43,6 +44,8 @@ export async function POST(request: NextRequest) {
       pageId,
       authorName,
       idempotencyKey,
+      contentId,
+      growthSourceId,
     } = body;
 
     const actualUserId = context.user.id;
@@ -122,6 +125,24 @@ export async function POST(request: NextRequest) {
       errorsCount: result.errors?.length || 0,
       primaryError,
     });
+
+    // Publication provenance must never turn a successful social dispatch into a failure.
+    // It records the Growth/source lineage now; live outcomes are collected later.
+    if (result.postId && (isSuccess || isPartial)) {
+      try {
+        await MariMarketingPublicationBridgeService.registerSuccessfulPublication({
+          organizationId: actualOrgId,
+          workspaceId: actualWorkspaceId,
+          userId: actualUserId,
+          socialPostId: result.postId,
+          idempotencyKey: typeof idempotencyKey === 'string' ? idempotencyKey : null,
+          contentId: typeof contentId === 'string' ? contentId : null,
+          growthSourceId: typeof growthSourceId === 'string' ? growthSourceId : null,
+        });
+      } catch (learningError: any) {
+        console.error('[SocialPublishAPI] Mari publication provenance warning:', learningError?.message || learningError);
+      }
+    }
 
     // Sanitize platformResults to remove internal provider markers
     const sanitizedPlatformResults: any = {};

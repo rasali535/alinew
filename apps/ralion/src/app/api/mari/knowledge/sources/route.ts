@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../../lib/cors';
 import { BusinessContextService, WebsiteIngestionService } from '@ralion/ai/server';
-import { getCurrentRalionContext } from '../../../../../lib/auth/serverAuth';
+import { requireRalionContext } from '../../../../../lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,14 +17,9 @@ export async function OPTIONS(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const serverCtx = await getCurrentRalionContext(request, { requireAuth: true });
-    if (!serverCtx) {
-      return corsJsonResponse(
-        { success: false, code: 'AUTHENTICATION_REQUIRED', error: 'Authentication required to view knowledge sources.' },
-        { status: 401 },
-        request
-      );
-    }
+    const required = await requireRalionContext(request);
+    if (required.response) return required.response;
+    const serverCtx = required.context;
 
     const canonicalOrgId = serverCtx.organization?.id || serverCtx.workspace.organization_id || serverCtx.workspace.id;
     const canonicalWorkspaceId = serverCtx.workspace.id;

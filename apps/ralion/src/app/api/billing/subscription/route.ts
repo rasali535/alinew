@@ -1,8 +1,9 @@
 import { NextRequest } from 'next/server';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../lib/cors';
-import { BillingDatabaseService } from '@ralion/database';
-import { EntitlementService, PLAN_CATALOG } from '@ralion/auth';
-import { TenantCreditsService } from '@ralion/ai/server';
+import { requireRalionContext } from '../../../../lib/auth/serverAuth';
+import { DurableBillingDatabaseService } from '@ralion/database/server';
+import { PLAN_CATALOG } from '@ralion/auth';
+import { DurableTenantCreditsService } from '@ralion/ai/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,36 +13,51 @@ export async function OPTIONS(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const organizationId = searchParams.get('organizationId') || request.headers.get('x-organization-id');
+    const required = await requireRalionContext(request);
+    if (required.response) return required.response;
+    const serverCtx = required.context;
 
-    if (!organizationId) {
+    const organizationId = serverCtx.organization?.id || serverCtx.workspace.organization_id || serverCtx.workspace.id;
+    const requestedOrgId = new URL(request.url).searchParams.get('organizationId') || request.headers.get('x-organization-id');
+    if (requestedOrgId && requestedOrgId !== organizationId && requestedOrgId !== serverCtx.workspace.id) {
       return corsJsonResponse(
-        { success: false, error: 'organizationId is required' },
-        { status: 400 },
+        { success: false, code: 'TENANT_CONTEXT_MISMATCH', error: 'The requested billing organization does not match the authenticated tenant.' },
+        { status: 403 },
         request
       );
     }
 
-    const sub = BillingDatabaseService.getSubscription(organizationId);
-    const { plan, status, isPastDue, periodEnd } = EntitlementService.getEffectivePlan(organizationId);
-    const wallet = TenantCreditsService.getOrCreateWallet(
-      organizationId,
-      sub.planId === 'PROFESSIONAL' ? 'PROFESSIONAL' : sub.planId === 'ENTERPRISE' ? 'ENTERPRISE' : 'COMMUNITY'
-    );
+    const sub = await DurableBillingDatabaseService.getSubscription(organizationId);
+    const now = new Date();
+    const periodEnd = new Date(sub.currentPeriodEnd);
+    let effectivePlan = PLAN_CATALOG[sub.planId] || PLAN_CATALOG.COMMUNITY;
+    let effectiveStatus = sub.status;
+    let isPastDue = false;
+
+    if (sub.status === 'CANCELED' && now > periodEnd) {
+      effectivePlan = PLAN_CATALOG.COMMUNITY;
+      effectiveStatus = 'EXPIRED';
+    } else if (['PAST_DUE', 'SUSPENDED', 'EXPIRED'].includes(sub.status)) {
+      effectivePlan = PLAN_CATALOG.COMMUNITY;
+      isPastDue = sub.status === 'PAST_DUE' || sub.status === 'SUSPENDED';
+    }
+
+    const credits = await DurableTenantCreditsService.getSummary(organizationId);
 
     return corsJsonResponse(
       {
         success: true,
         subscription: sub,
-        effectivePlan: plan,
-        status,
+        effectivePlan,
+        status: effectiveStatus,
         isPastDue,
-        currentPeriodEnd: periodEnd,
+        currentPeriodEnd: sub.currentPeriodEnd,
         credits: {
-          balance: wallet.balance,
-          monthlyQuota: plan.monthlyCreditQuota,
-          updatedAt: wallet.updatedAt,
+          balance: credits.remainingCredits,
+          monthlyQuota: credits.monthlyQuota,
+          reserved: credits.reservedCredits,
+          used: credits.usedCredits,
+          updatedAt: credits.periodStart || sub.updatedAt,
         },
         catalog: PLAN_CATALOG,
       },
@@ -51,7 +67,7 @@ export async function GET(request: NextRequest) {
   } catch (err: any) {
     console.error('[Subscription API] Error:', err);
     return corsJsonResponse(
-      { success: false, error: 'Internal server error fetching subscription' },
+      { success: false, error: 'Internal server error fetching subscription.' },
       { status: 500 },
       request
     );
@@ -59,63 +75,16 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json().catch(() => ({}));
-    const { organizationId, planId = 'PROFESSIONAL', billingCycle = 'MONTHLY' } = body;
+  const required = await requireRalionContext(request);
+  if (required.response) return required.response;
 
-    if (!organizationId) {
-      return corsJsonResponse(
-        { success: false, error: 'organizationId is required' },
-        { status: 400 },
-        request
-      );
-    }
-
-    const now = new Date().toISOString();
-    const nextPeriod = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-
-    const sub = BillingDatabaseService.saveSubscription({
-      id: `sub_${organizationId}_${Date.now()}`,
-      organizationId,
-      planId: planId as any,
-      status: 'ACTIVE',
-      billingCycle,
-      provider: 'manual',
-      currentPeriodStart: now,
-      currentPeriodEnd: nextPeriod,
-      cancelAtPeriodEnd: false,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    const catalogPlan = PLAN_CATALOG[planId as keyof typeof PLAN_CATALOG] || PLAN_CATALOG.COMMUNITY;
-    const targetTier = planId === 'ENTERPRISE' ? 'ENTERPRISE' : planId === 'PROFESSIONAL' ? 'PROFESSIONAL' : 'COMMUNITY';
-    const wallet = TenantCreditsService.getOrCreateWallet(organizationId, targetTier);
-    const targetQuota = catalogPlan.monthlyCreditQuota;
-    if (wallet.balance < targetQuota) {
-      TenantCreditsService.addCredits(organizationId, targetQuota - wallet.balance, `Subscription tier upgrade to ${targetTier}`);
-    }
-    const finalBalance = TenantCreditsService.getBalance(organizationId);
-
-    return corsJsonResponse(
-      {
-        success: true,
-        subscription: sub,
-        effectivePlan: catalogPlan,
-        credits: {
-          balance: wallet.balance,
-          monthlyQuota: catalogPlan.monthlyCreditQuota,
-        },
-      },
-      undefined,
-      request
-    );
-  } catch (err: any) {
-    console.error('[Subscription API] Error updating subscription:', err);
-    return corsJsonResponse(
-      { success: false, error: err.message || 'Internal server error updating subscription' },
-      { status: 500 },
-      request
-    );
-  }
+  return corsJsonResponse(
+    {
+      success: false,
+      code: 'DIRECT_SUBSCRIPTION_MUTATION_DISABLED',
+      error: 'Customer subscription state cannot be changed directly. Use the verified PayPal checkout flow.',
+    },
+    { status: 405 },
+    request
+  );
 }
