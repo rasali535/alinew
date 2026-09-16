@@ -30,7 +30,7 @@ function safeString(value: unknown, max = 500): string | undefined {
 export async function createPayPalSubscriptionWithDiagnostics(
   params: PayPalSubscriptionCreationParams
 ): Promise<PayPalCreateDiagnosticResult> {
-  const { organizationId, planId, billingCycle = 'MONTHLY', userId, returnUrl, cancelUrl } = params;
+  const { organizationId, planId, billingCycle = 'MONTHLY', returnUrl, cancelUrl } = params;
 
   if (!organizationId) return { success: false, error: 'organizationId is required' };
   if (organizationId === 'ras-ali-labs') {
@@ -45,6 +45,9 @@ export async function createPayPalSubscriptionWithDiagnostics(
   if (billingCycle !== 'MONTHLY') {
     return { success: false, error: 'Only MONTHLY PayPal billing is currently enabled.' };
   }
+  if (organizationId.length > 127) {
+    return { success: false, error: 'Organization billing identifier exceeds the PayPal custom_id limit.' };
+  }
 
   try {
     const paypalPlanId = PayPalService.getPlanId(planId);
@@ -52,13 +55,10 @@ export async function createPayPalSubscriptionWithDiagnostics(
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://rasalilabs.com/ralion';
     const payload = {
       plan_id: paypalPlanId,
-      custom_id: JSON.stringify({
-        organizationId,
-        workspaceId: organizationId,
-        userId: userId || 'user_owner',
-        planId,
-        billingCycle: 'MONTHLY',
-      }),
+      // PayPal custom_id is capped at 127 characters. Keep only the canonical,
+      // server-verified tenant identifier here; plan identity is independently
+      // verified from PayPal's plan_id during activation/webhook processing.
+      custom_id: organizationId,
       application_context: {
         brand_name: 'Ralion OS',
         locale: 'en-US',
