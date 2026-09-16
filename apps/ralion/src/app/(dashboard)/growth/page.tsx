@@ -15,7 +15,7 @@ import Link from 'next/link';
 import { AuthService } from '@/lib/services/auth.service';
 import { createClient } from '@/lib/supabase/client';
 import { TierAccessGate } from '@/components/TierAccessGate';
-import { MariMarkdownMessage } from '@/components/MariMarkdownMessage';
+import { MariMarkdownMessage, normalizeMarkdownText } from '@/components/MariMarkdownMessage';
 import { getRalionApiUrl, fetchRalionApi, getRalionAuthHeaders, authFetch } from '@/lib/api-config';
 import { AnalyticsSource, MetricState } from '@/lib/services/social/facebookAnalyticsSemantics';
 import type { MariRecommendationContract } from '@ralion/ai';
@@ -666,7 +666,7 @@ function GrowthPageContent() {
         if (data.chat) {
           setMariChatMessages(prev => [
             ...prev,
-            { role: 'mari', text: data.chat.answer, action: data.chat.recommendedAction, prompt: data.chat.suggestedPrompt },
+            { role: 'mari', text: normalizeMarkdownText(String(data.chat.answer || '')), action: data.chat.recommendedAction, prompt: data.chat.suggestedPrompt },
           ]);
         }
       }
