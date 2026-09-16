@@ -1,4 +1,5 @@
 import 'server-only';
+import './billing/paypalOpaqueCheckout.bootstrap';
 
 export * from './client';
 export * from './core/crypto';
