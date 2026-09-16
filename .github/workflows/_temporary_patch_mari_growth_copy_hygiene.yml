@@ -1,0 +1,32 @@
+name: Temporary patch Mari Growth copy hygiene
+
+on:
+  push:
+    branches:
+      - fix/mari-growth-copy-hygiene
+    paths:
+      - .github/workflows/_temporary_patch_mari_growth_copy_hygiene.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/mari-growth-copy-hygiene
+          fetch-depth: 0
+      - name: Patch Mari Growth copy hygiene
+        env:
+          PATCH_GZ_B64: "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" 
+        run: |
+          printf '%s' "$PATCH_GZ_B64" | base64 -d | gzip -d > /tmp/patch.py
+          python /tmp/patch.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/ralion/src/components/MariMarkdownMessage.tsx apps/ralion/src/app/api/social/facebook/pages/'[pageId]'/mari-growth/route.ts
+          git diff --cached --check
+          git commit -m "fix(mari): clean Growth copy and strengthen grounded strategy"
+          git push origin HEAD:fix/mari-growth-copy-hygiene
