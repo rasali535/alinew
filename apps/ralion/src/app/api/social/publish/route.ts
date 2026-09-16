@@ -105,9 +105,12 @@ export async function POST(request: NextRequest) {
       idempotencyKey,
     });
 
-    const isSuccess = result.overallStatus === 'PUBLISHED' || result.overallStatus === 'QUEUED';
+    const hasPersistenceWarning = result.overallStatus === 'PUBLISHED_WITH_PERSISTENCE_WARNING' || result.persistenceWarning === true;
+    const isSuccess = result.overallStatus === 'PUBLISHED'
+      || result.overallStatus === 'QUEUED'
+      || result.overallStatus === 'PUBLISHED_WITH_PERSISTENCE_WARNING';
     const isPartial = result.overallStatus === 'PARTIALLY_PUBLISHED';
-    const httpStatus = result.statusCode || (isSuccess ? 200 : isPartial ? 200 : 422);
+    const httpStatus = result.statusCode || (isSuccess || isPartial ? 200 : 422);
 
     const primaryError =
       result.errors?.[0] ||
@@ -122,6 +125,7 @@ export async function POST(request: NextRequest) {
       postId: result.postId,
       success: isSuccess || isPartial,
       conflict: result.conflict || false,
+      persistenceWarning: hasPersistenceWarning,
       errorsCount: result.errors?.length || 0,
       primaryError,
     });
@@ -144,7 +148,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Sanitize platformResults to remove internal provider markers
+    // Sanitize platformResults to remove internal provider markers.
     const sanitizedPlatformResults: any = {};
     if (result.platformResults) {
       for (const [pKey, pVal] of Object.entries(result.platformResults)) {
@@ -161,6 +165,11 @@ export async function POST(request: NextRequest) {
       postId: result.postId,
       overallStatus: result.overallStatus,
       statusCode: httpStatus,
+      ...(hasPersistenceWarning ? {
+        persistenceWarning: true,
+        persistenceError: result.persistenceError || 'PUBLICATION_HISTORY_PERSISTENCE_FAILED',
+        warning: 'The post was published externally, but Ralion could not persist its local publication history.',
+      } : {}),
       ...(result.conflict ? { conflict: true, error: primaryError || 'Publishing conflict' } : {}),
       ...(result.conflictDetails ? { conflictDetails: result.conflictDetails } : {}),
       ...(!isSuccess && !isPartial && primaryError ? { error: primaryError } : {}),

@@ -1,13 +1,10 @@
 /**
  * Ralion OS — Enterprise Security Audit Logging Engine
- * Complies with Meta Platform Data Protection Assessment audit requirements.
  *
- * Mandatory Meta Event Log Fields:
- * - Event Type
- * - Date / Time
- * - Success / Failure status
- * - User ID / Identity
- * - Meta User ID (when applicable)
+ * Security events are persisted in the canonical public.audit_logs table.
+ * Event-specific fields that are not first-class audit_logs columns are kept in
+ * sanitized metadata so we retain the security evidence without maintaining a
+ * second, divergent audit table.
  *
  * CRITICAL RULE: NEVER log passwords, access tokens, refresh tokens, or API secrets.
  */
@@ -70,6 +67,8 @@ export type SecurityEventCategory =
 export interface SecurityLogParams {
   eventType: SecurityEventType;
   eventCategory?: SecurityEventCategory;
+  organizationId?: string;
+  workspaceId?: string;
   userId?: string;
   actorUserId?: string;
   metaUserId?: string;
@@ -82,7 +81,6 @@ export interface SecurityLogParams {
   timestamp?: Date;
 }
 
-// Sensitive key patterns that must ALWAYS be sanitized from logs
 const SENSITIVE_PATTERNS = [
   /password/i,
   /token/i,
@@ -92,23 +90,20 @@ const SENSITIVE_PATTERNS = [
   /key/i,
   /credential/i,
   /hash/i,
-  /signature/i
+  /signature/i,
 ];
 
-/**
- * Deep sanitization of metadata to prevent secret leakage
- */
 export function sanitizeMetadata(data: any, depth = 0): any {
   if (depth > 5) return '[TRUNCATED_DEPTH]';
   if (!data || typeof data !== 'object') return data;
 
   if (Array.isArray(data)) {
-    return data.map(item => sanitizeMetadata(item, depth + 1));
+    return data.map((item) => sanitizeMetadata(item, depth + 1));
   }
 
   const sanitized: Record<string, any> = {};
   for (const [key, value] of Object.entries(data)) {
-    const isSensitive = SENSITIVE_PATTERNS.some(pattern => pattern.test(key));
+    const isSensitive = SENSITIVE_PATTERNS.some((pattern) => pattern.test(key));
     if (isSensitive) {
       sanitized[key] = '[REDACTED_SENSITIVE_DATA]';
     } else if (typeof value === 'object' && value !== null) {
@@ -121,9 +116,6 @@ export function sanitizeMetadata(data: any, depth = 0): any {
 }
 
 export class AuditLoggerService {
-  /**
-   * Determine default event category from event type
-   */
   private static resolveCategory(eventType: SecurityEventType): SecurityEventCategory {
     if (eventType.startsWith('AUTH_') || eventType.startsWith('MFA_') || eventType.startsWith('PASSWORD_')) {
       return 'AUTH';
@@ -137,41 +129,44 @@ export class AuditLoggerService {
     if (eventType.startsWith('PERMISSION_') || eventType.startsWith('ROLE_')) {
       return 'RBAC';
     }
+    if (eventType.startsWith('MARI_')) {
+      return 'MARI_AI';
+    }
     return 'SECURITY';
   }
 
-  /**
-   * Record an immutable security audit log entry
-   */
   static async log(params: SecurityLogParams): Promise<boolean> {
     const timestamp = params.timestamp ? params.timestamp.toISOString() : new Date().toISOString();
     const eventCategory = params.eventCategory || this.resolveCategory(params.eventType);
     const sanitizedMetadata = sanitizeMetadata(params.metadata || {});
 
-    // Clean payload strictly verified for zero secret leakage
-    const payload = {
-      event_type: params.eventType,
-      event_category: eventCategory,
+    const metadata = sanitizeMetadata({
+      ...sanitizedMetadata,
       success: params.success !== false,
-      user_id: params.userId || null,
-      actor_user_id: params.actorUserId || params.userId || null,
-      meta_user_id: params.metaUserId || null,
-      ip_address: params.ipAddress || null,
-      user_agent: params.userAgent || null,
-      resource_type: params.resourceType || null,
-      resource_id: params.resourceId || null,
-      metadata: sanitizedMetadata,
-      timestamp,
-      created_at: timestamp,
-    };
+      actorUserId: params.actorUserId || params.userId || null,
+      metaUserId: params.metaUserId || null,
+      ipAddress: params.ipAddress || null,
+      userAgent: params.userAgent || null,
+      resourceType: params.resourceType || null,
+      resourceId: params.resourceId || null,
+      securityEventCategory: eventCategory,
+    });
 
     try {
       const supabase = getServiceSupabase();
-      const { error } = await supabase.from('security_audit_logs').insert(payload);
+      const { error } = await supabase.from('audit_logs').insert({
+        organization_id: params.organizationId || null,
+        workspace_id: params.workspaceId || null,
+        user_id: params.userId || null,
+        action: params.eventType,
+        module: eventCategory,
+        metadata,
+        created_at: timestamp,
+      });
 
       if (error) {
-        // Fallback console logging (guaranteed sanitized)
         console.warn('[AuditLogger] Supabase audit write notice:', error.message);
+        return false;
       }
       return true;
     } catch (err) {
@@ -180,9 +175,6 @@ export class AuditLoggerService {
     }
   }
 
-  /**
-   * Query security audit logs with pagination and filters
-   */
   static async getLogs(filters: {
     limit?: number;
     offset?: number;
@@ -195,23 +187,40 @@ export class AuditLoggerService {
     endDate?: Date;
   } = {}) {
     const supabase = getServiceSupabase();
-    let query = supabase
-      .from('security_audit_logs')
-      .select('*', { count: 'exact' })
-      .order('timestamp', { ascending: false })
-      .range(filters.offset || 0, (filters.offset || 0) + (filters.limit || 50) - 1);
+    const limit = Math.min(Math.max(filters.limit || 50, 1), 200);
+    const offset = Math.max(filters.offset || 0, 0);
 
-    if (filters.eventType) query = query.eq('event_type', filters.eventType);
-    if (filters.eventCategory) query = query.eq('event_category', filters.eventCategory);
+    let query = supabase
+      .from('audit_logs')
+      .select('id,organization_id,workspace_id,user_id,action,module,metadata,created_at', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (filters.eventType) query = query.eq('action', filters.eventType);
+    if (filters.eventCategory) query = query.eq('module', filters.eventCategory);
     if (filters.userId) query = query.eq('user_id', filters.userId);
-    if (filters.metaUserId) query = query.eq('meta_user_id', filters.metaUserId);
-    if (filters.success !== undefined) query = query.eq('success', filters.success);
-    if (filters.startDate) query = query.gte('timestamp', filters.startDate.toISOString());
-    if (filters.endDate) query = query.lte('timestamp', filters.endDate.toISOString());
+    if (filters.metaUserId) query = query.contains('metadata', { metaUserId: filters.metaUserId });
+    if (filters.success !== undefined) query = query.contains('metadata', { success: filters.success });
+    if (filters.startDate) query = query.gte('created_at', filters.startDate.toISOString());
+    if (filters.endDate) query = query.lte('created_at', filters.endDate.toISOString());
 
     const { data, count, error } = await query;
     if (error) throw error;
 
-    return { logs: data || [], total: count || 0 };
+    const logs = (data || []).map((row: any) => ({
+      ...row,
+      event_type: row.action,
+      event_category: row.module,
+      success: row.metadata?.success !== false,
+      actor_user_id: row.metadata?.actorUserId || row.user_id || null,
+      meta_user_id: row.metadata?.metaUserId || null,
+      ip_address: row.metadata?.ipAddress || null,
+      user_agent: row.metadata?.userAgent || null,
+      resource_type: row.metadata?.resourceType || null,
+      resource_id: row.metadata?.resourceId || null,
+      timestamp: row.created_at,
+    }));
+
+    return { logs, total: count || 0 };
   }
 }
