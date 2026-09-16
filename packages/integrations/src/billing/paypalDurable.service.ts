@@ -262,11 +262,19 @@ export class DurablePayPalService {
             description: 'PayPal subscription payment completed',
             rawEventData: { billingAgreementId: agreementId },
           });
+          const verified = await PayPalService.verifySubscription(agreementId);
+          const providerPeriodEnd = verified.success && verified.data?.billing_info?.next_billing_time
+            ? String(verified.data.billing_info.next_billing_time)
+            : existing.currentPeriodEnd;
           const renewed = await DurableBillingDatabaseService.saveSubscription({
             ...existing,
             status: 'ACTIVE',
-            currentPeriodEnd: addMonth(existing.currentPeriodEnd),
-            metadata: { ...(existing.metadata || {}), lastPayPalWebhookId: eventId },
+            currentPeriodEnd: providerPeriodEnd,
+            metadata: {
+              ...(existing.metadata || {}),
+              lastPayPalWebhookId: eventId,
+              periodSource: verified.success ? 'paypal_next_billing_time' : 'existing_period_preserved',
+            },
             updatedAt: new Date().toISOString(),
           });
           await DurableTenantCreditsService.syncWallet(organizationId, renewed.planId);
