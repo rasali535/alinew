@@ -38,6 +38,7 @@ assert(integrityText.includes('uq_mari_marketing_experiment_source'), 'publicati
 const serviceText = read(service);
 assert(serviceText.includes(".from('social_posts')"), 'learner starts from canonical publication history');
 assert(serviceText.includes('FacebookPageManagementService.getPagePosts'), 'learner reconciles with live page evidence');
+assert(serviceText.includes('observedPost.id === publication.id'), 'learner rejects canonical publication rows as self-referential outcome evidence');
 assert(serviceText.includes('INSUFFICIENT_EXPERIMENT_COUNT'), 'learner refuses sparse evidence');
 assert(serviceText.includes("metricQuality === 'RATE' ? 0.88 : 0.58"), 'raw-engagement confidence is capped below supported threshold');
 assert(!serviceText.includes('topPosts ='), 'learner does not derive truth from BI top-post selection');
