@@ -669,6 +669,15 @@ function GrowthPageContent() {
             { role: 'mari', text: normalizeMarkdownText(String(data.chat.answer || '')), action: data.chat.recommendedAction, prompt: data.chat.suggestedPrompt },
           ]);
         }
+      } else {
+        const errorPayload = await res.json().catch(() => ({}));
+        console.warn('[Growth] Mari request failed', { status: res.status, error: errorPayload?.error });
+        setMariChatMessages(prev => [
+          ...prev,
+          { role: 'mari', text: res.status === 502
+            ? 'Mari’s live reasoning provider took too long to respond. Your business data is safe — please retry the request.'
+            : `Mari could not complete this request (HTTP ${res.status}). Please retry.` },
+        ]);
       }
     } catch (err) {
       setMariChatMessages(prev => [

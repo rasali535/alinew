@@ -38,6 +38,8 @@ import { CreativeAssetService } from './creativeAsset.service';
 
 const MARI_CLASSIFIER_MODEL = process.env.MARI_GEMINI_CLASSIFIER_MODEL || 'gemini-3.5-flash';
 const MARI_RESPONSE_MODEL = process.env.MARI_GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-3.5-flash';
+const MARI_CLASSIFIER_PROVIDER_BUDGET_MS = Math.max(1000, Number(process.env.MARI_CLASSIFIER_PROVIDER_BUDGET_MS || 2500));
+const MARI_RESPONSE_PROVIDER_BUDGET_MS = Math.max(2500, Number(process.env.MARI_RESPONSE_PROVIDER_BUDGET_MS || 7000));
 
 function modelsWithStableFallback(configuredModel: string): string[] {
   return Array.from(new Set([configuredModel.trim(), 'gemini-3.5-flash'].filter(Boolean))).slice(0, 2);
@@ -263,8 +265,14 @@ Classification Rules:
   });
 
   const modelsToTry = modelsWithStableFallback(MARI_CLASSIFIER_MODEL);
+  const providerDeadlineAt = Date.now() + MARI_CLASSIFIER_PROVIDER_BUDGET_MS;
 
   for (const modelName of modelsToTry) {
+    const remainingProviderMs = providerDeadlineAt - Date.now();
+    if (remainingProviderMs <= 0) {
+      modelErrors[modelName] = 'PROVIDER_TIMEOUT';
+      break;
+    }
     modelsAttempted.push(modelName);
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiKey}`;
 
@@ -283,6 +291,7 @@ Classification Rules:
             responseMimeType: 'application/json',
           },
         }),
+        signal: AbortSignal.timeout(remainingProviderMs),
       });
 
       if (!response.ok) {
@@ -334,7 +343,8 @@ Classification Rules:
         modelErrors,
       };
     } catch (err: any) {
-      modelErrors[modelName] = 'PROVIDER_EXCEPTION';
+      const isTimeout = err?.name === 'TimeoutError' || err?.name === 'AbortError';
+      modelErrors[modelName] = isTimeout ? 'PROVIDER_TIMEOUT' : 'PROVIDER_EXCEPTION';
       continue;
     }
   }
@@ -1010,8 +1020,15 @@ SERVER CONTEXT RULES:
 
   const modelsToTry = modelsWithStableFallback(MARI_RESPONSE_MODEL);
   let lastError = '';
+  const providerDeadlineAt = Date.now() + MARI_RESPONSE_PROVIDER_BUDGET_MS;
 
   for (const modelName of modelsToTry) {
+    const remainingProviderMs = providerDeadlineAt - Date.now();
+    if (remainingProviderMs <= 0) {
+      lastError = 'PROVIDER_TIMEOUT';
+      modelErrors[modelName] = 'PROVIDER_TIMEOUT';
+      break;
+    }
     modelsAttempted.push(modelName);
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiKey}`;
 
@@ -1029,6 +1046,7 @@ SERVER CONTEXT RULES:
             maxOutputTokens: 1500,
           },
         }),
+        signal: AbortSignal.timeout(remainingProviderMs),
       });
 
       if (!response.ok) {
@@ -1063,9 +1081,10 @@ SERVER CONTEXT RULES:
         modelErrors,
       };
     } catch (err: any) {
-      lastError = 'PROVIDER_EXCEPTION';
-      modelErrors[modelName] = 'PROVIDER_EXCEPTION';
-      console.warn(`[MariCore] Gemini (${modelName}) request exception`);
+      const isTimeout = err?.name === 'TimeoutError' || err?.name === 'AbortError';
+      lastError = isTimeout ? 'PROVIDER_TIMEOUT' : 'PROVIDER_EXCEPTION';
+      modelErrors[modelName] = lastError;
+      console.warn(`[MariCore] Gemini (${modelName}) request ${isTimeout ? 'timed out' : 'exception'}`);
     }
   }
 
