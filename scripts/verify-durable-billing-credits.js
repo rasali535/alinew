@@ -9,6 +9,7 @@ function assert(condition, message) {
 }
 
 const migration = read('packages/database/migrations/20260916170000_billing_credits_persistence_hardening.sql');
+const catalogMigration = read('packages/database/migrations/20260916172000_subscription_plan_catalog_alignment.sql');
 const billing = read('packages/database/src/billingDatabase.durable.ts');
 const credits = read('packages/ai/src/durableTenantCredits.service.ts');
 const mari = read('packages/ai/src/mariDurableCredits.bootstrap.ts');
@@ -25,6 +26,11 @@ assert(migration.includes('ralion_claim_billing_webhook'), 'Missing durable webh
 assert(migration.includes('ralion_adjust_credits'), 'Missing atomic admin credit adjustment RPC');
 assert(migration.includes('force row level security'), 'Billing tables must FORCE RLS');
 assert(!migration.includes('Authenticated users can view subscriptions\"\n  on public.subscriptions\n  for select\n  to authenticated\n  using (true)'), 'Cross-tenant subscription read policy must not exist');
+assert(catalogMigration.includes("where slug = 'starter'"), 'Starter price must be normalized in DB catalog');
+assert(catalogMigration.includes('price = 19'), 'Starter DB price must match live PayPal plan');
+assert(catalogMigration.includes('price = 49'), 'Professional DB price must match live PayPal plan');
+assert(catalogMigration.includes('price = 199'), 'Enterprise DB price must match live PayPal plan');
+assert(catalogMigration.includes("currency = 'USD'"), 'Canonical DB catalog must use PayPal USD pricing');
 assert(billing.includes("from('subscriptions')"), 'Durable subscription service must use Supabase');
 assert(billing.includes("from('payments')"), 'Durable payment service must use Supabase');
 assert(credits.includes("rpc('ralion_reserve_credits'"), 'Credits must reserve atomically');
