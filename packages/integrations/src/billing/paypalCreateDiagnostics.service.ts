@@ -1,6 +1,12 @@
 import 'server-only';
 import { PayPalService, type PayPalSubscriptionCreationParams } from './paypal.service';
 
+type PayPalDiagnosticIssue = {
+  field?: string;
+  issue?: string;
+  description?: string;
+};
+
 export interface PayPalCreateDiagnosticResult {
   success: boolean;
   subscriptionId?: string;
@@ -11,7 +17,7 @@ export interface PayPalCreateDiagnosticResult {
     name?: string;
     message?: string;
     debugId?: string;
-    issues?: Array<{ field?: string; issue?: string; description?: string }>;
+    issues?: PayPalDiagnosticIssue[];
   };
 }
 
@@ -82,8 +88,8 @@ export async function createPayPalSubscriptionWithDiagnostics(
     }
 
     if (!response.ok) {
-      const issues = Array.isArray(data?.details)
-        ? data.details.slice(0, 5).map((detail: any) => ({
+      const issues: PayPalDiagnosticIssue[] | undefined = Array.isArray(data?.details)
+        ? data.details.slice(0, 5).map((detail: any): PayPalDiagnosticIssue => ({
             field: safeString(detail?.field, 200),
             issue: safeString(detail?.issue, 200),
             description: safeString(detail?.description, 500),
@@ -106,7 +112,7 @@ export async function createPayPalSubscriptionWithDiagnostics(
         organizationId,
       });
 
-      const issueSummary = issues?.map((item) => item.issue).filter(Boolean).join(', ');
+      const issueSummary = issues?.map((item: PayPalDiagnosticIssue) => item.issue).filter(Boolean).join(', ');
       return {
         success: false,
         error: [
