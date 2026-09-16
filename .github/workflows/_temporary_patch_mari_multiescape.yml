@@ -27,13 +27,13 @@ jobs:
               Path('packages/ai/src/mariUniversalCore.ts'),
               Path('apps/ralion/src/components/MariMarkdownMessage.tsx'),
           ]
-          old = r".replace(/\\([*_#\[\]()`~\\-])/g, '$1')"
-          new = r".replace(/\\+([*_#\[\]()`~\\-])/g, '$1')"
+          old_prefix = ".replace(/\\\\([*_#"
+          new_prefix = ".replace(/\\\\+([*_#"
           for path in files:
               src = path.read_text()
-              if old not in src:
-                  raise SystemExit(f'multiescape anchor not found in {path}')
-              path.write_text(src.replace(old, new, 1))
+              if old_prefix not in src:
+                  raise SystemExit(f'multiescape prefix not found in {path}')
+              path.write_text(src.replace(old_prefix, new_prefix, 1))
 
           verifier = Path('scripts/verify-mari-growth-copy-hygiene.js')
           src = verifier.read_text()
@@ -44,7 +44,7 @@ jobs:
                   1,
               )
           anchor = "assert(component.includes('decodeMarkdownHtmlEntities'), 'Mari renderer must decode HTML entities before Markdown rendering.');"
-          addition = "assert(core.includes('replace(/\\\\+(['), 'Universal Mari sanitizer must collapse repeated Markdown escape layers.');\nassert(component.includes('replace(/\\\\+(['), 'Mari renderer must collapse repeated Markdown escape layers.');\n" + anchor
+          addition = "assert(core.includes('replace(/\\\\+([*_#'), 'Universal Mari sanitizer must collapse repeated Markdown escape layers.');\nassert(component.includes('replace(/\\\\+([*_#'), 'Mari renderer must collapse repeated Markdown escape layers.');\n" + anchor
           if "Universal Mari sanitizer must collapse repeated Markdown escape layers" not in src:
               if anchor not in src:
                   raise SystemExit('verifier anchor not found')
