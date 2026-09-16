@@ -1,0 +1,87 @@
+name: Temporary patch Mari Growth state sanitization
+
+on:
+  push:
+    branches:
+      - fix/mari-growth-state-sanitization
+    paths:
+      - .github/workflows/_temporary_patch_mari_growth_state.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/mari-growth-state-sanitization
+          fetch-depth: 0
+      - name: Patch Mari response hygiene
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          # 1) Growth page: sanitize before response ever enters chat state.
+          growth = Path('apps/ralion/src/app/(dashboard)/growth/page.tsx')
+          src = growth.read_text()
+          old = "import { MariMarkdownMessage } from '@/components/MariMarkdownMessage';"
+          new = "import { MariMarkdownMessage, normalizeMarkdownText } from '@/components/MariMarkdownMessage';"
+          if old not in src:
+              raise SystemExit('growth import anchor not found')
+          src = src.replace(old, new, 1)
+          old = "{ role: 'mari', text: data.chat.answer, action: data.chat.recommendedAction, prompt: data.chat.suggestedPrompt },"
+          new = "{ role: 'mari', text: normalizeMarkdownText(String(data.chat.answer || '')), action: data.chat.recommendedAction, prompt: data.chat.suggestedPrompt },"
+          if old not in src:
+              raise SystemExit('growth chat-state anchor not found')
+          src = src.replace(old, new, 1)
+          growth.write_text(src)
+
+          # 2) Universal sanitizer: remove invisible format chars before regex matching and run a final line-level artifact pass.
+          core = Path('packages/ai/src/mariUniversalCore.ts')
+          src = core.read_text()
+          old = "  let text = raw\n    .replace(/\\\\([*_#\\[\\]()`~\\\\-])/g, '$1')"
+          new = "  let text = raw\n    .replace(/[\\u200B-\\u200D\\u2060\\uFEFF]/g, '')\n    .replace(/\\\\([*_#\\[\\]()`~\\\\-])/g, '$1')"
+          if old not in src:
+              raise SystemExit('universal sanitizer start anchor not found')
+          src = src.replace(old, new, 1)
+          old = "    .replace(/\\n{3,}/g, '\\n\\n')\n    .trim();\n\n  return text;"
+          new = "    .replace(/\\n{3,}/g, '\\n\\n')\n    .trim();\n\n  text = text\n    .split(/\\r?\\n/)\n    .map((line) => line\n      .replace(/^(\\s*#{1,6}\\s+)svg(?=[A-Za-z0-9])/i, '$1')\n      .replace(/^(\\s*(?:[-*•]\\s+)?)svg(?=[A-Za-z0-9])/i, '$1')\n      .replace(/^\\s*[-*]\\s+\\*\\*•\\*\\*\\s*$/, '')\n      .replace(/^\\s*\\*\\*•\\*\\*\\s*$/, ''))\n    .join('\\n')\n    .replace(/\\n{3,}/g, '\\n\\n')\n    .trim();\n\n  return text;"
+          if old not in src:
+              raise SystemExit('universal sanitizer end anchor not found')
+          src = src.replace(old, new, 1)
+          core.write_text(src)
+
+          # 3) Client normalizer: same invisible-char defense and final line pass.
+          comp = Path('apps/ralion/src/components/MariMarkdownMessage.tsx')
+          src = comp.read_text()
+          old = "  let text = raw;\n\n  // 1. Unescape escaped markdown backslashes"
+          new = "  let text = raw;\n  text = text.replace(/[\\u200B-\\u200D\\u2060\\uFEFF]/g, '');\n\n  // 1. Unescape escaped markdown backslashes"
+          if old not in src:
+              raise SystemExit('client invisible-char anchor not found')
+          src = src.replace(old, new, 1)
+          old = "  text = cleanedLines.join('\\n');\n\n  // 5. Clean trailing action brackets if any"
+          new = "  text = cleanedLines\n    .map(line => line\n      .replace(/^(\\s*#{1,6}\\s+)svg(?=[A-Za-z0-9])/i, '$1')\n      .replace(/^(\\s*(?:[-*•]\\s+)?)svg(?=[A-Za-z0-9])/i, '$1'))\n    .filter(line => !/^\\s*(?:[-*]\\s+)?\\*\\*•\\*\\*\\s*$/.test(line))\n    .join('\\n');\n\n  // 5. Clean trailing action brackets if any"
+          if old not in src:
+              raise SystemExit('client final line-pass anchor not found')
+          src = src.replace(old, new, 1)
+          comp.write_text(src)
+
+          # 4) Facebook Growth prompt hygiene: stop asking the model to produce artifact tokens in the first place.
+          route = Path('apps/ralion/src/app/api/social/facebook/pages/[pageId]/mari-growth/route.ts')
+          src = route.read_text()
+          old = "Recommendations must be original and must not copy competitor creative or wording.`;"
+          new = "Recommendations must be original and must not copy competitor creative or wording. Use standard Markdown only. Never prefix headings with the literal token 'svg', never emit decorative bullet tokens such as '**•**', and never escape Markdown heading markers.`;"
+          if old not in src:
+              raise SystemExit('route format-rule anchor not found')
+          src = src.replace(old, new, 1)
+          route.write_text(src)
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/ralion/src/app/'(dashboard)'/growth/page.tsx packages/ai/src/mariUniversalCore.ts apps/ralion/src/components/MariMarkdownMessage.tsx apps/ralion/src/app/api/social/facebook/pages/'[pageId]'/mari-growth/route.ts
+          git diff --cached --check
+          git commit -m "fix(mari): sanitize Growth chat before render"
+          git push origin HEAD:fix/mari-growth-state-sanitization
