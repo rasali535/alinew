@@ -91,14 +91,11 @@ export class MariTokenTelemetryService {
           const client = createClient(supabaseUrl, serviceKey, {
             auth: { persistSession: false, autoRefreshToken: false },
           });
-          const { error } = await client.from('security_audit_logs').insert({
-            event_type: 'MARI_PAGE_ANALYSIS',
-            event_category: 'MARI_AI',
-            success: true,
+          const { error } = await client.from('audit_logs').insert({
+            organization_id: organizationId,
             user_id: userId || null,
-            actor_user_id: userId || null,
-            resource_type: 'TENANT_WORKSPACE',
-            resource_id: organizationId,
+            action: 'MARI_AI_QUERY',
+            module: 'MARI_AI',
             metadata: {
               requestId,
               provider,
@@ -108,10 +105,10 @@ export class MariTokenTelemetryService {
               totalTokens,
               action: 'MARI_AI_QUERY',
             },
-            timestamp: record.timestamp,
             created_at: record.timestamp,
           });
-          if (error) {
+          // A duplicate means another process already persisted this request.
+          if (error && error.code !== '23505') {
             console.warn('[MariTokenTelemetry] Durable usage insert failed:', error.code || 'DB_ERROR');
           }
         } catch {
@@ -185,10 +182,12 @@ static async getAuthoritativeUsage(organizationId: string): Promise<{
       let from = 0;
       while (true) {
         const { data, error } = await client
-          .from('security_audit_logs')
+          .from('audit_logs')
           .select('id, metadata')
-          .eq('event_category', 'MARI_AI')
-          .eq('resource_id', organizationId)
+          .eq('module', 'MARI_AI')
+          .eq('action', 'MARI_AI_QUERY')
+          .eq('organization_id', organizationId)
+          .order('created_at', { ascending: true })
           .range(from, from + pageSize - 1);
 
         if (error) break;

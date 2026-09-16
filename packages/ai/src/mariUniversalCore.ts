@@ -36,6 +36,13 @@ import { TenantCreditsService, CREDIT_COSTS } from './tenantCredits.service';
 import { CreativeOrchestrator } from './creativeOrchestrator.service';
 import { CreativeAssetService } from './creativeAsset.service';
 
+const MARI_CLASSIFIER_MODEL = process.env.MARI_GEMINI_CLASSIFIER_MODEL || 'gemini-3.5-flash';
+const MARI_RESPONSE_MODEL = process.env.MARI_GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-3.5-flash';
+
+function modelsWithStableFallback(configuredModel: string): string[] {
+  return Array.from(new Set([configuredModel.trim(), 'gemini-3.5-flash'].filter(Boolean))).slice(0, 2);
+}
+
 export function getMariBuildVersion(): string {
   if (typeof process !== 'undefined' && process.env) {
     const envVer =
@@ -255,10 +262,7 @@ Classification Rules:
     parts: [{ text: `Classify the following user input:\n"${cleanUserPrompt}"` }],
   });
 
-  const modelsToTry = [
-    'gemini-2.5-flash-lite',
-    'gemini-3.5-flash',
-  ];
+  const modelsToTry = modelsWithStableFallback(MARI_CLASSIFIER_MODEL);
 
   for (const modelName of modelsToTry) {
     modelsAttempted.push(modelName);
@@ -921,7 +925,7 @@ async function callGeminiNeuralCore(
     return {
       text: '',
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-      model: 'gemini-3.5-flash',
+      model: MARI_RESPONSE_MODEL,
       modelsAttempted,
       modelErrors: { all: 'API_KEY_MISSING' },
       error: 'API_KEY_MISSING',
@@ -966,10 +970,7 @@ SERVER CONTEXT RULES:
     parts: [{ text: cleanUserPrompt }],
   });
 
-  const modelsToTry = [
-    'gemini-3.5-flash',
-    'gemini-2.5-flash-lite',
-  ];
+  const modelsToTry = modelsWithStableFallback(MARI_RESPONSE_MODEL);
   let lastError = '';
 
   for (const modelName of modelsToTry) {
@@ -993,10 +994,9 @@ SERVER CONTEXT RULES:
       });
 
       if (!response.ok) {
-        const errBody = await response.text().catch(() => '');
         lastError = `HTTP_${response.status}`;
         modelErrors[modelName] = `HTTP_${response.status}`;
-        console.warn(`[MariCore] Gemini (${modelName}) HTTP ${response.status}:`, errBody);
+        console.warn(`[MariCore] Gemini (${modelName}) request failed`, { status: response.status });
         continue;
       }
 
@@ -1032,14 +1032,14 @@ SERVER CONTEXT RULES:
     } catch (err: any) {
       lastError = 'PROVIDER_EXCEPTION';
       modelErrors[modelName] = 'PROVIDER_EXCEPTION';
-      console.warn(`[MariCore] Gemini (${modelName}) API exception:`, err.message);
+      console.warn(`[MariCore] Gemini (${modelName}) request exception`);
     }
   }
 
   return {
     text: '',
     usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-    model: modelsAttempted[0] || 'gemini-3.5-flash',
+    model: modelsAttempted[0] || MARI_RESPONSE_MODEL,
     modelsAttempted,
     modelErrors,
     error: lastError || 'ALL_MODELS_FAILED',
@@ -1337,7 +1337,7 @@ export class MariUniversalCore {
     };
     semanticDecisionSource = 'DETERMINISTIC_CLASSIFICATION';
   } else if (!request.forceLocalOnly) {
-      classificationModelAttempted = 'gemini-2.5-flash-lite';
+      classificationModelAttempted = MARI_CLASSIFIER_MODEL;
       const modelClassification = await callGeminiSemanticClassifier(
         cleanOriginalPrompt,
         conversationHistory,
@@ -1354,7 +1354,7 @@ export class MariUniversalCore {
           Object.assign(modelFailureCodes, modelClassification.modelErrors);
         }
         if (modelClassification.model) {
-          classificationModelAttempted = modelClassification.modelsAttempted[0] || 'gemini-2.5-flash-lite';
+          classificationModelAttempted = modelClassification.modelsAttempted[0] || MARI_CLASSIFIER_MODEL;
           classificationModelSucceeded = true;
           classificationTokens = modelClassification.usage;
           semanticDecision = modelClassification.decision;
@@ -1822,8 +1822,8 @@ export class MariUniversalCore {
     let usage: MariTokenUsage = { ...classificationTokens };
     let suggestedActions: MariActionPayload[] = [];
 
-    responseModelAttempted = 'gemini-3.5-flash';
-    modelAttempted = 'gemini-3.5-flash';
+    responseModelAttempted = MARI_RESPONSE_MODEL;
+    modelAttempted = MARI_RESPONSE_MODEL;
 
     if (!request.forceLocalOnly) {
       const geminiResult = await callGeminiNeuralCore(
@@ -1854,8 +1854,8 @@ export class MariUniversalCore {
           };
           actualModelUsed = geminiResult.model;
           modelUsed = `Mari Neural Engine (${geminiResult.model})`;
-          modelAttempted = geminiResult.modelsAttempted[0] || 'gemini-3.5-flash';
-          responseModelAttempted = geminiResult.modelsAttempted[0] || 'gemini-3.5-flash';
+          modelAttempted = geminiResult.modelsAttempted[0] || MARI_RESPONSE_MODEL;
+          responseModelAttempted = geminiResult.modelsAttempted[0] || MARI_RESPONSE_MODEL;
           responseModelSucceeded = true;
           responseSource = 'gemini';
           modelSucceeded = true;

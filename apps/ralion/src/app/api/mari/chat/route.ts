@@ -8,7 +8,7 @@ import {
   MARI_BUILD_VERSION,
   setMariFacebookPageService,
 } from '@ralion/ai/server';
-import { getCurrentRalionContext } from '../../../../lib/auth/serverAuth';
+import { requireRalionContext } from '../../../../lib/auth/serverAuth';
 import { FacebookPageManagementService } from '../../../../lib/services/social/facebookPageManagement.service';
 import {
   MariBusinessIntelligenceService,
@@ -202,14 +202,9 @@ function buildDeterministicBusinessIntelligenceAnswer(
  */
 export async function POST(request: NextRequest) {
   try {
-    const serverCtx = await getCurrentRalionContext(request, { requireAuth: true });
-    if (!serverCtx) {
-      return corsJsonResponse(
-        { success: false, code: 'AUTHENTICATION_REQUIRED', error: 'Authentication required to use Mari.' },
-        { status: 401 },
-        request
-      );
-    }
+    const required = await requireRalionContext(request);
+    if (required.response) return required.response;
+    const serverCtx = required.context;
 
     const body = await request.json().catch(() => ({}));
     const query = body.query || body.message || body.prompt;

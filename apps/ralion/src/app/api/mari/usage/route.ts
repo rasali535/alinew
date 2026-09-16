@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../lib/cors';
-import { getCurrentRalionContext, authRequiredResponse } from '@/lib/auth/serverAuth';
+import { requireRalionContext } from '@/lib/auth/serverAuth';
 import { MariTokenTelemetryService } from '@ralion/ai/server';
 
 export const dynamic = 'force-dynamic';
@@ -15,10 +15,9 @@ export async function OPTIONS(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const serverCtx = await getCurrentRalionContext(request, { requireAuth: true });
-    if (!serverCtx) {
-      return authRequiredResponse(request, 'Authentication required to view Mari usage.');
-    }
+    const required = await requireRalionContext(request);
+    if (required.response) return required.response;
+    const serverCtx = required.context;
 
     const orgId =
       serverCtx.organization?.id ||

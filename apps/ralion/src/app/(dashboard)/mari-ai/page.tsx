@@ -47,7 +47,7 @@ import {
   BarChart3,
   Globe
 } from 'lucide-react';
-import { authFetch, getRalionApiUrl, getRalionAuthHeaders, MARI_BUILD_VERSION } from '@/lib/api-config';
+import { authFetch, getRalionApiUrl, MARI_BUILD_VERSION } from '@/lib/api-config';
 import { useOrganization } from '@ralion/auth';
 import { MariMarkdownMessage } from '@/components/MariMarkdownMessage';
 import type {
@@ -118,10 +118,11 @@ export default function MariAiPage() {
   const activeWorkspaceId = workspace?.id || '';
   const activeUserId = user?.uid || (user as any)?.id || '';
   const hasCanonicalTenant = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(activeOrgId);
+  const hasCanonicalWorkspace = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(activeWorkspaceId);
 
   // Load Business Context, Growth Profile, and Briefing on Mount
   const loadGrowthIntelligence = async (forceRefresh = false) => {
-    if (!hasCanonicalTenant) {
+    if (!hasCanonicalTenant || !hasCanonicalWorkspace) {
       setIsLoading(isOrganizationLoading);
       return;
     }
@@ -164,15 +165,12 @@ export default function MariAiPage() {
       // Fetch server business context
       let context: BusinessContext | null = null;
       try {
-        const apiUrl = getRalionApiUrl('/api/mari/context');
-        const authHeaders = await getRalionAuthHeaders();
-        const ctxRes = await fetch(apiUrl, {
+        const ctxRes = await authFetch('/api/mari/context', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...authHeaders,
             'x-organization-id': activeOrgId,
-            'x-workspace-id': activeWorkspaceId || activeOrgId,
+            'x-workspace-id': activeWorkspaceId,
           },
           body: JSON.stringify({
             organizationId: activeOrgId,
@@ -200,15 +198,12 @@ export default function MariAiPage() {
 
       // Fetch server briefing
       try {
-        const briefUrl = getRalionApiUrl('/api/mari/briefing');
-        const authHeaders = await getRalionAuthHeaders();
-        const briefRes = await fetch(briefUrl, {
+        const briefRes = await authFetch('/api/mari/briefing', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...authHeaders,
             'x-organization-id': activeOrgId,
-            'x-workspace-id': activeWorkspaceId || activeOrgId,
+            'x-workspace-id': activeWorkspaceId,
           },
           body: JSON.stringify({
             organizationId: activeOrgId,
@@ -415,19 +410,17 @@ export default function MariAiPage() {
       let httpStatus = 0;
 
       try {
-        const authHeaders = await getRalionAuthHeaders();
-        if (!hasCanonicalTenant) {
+        if (!hasCanonicalTenant || !hasCanonicalWorkspace) {
           throw new Error('Your organization workspace is still loading. Please retry in a moment.');
         }
         const effectiveOrgId = activeOrgId;
 
-        const res = await fetch(apiUrl, {
+        const res = await authFetch('/api/mari/chat', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...authHeaders,
             'x-organization-id': effectiveOrgId,
-            'x-workspace-id': activeWorkspaceId || effectiveOrgId,
+            'x-workspace-id': activeWorkspaceId,
           },
           body: JSON.stringify({
             query: cleanQuery,

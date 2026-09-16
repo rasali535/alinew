@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { BusinessContextService } from '@ralion/ai/server';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../lib/cors';
-import { getCurrentRalionContext } from '../../../../lib/auth/serverAuth';
+import { requireRalionContext } from '../../../../lib/auth/serverAuth';
 import { MariBusinessIntelligenceService } from '../../../../lib/services/mari/mariBusinessIntelligence.service';
 
 export const dynamic = 'force-dynamic';
@@ -17,14 +17,9 @@ export async function OPTIONS(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const serverCtx = await getCurrentRalionContext(request, { requireAuth: true });
-    if (!serverCtx) {
-      return corsJsonResponse(
-        { success: false, code: 'AUTHENTICATION_REQUIRED', error: 'Authentication required to view Mari intelligence.' },
-        { status: 401 },
-        request
-      );
-    }
+    const required = await requireRalionContext(request);
+    if (required.response) return required.response;
+    const serverCtx = required.context;
 
     const organizationId = serverCtx.organization?.id || serverCtx.workspace.organization_id || serverCtx.workspace.id;
     const workspaceId = serverCtx.workspace.id;
