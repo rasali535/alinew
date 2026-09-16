@@ -1,11 +1,21 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar, Header } from '@ralion/ui';
-import { MariAiDrawer } from '../../components/MariAiDrawer';
-import { FloatingMariAi } from '../../components/FloatingMariAi';
+import { useOrganization } from '@ralion/auth';
 import { ProductAccessGuard } from '../../components/ProductAccessGuard';
+
+const MariAiDrawer = dynamic(
+  () => import('../../components/MariAiDrawer').then((mod) => mod.MariAiDrawer),
+  { ssr: false }
+);
+
+const FloatingMariAi = dynamic(
+  () => import('../../components/FloatingMariAi').then((mod) => mod.FloatingMariAi),
+  { ssr: false }
+);
 
 export default function DashboardLayout({
   children,
@@ -14,34 +24,25 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { user, organization, activeBranch } = useOrganization();
   const [isMariDrawerOpen, setIsMariDrawerOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-
-  const [currentUser, setCurrentUser] = useState<{
-    fullName: string | null;
-    email: string | null;
-    orgName?: string | null;
-    branchName?: string | null;
-    tier?: string | null;
-  } | null>(null);
-
-  useEffect(() => {
-    import('@/lib/services/auth.service').then(({ AuthService }) => {
-      AuthService.getCurrentUser().then((user) => {
-        if (user) setCurrentUser(user);
-      });
-    });
-  }, []);
 
   useEffect(() => {
     setIsMobileSidebarOpen(false);
   }, [pathname]);
 
-  const isPlatformAdmin = (currentUser as any)?.isPlatformAdmin || (currentUser as any)?.role === 'PLATFORM_ADMIN' || currentUser?.email === 'ali@rasalilabs.com';
-  const organizationName = currentUser?.orgName || (currentUser?.fullName ? `${currentUser.fullName}'s Workspace` : (currentUser?.email ? `${currentUser.email.split('@')[0]}'s Workspace` : 'Ralion Workspace'));
-  const branchName = currentUser?.branchName || 'Main HQ Branch';
-  const displayTier = isPlatformAdmin ? 'PLATFORM_ADMIN' : (currentUser?.tier || 'COMMUNITY');
+  const isPlatformAdmin = user?.role === 'PLATFORM_ADMIN' || user?.email === 'ali@rasalilabs.com';
+  const organizationName =
+    organization?.name ||
+    (user?.displayName
+      ? `${user.displayName}'s Workspace`
+      : user?.email
+        ? `${user.email.split('@')[0]}'s Workspace`
+        : 'Ralion Workspace');
+  const branchName = activeBranch?.name || 'Main HQ Branch';
+  const displayTier = isPlatformAdmin ? 'PLATFORM_ADMIN' : (organization?.licenseTier || 'COMMUNITY');
 
   const handleNavigate = (href: string) => {
     const isDesktop = typeof window !== 'undefined' && ((window as any).__RALION_DESKTOP__ || window.location.protocol === 'file:');
@@ -51,6 +52,11 @@ export default function DashboardLayout({
       const route = href.startsWith('/ralion') ? href.replace('/ralion', '') : href;
       router.push(route || '/');
     }
+  };
+
+  const handleLogout = async () => {
+    const { AuthService } = await import('@/lib/services/auth.service');
+    await AuthService.logout();
   };
 
   return (
@@ -67,10 +73,7 @@ export default function DashboardLayout({
             onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
             onNavigate={handleNavigate}
             onOpenMariAI={() => setIsMariDrawerOpen(true)}
-            onLogout={async () => {
-              const { AuthService } = await import('@/lib/services/auth.service');
-              await AuthService.logout();
-            }}
+            onLogout={handleLogout}
           />
         </div>
 
@@ -93,10 +96,7 @@ export default function DashboardLayout({
                   setIsMobileSidebarOpen(false);
                   setIsMariDrawerOpen(true);
                 }}
-                onLogout={async () => {
-                  const { AuthService } = await import('@/lib/services/auth.service');
-                  await AuthService.logout();
-                }}
+                onLogout={handleLogout}
               />
             </div>
           </div>
@@ -105,9 +105,9 @@ export default function DashboardLayout({
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <Header
             user={{
-              name: currentUser?.fullName || 'User',
-              role: isPlatformAdmin ? 'PLATFORM_ADMIN' : currentUser?.tier === 'ENTERPRISE' ? 'ENTERPRISE_ADMIN' : currentUser?.tier === 'STANDARD' ? 'STANDARD_USER' : currentUser?.tier === 'PROFESSIONAL' ? 'PRO_OPERATOR' : 'ORGANIZATION_OWNER',
-              email: currentUser?.email || 'user@example.com'
+              name: user?.displayName || 'User',
+              role: isPlatformAdmin ? 'PLATFORM_ADMIN' : (user?.role || 'ORGANIZATION_OWNER'),
+              email: user?.email || 'user@example.com'
             }}
             orgName={organizationName}
             isAdmin={isPlatformAdmin}
@@ -123,10 +123,7 @@ export default function DashboardLayout({
             }}
             onOpenMariAI={() => setIsMariDrawerOpen(true)}
             onToggleMobileSidebar={() => setIsMobileSidebarOpen(prev => !prev)}
-            onLogout={async () => {
-              const { AuthService } = await import('@/lib/services/auth.service');
-              await AuthService.logout();
-            }}
+            onLogout={handleLogout}
           />
 
           <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-zinc-950">
@@ -134,10 +131,12 @@ export default function DashboardLayout({
           </main>
         </div>
 
-        <MariAiDrawer
-          isOpen={isMariDrawerOpen}
-          onClose={() => setIsMariDrawerOpen(false)}
-        />
+        {isMariDrawerOpen && (
+          <MariAiDrawer
+            isOpen={isMariDrawerOpen}
+            onClose={() => setIsMariDrawerOpen(false)}
+          />
+        )}
 
         <FloatingMariAi />
       </div>
