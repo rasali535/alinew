@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../../lib/cors';
 import { requireRalionContext } from '../../../../../lib/auth/serverAuth';
-import { createPayPalSubscriptionWithDiagnostics } from '@ralion/integrations/server';
+import { PayPalCardVaultService } from '@ralion/integrations/server';
 import { DurableBillingDatabaseService } from '@ralion/database/server';
 import { SubscriptionPlanId } from '@ralion/database';
 
@@ -68,8 +68,8 @@ export async function POST(request: NextRequest) {
     if (!canCreateNewPaidSubscription) {
       const code = existing.planId === validPlan ? 'ALREADY_SUBSCRIBED' : 'PLAN_CHANGE_REQUIRES_MANAGED_REVISION';
       const error = existing.planId === validPlan
-        ? `This organization already has a ${existing.planId} subscription. A second PayPal subscription was not created.`
-        : `This organization already has a ${existing.planId} billing relationship. Paid-plan changes require a managed PayPal revision to prevent double billing.`;
+        ? `This organization already has a ${existing.planId} subscription. A second PayPal billing relationship was not created.`
+        : `This organization already has a ${existing.planId} billing relationship. Paid-plan changes require a managed revision to prevent double billing.`;
       return corsJsonResponse(
         { success: false, code, error, currentPlanId: existing.planId, currentStatus: existing.status },
         { status: 409 },
@@ -77,31 +77,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await createPayPalSubscriptionWithDiagnostics({
+    const result = await PayPalCardVaultService.createOrder({
       organizationId,
       planId: validPlan,
-      billingCycle: 'MONTHLY',
       userId: serverCtx.user.id,
     });
-
-    if (!result.success) {
-      return corsJsonResponse(
-        {
-          success: false,
-          code: 'PAYPAL_CREATE_FAILED',
-          error: result.error || 'Failed to create PayPal subscription.',
-          providerError: result.providerError,
-        },
-        { status: 400 },
-        request
-      );
-    }
+    const appBase = (process.env.NEXT_PUBLIC_APP_URL || 'https://rasalilabs.com/ralion').replace(/\/$/, '');
+    const approveUrl = `${appBase}/billing/paypal-card?orderId=${encodeURIComponent(result.orderId)}&plan=${encodeURIComponent(validPlan)}`;
 
     return corsJsonResponse(
       {
         success: true,
-        subscriptionId: result.subscriptionId,
-        approveUrl: result.approveUrl,
+        subscriptionId: result.orderId,
+        approveUrl,
+        checkoutMode: 'paypal_card_vault',
         planId: validPlan,
         billingCycle: 'MONTHLY',
       },
@@ -109,10 +98,10 @@ export async function POST(request: NextRequest) {
       request
     );
   } catch (err: any) {
-    console.error('[PayPal Create Subscription API] Error:', err);
+    console.error('[PayPal Card Checkout API] Error:', err);
     return corsJsonResponse(
-      { success: false, error: 'Internal server error creating PayPal subscription.' },
-      { status: 500 },
+      { success: false, code: 'PAYPAL_CARD_CHECKOUT_CREATE_FAILED', error: err instanceof Error ? err.message : 'Internal server error creating PayPal card checkout.' },
+      { status: 400 },
       request
     );
   }
