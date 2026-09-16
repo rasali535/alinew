@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../lib/cors';
 import { BusinessContextService } from '@ralion/ai/server';
-import { getCurrentRalionContext, authRequiredResponse } from '../../../../lib/auth/serverAuth';
+import { requireRalionContext } from '../../../../lib/auth/serverAuth';
 import { MariCreditsService } from '@/lib/services/mari/mariCredits.service';
 
 export const dynamic = 'force-dynamic';
@@ -17,22 +17,15 @@ export async function OPTIONS(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const serverCtx = await getCurrentRalionContext(request, { requireAuth: false });
+    const required = await requireRalionContext(request);
+    if (required.response) return required.response;
+    const serverCtx = required.context;
     const body = await request.json().catch(() => ({}));
-    
-    let canonicalOrgId = 'unconfigured-tenant';
-    if (serverCtx) {
-      canonicalOrgId = serverCtx.organization?.id || serverCtx.workspace.organization_id || serverCtx.workspace.id;
-    } else if (body.organizationId && body.organizationId !== 'org_demo' && body.organizationId !== 'default') {
-      return corsJsonResponse(
-        { success: false, code: 'AUTHENTICATION_REQUIRED', error: 'Authentication required' },
-        { status: 401 },
-        request
-      );
-    }
+
+    const canonicalOrgId = serverCtx.organization?.id || serverCtx.workspace.organization_id || serverCtx.workspace.id;
 
     const requestedOrgId = body.organizationId || request.headers.get('x-organization-id');
-    if (serverCtx && requestedOrgId && requestedOrgId !== canonicalOrgId && requestedOrgId !== serverCtx.workspace.id && requestedOrgId !== serverCtx.user.id) {
+    if (requestedOrgId && requestedOrgId !== canonicalOrgId && requestedOrgId !== serverCtx.workspace.id) {
       return corsJsonResponse(
         { success: false, code: 'TENANT_CONTEXT_MISMATCH', error: 'Forbidden: Cannot access another tenant context' },
         { status: 403 },
@@ -41,8 +34,8 @@ export async function POST(request: NextRequest) {
     }
 
     const orgId = canonicalOrgId;
-    const workspaceId = serverCtx?.workspace?.id || body.workspaceId;
-    const userId = serverCtx?.user?.id || body.userId;
+    const workspaceId = serverCtx.workspace.id;
+    const userId = serverCtx.user.id;
     const activeScreen = body.activeScreen;
     const forceRefresh = Boolean(body.forceRefresh);
 
@@ -55,7 +48,7 @@ export async function POST(request: NextRequest) {
       localOverrides: body.localOverrides,
     });
 
-    if (serverCtx && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId)) {
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId)) {
       try {
         const durableCredits = await MariCreditsService.getSummary(orgId);
         context.credits = {
