@@ -1,20 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, Button, Badge } from '@ralion/ui';
+import { Card, Button, Badge } from '@ralion/ui';
 import {
-  CreditCard,
   Check,
-  Zap,
   ShieldCheck,
-  Clock,
-  Sparkles,
-  RefreshCw,
-  AlertCircle,
-  Download,
   Calendar,
-  Layers,
-  Activity,
 } from 'lucide-react';
 import { useOrganization } from '@ralion/auth';
 import { SubscriptionPlanId, BillingCycle } from '@ralion/database';
@@ -73,12 +64,14 @@ interface CreditLedgerRow {
   timestamp: string;
 }
 
+const PAYPAL_PENDING_KEY = 'ralion_pending_paypal_checkout';
+const billingCycle: BillingCycle = 'MONTHLY';
+
 export default function BillingPage() {
   const { organization, refreshOrganization } = useOrganization();
   const [subData, setSubData] = useState<SubscriptionData | null>(null);
   const [transactions, setTransactions] = useState<TransactionRow[]>([]);
   const [creditLedger, setCreditLedger] = useState<CreditLedgerRow[]>([]);
-  const [billingCycle, setBillingCycle] = useState<BillingCycle>('MONTHLY');
   const [loading, setLoading] = useState(true);
   const [upgradingPlan, setUpgradingPlan] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'plans' | 'ledger' | 'transactions'>('plans');
@@ -97,8 +90,8 @@ export default function BillingPage() {
     setLoading(true);
     try {
       const [subRes, histRes] = await Promise.all([
-        fetch(getRalionApiUrl(`/api/billing/subscription?organizationId=${encodeURIComponent(organizationId)}`)),
-        fetch(getRalionApiUrl(`/api/billing/history?organizationId=${encodeURIComponent(organizationId)}`)),
+        fetch(getRalionApiUrl(`/api/billing/subscription?organizationId=${encodeURIComponent(organizationId)}`), { credentials: 'include' }),
+        fetch(getRalionApiUrl(`/api/billing/history?organizationId=${encodeURIComponent(organizationId)}`), { credentials: 'include' }),
       ]);
 
       if (subRes.ok) {
@@ -124,35 +117,109 @@ export default function BillingPage() {
     fetchBillingData();
   }, [organizationId]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined' || !organizationId) return;
+    const params = new URLSearchParams(window.location.search);
+    const paypalState = params.get('paypal');
+    if (!paypalState) return;
+
+    if (paypalState === 'cancelled') {
+      sessionStorage.removeItem(PAYPAL_PENDING_KEY);
+      window.history.replaceState({}, '', window.location.pathname);
+      return;
+    }
+
+    if (paypalState !== 'success') return;
+
+    let pending: { subscriptionId?: string; planId?: SubscriptionPlanId; billingCycle?: BillingCycle } = {};
+    try {
+      pending = JSON.parse(sessionStorage.getItem(PAYPAL_PENDING_KEY) || '{}');
+    } catch {
+      pending = {};
+    }
+
+    const subscriptionId = params.get('subscription_id') || pending.subscriptionId || '';
+    const planId = pending.planId;
+    if (!subscriptionId || !planId) {
+      alert('PayPal returned successfully, but Ralion could not recover the pending subscription details. No plan was activated.');
+      window.history.replaceState({}, '', window.location.pathname);
+      return;
+    }
+
+    let cancelled = false;
+    setUpgradingPlan(planId);
+
+    (async () => {
+      try {
+        const res = await fetch(getRalionApiUrl('/api/billing/paypal/verify'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            organizationId,
+            planId,
+            billingCycle: 'MONTHLY',
+            subscriptionId,
+          }),
+        });
+        const result = await res.json();
+        if (cancelled) return;
+
+        if (!result.success) {
+          alert(`PayPal verification failed: ${result.error || 'The subscription could not be activated.'}`);
+          return;
+        }
+
+        sessionStorage.removeItem(PAYPAL_PENDING_KEY);
+        localStorage.setItem('ralion_user_tier', planId);
+        window.dispatchEvent(new Event('ralion_subscription_updated'));
+        window.dispatchEvent(new Event('ralion_organization_updated'));
+        await refreshOrganization?.();
+        await fetchBillingData();
+        alert(`Subscription activated: ${planId} (monthly PayPal billing).`);
+      } catch (err: any) {
+        if (!cancelled) alert(`Payment verification error: ${err.message}`);
+      } finally {
+        if (!cancelled) {
+          setUpgradingPlan(null);
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [organizationId]);
+
   const handleServerUpgrade = async (planId: SubscriptionPlanId) => {
+    if (planId === 'COMMUNITY') return;
     setUpgradingPlan(planId);
     try {
-      const mockSubId = `I-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-
-      const res = await fetch(getRalionApiUrl('/api/billing/paypal/verify'), {
+      const res = await fetch(getRalionApiUrl('/api/billing/paypal/create-subscription'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           organizationId,
           planId,
-          billingCycle,
-          subscriptionId: mockSubId,
+          billingCycle: 'MONTHLY',
         }),
       });
 
       const result = await res.json();
-      if (result.success) {
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('ralion_user_tier', planId);
-          window.dispatchEvent(new Event('ralion_subscription_updated'));
-          window.dispatchEvent(new Event('ralion_organization_updated'));
-        }
-        await refreshOrganization?.();
-        await fetchBillingData();
-        alert(`🎉 Subscription upgraded to ${planId} plan (${billingCycle})! Entitlements and credits updated.`);
-      } else {
-        alert(`Upgrade error: ${result.error || 'Verification failed'}`);
+      if (!result.success || !result.subscriptionId || !result.approveUrl) {
+        alert(`Checkout error: ${result.error || 'PayPal checkout could not be created.'}`);
+        return;
       }
+
+      sessionStorage.setItem(PAYPAL_PENDING_KEY, JSON.stringify({
+        subscriptionId: result.subscriptionId,
+        planId,
+        billingCycle: 'MONTHLY',
+        createdAt: new Date().toISOString(),
+      }));
+      window.location.assign(result.approveUrl);
     } catch (err: any) {
       alert(`Payment connection error: ${err.message}`);
     } finally {
@@ -161,8 +228,8 @@ export default function BillingPage() {
   };
 
   const currentPlanId = subData?.subscription?.planId || 'COMMUNITY';
-  const creditBalance = subData?.credits?.balance ?? 100;
-  const creditQuota = subData?.credits?.monthlyQuota ?? 100;
+  const creditBalance = subData?.credits?.balance ?? 250;
+  const creditQuota = subData?.credits?.monthlyQuota ?? 250;
   const renewalDate = subData?.currentPeriodEnd
     ? new Date(subData.currentPeriodEnd).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
     : 'Active';
@@ -181,19 +248,9 @@ export default function BillingPage() {
           </p>
         </div>
 
-        {/* Billing Cycle Selector */}
-        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-zinc-900 border border-zinc-800">
-          {(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'] as const).map((cycle) => (
-            <button
-              key={cycle}
-              onClick={() => setBillingCycle(cycle)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                billingCycle === cycle ? 'bg-blue-600 text-white shadow-md' : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              {cycle === 'DAILY' ? 'Daily' : cycle === 'WEEKLY' ? 'Weekly' : cycle === 'MONTHLY' ? 'Monthly' : 'Yearly (-20%)'}
-            </button>
-          ))}
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs">
+          <ShieldCheck className="w-4 h-4 text-emerald-400" />
+          <span className="text-zinc-300"><strong className="text-white">Monthly</strong> PayPal billing</span>
         </div>
       </div>
 
@@ -213,7 +270,7 @@ export default function BillingPage() {
           </p>
           <div className="mt-4 pt-3 border-t border-zinc-800/80 flex items-center justify-between text-xs text-zinc-400">
             <span>Cycle: <strong className="text-zinc-200">{subData?.subscription?.billingCycle || billingCycle}</strong></span>
-            <span>Gateway: <strong className="text-zinc-200 capitalize">{subData?.subscription?.provider || 'PayPal'}</strong></span>
+            <span>Gateway: <strong className="text-zinc-200 capitalize">{subData?.subscription?.provider || 'manual'}</strong></span>
           </div>
         </Card>
 
@@ -298,7 +355,7 @@ export default function BillingPage() {
 
               <ul className="mt-5 flex flex-col gap-2 text-xs text-zinc-300">
                 <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> Core CRM & Tasks</li>
-                <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> 100 Monthly Credits</li>
+                <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> 250 Monthly Credits</li>
                 <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> 1 Social Account</li>
                 <li className="flex items-center gap-2 text-zinc-500">✕ Commercial Video (Requires Pro)</li>
               </ul>
@@ -308,7 +365,7 @@ export default function BillingPage() {
               variant={currentPlanId === 'COMMUNITY' ? 'outline' : 'glass'}
               size="sm"
               className="w-full mt-6"
-              disabled={currentPlanId === 'COMMUNITY'}
+              disabled
             >
               {currentPlanId === 'COMMUNITY' ? 'Current Plan' : 'Free Baseline'}
             </Button>
@@ -325,10 +382,7 @@ export default function BillingPage() {
               </div>
               <h3 className="text-lg font-bold text-white mt-2">Starter</h3>
               <p className="text-xs text-zinc-400 mt-1">Visual generation & social campaigns</p>
-              <div className="mt-4 text-2xl font-black text-white">
-                {billingCycle === 'DAILY' ? '$1' : billingCycle === 'WEEKLY' ? '$5' : billingCycle === 'YEARLY' ? '$190' : '$19'}
-                <span className="text-xs text-zinc-500 font-normal"> / {billingCycle.toLowerCase()}</span>
-              </div>
+              <div className="mt-4 text-2xl font-black text-white">$19 <span className="text-xs text-zinc-500 font-normal">/ month</span></div>
 
               <ul className="mt-5 flex flex-col gap-2 text-xs text-zinc-300">
                 <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-amber-400 shrink-0" /> FLUX.1 Commercial Visuals</li>
@@ -345,7 +399,7 @@ export default function BillingPage() {
               onClick={() => handleServerUpgrade('STARTER')}
               disabled={currentPlanId === 'STARTER' || upgradingPlan === 'STARTER'}
             >
-              {currentPlanId === 'STARTER' ? 'Current Plan' : upgradingPlan === 'STARTER' ? 'Verifying with PayPal...' : `Upgrade to Starter`}
+              {currentPlanId === 'STARTER' ? 'Current Plan' : upgradingPlan === 'STARTER' ? 'Opening PayPal...' : 'Subscribe to Starter'}
             </Button>
           </Card>
 
@@ -358,10 +412,7 @@ export default function BillingPage() {
               </div>
               <h3 className="text-lg font-bold text-white mt-2">Professional</h3>
               <p className="text-xs text-zinc-400 mt-1">Full operational automation & commercial video</p>
-              <div className="mt-4 text-2xl font-black text-white">
-                {billingCycle === 'DAILY' ? '$3' : billingCycle === 'WEEKLY' ? '$15' : billingCycle === 'YEARLY' ? '$490' : '$49'}
-                <span className="text-xs text-zinc-500 font-normal"> / {billingCycle.toLowerCase()}</span>
-              </div>
+              <div className="mt-4 text-2xl font-black text-white">$49 <span className="text-xs text-zinc-500 font-normal">/ month</span></div>
 
               <ul className="mt-5 flex flex-col gap-2 text-xs text-zinc-300">
                 <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> CogVideoX Commercial Reels</li>
@@ -378,7 +429,7 @@ export default function BillingPage() {
               onClick={() => handleServerUpgrade('PROFESSIONAL')}
               disabled={currentPlanId === 'PROFESSIONAL' || upgradingPlan === 'PROFESSIONAL'}
             >
-              {currentPlanId === 'PROFESSIONAL' ? 'Current Plan' : upgradingPlan === 'PROFESSIONAL' ? 'Verifying with PayPal...' : `Upgrade to Pro`}
+              {currentPlanId === 'PROFESSIONAL' ? 'Current Plan' : upgradingPlan === 'PROFESSIONAL' ? 'Opening PayPal...' : 'Subscribe to Pro'}
             </Button>
           </Card>
 
@@ -391,7 +442,7 @@ export default function BillingPage() {
               </div>
               <h3 className="text-lg font-bold text-white mt-2">Enterprise</h3>
               <p className="text-xs text-zinc-400 mt-1">Unlimited branches, SLA & sovereign cloud</p>
-              <div className="mt-4 text-2xl font-black text-white">$199 <span className="text-xs text-zinc-500 font-normal">/ mo</span></div>
+              <div className="mt-4 text-2xl font-black text-white">$199 <span className="text-xs text-zinc-500 font-normal">/ month</span></div>
 
               <ul className="mt-5 flex flex-col gap-2 text-xs text-zinc-300">
                 <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-purple-400 shrink-0" /> 25,000 Monthly Credits</li>
@@ -408,9 +459,15 @@ export default function BillingPage() {
               onClick={() => handleServerUpgrade('ENTERPRISE')}
               disabled={currentPlanId === 'ENTERPRISE' || upgradingPlan === 'ENTERPRISE'}
             >
-              {currentPlanId === 'ENTERPRISE' ? 'Current Plan' : upgradingPlan === 'ENTERPRISE' ? 'Verifying with PayPal...' : 'Upgrade to Enterprise'}
+              {currentPlanId === 'ENTERPRISE' ? 'Current Plan' : upgradingPlan === 'ENTERPRISE' ? 'Opening PayPal...' : 'Subscribe to Enterprise'}
             </Button>
           </Card>
+        </div>
+      )}
+
+      {activeTab === 'plans' && currentPlanId !== 'COMMUNITY' && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-xs text-amber-200">
+          Paid-plan changes are protected from accidental double billing. Ralion will not create a second PayPal subscription for an already-paid organization; managed PayPal plan revision is required for upgrades or downgrades.
         </div>
       )}
 

@@ -1,6 +1,8 @@
 import 'server-only';
 import './mariCompetitiveContext.bootstrap';
 import './mariMarketingLearningContext.bootstrap';
+import './mariDurableCredits.bootstrap';
+import './creativeDurableCredits.bootstrap';
 
 export * from './client';
 export * from './storage';
@@ -9,6 +11,7 @@ export * from './creativeAsset.service';
 export * from './creativeProviders';
 export * from './creativeOrchestrator.service';
 export * from './tenantCredits.service';
+export * from './durableTenantCredits.service';
 export * from './mariCreativeIntelligence.service';
 export * from './creativeComposition.service';
 export * from './visualSemanticEvaluator.service';

@@ -1,4 +1,5 @@
 import 'server-only';
+import './billing/paypalOpaqueCheckout.bootstrap';
 
 export * from './client';
 export * from './core/crypto';
@@ -14,3 +15,4 @@ export * from './social/adapters/XProvider';
 export * from './social/adapters/ZernioProvider';
 export * from './social/services/ZernioSocialService';
 export * from './billing/paypal.service';
+export * from './billing/paypalDurable.service';
