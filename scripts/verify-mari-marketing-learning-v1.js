@@ -18,11 +18,12 @@ const integrity = 'packages/database/migrations/20260916114500_mari_marketing_le
 const service = 'apps/ralion/src/lib/services/mari/mariMarketingLearning.service.ts';
 const bridge = 'apps/ralion/src/lib/services/mari/mariMarketingPublicationBridge.service.ts';
 const route = 'apps/ralion/src/app/api/mari/learning/route.ts';
+const intelligenceRoute = 'apps/ralion/src/app/api/mari/intelligence/route.ts';
 const publishRoute = 'apps/ralion/src/app/api/social/publish/route.ts';
 const bootstrap = 'packages/ai/src/mariMarketingLearningContext.bootstrap.ts';
 const server = 'packages/ai/src/server.ts';
 
-[migration, integrity, service, bridge, route, publishRoute, bootstrap, server].forEach((file) => assert(exists(file), `${file} exists`));
+[migration, integrity, service, bridge, route, intelligenceRoute, publishRoute, bootstrap, server].forEach((file) => assert(exists(file), `${file} exists`));
 
 const migrationText = read(migration);
 assert(migrationText.includes('mari_marketing_experiments'), 'experiment ledger table declared');
@@ -37,7 +38,8 @@ assert(integrityText.includes('uq_mari_marketing_experiment_source'), 'publicati
 
 const serviceText = read(service);
 assert(serviceText.includes(".from('social_posts')"), 'learner starts from canonical publication history');
-assert(serviceText.includes('FacebookPageManagementService.getPagePosts'), 'learner reconciles with live page evidence');
+assert(serviceText.includes('FacebookPageManagementService.getPagePosts'), 'standalone learner can reconcile with live page evidence');
+assert(serviceText.includes('prefetchedPosts === undefined'), 'learner reuses authoritative prefetched BI evidence without refetching');
 assert(serviceText.includes('observedPost.id === publication.id'), 'learner rejects canonical publication rows as self-referential outcome evidence');
 assert(serviceText.includes('INSUFFICIENT_EXPERIMENT_COUNT'), 'learner refuses sparse evidence');
 assert(serviceText.includes("metricQuality === 'RATE' ? 0.88 : 0.58"), 'raw-engagement confidence is capped below supported threshold');
@@ -54,6 +56,11 @@ assert(publishText.includes('Mari publication provenance warning'), 'learning fa
 const routeText = read(route);
 assert(routeText.includes("action !== 'REFRESH'"), 'learning refresh API is explicit and authenticated by route context');
 assert(routeText.includes('refreshFromPublishedPerformance'), 'learning refresh invokes live evidence reconciliation');
+
+const intelligenceText = read(intelligenceRoute);
+assert(intelligenceText.includes('facebookPosts = await FacebookPageManagementService.getPagePosts'), 'BI route fetches shared Facebook evidence once');
+assert(intelligenceText.includes('facebookPosts,\n    });'), 'BI receives the shared post evidence');
+assert(intelligenceText.includes('intelligence,\n        facebookPosts'), 'learning refresh receives the same prefetched evidence');
 
 const bootstrapText = read(bootstrap);
 assert(bootstrapText.includes('TENANT MARKETING LEARNING'), 'Mari reasoning receives tenant learning evidence');
