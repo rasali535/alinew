@@ -1,0 +1,82 @@
+name: Temporary patch Mari output sanitizer
+
+on:
+  push:
+    branches:
+      - fix/mari-universal-output-sanitization
+    paths:
+      - .github/workflows/_temporary_patch_mari_output_sanitizer.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/mari-universal-output-sanitization
+          fetch-depth: 0
+      - name: Patch Universal Mari output sanitation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('packages/ai/src/mariUniversalCore.ts')
+          src = path.read_text()
+
+          marker = 'async function callGeminiNeuralCore('
+          if marker not in src:
+              raise SystemExit('callGeminiNeuralCore marker not found')
+
+          helper = r'''export function sanitizeMariModelOutput(raw: string): string {
+            if (!raw) return '';
+
+            let text = raw
+              .replace(/\\([*_#\[\]()`~\\-])/g, '$1')
+              .replace(/<svg[\s\S]*?<\/svg>/gi, '')
+              .replace(/<svg[^>]*>/gi, '')
+              .replace(/<\/?(?:path|rect|circle|g|defs|linearGradient|stop)[^>]*>/gi, '')
+              .replace(/\bsvgSend to Studio\b/gi, 'Send to Studio')
+              .replace(/(^|\n)(\s*#{1,6}\s+)svg(?=[A-Z0-9])/g, '$1$2')
+              .replace(/(^|\n)(\s*(?:[-*•]\s+)?)svg(?=[A-Z0-9])/g, '$1$2')
+              .replace(/\[(Open Growth Studio|View CRM Pipeline|Create Reel|Create Visual|Connect Facebook|Create Growth Campaign|Select Facebook Page)\]/gi, '')
+              .replace(/(^|\n)\s*[-*]\s+\*\*•\*\*\s*/g, '$1- ')
+              .replace(/(^|\n)\s*\*\*•\*\*\s*/g, '$1- ')
+              .replace(/(^|\n)\s*[-*•]\s*(?=\n|$)/g, '$1')
+              .replace(/(^|\n)(\s*[-*•]\s+)([A-Za-z0-9][A-Za-z0-9 /&()'’–—-]{1,80})\*\*:\s*/g, '$1$2**$3**: ')
+              .replace(/\b(The|A|An)\*\*\s+([^*\n]{1,80}?)\s+\*\*(?=[A-Za-z])/g, '$1 **$2** ')
+              .replace(/([A-Za-z0-9),.])\*\*\s+([^*\n]{1,80}?)\s+\*\*(?=[A-Za-z])/g, '$1 **$2** ')
+              .replace(/([A-Za-z0-9),.])\*\*\s+([^*\n]{1,80}?)\*\*(?=[\s.,;:!?]|$)/g, '$1 **$2**')
+              .replace(/\*\*:\*\*/g, '**:')
+              .replace(/\n{3,}/g, '\n\n')
+              .trim();
+
+            return text;
+          }
+
+          '''
+
+          if 'export function sanitizeMariModelOutput(' not in src:
+              src = src.replace(marker, helper + marker, 1)
+
+          pattern = re.compile(
+              r"      const cleanText = candidateText\n(?:        \.replace\([^\n]+\)\n)+        \.trim\(\);",
+              re.M,
+          )
+          replacement = "      const cleanText = sanitizeMariModelOutput(candidateText);"
+          src2, count = pattern.subn(lambda m: replacement, src, count=1)
+          if count != 1:
+              raise SystemExit(f'cleanText replacement count={count}')
+
+          path.write_text(src2)
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/ai/src/mariUniversalCore.ts
+          git diff --cached --quiet && exit 0
+          git commit -m "fix(mari): sanitize model output before surface rendering"
+          git push origin HEAD:fix/mari-universal-output-sanitization
