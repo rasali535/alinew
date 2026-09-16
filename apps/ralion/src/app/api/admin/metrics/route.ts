@@ -1,295 +1,170 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyPlatformAdminRequest } from '../../../../lib/auth/adminAuth';
-import {
-  TenantCreditsService,
-  CreativeAssetService,
-  BusinessKnowledgeProfileService,
-} from '@ralion/ai/server';
-import { BillingDatabaseService } from '@ralion/database';
-import { PlatformAdminService } from '@ralion/auth/server';
 import { getSocialConnectionCapabilities } from '@ralion/integrations';
 import { getPrivilegedSupabase } from '@/lib/supabase/server';
-import { isActiveFacebookConnection, isActiveSocialConnection } from '@/lib/services/social/socialConnectionStatus';
+import { isActiveSocialConnection } from '@/lib/services/social/socialConnectionStatus';
 
-const RAS_ALI_LABS_ORGANIZATION_ID = '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf';
-const RAS_ALI_LABS_FACEBOOK_PAGE_ID = '477334159265235';
+const PLATFORM_ORG_ID = '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf';
+const INTERNAL_ORG_IDS = new Set(['00000000-0000-0000-0000-000000000000', PLATFORM_ORG_ID]);
 
 export async function GET(request: NextRequest) {
   const auth = await verifyPlatformAdminRequest(request);
-  if (!auth.authorized) {
-    return NextResponse.json(
-      { success: false, error: auth.error || 'Unauthorized' },
-      { status: auth.statusCode || 403 }
-    );
-  }
+  if (!auth.authorized) return NextResponse.json({ success: false, error: auth.error || 'Unauthorized' }, { status: auth.statusCode || 403 });
 
   try {
-    let supabase: any = null;
-    let registeredProfiles: any[] = [];
-    let fbConns: any[] = [];
-    let zConns: any[] = [];
+    const supabase = getPrivilegedSupabase();
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
 
-    try {
-      supabase = getPrivilegedSupabase();
+    const [orgsRes, profilesRes, statesRes, subsRes, walletsRes, reservationsRes, socialRes, providerProfilesRes, auditsRes] = await Promise.all([
+      supabase.from('organizations').select('id,name,owner_id,created_at'),
+      supabase.from('profiles').select('id,full_name,email'),
+      supabase.from('tenant_admin_state').select('organization_id,status,suspension_reason,suspended_at'),
+      supabase.from('subscriptions').select('id,organization_id,status,billing_cycle,current_period_end,subscription_plans(name,slug,price,currency)').order('created_at', { ascending: false }),
+      supabase.from('tenant_credit_wallets').select('organization_id,monthly_quota,remaining_plan_credits,remaining_bonus_credits,reserved_credits,lifetime_credits_granted,lifetime_credits_consumed'),
+      supabase.from('tenant_credit_reservations').select('organization_id,status,source_feature,amount,created_at,finalized_at').gte('created_at', thirtyDaysAgo),
+      supabase.from('social_connections').select('id,organization_id,workspace_id,user_id,provider,provider_account_id,account_name,username,account_type,connection_status,token_status,followers_count,infrastructure_provider,connected_at,created_at,metadata'),
+      supabase.from('social_provider_profiles').select('id,organization_id,workspace_id,user_id,provider,provider_profile_id,account_id,profile_name,status,updated_at'),
+      supabase.from('audit_logs').select('id,organization_id,user_id,action,module,metadata,created_at').gte('created_at', thirtyDaysAgo).order('created_at', { ascending: false }).limit(1000),
+    ]);
 
-      const [profsRes, connsRes, zRes] = await Promise.allSettled([
-        supabase.from('profiles').select('id, full_name, email, created_at'),
-        supabase
-          .from('social_connections')
-          .select('id, organization_id, workspace_id, user_id, provider, provider_account_id, account_name, username, account_type, connection_status, token_status, followers_count, infrastructure_provider, connected_at, disconnected_at, created_at, metadata')
-          .order('created_at', { ascending: false }),
-        supabase.from('social_provider_profiles').select('id, organization_id, workspace_id, user_id, provider, provider_profile_id, account_id, profile_name, status, updated_at'),
-      ]);
-
-        if (profsRes.status === 'fulfilled' && profsRes.value.data) {
-          registeredProfiles = profsRes.value.data;
-        } else if (profsRes.status === 'rejected' || (profsRes.status === 'fulfilled' && profsRes.value.error)) {
-          console.warn('[Admin Metrics] Warning loading profiles:', profsRes.status === 'rejected' ? profsRes.reason : profsRes.value.error);
-        }
-
-        if (connsRes.status === 'fulfilled' && connsRes.value.data) {
-          fbConns = connsRes.value.data;
-        } else if (connsRes.status === 'rejected' || (connsRes.status === 'fulfilled' && connsRes.value.error)) {
-          console.warn('[Admin Metrics] Warning loading social_connections:', connsRes.status === 'rejected' ? connsRes.reason : connsRes.value.error);
-        }
-
-        if (zRes.status === 'fulfilled' && zRes.value.data) {
-          zConns = zRes.value.data;
-        } else if (zRes.status === 'rejected' || (zRes.status === 'fulfilled' && zRes.value.error)) {
-          console.warn('[Admin Metrics] Warning loading social_provider_profiles:', zRes.status === 'rejected' ? zRes.reason : zRes.value.error);
-        }
-    } catch (dbErr: any) {
-      console.error('[Admin Metrics] Supabase connection error:', dbErr.message);
+    for (const [name, result] of Object.entries({ organizations: orgsRes, profiles: profilesRes, adminState: statesRes, subscriptions: subsRes, wallets: walletsRes, reservations: reservationsRes, social: socialRes, providerProfiles: providerProfilesRes, audits: auditsRes })) {
+      if ((result as any).error) throw new Error(`${name}: ${(result as any).error.message}`);
     }
 
-    // 1. Live customer tenant discovery strictly from canonical Supabase user profiles (excluding platform admin)
-    const customerOrgIds = new Set<string>();
+    const organizations = orgsRes.data || [];
+    const customerOrgs = organizations.filter((org: any) => !INTERNAL_ORG_IDS.has(org.id));
+    const stateByOrg = new Map((statesRes.data || []).map((s: any) => [s.organization_id, s]));
+    const latestSubByOrg = new Map<string, any>();
+    for (const sub of subsRes.data || []) if (!latestSubByOrg.has((sub as any).organization_id)) latestSubByOrg.set((sub as any).organization_id, sub);
+    const walletByOrg = new Map((walletsRes.data || []).map((w: any) => [w.organization_id, w]));
+    const profileById = new Map((profilesRes.data || []).map((p: any) => [p.id, p]));
 
-    registeredProfiles.forEach(p => {
-      if (
-        p.id &&
-        p.id !== '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf' &&
-        p.email !== 'ali@rasalilabs.com' &&
-        p.email !== 'admin@rasalilabs.com'
-      ) {
-        customerOrgIds.add(p.id);
-      }
-    });
+    const totalCustomers = customerOrgs.length;
+    const suspendedCustomers = customerOrgs.filter((org: any) => stateByOrg.get(org.id)?.status === 'SUSPENDED').length;
+    const activeCustomers = totalCustomers - suspendedCustomers;
 
-    const totalCustomers = customerOrgIds.size;
-    const activeCustomers = Array.from(customerOrgIds).filter(
-      orgId => !PlatformAdminService.isTenantSuspended(orgId)
-    ).length;
-
-    // 2. Credits & Creative Studio Generations from Authoritative Ledger
-    const allAssets = CreativeAssetService.listAssets('all');
-    const imageAssets = allAssets.filter(a => a.type === 'POSTER_IMAGE');
-    const videoAssets = allAssets.filter(a => a.type === 'VIDEO_REEL');
-
-    let totalCreditsIssued = 0;
-    let totalCreditsConsumed = 0;
-    let payingCustomers = 0;
     let estimatedMRR = 0;
-
-    // Apply idempotent Community migration reconciliation for canonical tenants
-    customerOrgIds.forEach(orgId => {
-      try {
-        TenantCreditsService.reconcileCommunityMigration(orgId);
-        const wallet = TenantCreditsService.getOrCreateWallet(orgId);
-        totalCreditsIssued += wallet.monthlyQuota;
-        totalCreditsConsumed += wallet.lifetimeConsumed;
-
-        const sub = BillingDatabaseService.getSubscription(orgId);
-        if (sub && sub.status === 'ACTIVE') {
-          const pId = sub.planId as string;
-          if (pId === 'STARTER' || pId === 'STANDARD') {
-            estimatedMRR += 19;
-            payingCustomers += 1;
-          } else if (pId === 'PROFESSIONAL' || pId === 'GROWTH') {
-            estimatedMRR += 49;
-            payingCustomers += 1;
-          } else if (pId === 'ENTERPRISE') {
-            // Enterprise is custom billing
-            payingCustomers += 1;
-          }
-        }
-      } catch {}
-    });
-
-    const estimatedARR = estimatedMRR * 12;
-
-    // 3. AI Token Telemetry & Estimated Operational Cost
-    let totalAiTokens = 0;
-    customerOrgIds.forEach(orgId => {
-      try {
-        const { MariTokenTelemetryService } = require('@ralion/ai');
-        const usage = MariTokenTelemetryService.getTotalUsage(orgId);
-        totalAiTokens += usage.totalTokens;
-      } catch {}
-    });
-
-    // Estimated provider cost registry (operational cost, not verified gross margin)
-    const estimatedProviderCostUsd =
-      (totalAiTokens / 1000) * 0.0001 +
-      imageAssets.length * 0.003 +
-      videoAssets.length * 0.05;
-
-    // 4. Live Social & Meta Connections
-    let connectedMetaCount = 0;
-    let connectedZernioCount = 0;
-    let adminFacebook: any = null;
-    let adminZernio: any = null;
-
-    let connectedUsersCount = 0;
-    let connectedUsersList: any[] = [];
-    let allConnections: any[] = [];
-
-    if (fbConns.length > 0) {
-      const activeConns = fbConns.filter(isActiveSocialConnection);
-      const activeFacebookConns = activeConns.filter(isActiveFacebookConnection);
-      connectedMetaCount = activeFacebookConns.length;
-
-      const userProfilesMap: Record<string, { full_name?: string; email?: string }> = {};
-      registeredProfiles.forEach(p => {
-        userProfilesMap[p.id] = { full_name: p.full_name, email: p.email };
-      });
-
-      allConnections = activeConns.map(c => {
-        const caps = getSocialConnectionCapabilities(c);
-        return {
-          id: c.id,
-          connectionId: c.id,
-          provider: c.provider,
-          providerAccountId: c.provider_account_id || c.metadata?.pageId || c.id,
-          accountName: c.account_name || c.metadata?.pageName || c.metadata?.name || 'Social Account',
-          accountType: caps.classification,
-          accountTypeLabel: caps.accountTypeLabel,
-          isPersonalProfile: caps.isPersonalProfile,
-          isBusinessPage: caps.isBusinessPage,
-          username: c.username || c.metadata?.pageUsername || null,
-          connectionStatus: 'CONNECTED',
-          status: 'CONNECTED',
-          tokenStatus: c.token_status || 'TOKEN_VALID',
-          followersCount: Number(c.followers_count || c.metadata?.followers_count || 0),
-          organizationId: c.organization_id || c.workspace_id || 'ras-ali-labs',
-          workspaceId: c.workspace_id,
-          userId: c.user_id,
-          infrastructureProvider: c.infrastructure_provider || 'native',
-          connectedAt: c.connected_at || c.created_at,
-          capabilities: caps,
-          metadata: c.metadata || {},
-        };
-      });
-
-      // Construct distinct connectedUsers collection
-      const userMap = new Map<string, any>();
-      activeConns.forEach(c => {
-        const uId = c.user_id || c.workspace_id || 'unknown';
-        const prof = userProfilesMap[c.user_id] || {};
-        const caps = getSocialConnectionCapabilities(c);
-
-        const connItem = {
-          socialConnectionId: c.id,
-          id: c.id,
-          provider: c.provider,
-          providerAccountId: c.provider_account_id || c.metadata?.pageId || c.id,
-          accountName: c.account_name || c.metadata?.pageName || c.metadata?.name || 'Social Account',
-          accountType: caps.classification,
-          accountTypeLabel: caps.accountTypeLabel,
-          isPersonalProfile: caps.isPersonalProfile,
-          isBusinessPage: caps.isBusinessPage,
-          connectionStatus: 'CONNECTED',
-          status: 'CONNECTED',
-          tokenStatus: c.token_status || 'TOKEN_VALID',
-          connectedAt: c.connected_at || c.created_at,
-        };
-
-        if (!userMap.has(uId)) {
-          const rawEmail = prof.email || c.metadata?.email || (c.user_id === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf' ? 'ali@rasalilabs.com' : 'user@customer.ralion.io');
-          const rawName = prof.full_name || (c.metadata?.email === 'chiwabby@gmail.com' ? 'Kutlwano B Pule' : (c.account_name || 'Connected User'));
-          userMap.set(uId, {
-            userId: uId,
-            id: uId,
-            userName: rawName,
-            name: rawName,
-            email: rawEmail,
-            workspaceId: c.workspace_id || c.organization_id || uId,
-            organizationId: c.organization_id || c.workspace_id || uId,
-            connectionCount: 0,
-            connections: [],
-          });
-        }
-
-        const uEntry = userMap.get(uId);
-        uEntry.connections.push(connItem);
-        uEntry.connectionCount = uEntry.connections.length;
-      });
-
-      connectedUsersList = Array.from(userMap.values());
-      connectedUsersCount = connectedUsersList.length;
-
-      const masterFb =
-        activeFacebookConns.find(c =>
-          c.organization_id === RAS_ALI_LABS_ORGANIZATION_ID &&
-          getSocialConnectionCapabilities(c).isBusinessPage &&
-          (c.provider_account_id === RAS_ALI_LABS_FACEBOOK_PAGE_ID || c.metadata?.pageId === RAS_ALI_LABS_FACEBOOK_PAGE_ID)
-        ) ||
-        activeFacebookConns.find(c =>
-          c.organization_id === RAS_ALI_LABS_ORGANIZATION_ID &&
-          getSocialConnectionCapabilities(c).isBusinessPage
-        );
-
-      if (masterFb) {
-        adminFacebook = {
-          id: masterFb.id,
-          resourceType: 'PLATFORM_RESOURCE',
-          classification: 'PLATFORM_OWNED',
-          isLocked: true,
-          protected: true,
-          pageId: masterFb.metadata?.pageId || masterFb.provider_account_id || RAS_ALI_LABS_FACEBOOK_PAGE_ID,
-          pageName: masterFb.metadata?.pageName || masterFb.account_name || 'Ras Ali Labs',
-          pageUsername: masterFb.metadata?.pageUsername || masterFb.username || 'rasalibass',
-          organizationId: masterFb.organization_id,
-          connectionStatus: 'CONNECTED',
-          tokenStatus: masterFb.token_status || 'TOKEN_VALID',
-          followersCount: masterFb.followers_count || 108,
-          capabilities: masterFb.metadata?.capabilities || {
-            canPublish: true,
-            canSchedule: true,
-            canUploadImage: true,
-            canUploadVideo: true,
-            canReadAnalytics: true,
-          },
-          connectedAt: masterFb.connected_at || masterFb.created_at,
-        };
+    let payingCustomers = 0;
+    for (const org of customerOrgs as any[]) {
+      const sub: any = latestSubByOrg.get(org.id);
+      if (!sub || String(sub.status || '').toUpperCase() !== 'ACTIVE') continue;
+      const plan = Array.isArray(sub.subscription_plans) ? sub.subscription_plans[0] : sub.subscription_plans;
+      const price = Number(plan?.price || 0);
+      const currency = String(plan?.currency || 'USD').toUpperCase();
+      if (price > 0) {
+        payingCustomers += 1;
+        if (currency === 'USD') estimatedMRR += price;
       }
     }
 
-    if (zConns.length > 0) {
-      connectedZernioCount = zConns.filter(c => c.status === 'ACTIVE').length;
-      const masterZ =
-        zConns.find(c => c.provider === 'zernio' && c.provider_profile_id === '6a82deac1a69158ef81cb2cd') ||
-        zConns[0];
-      if (masterZ) {
-        adminZernio = {
-          id: masterZ.id,
-          resourceType: 'PLATFORM_RESOURCE',
-          classification: 'PLATFORM_OWNED',
-          isLocked: true,
-          protected: true,
-          providerProfileId: masterZ.provider_profile_id,
-          accountId: masterZ.account_id || '6a82df7277555aae018b92b4',
-          organizationId: masterZ.organization_id || 'ras-ali-labs',
-          profileName: masterZ.profile_name || 'Default',
-          status: masterZ.status || 'ACTIVE',
-          updatedAt: masterZ.updated_at,
-        };
-      }
-    }
+    const allWallets = walletsRes.data || [];
+    const totalCreditsIssued = allWallets.reduce((sum: number, wallet: any) => sum + Number(wallet.lifetime_credits_granted || 0), 0);
+    const totalCreditsConsumed = allWallets.reduce((sum: number, wallet: any) => sum + Number(wallet.lifetime_credits_consumed || 0), 0);
 
-    // 5. Audit log stats
-    const recentLogs = PlatformAdminService.getAuditLogs({ limit: 50 });
-    const securityEvents = recentLogs.filter(l => l.action === 'SECURITY_EVENT');
+    const reservations = reservationsRes.data || [];
+    const creativeReservations = reservations.filter((r: any) => /creative|image|video|flux|cogvideo/i.test(String(r.source_feature || '')));
+    const committed = creativeReservations.filter((r: any) => ['COMMITTED', 'CHARGED', 'CONSUMED', 'FINALIZED'].includes(String(r.status || '').toUpperCase()));
+    const released = creativeReservations.filter((r: any) => ['RELEASED', 'FAILED', 'CANCELED', 'CANCELLED'].includes(String(r.status || '').toUpperCase()));
+    const imageCount = committed.filter((r: any) => /image|flux/i.test(String(r.source_feature || ''))).length;
+    const videoCount = committed.filter((r: any) => /video|cogvideo/i.test(String(r.source_feature || ''))).length;
+    const finishedCreative = committed.length + released.length;
+    const successRate = finishedCreative ? Math.round((committed.length / finishedCreative) * 1000) / 10 : 0;
+
+    const socialConnections = socialRes.data || [];
+    const activeConns = socialConnections.filter(isActiveSocialConnection);
+    const activeFacebook = activeConns.filter((c: any) => String(c.provider || '').toLowerCase() === 'facebook');
+    const providerProfiles = providerProfilesRes.data || [];
+    const activeZernio = providerProfiles.filter((p: any) => String(p.provider || '').toLowerCase() === 'zernio' && ['ACTIVE', 'CONNECTED'].includes(String(p.status || '').toUpperCase()));
+
+    const userMap = new Map<string, any>();
+    for (const connection of activeConns as any[]) {
+      const key = connection.user_id || connection.workspace_id || connection.organization_id || connection.id;
+      const profile: any = profileById.get(connection.user_id);
+      const org: any = organizations.find((o: any) => o.id === connection.organization_id);
+      const caps = getSocialConnectionCapabilities(connection);
+      if (!userMap.has(key)) {
+        userMap.set(key, {
+          userId: key,
+          userName: profile?.full_name || org?.name || connection.account_name || 'Connected User',
+          email: profile?.email || '',
+          workspaceId: connection.workspace_id || null,
+          organizationId: connection.organization_id || null,
+          connectionCount: 0,
+          connections: [],
+        });
+      }
+      const entry = userMap.get(key);
+      entry.connections.push({
+        socialConnectionId: connection.id,
+        id: connection.id,
+        provider: connection.provider,
+        providerAccountId: connection.provider_account_id,
+        accountName: connection.account_name || connection.username || 'Social Account',
+        accountType: caps.classification,
+        accountTypeLabel: caps.accountTypeLabel,
+        isPersonalProfile: caps.isPersonalProfile,
+        isBusinessPage: caps.isBusinessPage,
+        connectionStatus: connection.connection_status,
+        tokenStatus: connection.token_status,
+        connectedAt: connection.connected_at || connection.created_at,
+      });
+      entry.connectionCount = entry.connections.length;
+    }
+    const connectedUsers = Array.from(userMap.values());
+
+    const allConnections = activeConns.map((connection: any) => {
+      const caps = getSocialConnectionCapabilities(connection);
+      return {
+        id: connection.id,
+        connectionId: connection.id,
+        provider: connection.provider,
+        providerAccountId: connection.provider_account_id,
+        accountName: connection.account_name || connection.username || 'Social Account',
+        accountType: caps.classification,
+        accountTypeLabel: caps.accountTypeLabel,
+        isPersonalProfile: caps.isPersonalProfile,
+        isBusinessPage: caps.isBusinessPage,
+        username: connection.username || null,
+        connectionStatus: connection.connection_status,
+        tokenStatus: connection.token_status,
+        followersCount: Number(connection.followers_count || 0),
+        organizationId: connection.organization_id,
+        workspaceId: connection.workspace_id,
+        userId: connection.user_id,
+        infrastructureProvider: connection.infrastructure_provider || 'native',
+        connectedAt: connection.connected_at || connection.created_at,
+        capabilities: caps,
+        metadata: connection.metadata || {},
+      };
+    });
+
+    const platformFacebook: any = activeFacebook.find((connection: any) => connection.organization_id === PLATFORM_ORG_ID && getSocialConnectionCapabilities(connection).isBusinessPage) || activeFacebook.find((connection: any) => connection.organization_id === PLATFORM_ORG_ID);
+    const adminFacebook = platformFacebook ? {
+      id: platformFacebook.id,
+      pageId: platformFacebook.provider_account_id,
+      pageName: platformFacebook.account_name || 'Ras Ali Labs',
+      pageUsername: platformFacebook.username || '',
+      connectionStatus: platformFacebook.connection_status,
+      tokenStatus: platformFacebook.token_status,
+      followersCount: Number(platformFacebook.followers_count || 0),
+      capabilities: getSocialConnectionCapabilities(platformFacebook),
+      connectedAt: platformFacebook.connected_at || platformFacebook.created_at,
+    } : null;
+
+    const platformZernio: any = activeZernio.find((profile: any) => profile.organization_id === PLATFORM_ORG_ID);
+    const adminZernio = platformZernio ? {
+      id: platformZernio.id,
+      providerProfileId: platformZernio.provider_profile_id,
+      profileName: platformZernio.profile_name || 'Zernio Profile',
+      status: platformZernio.status,
+      updatedAt: platformZernio.updated_at,
+      organizationId: platformZernio.organization_id,
+    } : null;
+
+    const audits = auditsRes.data || [];
+    const securityEvents = audits.filter((log: any) => /SECURITY|AUTH|FORBIDDEN|TENANT_CONTEXT/i.test(`${log.action} ${log.module}`));
+    const failedEvents = audits.filter((log: any) => ['FAILURE', 'FAILED', 'ERROR'].includes(String(log.metadata?.result || '').toUpperCase()));
+    const apiErrorRatePct = audits.length ? Math.round((failedEvents.length / audits.length) * 10000) / 100 : 0;
 
     return NextResponse.json({
       success: true,
@@ -297,46 +172,37 @@ export async function GET(request: NextRequest) {
         totalCustomers,
         activeCustomers,
         payingCustomers,
-        suspendedCustomers: totalCustomers - activeCustomers,
-        estimatedMRR,
-        estimatedARR,
-        mrr: estimatedMRR,
-        arr: estimatedARR,
+        suspendedCustomers,
+        estimatedMRR: Number(estimatedMRR.toFixed(2)),
+        estimatedARR: Number((estimatedMRR * 12).toFixed(2)),
+        mrr: Number(estimatedMRR.toFixed(2)),
+        arr: Number((estimatedMRR * 12).toFixed(2)),
         totalCreditsIssued,
         totalCreditsConsumed,
-        totalAiTokens,
-        estimatedProviderCostUsd: Number(estimatedProviderCostUsd.toFixed(4)),
-        estimatedGrossMarginPct: estimatedMRR > 0 ? Math.max(0, Math.round(((estimatedMRR - estimatedProviderCostUsd) / estimatedMRR) * 100)) : 100,
-        creativeGenerations: {
-          total: allAssets.length,
-          images: imageAssets.length,
-          videos: videoAssets.length,
-          successRate: 100,
-        },
-        connectedUsers: connectedUsersList,
-        connectedUsersCount: connectedUsersCount,
-        connectedUserCount: connectedUsersCount,
-        activeConnectionCount: connectedMetaCount,
-        activeSocialConnections: connectedMetaCount,
-        connectedMetaAccounts: connectedMetaCount,
-        connectedZernioProfiles: connectedZernioCount,
+        creativeGenerations: { total: committed.length, images: imageCount, videos: videoCount, successRate },
+        connectedUsers,
+        connectedUsersCount: connectedUsers.length,
+        connectedUserCount: connectedUsers.length,
+        activeConnectionCount: activeConns.length,
+        activeSocialConnections: activeConns.length,
+        connectedMetaAccounts: activeFacebook.length,
+        connectedZernioProfiles: activeZernio.length,
         adminFacebook,
         adminZernio,
         allConnections,
-        systemHealth: 'UP',
-        apiErrorRatePct: 0.0,
+        systemHealth: 'SEE_HEALTH_PROBES',
+        apiErrorRatePct,
         recentSecurityEvents: securityEvents.length,
         timestamp: new Date().toISOString(),
+        metricNotes: {
+          mrr: 'USD only; non-USD plan prices are excluded rather than converted without an FX source.',
+          creativeGenerations: 'Based on finalized credit reservations in the last 30 days.',
+          apiErrorRatePct: 'Share of durable audit events marked FAILURE/FAILED/ERROR in the last 30 days.',
+        },
       },
     });
   } catch (err: any) {
-    console.error('[Admin Metrics] Unexpected error in GET handler:', err);
-    return NextResponse.json(
-      {
-        success: false,
-        error: `Internal server error loading Command Center metrics: ${err.message}`,
-      },
-      { status: 500 }
-    );
+    console.error('[Admin Metrics] failed:', err?.message);
+    return NextResponse.json({ success: false, error: `Failed to load durable Command Centre metrics: ${err?.message || 'unknown error'}` }, { status: 500 });
   }
 }
