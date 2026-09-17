@@ -31,6 +31,7 @@ type DesktopBridge = {
   getPendingActions?: () => Promise<QueuedDesktopAction[]>;
   clearSyncedActions?: (ids: string[]) => Promise<any>;
   showNotification?: (title: string, body: string) => Promise<any>;
+  checkUpdates?: () => Promise<any>;
 };
 
 type SyncState = {
@@ -60,6 +61,7 @@ const CACHE_STORAGE_KEY = 'ralion_desktop_api_cache_v1';
 const CACHE_MAX_ENTRIES = 40;
 const CACHE_MAX_BODY_BYTES = 400_000;
 const HEALTH_INTERVAL_MS = 15_000;
+const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 const OFFLINE_QUEUE_PREFIXES = [
   '/ralion/api/tasks',
@@ -71,6 +73,7 @@ const OFFLINE_QUEUE_PREFIXES = [
 let desktopOnline = typeof navigator === 'undefined' ? true : navigator.onLine;
 let syncInFlight: Promise<void> | null = null;
 let lastSyncAt: string | null = null;
+let lastUpdateCheckAt = 0;
 
 function getDesktopBridge(): DesktopBridge | undefined {
   if (typeof window === 'undefined') return undefined;
@@ -79,7 +82,6 @@ function getDesktopBridge(): DesktopBridge | undefined {
 
 function emitSyncState(partial: Partial<SyncState> = {}) {
   if (typeof window === 'undefined') return;
-  const desktop = getDesktopBridge();
   const detail: SyncState = {
     online: partial.online ?? desktopOnline,
     syncing: partial.syncing ?? Boolean(syncInFlight),
@@ -223,9 +225,6 @@ function stripTransientHeaders(headers: Headers): Record<string, string> {
 function readStoredAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = {};
   try {
-    const sharedClient = (window as any).__ralion_supabase_instance__ || (globalThis as any).__ralion_supabase_instance__;
-    // getSession is async and handled separately in getCurrentAuthHeaders; this
-    // fallback covers the period before the shared client has rehydrated.
     const directSession = localStorage.getItem('ralion-app-auth-token');
     let parsed: any = directSession ? JSON.parse(directSession) : null;
     let token = parsed?.access_token || parsed?.currentSession?.access_token || null;
@@ -243,7 +242,6 @@ function readStoredAuthHeaders(): Record<string, string> {
 
     if (token) headers.Authorization = `Bearer ${token}`;
     if (user?.id) headers['x-user-id'] = user.id;
-    void sharedClient;
   } catch {}
 
   const workspaceId = localStorage.getItem('ralion_active_workspace_id') || localStorage.getItem('ralion_workspace_id');
@@ -325,8 +323,6 @@ async function flushOfflineQueue(): Promise<void> {
           continue;
         }
 
-        // Auth/validation/conflict errors need user or app intervention. Keep the
-        // item in the queue but stop hammering the server every health interval.
         if (result.status >= 400 && result.status < 500 && result.status !== 408 && result.status !== 429) break;
         if (result.status >= 500) break;
       } catch {
@@ -355,6 +351,18 @@ async function flushOfflineQueue(): Promise<void> {
   return syncInFlight;
 }
 
+async function maybeCheckForUpdates(desktop: DesktopBridge) {
+  if (!desktopOnline || !desktop.checkUpdates) return;
+  const now = Date.now();
+  if (now - lastUpdateCheckAt < UPDATE_CHECK_INTERVAL_MS) return;
+  lastUpdateCheckAt = now;
+  try {
+    await desktop.checkUpdates();
+  } catch {
+    // Updating is opportunistic; a failed check must never affect normal sync.
+  }
+}
+
 async function checkConnectivityAndSync() {
   const desktop = getDesktopBridge();
   if (!desktop?.apiFetch) return;
@@ -364,7 +372,10 @@ async function checkConnectivityAndSync() {
     desktopOnline = health.status >= 200 && health.status < 500;
     const pending = await desktop.getPendingActions?.().catch(() => []) || [];
     emitSyncState({ online: desktopOnline, pending: pending.length });
-    if (desktopOnline && (wasOffline || pending.length > 0)) await flushOfflineQueue();
+    if (desktopOnline) {
+      if (wasOffline || pending.length > 0) await flushOfflineQueue();
+      void maybeCheckForUpdates(desktop);
+    }
   } catch {
     desktopOnline = false;
     const pending = await desktop.getPendingActions?.().catch(() => []) || [];
