@@ -4,7 +4,27 @@
 alter table public.developer_api_keys
   add column if not exists workspace_id uuid references public.workspaces(id) on delete cascade;
 
--- Production contained no customer keys when this migration was introduced.
+-- Backfill legacy rows deterministically when an organization already had keys
+-- before workspace binding was introduced. New keys are always created with the
+-- authenticated workspace id by the server route.
+update public.developer_api_keys k
+set workspace_id = (
+  select w.id
+  from public.workspaces w
+  where w.organization_id = k.organization_id
+  order by w.created_at asc nulls last, w.id asc
+  limit 1
+)
+where k.workspace_id is null;
+
+do $$
+begin
+  if exists (select 1 from public.developer_api_keys where workspace_id is null) then
+    raise exception 'Cannot enforce developer_api_keys.workspace_id: legacy key exists without a workspace for its organization';
+  end if;
+end
+$$;
+
 alter table public.developer_api_keys
   alter column workspace_id set not null;
 
