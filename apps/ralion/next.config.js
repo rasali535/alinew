@@ -32,6 +32,32 @@ const securityHeaders = [
   },
 ];
 
+// The Mari website widget is intentionally frameable by approved customer sites.
+// The session endpoint still enforces the widget's domain allowlist before issuing
+// a short-lived browser credential. Every other Ralion page remains SAMEORIGIN.
+const embeddableWidgetHeaders = [
+  {
+    key: 'Strict-Transport-Security',
+    value: 'max-age=63072000; includeSubDomains; preload',
+  },
+  {
+    key: 'X-Content-Type-Options',
+    value: 'nosniff',
+  },
+  {
+    key: 'Referrer-Policy',
+    value: 'no-referrer',
+  },
+  {
+    key: 'Permissions-Policy',
+    value: 'camera=(), microphone=(), geolocation=(), browsing-topics=()',
+  },
+  {
+    key: 'Content-Security-Policy',
+    value: "frame-ancestors *",
+  },
+];
+
 const corsApiHeaders = [
   { key: 'Access-Control-Allow-Origin', value: 'https://rasalilabs.com' },
   { key: 'Access-Control-Allow-Methods', value: 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD' },
@@ -135,11 +161,22 @@ const nextConfig = {
         async headers() {
           return [
             {
-              source: '/api/:path*',
+              // mari/widget/session returns a dynamically validated customer
+              // origin from the route handler, so do not stamp the fixed Ralion
+              // dashboard CORS origin onto that bootstrap response.
+              source: '/api/((?!mari/widget/session).*)',
               headers: corsApiHeaders,
             },
             {
-              source: '/((?!api).*)',
+              source: '/mari-widget',
+              headers: embeddableWidgetHeaders,
+            },
+            {
+              source: '/ralion/mari-widget',
+              headers: embeddableWidgetHeaders,
+            },
+            {
+              source: '/((?!api|mari-widget|ralion/mari-widget).*)',
               headers: securityHeaders,
             },
           ];
