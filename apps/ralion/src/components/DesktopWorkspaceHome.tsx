@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import {
+  Activity,
   ArrowRight,
   Bot,
   BriefcaseBusiness,
@@ -34,6 +35,7 @@ const quickActions = [
   { label: 'Social', description: 'Content & publishing', href: '/social', icon: Megaphone },
   { label: 'Tasks', description: 'Work that needs action', href: '/tasks', icon: CheckSquare },
   { label: 'Documents', description: 'Business knowledge', href: '/documents', icon: FileText },
+  { label: 'Diagnostics', description: 'Validate this installation', href: '/diagnostics', icon: Activity },
 ];
 
 export function DesktopWorkspaceHome({ organizationName, onNavigate, onOpenMari }: DesktopWorkspaceHomeProps) {
