@@ -8,9 +8,6 @@ on:
   pull_request:
     branches: [ "main" ]
 
-permissions:
-  contents: write
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -21,23 +18,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-    - name: Apply one-time Growth creative fidelity migration
-      if: github.event_name == 'pull_request' && github.head_ref == 'fix/creative-prompt-fidelity'
-      env:
-        HEAD_BRANCH: ${{ github.head_ref }}
-      run: |
-        git fetch origin "$HEAD_BRANCH"
-        git checkout -B "$HEAD_BRANCH" "origin/$HEAD_BRANCH"
-        node scripts/patch-growth-creative-fidelity.js
-        if ! git diff --quiet -- apps/ralion/src/app/'(dashboard)'/growth/page.tsx packages/ai/src/aimlClient.ts; then
-          git config user.name "Ras Ali Labs CI"
-          git config user.email "ali@rasalilabs.com"
-          git add apps/ralion/src/app/'(dashboard)'/growth/page.tsx packages/ai/src/aimlClient.ts
-          git commit -m "fix(growth): remove synthetic creative success fallbacks"
-          git push origin "HEAD:$HEAD_BRANCH"
-        fi
     - name: Use Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@v4
       with:
