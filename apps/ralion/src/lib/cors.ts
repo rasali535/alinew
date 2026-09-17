@@ -4,6 +4,7 @@ import type { NextRequest } from 'next/server';
 const ALLOWED_ORIGINS = new Set([
   'https://rasalilabs.com',
   'https://www.rasalilabs.com',
+  'app://localhost',
   'http://localhost:3000',
   'http://localhost:6509',
   'http://localhost:5173',
