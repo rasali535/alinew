@@ -20,6 +20,7 @@ type ApiKeyStatus = 'active' | 'expired' | 'revoked';
 type ApiKeyRecord = {
   id: string;
   organizationId: string;
+  workspaceId: string;
   name: string;
   keyPrefix: string;
   scopes: string[];
@@ -39,6 +40,13 @@ type RevealedSecret = {
   secret: string;
   message: string;
 };
+
+const PUBLIC_MARI_ENDPOINT = 'https://rasalilabs.com/ralion/api/v1/mari/chat';
+const CURL_EXAMPLE = `curl -X POST ${PUBLIC_MARI_ENDPOINT} \\
+  -H "Authorization: Bearer $RALION_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -H "Idempotency-Key: customer-request-001" \\
+  -d '{"message":"What should we focus our marketing on this month?"}'`;
 
 function formatDate(value: string | null): string {
   if (!value) return 'Never';
@@ -65,7 +73,7 @@ export default function DeveloperPlatformPage() {
   const [name, setName] = useState('');
   const [expiresInDays, setExpiresInDays] = useState('90');
   const [revealedSecret, setRevealedSecret] = useState<RevealedSecret | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<'secret' | 'curl' | 'endpoint' | null>(null);
 
   const activeKeys = useMemo(
     () => apiKeys.filter((key) => key.status === 'active').length,
@@ -78,9 +86,7 @@ export default function DeveloperPlatformPage() {
     try {
       const response = await authFetch('/api/developer/api-keys');
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data?.message || data?.error || 'Unable to load API keys.');
-      }
+      if (!response.ok) throw new Error(data?.message || data?.error || 'Unable to load API keys.');
       setApiKeys(Array.isArray(data?.apiKeys) ? data.apiKeys : []);
     } catch (loadError: any) {
       setError(loadError?.message || 'Unable to load API keys.');
@@ -103,7 +109,7 @@ export default function DeveloperPlatformPage() {
 
     setCreating(true);
     setError(null);
-    setCopied(false);
+    setCopied(null);
     try {
       const response = await authFetch('/api/developer/api-keys', {
         method: 'POST',
@@ -113,9 +119,7 @@ export default function DeveloperPlatformPage() {
         }),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data?.message || data?.error || 'Unable to create API key.');
-      }
+      if (!response.ok) throw new Error(data?.message || data?.error || 'Unable to create API key.');
 
       setRevealedSecret({
         name: data.apiKey?.name || trimmedName,
@@ -133,15 +137,12 @@ export default function DeveloperPlatformPage() {
 
   async function revokeApiKey(apiKey: ApiKeyRecord) {
     if (apiKey.status === 'revoked') return;
-    const confirmed = window.confirm(`Revoke “${apiKey.name}”? Any application using this key will stop authenticating.`);
-    if (!confirmed) return;
+    if (!window.confirm(`Revoke “${apiKey.name}”? Any application using this key will stop authenticating.`)) return;
 
     setBusyKeyId(apiKey.id);
     setError(null);
     try {
-      const response = await authFetch(`/api/developer/api-keys/${apiKey.id}`, {
-        method: 'DELETE',
-      });
+      const response = await authFetch(`/api/developer/api-keys/${apiKey.id}`, { method: 'DELETE' });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data?.message || 'Unable to revoke API key.');
       await loadKeys();
@@ -154,16 +155,13 @@ export default function DeveloperPlatformPage() {
 
   async function rotateApiKey(apiKey: ApiKeyRecord) {
     if (apiKey.status !== 'active') return;
-    const confirmed = window.confirm(`Rotate “${apiKey.name}”? The current secret will stop working immediately.`);
-    if (!confirmed) return;
+    if (!window.confirm(`Rotate “${apiKey.name}”? The current secret will stop working immediately.`)) return;
 
     setBusyKeyId(apiKey.id);
     setError(null);
-    setCopied(false);
+    setCopied(null);
     try {
-      const response = await authFetch(`/api/developer/api-keys/${apiKey.id}/rotate`, {
-        method: 'POST',
-      });
+      const response = await authFetch(`/api/developer/api-keys/${apiKey.id}/rotate`, { method: 'POST' });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data?.message || 'Unable to rotate API key.');
 
@@ -180,14 +178,13 @@ export default function DeveloperPlatformPage() {
     }
   }
 
-  async function copySecret() {
-    if (!revealedSecret?.secret) return;
+  async function copyValue(kind: 'secret' | 'curl' | 'endpoint', value: string) {
     try {
-      await navigator.clipboard.writeText(revealedSecret.secret);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
+      await navigator.clipboard.writeText(value);
+      setCopied(kind);
+      window.setTimeout(() => setCopied(null), 1800);
     } catch {
-      setError('Clipboard access failed. Select the key and copy it manually.');
+      setError('Clipboard access failed. Select the value and copy it manually.');
     }
   }
 
@@ -200,7 +197,7 @@ export default function DeveloperPlatformPage() {
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-white md:text-4xl">Customer API Keys</h1>
           <p className="mt-3 text-sm leading-6 text-slate-400 md:text-base">
-            Create organization-scoped credentials for applications that will use Mari. Keys are stored as one-way hashes and the full secret is shown only when you create or rotate it.
+            Create workspace-bound credentials for server-side applications using Mari. Ralion stores only a one-way hash; the full secret is shown once when created or rotated.
           </p>
         </div>
 
@@ -208,7 +205,7 @@ export default function DeveloperPlatformPage() {
           <ShieldCheck className="h-5 w-5 text-emerald-400" />
           <div>
             <div className="text-xs font-semibold text-white">{activeKeys}/10 active keys</div>
-            <div className="text-[11px] text-slate-500">Scope: mari:chat</div>
+            <div className="text-[11px] text-slate-500">Scope: mari:chat • 60 req/min</div>
           </div>
         </div>
       </div>
@@ -223,7 +220,7 @@ export default function DeveloperPlatformPage() {
       {revealedSecret && (
         <div className="mb-8 rounded-3xl border border-amber-400/30 bg-gradient-to-br from-amber-400/10 to-purple-500/5 p-5 md:p-6">
           <div className="mb-3 flex items-center gap-2 text-sm font-bold text-amber-200">
-            <AlertTriangle className="h-4 w-4" /> Save this secret now
+            <AlertTriangle className="h-4 w-4" /> Save {revealedSecret.name} now
           </div>
           <p className="mb-4 text-xs leading-5 text-slate-300">{revealedSecret.message}</p>
           <div className="flex flex-col gap-3 sm:flex-row">
@@ -232,11 +229,11 @@ export default function DeveloperPlatformPage() {
             </code>
             <button
               type="button"
-              onClick={copySecret}
+              onClick={() => void copyValue('secret', revealedSecret.secret)}
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-xs font-bold text-slate-950 transition hover:bg-slate-200"
             >
-              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              {copied ? 'Copied' : 'Copy key'}
+              {copied === 'secret' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              {copied === 'secret' ? 'Copied' : 'Copy key'}
             </button>
           </div>
           <button
@@ -257,7 +254,7 @@ export default function DeveloperPlatformPage() {
             </div>
             <div>
               <h2 className="text-sm font-bold text-white">Create a Mari API key</h2>
-              <p className="text-xs text-slate-500">For server-side integrations</p>
+              <p className="text-xs text-slate-500">Owners and admins only</p>
             </div>
           </div>
 
@@ -268,7 +265,7 @@ export default function DeveloperPlatformPage() {
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 maxLength={80}
-                placeholder="e.g. Production website"
+                placeholder="e.g. Production backend"
                 className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-purple-400/50"
               />
             </div>
@@ -288,10 +285,10 @@ export default function DeveloperPlatformPage() {
             </div>
 
             <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3">
-              <div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">Permissions</div>
+              <div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">Permission</div>
               <div className="flex items-center justify-between gap-3">
                 <code className="text-xs text-purple-300">mari:chat</code>
-                <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">Enabled</span>
+                <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">Read-only AI</span>
               </div>
             </div>
 
@@ -306,15 +303,15 @@ export default function DeveloperPlatformPage() {
           </form>
 
           <div className="mt-5 border-t border-white/10 pt-5 text-[11px] leading-5 text-slate-500">
-            Never put a Ralion secret in browser code, mobile bundles or public repositories. Use it from a backend you control.
+            Never put a Ralion API secret in browser JavaScript, mobile bundles or public repositories. Call Mari from a backend you control.
           </div>
         </section>
 
         <section className="overflow-hidden rounded-3xl border border-white/10 bg-[#101827]">
           <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 md:px-6">
             <div>
-              <h2 className="text-sm font-bold text-white">Organization keys</h2>
-              <p className="mt-0.5 text-xs text-slate-500">Only prefixes are recoverable after creation.</p>
+              <h2 className="text-sm font-bold text-white">Workspace keys</h2>
+              <p className="mt-0.5 text-xs text-slate-500">Only the safe prefix remains visible after creation.</p>
             </div>
             <button
               type="button"
@@ -335,7 +332,7 @@ export default function DeveloperPlatformPage() {
             <div className="flex min-h-[260px] flex-col items-center justify-center px-6 text-center">
               <KeyRound className="mb-3 h-8 w-8 text-slate-600" />
               <div className="text-sm font-semibold text-slate-300">No API keys yet</div>
-              <p className="mt-1 max-w-sm text-xs leading-5 text-slate-500">Create your first key to prepare an external application for Mari API access.</p>
+              <p className="mt-1 max-w-sm text-xs leading-5 text-slate-500">Create a key on the left, save the secret once, then use it from your server.</p>
             </div>
           ) : (
             <div className="divide-y divide-white/10">
@@ -389,19 +386,68 @@ export default function DeveloperPlatformPage() {
       </div>
 
       <section className="mt-6 rounded-3xl border border-white/10 bg-gradient-to-br from-purple-500/[0.08] to-cyan-500/[0.03] p-5 md:p-6">
-        <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-start gap-3">
-            <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/5 text-purple-300">
-              <Code2 className="h-5 w-5" />
+        <div className="mb-5 flex items-start gap-3">
+          <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/5 text-purple-300">
+            <Code2 className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <h2 className="text-sm font-bold text-white">Public Mari API v1</h2>
+              <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-200">mari:chat</span>
             </div>
-            <div>
-              <h2 className="text-sm font-bold text-white">Next: Public Mari API</h2>
-              <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-400">
-                These customer keys are the authentication layer for the public Mari endpoint. The public API will validate the key, resolve its organization, enforce scope and rate limits, then charge Mari usage against that organization’s existing credit wallet.
-              </p>
+            <p className="max-w-3xl text-xs leading-5 text-slate-400">
+              Text reasoning is read-only in v1. Your key supplies the workspace identity automatically; do not send organization or workspace IDs. Each successful model response uses the same Mari credit wallet as the Ralion app.
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Endpoint</span>
+              <button
+                type="button"
+                onClick={() => void copyValue('endpoint', PUBLIC_MARI_ENDPOINT)}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-300 hover:text-purple-200"
+              >
+                {copied === 'endpoint' ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                {copied === 'endpoint' ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+            <code className="block overflow-x-auto rounded-xl border border-white/10 bg-black/25 p-4 font-mono text-xs text-emerald-200">
+              POST {PUBLIC_MARI_ENDPOINT}
+            </code>
+          </div>
+
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">cURL</span>
+              <button
+                type="button"
+                onClick={() => void copyValue('curl', CURL_EXAMPLE)}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-300 hover:text-purple-200"
+              >
+                {copied === 'curl' ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                {copied === 'curl' ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+            <pre className="overflow-x-auto whitespace-pre rounded-xl border border-white/10 bg-black/25 p-4 font-mono text-[11px] leading-5 text-slate-300">{CURL_EXAMPLE}</pre>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Authentication</div>
+              <div className="mt-1 text-xs text-white">Bearer key or x-api-key</div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Rate limit</div>
+              <div className="mt-1 text-xs text-white">60 requests / minute / key</div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Billing</div>
+              <div className="mt-1 text-xs text-white">Mari credits on model success</div>
             </div>
           </div>
-          <span className="shrink-0 rounded-full border border-purple-400/20 bg-purple-400/10 px-3 py-1.5 text-[11px] font-semibold text-purple-200">Foundation ready</span>
         </div>
       </section>
     </div>
