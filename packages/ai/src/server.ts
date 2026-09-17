@@ -3,12 +3,14 @@ import './mariCompetitiveContext.bootstrap';
 import './mariMarketingLearningContext.bootstrap';
 import './mariDurableCredits.bootstrap';
 import './creativeDurableCredits.bootstrap';
+import './promptFaithfulCreativeProviders.bootstrap';
 
 export * from './client';
 export * from './storage';
 export * from './tokenTelemetry.service';
 export * from './creativeAsset.service';
 export * from './creativeProviders';
+export * from './promptFaithfulCreativeProviders';
 export * from './creativeOrchestrator.service';
 export * from './tenantCredits.service';
 export * from './durableTenantCredits.service';
