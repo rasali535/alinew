@@ -17,15 +17,17 @@ Options -Indexes +FollowSymLinks
   CGIPassAuth On
   RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
-  # 1. Route all /ralion/api/* to PHP proxy script (transparent upstream proxy)
-  RewriteRule ^api/(.*)$ /api_proxy.php?__proxy_path=api/$1 [QSA,L]
+  # 1. Route all /ralion/api/* through the proxy that is deployed inside /ralion.
+  # Use a relative substitution so this sub-app does not depend on a root-level
+  # /api_proxy.php file being present in Hostinger's document root.
+  RewriteRule ^api/(.*)$ api_proxy.php?__proxy_path=api/$1 [QSA,L]
 
-  # 3. Do NOT rewrite existing static assets
+  # 2. Do NOT rewrite existing static assets
   RewriteCond %{REQUEST_URI} !^/ralion/api/ [NC]
   RewriteCond %{REQUEST_FILENAME} -f
   RewriteRule ^ - [L]
 
-  # 4. SPA Fallback for /ralion/*
+  # 3. SPA Fallback for /ralion/*
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule ^.*$ /ralion/index.html [L]
