@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const apiKeys = await DeveloperApiKeysService.list(context.organization.id);
+    const apiKeys = await DeveloperApiKeysService.list(context.organization.id, context.workspace.id);
     return NextResponse.json({ success: true, apiKeys });
   } catch (error: any) {
     console.error('[DeveloperApiKeys] List failed:', error?.message || error);
@@ -72,17 +72,18 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const existing = await DeveloperApiKeysService.list(context.organization.id);
+    const existing = await DeveloperApiKeysService.list(context.organization.id, context.workspace.id);
     const activeCount = existing.filter((key) => key.status === 'active').length;
     if (activeCount >= 10) {
       return NextResponse.json(
-        { success: false, code: 'API_KEY_LIMIT_REACHED', message: 'Revoke an existing key before creating another. Maximum 10 active keys per organization.' },
+        { success: false, code: 'API_KEY_LIMIT_REACHED', message: 'Revoke an existing key before creating another. Maximum 10 active keys per workspace.' },
         { status: 409 }
       );
     }
 
     const created = await DeveloperApiKeysService.create({
       organizationId: context.organization.id,
+      workspaceId: context.workspace.id,
       createdBy: context.user.id,
       name,
       scopes: [MARI_CHAT_SCOPE],
