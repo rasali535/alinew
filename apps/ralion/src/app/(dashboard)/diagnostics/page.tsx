@@ -25,10 +25,11 @@ import {
 } from 'lucide-react';
 
 type CheckStatus = 'pass' | 'warn' | 'fail';
+type Category = 'Runtime' | 'Cloud' | 'Identity' | 'Offline & Sync' | 'Local AI' | 'Updates';
 
 type DiagnosticCheck = {
   id: string;
-  category: 'Runtime' | 'Cloud' | 'Identity' | 'Offline & Sync' | 'Local AI' | 'Updates';
+  category: Category;
   label: string;
   status: CheckStatus;
   detail: string;
@@ -42,7 +43,6 @@ type PlatformInfo = {
   electronVersion?: string;
   nodeVersion?: string;
   osVersion?: string;
-  hostname?: string;
 };
 
 type DesktopBridge = {
@@ -79,17 +79,13 @@ type DiagnosticReport = {
     branchResolved: boolean;
     rolePresent: boolean;
   };
-  summary: {
-    pass: number;
-    warn: number;
-    fail: number;
-    total: number;
-  };
+  summary: { pass: number; warn: number; fail: number; total: number };
   checks: DiagnosticCheck[];
 };
 
 const HEALTH_URL = 'https://rasalilabs.com/ralion/api/health';
 const CACHE_STORAGE_KEY = 'ralion_desktop_api_cache_v1';
+const AUTH_STORAGE_KEY = 'ralion-app-auth-token';
 
 function statusClasses(status: CheckStatus) {
   if (status === 'pass') return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300';
@@ -107,13 +103,33 @@ function downloadJson(report: DiagnosticReport) {
   const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
-  const safeTimestamp = report.generatedAt.replace(/[:.]/g, '-');
   link.href = url;
-  link.download = `ralion-os-diagnostics-${report.app.version || 'unknown'}-${safeTimestamp}.json`;
+  link.download = `ralion-os-diagnostics-${report.app.version || 'unknown'}-${report.generatedAt.replace(/[:.]/g, '-')}.json`;
   document.body.appendChild(link);
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+async function getLiveAuthHeader(): Promise<Record<string, string>> {
+  try {
+    const client = (window as any).__ralion_supabase_instance__ || (globalThis as any).__ralion_supabase_instance__;
+    if (client?.auth?.getSession) {
+      const result = await client.auth.getSession();
+      const token = result?.data?.session?.access_token;
+      if (token) return { Authorization: `Bearer ${token}` };
+    }
+  } catch {}
+
+  try {
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    const token = parsed?.access_token || parsed?.currentSession?.access_token;
+    if (token) return { Authorization: `Bearer ${token}` };
+  } catch {}
+
+  return {};
 }
 
 export default function DesktopDiagnosticsPage() {
@@ -129,7 +145,7 @@ export default function DesktopDiagnosticsPage() {
 
   const runCheck = useCallback(async (
     id: string,
-    category: DiagnosticCheck['category'],
+    category: Category,
     label: string,
     runner: () => Promise<{ status: CheckStatus; detail: string }>
   ): Promise<DiagnosticCheck> => {
@@ -142,7 +158,7 @@ export default function DesktopDiagnosticsPage() {
         id,
         category,
         label,
-        status: 'fail',
+        status: typeof navigator !== 'undefined' && !navigator.onLine && (category === 'Cloud' || id === 'auth-context') ? 'warn' : 'fail',
         detail: error?.message || 'Validation failed unexpectedly.',
         durationMs: Math.round(performance.now() - started),
       };
@@ -153,6 +169,7 @@ export default function DesktopDiagnosticsPage() {
     setRunning(true);
     setCopied(false);
     const desktop = (window as any).ralionDesktop as DesktopBridge | undefined;
+    const onlineNow = navigator.onLine;
     const results: DiagnosticCheck[] = [];
 
     results.push(await runCheck('desktop-bridge', 'Runtime', 'Native desktop bridge', async () => ({
@@ -164,8 +181,8 @@ export default function DesktopDiagnosticsPage() {
 
     results.push(await runCheck('renderer-protocol', 'Runtime', 'Packaged renderer protocol', async () => {
       const protocol = window.location.protocol;
-      if (protocol === 'app:') return { status: 'pass', detail: `Renderer loaded through ${protocol}//localhost.` };
-      if (protocol === 'http:' || protocol === 'https:') return { status: 'warn', detail: `Renderer is running through ${protocol}; this is expected for browser/development validation.` };
+      if (protocol === 'app:') return { status: 'pass', detail: 'Renderer loaded through the packaged app:// protocol.' };
+      if (protocol === 'http:' || protocol === 'https:') return { status: 'warn', detail: `Renderer is using ${protocol}; expected for browser/development validation.` };
       return { status: 'fail', detail: `Unexpected renderer protocol: ${protocol}` };
     }));
 
@@ -181,24 +198,22 @@ export default function DesktopDiagnosticsPage() {
 
     results.push(await runCheck('local-storage', 'Runtime', 'Local workspace storage', async () => {
       const key = '__ralion_diagnostics_write_test__';
-      const value = `${Date.now()}`;
+      const value = String(Date.now());
       localStorage.setItem(key, value);
       const verified = localStorage.getItem(key) === value;
       localStorage.removeItem(key);
-      return {
-        status: verified ? 'pass' : 'fail',
-        detail: verified ? 'Local storage is writable and readable.' : 'Local storage write verification failed.',
-      };
+      return { status: verified ? 'pass' : 'fail', detail: verified ? 'Local storage is writable and readable.' : 'Local storage write verification failed.' };
     }));
 
     results.push(await runCheck('api-bridge', 'Cloud', 'Native Ralion HTTPS bridge', async () => ({
       status: typeof desktop?.apiFetch === 'function' ? 'pass' : 'fail',
       detail: typeof desktop?.apiFetch === 'function'
         ? 'Native HTTPS transport is available for Ralion API calls.'
-        : 'Native HTTPS transport is missing; packaged Ralion may fall back to browser networking.',
+        : 'Native HTTPS transport is missing.',
     })));
 
     results.push(await runCheck('cloud-health', 'Cloud', 'Ralion cloud health', async () => {
+      if (!onlineNow) return { status: 'warn', detail: 'Device is intentionally offline; live cloud health is expected to be unavailable.' };
       if (!desktop?.apiFetch) return { status: 'fail', detail: 'Cannot test cloud health without the native API bridge.' };
       const response = await desktop.apiFetch({ url: HEALTH_URL, method: 'GET', headers: { Accept: 'application/json' }, body: null });
       let body: any = null;
@@ -206,47 +221,40 @@ export default function DesktopDiagnosticsPage() {
       const healthy = response.status >= 200 && response.status < 300 && body?.ok === true;
       return {
         status: healthy ? 'pass' : 'fail',
-        detail: healthy
-          ? `Ralion cloud responded successfully (${response.status}).`
-          : `Ralion cloud health returned HTTP ${response.status}.`,
+        detail: healthy ? `Ralion cloud responded successfully (${response.status}).` : `Ralion cloud health returned HTTP ${response.status}.`,
       };
     }));
 
     results.push(await runCheck('browser-online', 'Cloud', 'Windows/browser connectivity signal', async () => ({
-      status: navigator.onLine ? 'pass' : 'warn',
-      detail: navigator.onLine ? 'Windows reports an active network connection.' : 'Windows reports that this device is offline.',
+      status: onlineNow ? 'pass' : 'warn',
+      detail: onlineNow ? 'Windows reports an active network connection.' : 'Windows reports that this device is offline, as expected for an offline validation pass.',
     })));
 
     results.push(await runCheck('auth-context', 'Identity', 'Authenticated Ralion session', async () => {
-      const response = await fetch('/api/auth/context', { method: 'GET', cache: 'no-store' });
+      if (!onlineNow) return { status: 'warn', detail: 'Live auth validation is skipped while offline; local organization context is checked separately below.' };
+      const authHeaders = await getLiveAuthHeader();
+      if (!authHeaders.Authorization) return { status: 'fail', detail: 'No active bearer session was found in the desktop auth client.' };
+      const response = await fetch('/api/auth/context', { method: 'GET', cache: 'no-store', headers: authHeaders });
       const payload = await response.json().catch(() => null);
-      if (response.ok && payload?.success) {
-        return { status: 'pass', detail: 'Bearer session was accepted by the canonical Ralion auth context endpoint.' };
-      }
-      if (response.status === 401) return { status: 'fail', detail: 'Session is missing, expired, or invalid. Sign in again.' };
+      if (response.ok && payload?.success) return { status: 'pass', detail: 'Current bearer session was accepted by the canonical Ralion auth context endpoint.' };
+      if (response.status === 401) return { status: 'fail', detail: 'Session is expired or invalid. Sign in again.' };
       if (response.status === 409) return { status: 'fail', detail: 'Session is valid but organization/workspace context is unresolved.' };
       return { status: 'fail', detail: `Auth context returned HTTP ${response.status}${payload?.code ? ` (${payload.code})` : ''}.` };
     }));
 
     results.push(await runCheck('organization-context', 'Identity', 'Organization context', async () => ({
       status: organization?.id && organization?.name ? 'pass' : 'fail',
-      detail: organization?.id && organization?.name
-        ? 'Signed-in user has a resolved organization context.'
-        : 'Organization context is not resolved in the desktop workspace.',
+      detail: organization?.id && organization?.name ? 'Signed-in user has a resolved organization context.' : 'Organization context is not resolved in the desktop workspace.',
     })));
 
     results.push(await runCheck('branch-context', 'Identity', 'Active branch/workspace context', async () => ({
       status: activeBranch?.id ? 'pass' : 'warn',
-      detail: activeBranch?.id
-        ? 'An active branch is resolved for this session.'
-        : 'No active branch is resolved. Single-workspace features may still work, but branch-scoped modules should be checked.',
+      detail: activeBranch?.id ? 'An active branch is resolved for this session.' : 'No active branch is resolved. Branch-scoped modules should be checked.',
     })));
 
     results.push(await runCheck('user-role', 'Identity', 'User role and permissions', async () => ({
       status: user?.uid && user?.role ? 'pass' : 'fail',
-      detail: user?.uid && user?.role
-        ? `Authenticated role is available (${user.role}).`
-        : 'User identity or role is unavailable in the organization provider.',
+      detail: user?.uid && user?.role ? `Authenticated role is available (${user.role}).` : 'User identity or role is unavailable in the organization provider.',
     })));
 
     results.push(await runCheck('offline-queue', 'Offline & Sync', 'Offline mutation queue', async () => {
@@ -262,15 +270,13 @@ export default function DesktopDiagnosticsPage() {
     results.push(await runCheck('offline-status', 'Offline & Sync', 'Offline status service', async () => {
       if (!desktop?.getOfflineStatus) return { status: 'fail', detail: 'Offline status API is unavailable.' };
       const status = await desktop.getOfflineStatus();
-      return {
-        status: 'pass',
-        detail: `Offline status service responded · ${status?.pendingActions || 0} pending action${status?.pendingActions === 1 ? '' : 's'}.`,
-      };
+      const count = status?.pendingActions || 0;
+      return { status: 'pass', detail: `Offline status service responded · ${count} pending action${count === 1 ? '' : 's'}.` };
     }));
 
     results.push(await runCheck('offline-cache', 'Offline & Sync', 'Tenant-scoped response cache', async () => {
       const raw = localStorage.getItem(CACHE_STORAGE_KEY);
-      if (!raw) return { status: 'warn', detail: 'No API cache has been created yet. Open a few business modules while online, then test again.' };
+      if (!raw) return { status: 'warn', detail: 'No API cache exists yet. Open business modules while online, then test again.' };
       try {
         const cache = JSON.parse(raw) || {};
         const count = Object.keys(cache).length;
@@ -288,9 +294,7 @@ export default function DesktopDiagnosticsPage() {
       const status = await desktop.aiCheckStatus();
       return {
         status: status?.isInstalled ? 'pass' : 'warn',
-        detail: status?.isInstalled
-          ? 'Local AI engine is installed and can be used by the desktop AI layer.'
-          : 'Local AI engine is not installed. Cloud Mari remains available while online.',
+        detail: status?.isInstalled ? 'Local AI engine is installed and available to the desktop AI layer.' : 'Local AI engine is not installed. Cloud Mari remains available while online.',
       };
     }));
 
@@ -298,17 +302,12 @@ export default function DesktopDiagnosticsPage() {
       if (!desktop?.aiListModels) return { status: 'warn', detail: 'Local model inventory is unavailable.' };
       const models = await desktop.aiListModels();
       const count = Array.isArray(models) ? models.length : 0;
-      return {
-        status: count > 0 ? 'pass' : 'warn',
-        detail: count > 0 ? `${count} local AI model${count === 1 ? '' : 's'} detected.` : 'No local AI models are installed yet.',
-      };
+      return { status: count > 0 ? 'pass' : 'warn', detail: count > 0 ? `${count} local AI model${count === 1 ? '' : 's'} detected.` : 'No local AI models are installed yet.' };
     }));
 
     results.push(await runCheck('updater-bridge', 'Updates', 'Desktop updater bridge', async () => ({
       status: typeof desktop?.checkUpdates === 'function' ? 'pass' : 'warn',
-      detail: typeof desktop?.checkUpdates === 'function'
-        ? 'Update-check command is exposed to the installed app. Release-channel validation is handled separately.'
-        : 'Updater bridge is unavailable in this build.',
+      detail: typeof desktop?.checkUpdates === 'function' ? 'Update-check command is exposed to the installed app.' : 'Updater bridge is unavailable in this build.',
     })));
 
     setChecks(results);
@@ -316,9 +315,7 @@ export default function DesktopDiagnosticsPage() {
     setRunning(false);
   }, [activeBranch?.id, organization?.id, organization?.name, runCheck, user?.role, user?.uid]);
 
-  useEffect(() => {
-    void runDiagnostics();
-  }, [runDiagnostics]);
+  useEffect(() => { void runDiagnostics(); }, [runDiagnostics]);
 
   const summary = useMemo(() => {
     const pass = checks.filter(check => check.status === 'pass').length;
@@ -328,7 +325,7 @@ export default function DesktopDiagnosticsPage() {
   }, [checks]);
 
   const report = useMemo<DiagnosticReport | null>(() => {
-    if (!generatedAt || !checks.length) return null;
+    if (!generatedAt || !checks.length || typeof window === 'undefined') return null;
     return {
       generatedAt,
       app: {
@@ -360,7 +357,7 @@ export default function DesktopDiagnosticsPage() {
   };
 
   const categories = useMemo(() => {
-    const order: DiagnosticCheck['category'][] = ['Runtime', 'Cloud', 'Identity', 'Offline & Sync', 'Local AI', 'Updates'];
+    const order: Category[] = ['Runtime', 'Cloud', 'Identity', 'Offline & Sync', 'Local AI', 'Updates'];
     return order.map(category => ({ category, checks: checks.filter(check => check.category === category) }));
   }, [checks]);
 
@@ -387,34 +384,19 @@ export default function DesktopDiagnosticsPage() {
               Validate the installed Windows runtime, cloud connection, authenticated company context, offline queue/cache, local Mari foundation and updater bridge from one screen.
             </p>
             <p className="mt-2 text-[11px] leading-5 text-zinc-500">
-              Exported reports are intentionally sanitized: authentication tokens, customer data, company names, email addresses and tenant IDs are not included.
+              Exported reports are sanitized: no bearer tokens, customer data, company names, email addresses or tenant IDs are included.
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => void runDiagnostics()}
-              disabled={running}
-              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
-            >
+            <button type="button" onClick={() => void runDiagnostics()} disabled={running} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60">
               {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               {running ? 'Running validation…' : 'Run full validation'}
             </button>
-            <button
-              type="button"
-              onClick={() => void copyReport()}
-              disabled={!report}
-              className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-xs font-bold text-zinc-200 transition hover:border-zinc-600 hover:bg-zinc-800 disabled:opacity-40"
-            >
+            <button type="button" onClick={() => void copyReport()} disabled={!report} className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-xs font-bold text-zinc-200 transition hover:border-zinc-600 hover:bg-zinc-800 disabled:opacity-40">
               <Clipboard className="h-4 w-4" /> {copied ? 'Copied' : 'Copy report'}
             </button>
-            <button
-              type="button"
-              onClick={() => report && downloadJson(report)}
-              disabled={!report}
-              className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-xs font-bold text-zinc-200 transition hover:border-zinc-600 hover:bg-zinc-800 disabled:opacity-40"
-            >
+            <button type="button" onClick={() => report && downloadJson(report)} disabled={!report} className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-xs font-bold text-zinc-200 transition hover:border-zinc-600 hover:bg-zinc-800 disabled:opacity-40">
               <Download className="h-4 w-4" /> Download JSON
             </button>
           </div>
@@ -428,18 +410,16 @@ export default function DesktopDiagnosticsPage() {
       )}
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/[0.06] p-4">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">Passed</div>
-          <div className="mt-1 text-3xl font-black text-white">{summary.pass}</div>
-        </div>
-        <div className="rounded-2xl border border-amber-500/15 bg-amber-500/[0.06] p-4">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-amber-400">Warnings</div>
-          <div className="mt-1 text-3xl font-black text-white">{summary.warn}</div>
-        </div>
-        <div className="rounded-2xl border border-red-500/15 bg-red-500/[0.06] p-4">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-red-400">Failed</div>
-          <div className="mt-1 text-3xl font-black text-white">{summary.fail}</div>
-        </div>
+        {[
+          ['Passed', summary.pass, 'border-emerald-500/15 bg-emerald-500/[0.06]', 'text-emerald-400'],
+          ['Warnings', summary.warn, 'border-amber-500/15 bg-amber-500/[0.06]', 'text-amber-400'],
+          ['Failed', summary.fail, 'border-red-500/15 bg-red-500/[0.06]', 'text-red-400'],
+        ].map(([label, value, boxClass, labelClass]) => (
+          <div key={String(label)} className={`rounded-2xl border p-4 ${boxClass}`}>
+            <div className={`text-[10px] font-bold uppercase tracking-wider ${labelClass}`}>{label}</div>
+            <div className="mt-1 text-3xl font-black text-white">{value}</div>
+          </div>
+        ))}
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
           <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Runtime</div>
           <div className="mt-1 text-sm font-bold text-white">v{platform?.version || (typeof window !== 'undefined' ? (window as any).__RALION_VERSION__ : null) || '—'}</div>
@@ -454,7 +434,7 @@ export default function DesktopDiagnosticsPage() {
           { icon: ShieldCheck, label: 'Organization', value: organization?.id ? 'Context resolved' : 'Context missing' },
           { icon: Database, label: 'Offline Cache', value: cachePresent ? 'Cache present' : 'Not populated' },
           { icon: Bot, label: 'Mari Runtime', value: checks.find(c => c.id === 'local-ai-engine')?.status === 'pass' ? 'Local engine ready' : 'Cloud-first' },
-          { icon: Cloud, label: 'Cloud API', value: checks.find(c => c.id === 'cloud-health')?.status === 'pass' ? 'Healthy' : clientOnline ? 'Needs attention' : 'Offline' },
+          { icon: Cloud, label: 'Cloud API', value: checks.find(c => c.id === 'cloud-health')?.status === 'pass' ? 'Healthy' : clientOnline ? 'Needs attention' : 'Offline expected' },
         ].map(({ icon: Icon, label, value }) => (
           <div key={label} className="flex items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-800 text-zinc-300"><Icon className="h-5 w-5" /></span>
@@ -483,9 +463,7 @@ export default function DesktopDiagnosticsPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-xs font-semibold text-white">{check.label}</span>
-                        <span className={`rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase ${statusClasses(check.status)}`}>
-                          {check.status}
-                        </span>
+                        <span className={`rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase ${statusClasses(check.status)}`}>{check.status}</span>
                         {typeof check.durationMs === 'number' && <span className="text-[9px] text-zinc-600">{check.durationMs} ms</span>}
                       </div>
                       <p className="mt-1 text-[11px] leading-5 text-zinc-500">{check.detail}</p>
@@ -504,7 +482,7 @@ export default function DesktopDiagnosticsPage() {
           <div>
             <h3 className="text-xs font-bold text-white">How to use this during Windows validation</h3>
             <p className="mt-1 text-[11px] leading-5 text-zinc-500">
-              Run this once immediately after install, again after signing in, once while disconnected from the internet, and once after reconnecting. A healthy reconnect should return cloud/auth checks to green and reduce the offline queue after pending changes sync.
+              Run this after installation and sign-in, then disconnect the internet and run it again. Create a supported offline change, reconnect, wait for automatic sync, and run a final pass. Cloud and live-auth checks should be amber while deliberately offline and return green after reconnection.
             </p>
           </div>
         </div>
