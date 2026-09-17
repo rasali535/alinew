@@ -56,7 +56,7 @@ export interface SidebarProps {
   platformUrl?: string;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
-  onNavigate?: (href) => void;
+  onNavigate?: (href: string) => void;
   onOpenMariAI?: () => void;
   onLogout?: () => void;
 }
