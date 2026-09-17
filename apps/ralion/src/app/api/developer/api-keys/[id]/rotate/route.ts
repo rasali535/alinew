@@ -27,6 +27,7 @@ export async function POST(
   try {
     const rotated = await DeveloperApiKeysService.rotate({
       organizationId: context.organization.id,
+      workspaceId: context.workspace.id,
       apiKeyId: id,
       rotatedBy: context.user.id,
     });
