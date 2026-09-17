@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import * as https from 'https';
 
 // Production diagnostics error handlers
 if (typeof window !== 'undefined') {
@@ -11,13 +12,158 @@ if (typeof window !== 'undefined') {
   });
 }
 
+type DesktopApiRequest = {
+  url: string;
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string | null;
+};
+
+type DesktopApiResponse = {
+  status: number;
+  statusText: string;
+  headers: Record<string, string>;
+  body: string;
+};
+
+const ALLOWED_RALION_HOSTS = new Set(['rasalilabs.com', 'www.rasalilabs.com']);
+const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD']);
+const ALLOWED_REQUEST_HEADERS = new Set([
+  'authorization',
+  'accept',
+  'content-type',
+  'x-requested-with',
+  'apikey',
+  'x-api-key',
+  'x-client-info',
+  'idempotency-key',
+  'cache-control',
+  'pragma',
+  'x-user-id',
+  'x-workspace-id',
+  'x-organization-id',
+  'x-tenant-id',
+  'x-tenant',
+  'x-workspace',
+  'x-org-id',
+  'x-admin-key',
+  'x-session-id',
+  'x-request-id',
+  'baggage',
+  'sentry-trace',
+]);
+
+function sanitizeApiHeaders(headers: Record<string, string> = {}): Record<string, string> {
+  const safe: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    const normalized = key.toLowerCase();
+    if (ALLOWED_REQUEST_HEADERS.has(normalized) && typeof value === 'string') {
+      safe[key] = value;
+    }
+  }
+  return safe;
+}
+
+function validateRalionApiUrl(rawUrl: string): URL {
+  const url = new URL(rawUrl);
+  if (url.protocol !== 'https:' || !ALLOWED_RALION_HOSTS.has(url.hostname)) {
+    throw new Error('Desktop API bridge only permits the canonical Ralion HTTPS host.');
+  }
+  if (!url.pathname.startsWith('/ralion/api/')) {
+    throw new Error('Desktop API bridge only permits Ralion API routes.');
+  }
+  return url;
+}
+
+function requestRalionApi(payload: DesktopApiRequest, redirectDepth = 0): Promise<DesktopApiResponse> {
+  if (!payload || typeof payload.url !== 'string') {
+    return Promise.reject(new Error('Invalid desktop API request.'));
+  }
+
+  const target = validateRalionApiUrl(payload.url);
+  const method = String(payload.method || 'GET').toUpperCase();
+  if (!ALLOWED_METHODS.has(method)) {
+    return Promise.reject(new Error(`Unsupported desktop API method: ${method}`));
+  }
+  if (redirectDepth > 3) {
+    return Promise.reject(new Error('Too many redirects while contacting Ralion API.'));
+  }
+
+  const headers = sanitizeApiHeaders(payload.headers || {});
+  const body = typeof payload.body === 'string' ? payload.body : undefined;
+  if (body !== undefined) {
+    headers['Content-Length'] = String(Buffer.byteLength(body, 'utf8'));
+  }
+
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        protocol: 'https:',
+        hostname: target.hostname,
+        port: 443,
+        path: `${target.pathname}${target.search}`,
+        method,
+        headers,
+        timeout: 30_000,
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+        res.on('end', async () => {
+          const status = res.statusCode || 500;
+          const location = res.headers.location;
+          if (location && [301, 302, 303, 307, 308].includes(status)) {
+            try {
+              const redirected = new URL(location, target);
+              validateRalionApiUrl(redirected.toString());
+              const redirectMethod = status === 303 ? 'GET' : method;
+              const nextPayload: DesktopApiRequest = {
+                ...payload,
+                url: redirected.toString(),
+                method: redirectMethod,
+                body: redirectMethod === 'GET' || redirectMethod === 'HEAD' ? null : payload.body,
+              };
+              resolve(await requestRalionApi(nextPayload, redirectDepth + 1));
+            } catch (error) {
+              reject(error);
+            }
+            return;
+          }
+
+          const responseHeaders: Record<string, string> = {};
+          for (const [key, value] of Object.entries(res.headers)) {
+            if (Array.isArray(value)) responseHeaders[key] = value.join(', ');
+            else if (value !== undefined) responseHeaders[key] = String(value);
+          }
+
+          resolve({
+            status,
+            statusText: res.statusMessage || '',
+            headers: responseHeaders,
+            body: Buffer.concat(chunks).toString('utf8'),
+          });
+        });
+      }
+    );
+
+    req.on('timeout', () => req.destroy(new Error('Ralion API request timed out.')));
+    req.on('error', reject);
+    if (body !== undefined) req.write(body);
+    req.end();
+  });
+}
+
 // Expose a secure, typed API to the renderer (Next.js web app)
-// All calls go through IPC — no direct Node.js access from renderer
+// All privileged calls remain inside the preload/main boundary — no direct Node.js access from renderer.
 contextBridge.exposeInMainWorld('ralionDesktop', {
   // Identity
   isDesktop: true,
   getDeviceId: () => ipcRenderer.invoke('get-device-id'),
   getPlatformInfo: () => ipcRenderer.invoke('get-platform-info'),
+
+  // Native Ralion API transport. The preload implementation restricts requests
+  // to https://rasalilabs.com[/www]/ralion/api/* and strips unsafe headers.
+  apiFetch: (request: DesktopApiRequest) => requestRalionApi(request),
 
   // License management
   validateLicense: (key: string) => ipcRenderer.invoke('validate-license', key),
