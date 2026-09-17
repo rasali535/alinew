@@ -27,6 +27,7 @@ export async function DELETE(
   try {
     const revoked = await DeveloperApiKeysService.revoke({
       organizationId: context.organization.id,
+      workspaceId: context.workspace.id,
       apiKeyId: id,
     });
 
