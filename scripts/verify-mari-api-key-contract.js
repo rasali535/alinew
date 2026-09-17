@@ -20,6 +20,7 @@ const rotate = read('apps/ralion/src/app/api/developer/api-keys/[id]/rotate/rout
 const publicChat = read('apps/ralion/src/app/api/v1/mari/chat/route.ts');
 const hardeningMigration = read('supabase/migrations/20260917130500_harden_customer_mari_api_keys.sql');
 const bindingMigration = read('supabase/migrations/20260917132500_bind_mari_api_keys_and_rate_limits.sql');
+const compactRateLimitMigration = read('supabase/migrations/20260917134500_compact_mari_api_key_rate_limits.sql');
 
 // Secret handling and lifecycle.
 expect(service, "createHash('sha256')", 'API keys are SHA-256 hashed before persistence');
@@ -58,5 +59,8 @@ expect(bindingMigration, 'alter column workspace_id set not null', 'workspace bi
 expect(bindingMigration, 'developer_api_key_rate_limits', 'durable rate-limit storage exists');
 expect(bindingMigration, 'ralion_consume_api_key_rate_limit', 'atomic rate-limit function exists');
 expect(bindingMigration, 'security invoker', 'rate-limit function does not escalate privileges');
+expect(compactRateLimitMigration, 'primary key (api_key_id)', 'rate limiting keeps one mutable counter row per key');
+expect(compactRateLimitMigration, 'on conflict (api_key_id)', 'rate-limit counter resets in place instead of accumulating minute rows');
+expect(compactRateLimitMigration, 'security invoker', 'compacted rate-limit function remains non-escalating');
 
 console.log('Mari customer API key + public chat security contract: PASS');
