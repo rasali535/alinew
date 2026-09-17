@@ -1,7 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 
-const rendererRoot = path.join(__dirname, '..', 'dist', 'renderer');
+const desktopRoot = path.join(__dirname, '..', 'dist');
+const rendererRoot = path.join(desktopRoot, 'renderer');
+const preloadPath = path.join(desktopRoot, 'preload.js');
 const EXPECTED_PUBLISHABLE_KEY = 'sb_publishable_ZBMkUxUqKAz1b5fQ9aqUcA_xL2SB85N';
 const EXPECTED_API_BASE = 'https://rasalilabs.com/ralion';
 
@@ -28,12 +30,14 @@ if (!files.length) {
 
 let hasPublishableKey = false;
 let hasApiBase = false;
+let hasNetworkBootstrap = false;
 
 for (const file of files) {
   const source = fs.readFileSync(file, 'utf8');
   if (source.includes(EXPECTED_PUBLISHABLE_KEY)) hasPublishableKey = true;
   if (source.includes(EXPECTED_API_BASE)) hasApiBase = true;
-  if (hasPublishableKey && hasApiBase) break;
+  if (source.includes('Native Ralion API transport enabled')) hasNetworkBootstrap = true;
+  if (hasPublishableKey && hasApiBase && hasNetworkBootstrap) break;
 }
 
 if (!hasPublishableKey) {
@@ -46,6 +50,23 @@ if (!hasApiBase) {
   process.exit(1);
 }
 
+if (!hasNetworkBootstrap) {
+  console.error('[Desktop Runtime Config] Native desktop network bootstrap is absent from the packaged renderer.');
+  process.exit(1);
+}
+
+if (!fs.existsSync(preloadPath)) {
+  console.error('[Desktop Runtime Config] Compiled preload bridge is missing:', preloadPath);
+  process.exit(1);
+}
+
+const preloadSource = fs.readFileSync(preloadPath, 'utf8');
+if (!preloadSource.includes('apiFetch') || !preloadSource.includes('/ralion/api/')) {
+  console.error('[Desktop Runtime Config] Secure native Ralion API bridge is absent from compiled preload.');
+  process.exit(1);
+}
+
 console.log('[Desktop Runtime Config] Supabase publishable client configuration: VERIFIED');
 console.log('[Desktop Runtime Config] Ralion production API routing: VERIFIED');
+console.log('[Desktop Runtime Config] Native desktop API transport: VERIFIED');
 console.log('[Desktop Runtime Config] Packaged renderer runtime configuration is ready.');
