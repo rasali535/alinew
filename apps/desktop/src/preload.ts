@@ -35,6 +35,11 @@ contextBridge.exposeInMainWorld('ralionDesktop', {
     ipcRenderer.invoke('show-notification', { title, body }),
   openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
   checkUpdates: () => ipcRenderer.invoke('check-updates'),
+  onMariToggle: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on('mari:toggle', listener);
+    return () => ipcRenderer.removeListener('mari:toggle', listener);
+  },
 
   // Window Controls
   windowMinimize: () => ipcRenderer.invoke('window-minimize'),
@@ -53,9 +58,9 @@ contextBridge.exposeInMainWorld('ralionDesktop', {
   aiListModels: () => ipcRenderer.invoke('ai-list-models'),
   aiPullModel: (modelName: string) => ipcRenderer.invoke('ai-pull-model', modelName),
   aiRemoveModel: (modelName: string) => ipcRenderer.invoke('ai-remove-model', modelName),
-  aiQuery: (prompt: string, localModel?: string, cloudApiKey?: string, offlineMode?: boolean) => 
+  aiQuery: (prompt: string, localModel?: string, cloudApiKey?: string, offlineMode?: boolean) =>
     ipcRenderer.invoke('ai-query', { prompt, localModel, cloudApiKey, offlineMode }),
-  
+
   // Vector DB Commands
   aiMemoryAdd: (content: string, metadata: any) => ipcRenderer.invoke('ai-memory-add', { content, metadata }),
   aiMemorySearch: (query: string, limit: number) => ipcRenderer.invoke('ai-memory-search', { query, limit }),

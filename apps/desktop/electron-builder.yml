@@ -1,5 +1,5 @@
 appId: com.rasalilabs.ralion
-productName: Ralion
+productName: Ralion OS
 copyright: Copyright © 2026 Ras Ali Labs
 
 directories:
@@ -21,7 +21,7 @@ win:
   icon: assets/icon.ico
   publisherName: Ras Ali Labs
   verifyUpdateCodeSignature: false
-  artifactName: "ralion-desktop-${version}-setup.${ext}"
+  artifactName: "ralion-os-${version}-setup.${ext}"
 
 nsis:
   oneClick: false
@@ -32,8 +32,8 @@ nsis:
   installerHeaderIcon: assets/icon.ico
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: Ralion
-  artifactName: "ralion-desktop-${version}-setup.${ext}"
+  shortcutName: Ralion OS
+  artifactName: "ralion-os-${version}-setup.${ext}"
 
 # ── macOS ─────────────────────────────────────────────────────────────────────
 mac:
@@ -44,9 +44,10 @@ mac:
         - arm64
   icon: assets/icon.icns
   category: public.app-category.business
+  artifactName: "ralion-os-${version}-${arch}.${ext}"
 
 dmg:
-  title: Ralion ${version}
+  title: Ralion OS ${version}
   icon: assets/icon.icns
 
 # ── Linux ─────────────────────────────────────────────────────────────────────
@@ -56,6 +57,7 @@ linux:
   icon: assets/icon.png
   category: Office
   maintainer: Ras Ali Labs <support@rasalilabs.com>
+  artifactName: "ralion-os-${version}-${arch}.${ext}"
 
 # ── Auto Update ───────────────────────────────────────────────────────────────
 publish:
