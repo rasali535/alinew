@@ -174,6 +174,21 @@ export class MariApiKeyService {
     workspaceId: string;
   }): Promise<{ apiKey: string; record: MariApiKeyRecord }> {
     const db = getServiceSupabase();
+    const { data: existing, error: lookupError } = await db
+      .from('mari_api_keys')
+      .select('id, expires_at')
+      .eq('id', params.keyId)
+      .eq('organization_id', params.organizationId)
+      .eq('workspace_id', params.workspaceId)
+      .eq('status', 'ACTIVE')
+      .maybeSingle();
+
+    if (lookupError) throw new Error(lookupError.message);
+    if (!existing) throw codedError('MARI_API_KEY_NOT_FOUND', 'Active Mari API key was not found in this workspace.');
+    if (existing.expires_at && new Date(existing.expires_at).getTime() <= Date.now()) {
+      throw codedError('MARI_API_KEY_EXPIRED', 'Expired Mari API keys cannot be rotated. Create a new key instead.');
+    }
+
     const secret = generateSecret();
     const { data, error } = await db
       .from('mari_api_keys')
@@ -193,10 +208,6 @@ export class MariApiKeyService {
 
     if (error) throw new Error(error.message);
     if (!data) throw codedError('MARI_API_KEY_NOT_FOUND', 'Active Mari API key was not found in this workspace.');
-    if (data.expires_at && new Date(data.expires_at).getTime() <= Date.now()) {
-      throw codedError('MARI_API_KEY_EXPIRED', 'Expired Mari API keys cannot be rotated. Create a new key instead.');
-    }
-
     return { apiKey: secret, record: mapKey(data) };
   }
 
