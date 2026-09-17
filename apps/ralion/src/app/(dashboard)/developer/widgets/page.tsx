@@ -11,11 +11,14 @@ import {
   Globe2,
   Loader2,
   Pause,
+  Pencil,
   Play,
   Plus,
   RotateCw,
+  Save,
   ShieldCheck,
   Trash2,
+  X,
 } from 'lucide-react';
 import { authFetch } from '@/lib/api-config';
 
@@ -38,6 +41,7 @@ type MariWidget = {
 };
 
 const EMBED_SRC = 'https://rasalilabs.com/ralion/api/mari/widget/embed';
+const MAX_ALLOWED_DOMAINS = 20;
 
 function formatDate(value: string | null): string {
   if (!value) return 'Never';
@@ -50,6 +54,29 @@ function embedSnippet(widget: MariWidget): string {
   return `<script async src="${EMBED_SRC}" data-widget="${widget.publicToken}"></script>`;
 }
 
+function normalizeWebsiteDomain(value: string): string | null {
+  const raw = value.trim().toLowerCase();
+  if (!raw) return null;
+  const wildcard = raw.startsWith('*.');
+  const withoutWildcard = wildcard ? raw.slice(2) : raw;
+  try {
+    const parsed = new URL(withoutWildcard.includes('://') ? withoutWildcard : `https://${withoutWildcard}`);
+    const hostname = parsed.hostname.toLowerCase().replace(/\.$/, '');
+    if (!hostname || hostname.includes(' ')) return null;
+    return wildcard ? `*.${hostname}` : hostname;
+  } catch {
+    return null;
+  }
+}
+
+function addWebsiteDomains(current: string[], raw: string): string[] {
+  const incoming = raw
+    .split(/[\n,]+/g)
+    .map((item) => normalizeWebsiteDomain(item))
+    .filter((item): item is string => Boolean(item));
+  return Array.from(new Set([...current, ...incoming])).slice(0, MAX_ALLOWED_DOMAINS);
+}
+
 export default function MariWidgetsPage() {
   const [widgets, setWidgets] = useState<MariWidget[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,11 +85,15 @@ export default function MariWidgetsPage() {
   const [error, setError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [name, setName] = useState('Website assistant');
-  const [domains, setDomains] = useState('');
+  const [allowedDomains, setAllowedDomains] = useState<string[]>([]);
+  const [domainInput, setDomainInput] = useState('');
   const [assistantName, setAssistantName] = useState('Mari');
   const [welcomeMessage, setWelcomeMessage] = useState('Hi! I’m Mari. How can I help?');
   const [accentColor, setAccentColor] = useState('#7c3aed');
   const [position, setPosition] = useState<'bottom-right' | 'bottom-left'>('bottom-right');
+  const [editingDomainsId, setEditingDomainsId] = useState<string | null>(null);
+  const [editDomains, setEditDomains] = useState<string[]>([]);
+  const [editDomainInput, setEditDomainInput] = useState('');
 
   const activeCount = useMemo(() => widgets.filter((widget) => widget.status === 'ACTIVE').length, [widgets]);
 
@@ -85,12 +116,75 @@ export default function MariWidgetsPage() {
     void loadWidgets();
   }, [loadWidgets]);
 
+  function addCreateDomain() {
+    if (!domainInput.trim()) return;
+    const next = addWebsiteDomains(allowedDomains, domainInput);
+    if (next.length === allowedDomains.length) {
+      setError('Enter a valid website such as example.com or https://www.example.com.');
+      return;
+    }
+    setAllowedDomains(next);
+    setDomainInput('');
+    setError(null);
+  }
+
+  function removeCreateDomain(domain: string) {
+    setAllowedDomains((current) => current.filter((item) => item !== domain));
+  }
+
+  function startDomainEdit(widget: MariWidget) {
+    setEditingDomainsId(widget.id);
+    setEditDomains(widget.allowedDomains);
+    setEditDomainInput('');
+    setError(null);
+  }
+
+  function addEditDomain() {
+    if (!editDomainInput.trim()) return;
+    const next = addWebsiteDomains(editDomains, editDomainInput);
+    if (next.length === editDomains.length) {
+      setError('Enter a valid website such as example.com or https://www.example.com.');
+      return;
+    }
+    setEditDomains(next);
+    setEditDomainInput('');
+    setError(null);
+  }
+
+  async function saveAllowedDomains(widget: MariWidget) {
+    if (!editDomains.length) {
+      setError('A Mari widget must have at least one allowed website.');
+      return;
+    }
+    setBusyId(widget.id);
+    setError(null);
+    try {
+      const response = await authFetch('/api/mari/widgets', {
+        method: 'PATCH',
+        body: JSON.stringify({ widgetId: widget.id, allowedDomains: editDomains }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload?.error || 'Unable to update allowed websites.');
+      setEditingDomainsId(null);
+      setEditDomains([]);
+      setEditDomainInput('');
+      await loadWidgets();
+    } catch (updateError: any) {
+      setError(updateError?.message || 'Unable to update allowed websites.');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function createWidget(event: React.FormEvent) {
     event.preventDefault();
+    if (!allowedDomains.length) {
+      setError('Add at least one allowed website before creating the widget.');
+      return;
+    }
     setCreating(true);
     setError(null);
     try {
-      const allowedDomains = domains.split(/[\n,]/g).map((item) => item.trim()).filter(Boolean);
       const response = await authFetch('/api/mari/widgets', {
         method: 'POST',
         body: JSON.stringify({
@@ -104,7 +198,8 @@ export default function MariWidgetsPage() {
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload?.error || 'Unable to create website widget.');
-      setDomains('');
+      setAllowedDomains([]);
+      setDomainInput('');
       await loadWidgets();
     } catch (createError: any) {
       setError(createError?.message || 'Unable to create website widget.');
@@ -141,6 +236,7 @@ export default function MariWidgetsPage() {
       const response = await authFetch(`/api/mari/widgets?widgetId=${encodeURIComponent(widget.id)}`, { method: 'DELETE' });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload?.error || 'Unable to revoke widget.');
+      if (editingDomainsId === widget.id) setEditingDomainsId(null);
       await loadWidgets();
     } catch (revokeError: any) {
       setError(revokeError?.message || 'Unable to revoke widget.');
@@ -171,12 +267,12 @@ export default function MariWidgetsPage() {
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-white md:text-4xl">Embed Mari on a website</h1>
           <p className="mt-3 text-sm leading-6 text-slate-400 md:text-base">
-            Create a domain-bound Mari assistant and paste one script tag into the customer website. The browser never receives a <code className="text-purple-300">mari_live_...</code> secret.
+            Create a domain-bound Mari assistant, choose exactly which websites may load it, then paste one script tag into the approved site. The browser never receives a <code className="text-purple-300">mari_live_...</code> secret.
           </p>
         </div>
         <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
           <ShieldCheck className="h-5 w-5 text-emerald-400" />
-          <div><div className="text-xs font-bold text-white">{activeCount} active widgets</div><div className="text-[11px] text-slate-500">Domain allowlist • short-lived sessions</div></div>
+          <div><div className="text-xs font-bold text-white">{activeCount} active widgets</div><div className="text-[11px] text-slate-500">Allowed websites • short-lived sessions</div></div>
         </div>
       </div>
 
@@ -198,11 +294,43 @@ export default function MariWidgetsPage() {
               <label className="mb-1.5 block text-xs font-semibold text-slate-300">Widget name</label>
               <input value={name} onChange={(event) => setName(event.target.value)} maxLength={120} className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-400/50" />
             </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold text-slate-300">Approved website domains</label>
-              <textarea value={domains} onChange={(event) => setDomains(event.target.value)} rows={3} placeholder="example.com\nwww.example.com" className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none placeholder:text-slate-600 focus:border-cyan-400/50" />
-              <p className="mt-1.5 text-[10px] leading-4 text-slate-500">One per line or comma separated. Use <code>*.example.com</code> only when you intentionally want all subdomains.</p>
+
+            <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/[0.05] p-3.5">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-white">Allowed websites</label>
+                  <p className="mt-0.5 text-[10px] leading-4 text-slate-500">Mari will only create sessions on these domains.</p>
+                </div>
+                <span className="text-[10px] font-semibold text-cyan-300">{allowedDomains.length}/{MAX_ALLOWED_DOMAINS}</span>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  value={domainInput}
+                  onChange={(event) => setDomainInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ',') {
+                      event.preventDefault();
+                      addCreateDomain();
+                    }
+                  }}
+                  placeholder="example.com or https://www.example.com"
+                  className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none placeholder:text-slate-600 focus:border-cyan-400/50"
+                />
+                <button type="button" onClick={addCreateDomain} disabled={!domainInput.trim() || allowedDomains.length >= MAX_ALLOWED_DOMAINS} className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 text-xs font-bold text-cyan-200 hover:bg-cyan-500/20 disabled:opacity-40">Add</button>
+              </div>
+              <div className="mt-3 flex min-h-8 flex-wrap gap-1.5">
+                {allowedDomains.length === 0 ? (
+                  <span className="text-[10px] text-amber-300">Add at least one website before creating the widget.</span>
+                ) : allowedDomains.map((domain) => (
+                  <span key={domain} className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/20 bg-black/20 px-2 py-1 text-[10px] text-slate-200">
+                    <Globe2 className="h-3 w-3 text-cyan-400" /> {domain}
+                    <button type="button" onClick={() => removeCreateDomain(domain)} aria-label={`Remove ${domain}`} className="text-slate-500 hover:text-red-300"><X className="h-3 w-3" /></button>
+                  </span>
+                ))}
+              </div>
+              <p className="mt-2 text-[10px] leading-4 text-slate-500">Add both <code>example.com</code> and <code>www.example.com</code> if the site serves both. Use <code>*.example.com</code> only when all subdomains should be allowed.</p>
             </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="mb-1.5 block text-xs font-semibold text-slate-300">Assistant name</label>
@@ -227,7 +355,7 @@ export default function MariWidgetsPage() {
                 <option value="bottom-left">Bottom left</option>
               </select>
             </div>
-            <button type="submit" disabled={creating || !domains.trim()} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 py-3 text-sm font-bold text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50">
+            <button type="submit" disabled={creating || allowedDomains.length === 0} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 py-3 text-sm font-bold text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50">
               {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />} Create widget
             </button>
           </form>
@@ -236,19 +364,20 @@ export default function MariWidgetsPage() {
         <div className="space-y-6">
           <section className="overflow-hidden rounded-3xl border border-white/10 bg-[#101827]">
             <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 md:px-6">
-              <div><h2 className="text-sm font-bold text-white">Website assistants</h2><p className="mt-0.5 text-xs text-slate-500">Copy the embed snippet into the approved site.</p></div>
+              <div><h2 className="text-sm font-bold text-white">Website assistants</h2><p className="mt-0.5 text-xs text-slate-500">Copy the embed snippet into an allowed website.</p></div>
               <button type="button" onClick={() => void loadWidgets()} disabled={loading} className="rounded-lg border border-white/10 p-2 text-slate-400 hover:bg-white/5 hover:text-white"><RotateCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></button>
             </div>
 
             {loading ? (
               <div className="flex min-h-[280px] items-center justify-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading widgets…</div>
             ) : widgets.length === 0 ? (
-              <div className="flex min-h-[280px] flex-col items-center justify-center px-6 text-center"><Globe2 className="mb-3 h-8 w-8 text-slate-600" /><div className="text-sm font-semibold text-slate-300">No website widgets yet</div><p className="mt-1 max-w-md text-xs leading-5 text-slate-500">Create one, approve the website domain and paste the generated script before the closing <code>&lt;/body&gt;</code> tag.</p></div>
+              <div className="flex min-h-[280px] flex-col items-center justify-center px-6 text-center"><Globe2 className="mb-3 h-8 w-8 text-slate-600" /><div className="text-sm font-semibold text-slate-300">No website widgets yet</div><p className="mt-1 max-w-md text-xs leading-5 text-slate-500">Create one, choose the allowed websites and paste the generated script before the closing <code>&lt;/body&gt;</code> tag.</p></div>
             ) : (
               <div className="divide-y divide-white/10">
                 {widgets.map((widget) => {
                   const busy = busyId === widget.id;
                   const snippet = embedSnippet(widget);
+                  const editingDomains = editingDomainsId === widget.id;
                   return (
                     <div key={widget.id} className="p-5 md:p-6">
                       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
@@ -260,8 +389,50 @@ export default function MariWidgetsPage() {
                           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
                             <span>{widget.assistantName}</span><span>{widget.position.replace('-', ' ')}</span><span>{widget.requestCount.toLocaleString()} lifetime requests</span><span>Last used {formatDate(widget.lastUsedAt)}</span>
                           </div>
-                          <div className="mt-3 flex flex-wrap gap-1.5">
-                            {widget.allowedDomains.map((domain) => <span key={domain} className="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] text-slate-300">{domain}</span>)}
+
+                          <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-500"><Globe2 className="h-3.5 w-3.5" /> Allowed websites</div>
+                              {!editingDomains && widget.status !== 'REVOKED' && (
+                                <button type="button" onClick={() => startDomainEdit(widget)} className="inline-flex items-center gap-1.5 text-[11px] font-bold text-cyan-300 hover:text-cyan-200"><Pencil className="h-3.5 w-3.5" /> Edit websites</button>
+                              )}
+                            </div>
+
+                            {editingDomains ? (
+                              <div className="space-y-3">
+                                <div className="flex gap-2">
+                                  <input
+                                    value={editDomainInput}
+                                    onChange={(event) => setEditDomainInput(event.target.value)}
+                                    onKeyDown={(event) => {
+                                      if (event.key === 'Enter' || event.key === ',') {
+                                        event.preventDefault();
+                                        addEditDomain();
+                                      }
+                                    }}
+                                    placeholder="Add another allowed website"
+                                    className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white outline-none placeholder:text-slate-600 focus:border-cyan-400/50"
+                                  />
+                                  <button type="button" onClick={addEditDomain} disabled={!editDomainInput.trim() || editDomains.length >= MAX_ALLOWED_DOMAINS} className="rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-3 text-[11px] font-bold text-cyan-200 disabled:opacity-40">Add</button>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {editDomains.map((domain) => (
+                                    <span key={domain} className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/20 bg-black/20 px-2 py-1 text-[10px] text-slate-200">
+                                      {domain}
+                                      <button type="button" onClick={() => setEditDomains((current) => current.filter((item) => item !== domain))} aria-label={`Remove ${domain}`} className="text-slate-500 hover:text-red-300"><X className="h-3 w-3" /></button>
+                                    </span>
+                                  ))}
+                                </div>
+                                <div className="flex gap-2">
+                                  <button type="button" onClick={() => void saveAllowedDomains(widget)} disabled={busy || editDomains.length === 0} className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-600 px-3 py-2 text-[11px] font-bold text-white hover:bg-cyan-500 disabled:opacity-40"><Save className="h-3.5 w-3.5" /> Save websites</button>
+                                  <button type="button" onClick={() => { setEditingDomainsId(null); setEditDomains([]); setEditDomainInput(''); }} disabled={busy} className="rounded-lg border border-white/10 px-3 py-2 text-[11px] font-semibold text-slate-400 hover:text-white disabled:opacity-40">Cancel</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex flex-wrap gap-1.5">
+                                {widget.allowedDomains.map((domain) => <span key={domain} className="rounded-lg border border-white/10 bg-black/20 px-2 py-1 text-[10px] text-slate-300">{domain}</span>)}
+                              </div>
+                            )}
                           </div>
 
                           {widget.status !== 'REVOKED' && (
@@ -294,7 +465,7 @@ export default function MariWidgetsPage() {
           <section className="rounded-3xl border border-emerald-500/15 bg-emerald-500/[0.05] p-5 md:p-6">
             <div className="flex gap-3">
               <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
-              <div><h2 className="text-sm font-bold text-white">Safe for browser embedding</h2><p className="mt-1 text-xs leading-5 text-slate-400">The snippet contains a public widget identifier, not the customer’s Mari API secret. Ralion validates the website domain, creates a short-lived session, rate-limits visitors and charges successful model reasoning against the organisation’s existing Mari credit wallet. Public widgets also exclude CRM and private-document context.</p></div>
+              <div><h2 className="text-sm font-bold text-white">Safe for browser embedding</h2><p className="mt-1 text-xs leading-5 text-slate-400">The snippet contains a public widget identifier, not the customer’s Mari API secret. Ralion validates every website against the widget’s allowed list, creates a short-lived session, rate-limits visitors and charges successful model reasoning against the organisation’s existing Mari credit wallet. Removing a website from the list also invalidates its existing widget sessions on the next request. Public widgets exclude CRM and private-document context.</p></div>
             </div>
           </section>
         </div>
