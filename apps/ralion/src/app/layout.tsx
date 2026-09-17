@@ -2,6 +2,7 @@ import React from 'react';
 import { DesktopTitleBar } from '@ralion/ui';
 import { OrganizationProvider } from '@ralion/auth';
 import { DesktopOAuthListener } from '@/components/DesktopOAuthListener';
+import { DesktopNetworkBootstrap } from '@/components/DesktopNetworkBootstrap';
 import './globals.css';
 
 export const metadata = {
@@ -22,13 +23,15 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
       <body className="bg-zinc-950 text-zinc-100 font-sans antialiased flex flex-col h-screen overflow-hidden" suppressHydrationWarning>
-        <OrganizationProvider>
-          <DesktopTitleBar />
-          <DesktopOAuthListener />
-          <div className="flex-1 overflow-auto">
-            {children}
-          </div>
-        </OrganizationProvider>
+        <DesktopNetworkBootstrap>
+          <OrganizationProvider>
+            <DesktopTitleBar />
+            <DesktopOAuthListener />
+            <div className="flex-1 overflow-auto">
+              {children}
+            </div>
+          </OrganizationProvider>
+        </DesktopNetworkBootstrap>
       </body>
     </html>
   );

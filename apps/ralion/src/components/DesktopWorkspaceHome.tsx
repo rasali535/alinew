@@ -1,12 +1,15 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ArrowRight,
   Bot,
   BriefcaseBusiness,
   CheckSquare,
+  Cloud,
+  CloudOff,
   FileText,
+  Loader2,
   Megaphone,
   Sparkles,
   Users,
@@ -18,6 +21,13 @@ interface DesktopWorkspaceHomeProps {
   onOpenMari: () => void;
 }
 
+type SyncState = {
+  online: boolean;
+  syncing: boolean;
+  pending: number;
+  lastSyncAt: string | null;
+};
+
 const quickActions = [
   { label: 'Customers', description: 'CRM & pipeline', href: '/crm', icon: Users },
   { label: 'Growth', description: 'Strategy & campaigns', href: '/growth', icon: BriefcaseBusiness },
@@ -27,6 +37,32 @@ const quickActions = [
 ];
 
 export function DesktopWorkspaceHome({ organizationName, onNavigate, onOpenMari }: DesktopWorkspaceHomeProps) {
+  const [syncState, setSyncState] = useState<SyncState>({
+    online: typeof navigator === 'undefined' ? true : navigator.onLine,
+    syncing: false,
+    pending: 0,
+    lastSyncAt: null,
+  });
+
+  useEffect(() => {
+    const onSyncState = (event: Event) => {
+      const custom = event as CustomEvent<SyncState>;
+      if (custom.detail) setSyncState(custom.detail);
+    };
+    window.addEventListener('ralion:sync-status', onSyncState as EventListener);
+    return () => window.removeEventListener('ralion:sync-status', onSyncState as EventListener);
+  }, []);
+
+  const syncLabel = syncState.syncing
+    ? `Syncing ${syncState.pending || ''}`.trim()
+    : syncState.online
+      ? syncState.pending > 0
+        ? `${syncState.pending} pending`
+        : 'Cloud synced'
+      : syncState.pending > 0
+        ? `Offline · ${syncState.pending} queued`
+        : 'Offline · working locally';
+
   return (
     <section className="mb-6 overflow-hidden rounded-2xl border border-blue-500/20 bg-gradient-to-br from-zinc-900 via-zinc-950 to-blue-950/30 shadow-2xl shadow-blue-950/10">
       <div className="grid gap-5 p-5 lg:grid-cols-[1.45fr_1fr] lg:p-6">
@@ -37,6 +73,20 @@ export function DesktopWorkspaceHome({ organizationName, onNavigate, onOpenMari 
                 Ralion OS Desktop
               </span>
               <span className="text-[11px] text-zinc-500">{organizationName}</span>
+              <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-medium ${
+                syncState.online
+                  ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300'
+                  : 'border-amber-500/20 bg-amber-500/10 text-amber-300'
+              }`}>
+                {syncState.syncing ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : syncState.online ? (
+                  <Cloud className="h-3 w-3" />
+                ) : (
+                  <CloudOff className="h-3 w-3" />
+                )}
+                {syncLabel}
+              </span>
             </div>
             <h1 className="max-w-2xl text-2xl font-black tracking-tight text-white sm:text-3xl">
               Your business, with Mari at the centre.
@@ -44,6 +94,11 @@ export function DesktopWorkspaceHome({ organizationName, onNavigate, onOpenMari 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
               Ask Mari what needs attention, then move straight into the Ralion tools that execute the work. One company context, one operating workspace.
             </p>
+            {!syncState.online && (
+              <p className="mt-2 text-[11px] leading-5 text-amber-300/80">
+                Ralion is using locally cached business data. Supported changes are saved on this device and sync automatically when the internet returns.
+              </p>
+            )}
           </div>
 
           <button
@@ -68,7 +123,9 @@ export function DesktopWorkspaceHome({ organizationName, onNavigate, onOpenMari 
               <Bot className="h-4 w-4 text-violet-300" />
               <span className="text-xs font-bold uppercase tracking-wider text-zinc-300">Workspace</span>
             </div>
-            <span className="text-[10px] text-emerald-400">Business context connected</span>
+            <span className={`text-[10px] ${syncState.online ? 'text-emerald-400' : 'text-amber-400'}`}>
+              {syncState.online ? 'Business context connected' : 'Local workspace active'}
+            </span>
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
             {quickActions.map(({ label, description, href, icon: Icon }) => (
