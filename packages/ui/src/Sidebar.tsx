@@ -56,7 +56,7 @@ export interface SidebarProps {
   platformUrl?: string;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
-  onNavigate?: (href: string) => void;
+  onNavigate?: (href) => void;
   onOpenMariAI?: () => void;
   onLogout?: () => void;
 }
@@ -112,7 +112,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const ecosystemNav: SidebarItem[] = [
     { id: 'integrations', label: 'Integrations Hub', href: '/ralion/settings/integrations', icon: <Globe className="w-4 h-4 text-indigo-400" />, badge: 'Meta/OAuth' },
     { id: 'marketplace', label: 'Marketplace & AI', href: '/ralion/marketplace', icon: <Store className="w-4 h-4 text-zinc-400" />, badge: 'Coming Soon', isLocked: true },
-    { id: 'developer', label: 'Developer Platform', href: '/ralion/developer', icon: <Code className="w-4 h-4 text-zinc-400" />, badge: 'Coming Soon', isLocked: true },
+    { id: 'developer', label: 'Developer Platform', href: '/ralion/developer', icon: <Code className="w-4 h-4 text-indigo-400" />, badge: 'Live', badgeVariant: 'purple' },
   ];
 
   // 3. INDUSTRY SOLUTIONS Items (Locked with Coming Soon for Early Access)
