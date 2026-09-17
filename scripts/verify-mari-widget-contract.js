@@ -28,6 +28,7 @@ const chat = read('apps/ralion/src/app/api/mari/widget/chat/route.ts');
 const embed = read('apps/ralion/src/app/api/mari/widget/embed/route.ts');
 const widgetPage = read('apps/ralion/src/app/mari-widget/page.tsx');
 const dashboard = read('apps/ralion/src/app/(dashboard)/developer/widgets/page.tsx');
+const nextConfig = read('apps/ralion/next.config.js');
 
 // Browser credential boundary.
 expect(service, 'generatePublicToken', 'widgets use a dedicated public identifier');
@@ -54,6 +55,12 @@ reject(chat, 'callMariAiApi', 'public widget cannot invoke tenant-knowledge Mari
 reject(chat, 'MariKnowledgeRetrievalService', 'public widget does not retrieve private workspace documents');
 reject(chat, 'CreativeOrchestrator', 'public widget cannot execute creative generation tools');
 reject(chat, 'TenantCreditsService', 'public widget cannot invoke the legacy Mari credit path');
+
+// Cross-origin embedding must be narrow and deliberate.
+expect(nextConfig, "source: '/mari-widget'", 'widget frame route has a dedicated header policy');
+expect(nextConfig, "value: \"frame-ancestors *\"", 'widget surface is frameable by approved customer sites');
+expect(nextConfig, "source: '/api/((?!mari/widget/session).*)'", 'widget session bootstrap is excluded from the fixed dashboard CORS origin');
+expect(nextConfig, "source: '/((?!api|mari-widget|ralion/mari-widget).*)'", 'all other non-API Ralion pages keep normal frame protection');
 
 // Durable billing and usage.
 expect(chat, 'MariCreditsService.reserveReasoning', 'website reasoning reserves durable Mari credits');
