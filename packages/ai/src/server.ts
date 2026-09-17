@@ -11,6 +11,7 @@ export * from './tokenTelemetry.service';
 export * from './creativeAsset.service';
 export * from './creativeProviders';
 export * from './promptFaithfulCreativeProviders';
+export * from './veoVideoProvider';
 export * from './creativeOrchestrator.service';
 export * from './tenantCredits.service';
 export * from './durableTenantCredits.service';
