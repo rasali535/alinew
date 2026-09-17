@@ -111,6 +111,7 @@ function App() {
                 <Route path="/products" element={<Products />} />
                 <Route path="/products/ralion-crm" element={<RalionCRMProduct />} />
                 <Route path="/products/ralion-growth-intelligence" element={<RalionGrowthIntelligenceProduct />} />
+                <Route path="/mari-ai" element={<RalionMariAIProduct />} />
                 <Route path="/products/ralion-mari-ai" element={<RalionMariAIProduct />} />
                 <Route path="/products/ralion-automation" element={<RalionAutomationProduct />} />
                 <Route path="/products/ralion-analytics" element={<RalionAnalyticsProduct />} />
@@ -136,7 +137,6 @@ function App() {
                 <Route path="/tasks" element={<ExternalRedirect to="/ralion/tasks" />} />
                 <Route path="/documents" element={<ExternalRedirect to="/ralion/documents" />} />
                 <Route path="/billing" element={<ExternalRedirect to="/ralion/billing" />} />
-                <Route path="/mari-ai" element={<ExternalRedirect to="/ralion/mari-ai" />} />
                 <Route path="/settings" element={<ExternalRedirect to="/ralion/settings" />} />
                 <Route path="/settings/*" element={<ExternalRedirect />} />
                 <Route path="/workflows" element={<ExternalRedirect to="/ralion/workflows" />} />

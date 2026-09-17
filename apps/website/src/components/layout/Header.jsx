@@ -4,6 +4,14 @@ import { navLinks, companyInfo } from '../../data/mock';
 import { useAuth } from '../../context/AuthContext';
 import { User, LogOut, ChevronDown, Sparkles, Building2, UserCheck, ArrowRight, Video, Code, Music, Bot } from 'lucide-react';
 
+const primaryNavLinks = navLinks.some((link) => link.href === '/mari-ai')
+  ? navLinks
+  : navLinks.flatMap((link) =>
+      link.name === 'Ralion OS'
+        ? [link, { name: 'Mari AI', href: '/mari-ai' }]
+        : [link]
+    );
+
 const Header = () => {
   const [currentTime, setCurrentTime] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -43,8 +51,8 @@ const Header = () => {
         </Link>
 
         {/* Desktop Navigation */}
-        <div className="hidden lg:flex items-center gap-6 xl:gap-8">
-          {navLinks.map((link) => {
+        <div className="hidden lg:flex items-center gap-5 xl:gap-7">
+          {primaryNavLinks.map((link) => {
             const isActive =
               location.pathname === link.href ||
               (link.href !== '/' && location.pathname.startsWith(link.href));
@@ -103,7 +111,9 @@ const Header = () => {
                 className={`text-xs uppercase tracking-wider font-semibold transition-all duration-300 py-4 ${
                   isActive
                     ? 'text-brand-gold border-b-2 border-brand-gold'
-                    : 'text-white/75 hover:text-brand-gold'
+                    : link.href === '/mari-ai'
+                      ? 'text-purple-300 hover:text-white'
+                      : 'text-white/75 hover:text-brand-gold'
                 }`}
               >
                 {link.name}
@@ -226,7 +236,7 @@ const Header = () => {
           </div>
 
           <div className="space-y-4 overflow-y-auto max-h-[70vh] pb-8">
-            {navLinks.map((link) => (
+            {primaryNavLinks.map((link) => (
               <div key={link.name}>
                 {link.dropdown ? (
                   <div className="space-y-3">
@@ -262,7 +272,7 @@ const Header = () => {
                 ) : (
                   <Link
                     to={link.href}
-                    className="block text-white font-bold text-base hover:text-brand-gold transition-colors"
+                    className={`block font-bold text-base transition-colors ${link.href === '/mari-ai' ? 'text-purple-300 hover:text-white' : 'text-white hover:text-brand-gold'}`}
                     onClick={() => setIsMenuOpen(false)}
                   >
                     {link.name}
