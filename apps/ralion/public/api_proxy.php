@@ -28,7 +28,6 @@ if (isset($_GET['__proxy_path']) && !empty($_GET['__proxy_path'])) {
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $origin = $_SERVER['HTTP_ORIGIN'] ?? 'https://rasalilabs.com';
 
-// Allowed origin validation
 $allowedOrigin = 'https://rasalilabs.com';
 if (preg_match('/^https:\/\/(?:[a-zA-Z0-9-]+\.)*rasalilabs\.com$/', $origin) ||
     preg_match('/^https:\/\/(?:[a-zA-Z0-9-]+\.)*onrender\.com$/', $origin) ||
@@ -61,12 +60,16 @@ $targetUrl = rtrim($backendUrl, '/') . $path . ($queryString !== '' ? '?' . $que
 // 4. Prepare headers to forward
 $forwardHeaders = [];
 $ignoreHeaders = ['host', 'connection', 'content-length', 'transfer-encoding', 'accept-encoding'];
+$hasAuth = false;
 
 if (function_exists('getallheaders')) {
     foreach (getallheaders() as $name => $value) {
         $lower = strtolower($name);
         if (!in_array($lower, $ignoreHeaders, true)) {
             $forwardHeaders[] = "$name: $value";
+            if ($lower === 'authorization') {
+                $hasAuth = true;
+            }
         }
     }
 } else {
@@ -76,8 +79,20 @@ if (function_exists('getallheaders')) {
             $lower = strtolower($name);
             if (!in_array($lower, $ignoreHeaders, true)) {
                 $forwardHeaders[] = "$name: $value";
+                if ($lower === 'authorization') {
+                    $hasAuth = true;
+                }
             }
         }
+    }
+}
+
+// Ensure Authorization is captured if passed via FastCGI environment variables.
+if (!$hasAuth) {
+    $authVal = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+    if (!empty($authVal)) {
+        $forwardHeaders[] = "Authorization: $authVal";
+        $hasAuth = true;
     }
 }
 
@@ -103,7 +118,6 @@ if ($method !== 'GET' && $method !== 'HEAD' && !empty($body)) {
     curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
 }
 
-// Capture response headers
 $responseHeaders = [];
 curl_setopt($ch, CURLOPT_HEADERFUNCTION, function($curl, $header) use (&$responseHeaders) {
     $len = strlen($header);
@@ -124,9 +138,9 @@ $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 $curlError = curl_error($ch);
 curl_close($ch);
 
-// Set default CORS
-header("Access-Control-Allow-Origin: $origin");
+header("Access-Control-Allow-Origin: $allowedOrigin");
 header("Access-Control-Allow-Credentials: true");
+header("Vary: Origin");
 
 if ($responseBody === false || ($httpCode === 0 && !empty($curlError))) {
     http_response_code(503);
@@ -141,7 +155,6 @@ if ($responseBody === false || ($httpCode === 0 && !empty($curlError))) {
     exit;
 }
 
-// Forward upstream response headers
 foreach ($responseHeaders as $hdr) {
     header($hdr, false);
 }
