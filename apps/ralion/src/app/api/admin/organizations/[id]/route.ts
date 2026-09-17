@@ -4,6 +4,16 @@ import { getPrivilegedSupabase } from '@/lib/supabase/server';
 import { getSocialConnectionCapabilities } from '@ralion/integrations';
 import { isActiveFacebookConnection } from '@/lib/services/social/socialConnectionStatus';
 
+function toMs(value?: string | null): number {
+  const parsed = value ? Date.parse(value) : NaN;
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function maxIso(values: Array<string | null | undefined>): string | null {
+  const best = values.reduce((max, value) => Math.max(max, toMs(value)), 0);
+  return best ? new Date(best).toISOString() : null;
+}
+
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
@@ -34,7 +44,7 @@ export async function GET(
     });
     if (auditInsertError) throw new Error(`Audit logging failed: ${auditInsertError.message}`);
 
-    const [workspacesRes, stateRes, subsRes, walletRes, ledgerRes, paymentsRes, socialRes, businessRes, knowledgeRes, reservationsRes, auditRes, tasksRes, dealsRes, docsRes, workflowsRes] = await Promise.all([
+    const [workspacesRes, stateRes, subsRes, walletRes, ledgerRes, paymentsRes, socialRes, businessRes, knowledgeRes, reservationsRes, auditRes, tasksRes, dealsRes, docsRes, workflowsRes, widgetsRes, widgetSessionsRes, widgetUsageRes, apiKeysRes, apiUsageRes] = await Promise.all([
       supabase.from('workspaces').select('*').eq('organization_id', organizationId).order('created_at', { ascending: true }),
       supabase.from('tenant_admin_state').select('*').eq('organization_id', organizationId).maybeSingle(),
       supabase.from('subscriptions').select('*,subscription_plans(name,slug,price,currency,features,limits)').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
@@ -50,9 +60,14 @@ export async function GET(
       supabase.from('deals').select('id,workspace_id,title,stage,value,created_at').in('workspace_id', (await supabase.from('workspaces').select('id').eq('organization_id', organizationId)).data?.map((w: any) => w.id) || []).limit(100),
       supabase.from('documents').select('id,workspace_id,name,category,rag_status,size_bytes,created_at').eq('organization_id', organizationId).limit(100),
       supabase.from('workflows').select('id,workspace_id,name,trigger_event,is_active,executions_count,last_executed_at').eq('organization_id', organizationId).limit(100),
+      supabase.from('mari_embed_widgets').select('id,workspace_id,name,allowed_domains,assistant_name,status,monthly_request_limit,request_count,last_used_at,created_at').eq('organization_id', organizationId).order('created_at', { ascending: false }),
+      supabase.from('mari_widget_sessions').select('id,widget_id,origin,request_count,last_used_at,created_at,expires_at').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(500),
+      supabase.from('mari_widget_usage').select('id,widget_id,request_id,session_fingerprint,status_code,total_tokens,credits_used,model,latency_ms,created_at').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(1000),
+      supabase.from('mari_api_keys').select('id,workspace_id,name,key_prefix,status,scopes,request_count,last_used_at,expires_at,created_at').eq('organization_id', organizationId).order('created_at', { ascending: false }),
+      supabase.from('mari_api_usage').select('id,api_key_id,status_code,total_tokens,credits_used,model,latency_ms,created_at').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(1000),
     ]);
 
-    for (const [name, result] of Object.entries({ workspaces: workspacesRes, state: stateRes, subscription: subsRes, wallet: walletRes, ledger: ledgerRes, payments: paymentsRes, social: socialRes, business: businessRes, knowledge: knowledgeRes, reservations: reservationsRes, audit: auditRes, tasks: tasksRes, deals: dealsRes, documents: docsRes, workflows: workflowsRes })) {
+    for (const [name, result] of Object.entries({ workspaces: workspacesRes, state: stateRes, subscription: subsRes, wallet: walletRes, ledger: ledgerRes, payments: paymentsRes, social: socialRes, business: businessRes, knowledge: knowledgeRes, reservations: reservationsRes, audit: auditRes, tasks: tasksRes, deals: dealsRes, documents: docsRes, workflows: workflowsRes, widgets: widgetsRes, widgetSessions: widgetSessionsRes, widgetUsage: widgetUsageRes, apiKeys: apiKeysRes, apiUsage: apiUsageRes })) {
       if ((result as any).error) throw new Error(`${name}: ${(result as any).error.message}`);
     }
 
@@ -113,6 +128,62 @@ export async function GET(
       details: row.metadata || {},
     }));
 
+    const widgetSessions = widgetSessionsRes.data || [];
+    const widgetUsage = widgetUsageRes.data || [];
+    const websiteWidgets = (widgetsRes.data || []).map((widget: any) => {
+      const sessions = widgetSessions.filter((row: any) => row.widget_id === widget.id);
+      const usage = widgetUsage.filter((row: any) => row.widget_id === widget.id);
+      const successful = usage.filter((row: any) => Number(row.status_code) >= 200 && Number(row.status_code) < 300);
+      const failed = usage.filter((row: any) => Number(row.status_code) >= 400);
+      const lastSeenAt = maxIso([
+        widget.last_used_at,
+        ...sessions.flatMap((row: any) => [row.last_used_at, row.created_at]),
+        ...usage.map((row: any) => row.created_at),
+      ]);
+      return {
+        id: widget.id,
+        workspaceId: widget.workspace_id,
+        name: widget.name,
+        assistantName: widget.assistant_name,
+        allowedDomains: widget.allowed_domains || [],
+        observedOrigins: Array.from(new Set(sessions.map((row: any) => row.origin).filter(Boolean))),
+        status: widget.status,
+        monthlyRequestLimit: Number(widget.monthly_request_limit || 0),
+        lifetimeRequestCount: Number(widget.request_count || 0),
+        sessions: sessions.length,
+        requests: usage.length,
+        successfulRequests: successful.length,
+        failedRequests: failed.length,
+        creditsUsed: usage.reduce((sum: number, row: any) => sum + Number(row.credits_used || 0), 0),
+        totalTokens: usage.reduce((sum: number, row: any) => sum + Number(row.total_tokens || 0), 0),
+        avgLatencyMs: usage.length ? Math.round(usage.reduce((sum: number, row: any) => sum + Number(row.latency_ms || 0), 0) / usage.length) : 0,
+        lastSuccessfulAt: maxIso(successful.map((row: any) => row.created_at)),
+        lastSeenAt,
+        createdAt: widget.created_at,
+      };
+    });
+
+    const apiUsage = apiUsageRes.data || [];
+    const mariApiKeys = (apiKeysRes.data || []).map((key: any) => {
+      const usage = apiUsage.filter((row: any) => row.api_key_id === key.id);
+      return {
+        id: key.id,
+        workspaceId: key.workspace_id,
+        name: key.name,
+        keyPrefix: key.key_prefix,
+        status: key.status,
+        scopes: key.scopes || [],
+        lifetimeRequestCount: Number(key.request_count || 0),
+        requests: usage.length,
+        failedRequests: usage.filter((row: any) => Number(row.status_code) >= 400).length,
+        creditsUsed: usage.reduce((sum: number, row: any) => sum + Number(row.credits_used || 0), 0),
+        totalTokens: usage.reduce((sum: number, row: any) => sum + Number(row.total_tokens || 0), 0),
+        lastUsedAt: key.last_used_at,
+        expiresAt: key.expires_at,
+        createdAt: key.created_at,
+      };
+    });
+
     return NextResponse.json({
       success: true,
       data: {
@@ -131,6 +202,24 @@ export async function GET(
         assets,
         activityStream,
         mariKnowledge: knowledgeRes.data || [],
+        mariWebsite: {
+          widgets: websiteWidgets,
+          widgetCount: websiteWidgets.length,
+          sessions: widgetSessions.length,
+          requests: widgetUsage.length,
+          successfulRequests: widgetUsage.filter((row: any) => Number(row.status_code) >= 200 && Number(row.status_code) < 300).length,
+          failedRequests: widgetUsage.filter((row: any) => Number(row.status_code) >= 400).length,
+          creditsUsed: widgetUsage.reduce((sum: number, row: any) => sum + Number(row.credits_used || 0), 0),
+          lastSeenAt: maxIso(websiteWidgets.map((row: any) => row.lastSeenAt)),
+        },
+        mariApi: {
+          keys: mariApiKeys,
+          keyCount: mariApiKeys.length,
+          activeKeyCount: mariApiKeys.filter((row: any) => row.status === 'ACTIVE').length,
+          requests: apiUsage.length,
+          failedRequests: apiUsage.filter((row: any) => Number(row.status_code) >= 400).length,
+          creditsUsed: apiUsage.reduce((sum: number, row: any) => sum + Number(row.credits_used || 0), 0),
+        },
         operationalData: { tasks: tasksRes.data || [], deals: dealsRes.data || [], documents: docsRes.data || [], workflows: workflowsRes.data || [] },
         socialConnections,
         metaStatus: activeFacebookConnections.length ? 'CONNECTED' : 'DISCONNECTED',
