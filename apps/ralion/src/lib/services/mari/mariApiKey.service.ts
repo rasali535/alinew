@@ -32,6 +32,7 @@ const ALLOWED_SCOPES: MariApiScope[] = ['intelligence:read', 'knowledge:read', '
 const DEFAULT_MONTHLY_REQUEST_LIMIT = Math.max(1, Number(process.env.MARI_API_DEFAULT_MONTHLY_REQUEST_LIMIT || 1000));
 const DEFAULT_MONTHLY_CREDIT_LIMIT = Math.max(1, Number(process.env.MARI_API_DEFAULT_MONTHLY_CREDIT_LIMIT || 1000));
 const BURST_REQUESTS_PER_MINUTE = Math.max(1, Number(process.env.MARI_API_BURST_REQUESTS_PER_MINUTE || 30));
+const MAX_ACTIVE_KEYS_PER_WORKSPACE = Math.max(1, Number(process.env.MARI_API_MAX_ACTIVE_KEYS || 10));
 
 function hashKey(value: string): string {
   return createHash('sha256').update(value).digest('hex');
@@ -39,6 +40,10 @@ function hashKey(value: string): string {
 
 function hashIp(value: string, keyId: string): string {
   return createHash('sha256').update(`${keyId}:${value}`).digest('hex');
+}
+
+function generateSecret(): string {
+  return `mari_live_${randomBytes(30).toString('base64url')}`;
 }
 
 function mapKey(row: any): MariApiKeyRecord {
@@ -83,7 +88,21 @@ export class MariApiKeyService {
     expiresAt?: string | null;
   }): Promise<{ apiKey: string; record: MariApiKeyRecord }> {
     const db = getServiceSupabase();
-    const secret = `mari_live_${randomBytes(30).toString('base64url')}`;
+    const nowIso = new Date().toISOString();
+    const { count, error: countError } = await db
+      .from('mari_api_keys')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', params.organizationId)
+      .eq('workspace_id', params.workspaceId)
+      .eq('status', 'ACTIVE')
+      .or(`expires_at.is.null,expires_at.gt.${nowIso}`);
+
+    if (countError) throw new Error(countError.message);
+    if ((count || 0) >= MAX_ACTIVE_KEYS_PER_WORKSPACE) {
+      throw codedError('MARI_API_KEY_LIMIT_REACHED', `This workspace can have up to ${MAX_ACTIVE_KEYS_PER_WORKSPACE} active Mari API keys.`);
+    }
+
+    const secret = generateSecret();
     const scopes = this.normalizeScopes(params.scopes);
     if (!scopes.length) throw new Error('At least one valid Mari API scope is required.');
 
@@ -146,7 +165,50 @@ export class MariApiKeyService {
       .select('id')
       .maybeSingle();
     if (error) throw new Error(error.message);
-    if (!data) throw new Error('Mari API key was not found in this workspace.');
+    if (!data) throw codedError('MARI_API_KEY_NOT_FOUND', 'Mari API key was not found in this workspace.');
+  }
+
+  static async rotateKey(params: {
+    keyId: string;
+    organizationId: string;
+    workspaceId: string;
+  }): Promise<{ apiKey: string; record: MariApiKeyRecord }> {
+    const db = getServiceSupabase();
+    const { data: existing, error: lookupError } = await db
+      .from('mari_api_keys')
+      .select('id, expires_at')
+      .eq('id', params.keyId)
+      .eq('organization_id', params.organizationId)
+      .eq('workspace_id', params.workspaceId)
+      .eq('status', 'ACTIVE')
+      .maybeSingle();
+
+    if (lookupError) throw new Error(lookupError.message);
+    if (!existing) throw codedError('MARI_API_KEY_NOT_FOUND', 'Active Mari API key was not found in this workspace.');
+    if (existing.expires_at && new Date(existing.expires_at).getTime() <= Date.now()) {
+      throw codedError('MARI_API_KEY_EXPIRED', 'Expired Mari API keys cannot be rotated. Create a new key instead.');
+    }
+
+    const secret = generateSecret();
+    const { data, error } = await db
+      .from('mari_api_keys')
+      .update({
+        key_prefix: secret.slice(0, 18),
+        key_hash: hashKey(secret),
+        last_used_at: null,
+        last_used_ip_hash: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', params.keyId)
+      .eq('organization_id', params.organizationId)
+      .eq('workspace_id', params.workspaceId)
+      .eq('status', 'ACTIVE')
+      .select('*')
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    if (!data) throw codedError('MARI_API_KEY_NOT_FOUND', 'Active Mari API key was not found in this workspace.');
+    return { apiKey: secret, record: mapKey(data) };
   }
 
   static async authenticate(rawKey: string, requiredScope?: MariApiScope, requestIp?: string | null): Promise<MariApiAuthContext> {
