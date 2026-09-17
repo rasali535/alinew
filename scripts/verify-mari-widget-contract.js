@@ -41,9 +41,11 @@ reject(widgetPage, 'mari_live_', 'widget UI must never contain a customer Mari A
 
 // Domain and tenant isolation.
 expect(service, 'isOriginAllowed(origin, widget.allowedDomains)', 'session creation enforces the widget domain allowlist');
+expect(service, 'isOriginAllowed(session.origin, widget.allowedDomains)', 'existing sessions are rechecked after allowlist changes');
 expect(service, 'organization_id: params.organizationId', 'widget creation binds to the authenticated organisation');
 expect(service, 'workspace_id: params.workspaceId', 'widget creation binds to the authenticated workspace');
 expect(management, "normalized === 'owner' || normalized === 'admin'", 'only owners/admins manage widgets');
+expect(management, 'allowedDomains: body.allowedDomains', 'management API accepts explicit allowed website updates');
 expect(session, 'MARI_WIDGET_DOMAIN_DENIED', 'domain denial is explicit');
 
 // Public data and execution boundary.
@@ -83,6 +85,9 @@ expect(fkMigration, 'mari_widget_usage_workspace_idx', 'usage workspace foreign 
 
 // Customer workflow.
 expect(dashboard, 'Embed Mari on a website', 'developer UI exposes website widget setup');
+expect(dashboard, 'Allowed websites', 'widget setup makes the domain allowlist explicit');
+expect(dashboard, 'Edit websites', 'customers can update allowed websites after setup');
+expect(dashboard, 'allowedDomains: editDomains', 'allowed website edits are persisted through the management API');
 expect(dashboard, 'Copy', 'developer UI provides copyable embed code');
 expect(dashboard, 'No secret API key is exposed', 'developer UI explains the secret boundary');
 
