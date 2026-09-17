@@ -3,6 +3,7 @@ import {
   PromptFaithfulImageProvider,
   PromptFaithfulVideoProvider,
 } from './promptFaithfulCreativeProviders';
+import { VeoVideoProvider } from './veoVideoProvider';
 
 /**
  * Server-only provider policy.
@@ -18,5 +19,6 @@ orchestrator.imageProviders = [
 ];
 
 orchestrator.videoProviders = [
+  new VeoVideoProvider(),
   new PromptFaithfulVideoProvider(),
 ];
