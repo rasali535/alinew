@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar, Header } from '@ralion/ui';
 import { useOrganization } from '@ralion/auth';
 import { ProductAccessGuard } from '../../components/ProductAccessGuard';
+import { DesktopWorkspaceHome } from '../../components/DesktopWorkspaceHome';
 
 const MariAiDrawer = dynamic(
   () => import('../../components/MariAiDrawer').then((mod) => mod.MariAiDrawer),
@@ -28,10 +29,36 @@ export default function DashboardLayout({
   const [isMariDrawerOpen, setIsMariDrawerOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isDesktopRuntime, setIsDesktopRuntime] = useState(false);
 
   useEffect(() => {
     setIsMobileSidebarOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    const desktopApi = typeof window !== 'undefined' ? (window as any).ralionDesktop : undefined;
+    const desktop = Boolean(desktopApi?.isDesktop || (window as any).__RALION_DESKTOP__ || window.location.protocol === 'file:' || window.location.protocol === 'app:');
+    setIsDesktopRuntime(desktop);
+
+    const openMari = () => setIsMariDrawerOpen(true);
+    const handleKeyboard = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'm') {
+        event.preventDefault();
+        openMari();
+      }
+    };
+    const handleOpenMariEvent = () => openMari();
+
+    window.addEventListener('keydown', handleKeyboard);
+    window.addEventListener('ralion:open-mari', handleOpenMariEvent as EventListener);
+    const removeNativeListener = desktopApi?.onMariToggle?.(openMari);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyboard);
+      window.removeEventListener('ralion:open-mari', handleOpenMariEvent as EventListener);
+      if (typeof removeNativeListener === 'function') removeNativeListener();
+    };
+  }, []);
 
   const isPlatformAdmin = user?.role === 'PLATFORM_ADMIN' || user?.email === 'ali@rasalilabs.com';
   const organizationName =
@@ -43,9 +70,10 @@ export default function DashboardLayout({
         : 'Ralion Workspace');
   const branchName = activeBranch?.name || 'Main HQ Branch';
   const displayTier = isPlatformAdmin ? 'PLATFORM_ADMIN' : (organization?.licenseTier || 'COMMUNITY');
+  const isDashboardHome = pathname === '/dashboard' || pathname === '/ralion/dashboard';
 
   const handleNavigate = (href: string) => {
-    const isDesktop = typeof window !== 'undefined' && ((window as any).__RALION_DESKTOP__ || window.location.protocol === 'file:');
+    const isDesktop = typeof window !== 'undefined' && ((window as any).__RALION_DESKTOP__ || (window as any).ralionDesktop?.isDesktop || window.location.protocol === 'file:' || window.location.protocol === 'app:');
     if (isDesktop) {
       window.location.href = href;
     } else {
@@ -61,7 +89,7 @@ export default function DashboardLayout({
 
   return (
     <ProductAccessGuard>
-      <div className="flex h-screen bg-zinc-950 text-zinc-100 overflow-hidden">
+      <div className="flex h-full min-h-0 bg-zinc-950 text-zinc-100 overflow-hidden">
         <div className="hidden md:flex shrink-0">
           <Sidebar
             currentPath={pathname}
@@ -116,6 +144,10 @@ export default function DashboardLayout({
             exitUrl={process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com'}
             onExit={() => {
               const platformUrl = process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com';
+              if (isDesktopRuntime && (window as any).ralionDesktop?.openExternal) {
+                void (window as any).ralionDesktop.openExternal(platformUrl);
+                return;
+              }
               window.location.href = platformUrl;
             }}
             onOpenAdmin={() => {
@@ -127,6 +159,13 @@ export default function DashboardLayout({
           />
 
           <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-zinc-950">
+            {isDesktopRuntime && isDashboardHome && (
+              <DesktopWorkspaceHome
+                organizationName={organizationName}
+                onNavigate={handleNavigate}
+                onOpenMari={() => setIsMariDrawerOpen(true)}
+              />
+            )}
             {children}
           </main>
         </div>
@@ -135,6 +174,7 @@ export default function DashboardLayout({
           <MariAiDrawer
             isOpen={isMariDrawerOpen}
             onClose={() => setIsMariDrawerOpen(false)}
+            onNavigate={handleNavigate}
           />
         )}
 
