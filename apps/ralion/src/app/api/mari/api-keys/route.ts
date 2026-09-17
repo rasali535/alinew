@@ -10,7 +10,8 @@ export async function OPTIONS(request: NextRequest) {
 }
 
 function canManage(role?: string): boolean {
-  return role === 'owner' || role === 'admin';
+  const normalized = String(role || '').toLowerCase();
+  return normalized === 'owner' || normalized === 'admin';
 }
 
 export async function GET(request: NextRequest) {
@@ -50,8 +51,6 @@ export async function POST(request: NextRequest) {
       createdBy: ctx.user.id,
       name: body.name || 'Mari Intelligence API',
       scopes: body.scopes,
-      monthlyRequestLimit: body.monthlyRequestLimit,
-      monthlyCreditLimit: body.monthlyCreditLimit,
       expiresAt: body.expiresAt || null,
     });
 
