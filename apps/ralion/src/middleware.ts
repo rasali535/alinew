@@ -5,7 +5,19 @@ import { getCorsHeaders, handleCorsPreflight } from '@/lib/cors';
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
-  // Apply CORS to all /api/ and /ralion/api/ endpoints
+  // The public Mari website-widget bootstrap has its own dynamic CORS policy.
+  // Its OPTIONS handler mirrors the requesting website origin, while the POST
+  // then validates that origin against the widget's persisted allowed_domains.
+  // Do not let the dashboard/global CORS allowlist intercept this route first.
+  const isMariWidgetSession =
+    pathname === '/api/mari/widget/session' ||
+    pathname === '/ralion/api/mari/widget/session';
+
+  if (isMariWidgetSession) {
+    return NextResponse.next();
+  }
+
+  // Apply CORS to all other /api/ and /ralion/api/ endpoints.
   if (pathname.startsWith('/api') || pathname.startsWith('/ralion/api')) {
     // Immediate response for Preflight OPTIONS requests (no auth check, no redirect)
     if (request.method === 'OPTIONS') {
