@@ -1,12 +1,22 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 
 type DesktopApiResponse = {
   status: number;
   statusText?: string;
   headers?: Record<string, string>;
   body?: string;
+};
+
+type QueuedDesktopAction = {
+  id: string;
+  url: string;
+  method: string;
+  headers: Record<string, string>;
+  body: string | null;
+  queuedAt?: string;
+  attempts?: number;
 };
 
 type DesktopBridge = {
@@ -17,6 +27,25 @@ type DesktopBridge = {
     headers?: Record<string, string>;
     body?: string | null;
   }) => Promise<DesktopApiResponse>;
+  queueOfflineAction?: (action: QueuedDesktopAction) => Promise<any>;
+  getPendingActions?: () => Promise<QueuedDesktopAction[]>;
+  clearSyncedActions?: (ids: string[]) => Promise<any>;
+  showNotification?: (title: string, body: string) => Promise<any>;
+};
+
+type SyncState = {
+  online: boolean;
+  syncing: boolean;
+  pending: number;
+  lastSyncAt: string | null;
+};
+
+type CachedResponse = {
+  status: number;
+  statusText: string;
+  headers: Record<string, string>;
+  body: string;
+  cachedAt: number;
 };
 
 declare global {
@@ -26,6 +55,39 @@ declare global {
 }
 
 const CANONICAL_RALION_ORIGIN = 'https://rasalilabs.com';
+const HEALTH_URL = `${CANONICAL_RALION_ORIGIN}/ralion/api/health`;
+const CACHE_STORAGE_KEY = 'ralion_desktop_api_cache_v1';
+const CACHE_MAX_ENTRIES = 40;
+const CACHE_MAX_BODY_BYTES = 400_000;
+const HEALTH_INTERVAL_MS = 15_000;
+
+const OFFLINE_QUEUE_PREFIXES = [
+  '/ralion/api/tasks',
+  '/ralion/api/crm/customers',
+  '/ralion/api/calendar',
+  '/ralion/api/leads',
+];
+
+let desktopOnline = typeof navigator === 'undefined' ? true : navigator.onLine;
+let syncInFlight: Promise<void> | null = null;
+let lastSyncAt: string | null = null;
+
+function getDesktopBridge(): DesktopBridge | undefined {
+  if (typeof window === 'undefined') return undefined;
+  return (window as any).ralionDesktop as DesktopBridge | undefined;
+}
+
+function emitSyncState(partial: Partial<SyncState> = {}) {
+  if (typeof window === 'undefined') return;
+  const desktop = getDesktopBridge();
+  const detail: SyncState = {
+    online: partial.online ?? desktopOnline,
+    syncing: partial.syncing ?? Boolean(syncInFlight),
+    pending: partial.pending ?? 0,
+    lastSyncAt: partial.lastSyncAt ?? lastSyncAt,
+  };
+  window.dispatchEvent(new CustomEvent('ralion:sync-status', { detail }));
+}
 
 function resolveDesktopApiTarget(input: RequestInfo | URL): string | null {
   let raw: string;
@@ -51,7 +113,6 @@ function resolveDesktopApiTarget(input: RequestInfo | URL): string | null {
       return `${CANONICAL_RALION_ORIGIN}/ralion${parsed.pathname}${parsed.search}`;
     }
 
-    // Protect packaged builds from stale localhost API assumptions.
     if (isLocalHost && parsed.pathname.startsWith('/api/')) {
       return `${CANONICAL_RALION_ORIGIN}/ralion${parsed.pathname}${parsed.search}`;
     }
@@ -78,8 +139,6 @@ async function resolveBody(input: RequestInfo | URL, init: RequestInit | undefin
   if (initBody !== undefined && initBody !== null) {
     if (typeof initBody === 'string') return initBody;
     if (typeof URLSearchParams !== 'undefined' && initBody instanceof URLSearchParams) return initBody.toString();
-    // Binary/FormData uploads stay on the browser transport for now rather than
-    // being corrupted by a text-only bridge.
     return undefined;
   }
 
@@ -96,10 +155,227 @@ async function resolveBody(input: RequestInfo | URL, init: RequestInit | undefin
   return null;
 }
 
+function readCache(): Record<string, CachedResponse> {
+  if (typeof window === 'undefined') return {};
+  try {
+    return JSON.parse(localStorage.getItem(CACHE_STORAGE_KEY) || '{}') || {};
+  } catch {
+    return {};
+  }
+}
+
+function writeCachedResponse(url: string, result: DesktopApiResponse) {
+  if (typeof window === 'undefined') return;
+  const body = result.body || '';
+  if (body.length > CACHE_MAX_BODY_BYTES) return;
+  const contentType = Object.entries(result.headers || {}).find(([key]) => key.toLowerCase() === 'content-type')?.[1] || '';
+  if (contentType && !contentType.includes('json') && !contentType.includes('text')) return;
+
+  try {
+    const cache = readCache();
+    cache[url] = {
+      status: result.status,
+      statusText: result.statusText || 'OK',
+      headers: result.headers || { 'content-type': 'application/json' },
+      body,
+      cachedAt: Date.now(),
+    };
+
+    const entries = Object.entries(cache).sort((a, b) => b[1].cachedAt - a[1].cachedAt).slice(0, CACHE_MAX_ENTRIES);
+    localStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(Object.fromEntries(entries)));
+  } catch {
+    // Cache failure must never prevent the live request from succeeding.
+  }
+}
+
+function readCachedResponse(url: string): Response | null {
+  const cached = readCache()[url];
+  if (!cached) return null;
+  const headers = new Headers(cached.headers || {});
+  headers.set('x-ralion-offline-cache', 'true');
+  headers.set('x-ralion-cached-at', new Date(cached.cachedAt).toISOString());
+  return new Response(cached.body, {
+    status: cached.status >= 200 && cached.status < 300 ? cached.status : 200,
+    statusText: cached.statusText || 'Offline Cache',
+    headers,
+  });
+}
+
+function isQueueableOfflineMutation(url: string, method: string, headers: Headers, body: string | null | undefined): boolean {
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return false;
+  if (body === undefined) return false;
+  const parsed = new URL(url);
+  if (!OFFLINE_QUEUE_PREFIXES.some(prefix => parsed.pathname.startsWith(prefix))) return false;
+  const contentType = headers.get('content-type') || 'application/json';
+  return contentType.includes('application/json') || contentType.includes('application/x-www-form-urlencoded');
+}
+
+function stripTransientHeaders(headers: Headers): Record<string, string> {
+  const saved: Record<string, string> = {};
+  headers.forEach((value, key) => {
+    const normalized = key.toLowerCase();
+    if (normalized === 'authorization' || normalized === 'x-user-id' || normalized === 'content-length') return;
+    saved[key] = value;
+  });
+  return saved;
+}
+
+function readStoredAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {};
+  try {
+    const sharedClient = (window as any).__ralion_supabase_instance__ || (globalThis as any).__ralion_supabase_instance__;
+    // getSession is async and handled separately in getCurrentAuthHeaders; this
+    // fallback covers the period before the shared client has rehydrated.
+    const directSession = localStorage.getItem('ralion-app-auth-token');
+    let parsed: any = directSession ? JSON.parse(directSession) : null;
+    let token = parsed?.access_token || parsed?.currentSession?.access_token || null;
+    let user = parsed?.user || parsed?.currentSession?.user || null;
+
+    for (let i = 0; !token && i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith('sb-') || !key.endsWith('-auth-token')) continue;
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      parsed = JSON.parse(raw);
+      token = parsed?.access_token || parsed?.currentSession?.access_token || null;
+      user = parsed?.user || parsed?.currentSession?.user || null;
+    }
+
+    if (token) headers.Authorization = `Bearer ${token}`;
+    if (user?.id) headers['x-user-id'] = user.id;
+    void sharedClient;
+  } catch {}
+
+  const workspaceId = localStorage.getItem('ralion_active_workspace_id') || localStorage.getItem('ralion_workspace_id');
+  const orgId = localStorage.getItem('ralion_organization_id') || localStorage.getItem('ralion_active_org_id') || localStorage.getItem('ralion_org_id');
+  if (workspaceId) headers['x-workspace-id'] = workspaceId;
+  if (orgId) headers['x-organization-id'] = orgId;
+  return headers;
+}
+
+async function getCurrentAuthHeaders(): Promise<Record<string, string>> {
+  try {
+    const sharedClient = (window as any).__ralion_supabase_instance__ || (globalThis as any).__ralion_supabase_instance__;
+    if (sharedClient?.auth?.getSession) {
+      const result = await sharedClient.auth.getSession();
+      const session = result?.data?.session;
+      if (session?.access_token) {
+        const headers = readStoredAuthHeaders();
+        headers.Authorization = `Bearer ${session.access_token}`;
+        if (session.user?.id) headers['x-user-id'] = session.user.id;
+        return headers;
+      }
+    }
+  } catch {}
+  return readStoredAuthHeaders();
+}
+
+function queuedResponse(actionId: string): Response {
+  return new Response(JSON.stringify({
+    success: true,
+    queued: true,
+    offline: true,
+    actionId,
+    message: 'Saved on this device and queued for automatic sync when Ralion reconnects.',
+  }), {
+    status: 202,
+    statusText: 'Queued for Sync',
+    headers: { 'Content-Type': 'application/json', 'x-ralion-offline-queued': 'true' },
+  });
+}
+
+async function queueMutation(desktop: DesktopBridge, url: string, method: string, headers: Headers, body: string | null): Promise<Response> {
+  const id = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `offline-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const savedHeaders = stripTransientHeaders(headers);
+  if (!savedHeaders['Idempotency-Key'] && !savedHeaders['idempotency-key']) {
+    savedHeaders['Idempotency-Key'] = `ralion-desktop-${id}`;
+  }
+  await desktop.queueOfflineAction?.({ id, url, method, headers: savedHeaders, body, queuedAt: new Date().toISOString(), attempts: 0 });
+  const pending = await desktop.getPendingActions?.().catch(() => []) || [];
+  emitSyncState({ online: false, syncing: false, pending: pending.length });
+  return queuedResponse(id);
+}
+
+async function flushOfflineQueue(): Promise<void> {
+  if (syncInFlight) return syncInFlight;
+  const desktop = getDesktopBridge();
+  if (!desktop?.apiFetch || !desktop.getPendingActions || !desktop.clearSyncedActions || !desktopOnline) return;
+
+  syncInFlight = (async () => {
+    const pending = await desktop.getPendingActions!().catch(() => []);
+    emitSyncState({ online: true, syncing: pending.length > 0, pending: pending.length });
+    if (!pending.length) return;
+
+    const syncedIds: string[] = [];
+    const freshAuth = await getCurrentAuthHeaders();
+
+    for (const action of pending) {
+      try {
+        const result = await desktop.apiFetch!({
+          url: action.url,
+          method: action.method,
+          headers: { ...(action.headers || {}), ...freshAuth },
+          body: action.body,
+        });
+
+        if (result.status >= 200 && result.status < 300) {
+          syncedIds.push(action.id);
+          continue;
+        }
+
+        // Auth/validation/conflict errors need user or app intervention. Keep the
+        // item in the queue but stop hammering the server every health interval.
+        if (result.status >= 400 && result.status < 500 && result.status !== 408 && result.status !== 429) break;
+        if (result.status >= 500) break;
+      } catch {
+        desktopOnline = false;
+        break;
+      }
+    }
+
+    if (syncedIds.length) {
+      await desktop.clearSyncedActions!(syncedIds);
+      lastSyncAt = new Date().toISOString();
+      if (desktop.showNotification) {
+        void desktop.showNotification(
+          'Ralion OS synced',
+          `${syncedIds.length} offline change${syncedIds.length === 1 ? '' : 's'} synced to your business workspace.`
+        );
+      }
+    }
+
+    const remaining = await desktop.getPendingActions!().catch(() => []);
+    emitSyncState({ online: desktopOnline, syncing: false, pending: remaining.length, lastSyncAt });
+  })().finally(() => {
+    syncInFlight = null;
+  });
+
+  return syncInFlight;
+}
+
+async function checkConnectivityAndSync() {
+  const desktop = getDesktopBridge();
+  if (!desktop?.apiFetch) return;
+  try {
+    const health = await desktop.apiFetch({ url: HEALTH_URL, method: 'GET', headers: { Accept: 'application/json' }, body: null });
+    const wasOffline = !desktopOnline;
+    desktopOnline = health.status >= 200 && health.status < 500;
+    const pending = await desktop.getPendingActions?.().catch(() => []) || [];
+    emitSyncState({ online: desktopOnline, pending: pending.length });
+    if (desktopOnline && (wasOffline || pending.length > 0)) await flushOfflineQueue();
+  } catch {
+    desktopOnline = false;
+    const pending = await desktop.getPendingActions?.().catch(() => []) || [];
+    emitSyncState({ online: false, pending: pending.length });
+  }
+}
+
 function installDesktopFetchBridge() {
   if (typeof window === 'undefined' || window.__ralionDesktopFetchInstalled__) return;
 
-  const desktop = (window as any).ralionDesktop as DesktopBridge | undefined;
+  const desktop = getDesktopBridge();
   if (!desktop?.isDesktop || typeof desktop.apiFetch !== 'function') return;
 
   const browserFetch = window.fetch.bind(window);
@@ -112,9 +388,23 @@ function installDesktopFetchBridge() {
     const headers = mergeHeaders(input, init);
     const body = await resolveBody(input, init, method, headers);
 
-    // Preserve the native browser path for payload types the text bridge does
-    // not intentionally support yet (FormData, Blob, ArrayBuffer, streams).
     if (body === undefined) return browserFetch(input as any, init);
+
+    if (!desktopOnline) {
+      if (method === 'GET' || method === 'HEAD') {
+        const cached = readCachedResponse(target);
+        if (cached) return cached;
+      }
+      if (isQueueableOfflineMutation(target, method, headers, body)) {
+        return queueMutation(desktop, target, method, headers, body ?? null);
+      }
+      return new Response(JSON.stringify({
+        success: false,
+        offline: true,
+        error: 'This action needs an internet connection. Ralion will reconnect automatically.',
+        code: 'OFFLINE_ACTION_REQUIRES_CONNECTION',
+      }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+    }
 
     try {
       const result = await desktop.apiFetch({
@@ -124,17 +414,28 @@ function installDesktopFetchBridge() {
         body,
       });
 
+      if ((method === 'GET' || method === 'HEAD') && result.status >= 200 && result.status < 300) {
+        writeCachedResponse(target, result);
+      }
+
       return new Response(result.body || '', {
         status: result.status,
         statusText: result.statusText || '',
         headers: result.headers || {},
       });
     } catch (error: any) {
+      desktopOnline = false;
+      void checkConnectivityAndSync();
+      if (method === 'GET' || method === 'HEAD') {
+        const cached = readCachedResponse(target);
+        if (cached) return cached;
+      }
       console.error('[Desktop Network] Native Ralion API request failed:', error?.message || error);
       return new Response(
         JSON.stringify({
           success: false,
-          error: error?.message || 'Unable to reach the Ralion service.',
+          offline: true,
+          error: error?.message || 'Unable to reach the Ralion service. Ralion will retry automatically.',
           code: 'DESKTOP_API_UNREACHABLE',
         }),
         {
@@ -147,12 +448,36 @@ function installDesktopFetchBridge() {
   };
 
   window.__ralionDesktopFetchInstalled__ = true;
-  console.info('[Desktop Network] Native Ralion API transport enabled.');
+  console.info('[Desktop Network] Native Ralion API transport enabled with offline cache + automatic sync.');
 }
 
 export function DesktopNetworkBootstrap({ children }: { children: React.ReactNode }) {
-  // This intentionally installs during the parent render so child providers
-  // (especially OrganizationProvider) see the bridged fetch before their effects run.
   installDesktopFetchBridge();
+
+  useEffect(() => {
+    const desktop = getDesktopBridge();
+    if (!desktop?.isDesktop) return;
+
+    const handleOnline = () => {
+      desktopOnline = true;
+      void checkConnectivityAndSync();
+    };
+    const handleOffline = () => {
+      desktopOnline = false;
+      void checkConnectivityAndSync();
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    void checkConnectivityAndSync();
+    const timer = window.setInterval(() => void checkConnectivityAndSync(), HEALTH_INTERVAL_MS);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      window.clearInterval(timer);
+    };
+  }, []);
+
   return <>{children}</>;
 }
