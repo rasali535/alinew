@@ -131,10 +131,13 @@ try {
     fs.cpSync(desktopDist, path.join(outputDir, 'desktop'), { recursive: true });
   }
 
-  // 4. Ensure .htaccess and api_proxy.php are in build root and subfolders
+  // 4. Ensure .htaccess and api_proxy.php are in build root and subfolders.
+  // Each sub-app keeps its own proxy implementation so deployment packaging cannot
+  // silently overwrite app-specific routing/auth behavior.
   const htaccessSrc = path.join(rootDir, 'apps', 'website', 'public', '.htaccess');
   const ralionHtaccessSrc = path.join(rootDir, 'apps', 'ralion', 'public', '.htaccess');
   const proxySrc = path.join(rootDir, 'apps', 'website', 'public', 'api_proxy.php');
+  const ralionProxySrc = path.join(rootDir, 'apps', 'ralion', 'public', 'api_proxy.php');
 
   if (fs.existsSync(htaccessSrc)) {
     fs.copyFileSync(htaccessSrc, path.join(outputDir, '.htaccess'));
@@ -150,7 +153,9 @@ try {
     } else if (fs.existsSync(htaccessSrc)) {
       fs.copyFileSync(htaccessSrc, path.join(ralionDir, '.htaccess'));
     }
-    if (fs.existsSync(proxySrc)) {
+    if (fs.existsSync(ralionProxySrc)) {
+      fs.copyFileSync(ralionProxySrc, path.join(ralionDir, 'api_proxy.php'));
+    } else if (fs.existsSync(proxySrc)) {
       fs.copyFileSync(proxySrc, path.join(ralionDir, 'api_proxy.php'));
     }
   }
