@@ -161,7 +161,10 @@ const nextConfig = {
         async headers() {
           return [
             {
-              source: '/api/:path*',
+              // mari/widget/session returns a dynamically validated customer
+              // origin from the route handler, so do not stamp the fixed Ralion
+              // dashboard CORS origin onto that bootstrap response.
+              source: '/api/((?!mari/widget/session).*)',
               headers: corsApiHeaders,
             },
             {
