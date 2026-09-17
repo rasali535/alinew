@@ -1,5 +1,16 @@
 import { createClient } from '../supabase/client';
 
+function isDesktopRuntime(): boolean {
+  if (typeof window === 'undefined') return false;
+  const protocol = window.location.protocol;
+  return Boolean(
+    (window as any).ralionDesktop?.isDesktop ||
+    (window as any).__RALION_DESKTOP__ ||
+    protocol === 'app:' ||
+    protocol === 'file:'
+  );
+}
+
 export interface UserProfile {
   id: string;
   fullName: string | null;
@@ -43,7 +54,7 @@ export class AuthService {
       tier?: string;
     } = {}
   ) {
-    const isDesktop = typeof window !== 'undefined' && ((window as any).__RALION_DESKTOP__ || window.location.protocol === 'file:');
+    const isDesktop = isDesktopRuntime();
     const redirectUrl = isDesktop
       ? 'ralion://auth-callback'
       : typeof window !== 'undefined'
@@ -75,7 +86,7 @@ export class AuthService {
    * Resend signup email confirmation link
    */
   static async resendConfirmationEmail(email: string) {
-    const isDesktop = typeof window !== 'undefined' && ((window as any).__RALION_DESKTOP__ || window.location.protocol === 'file:');
+    const isDesktop = isDesktopRuntime();
     const redirectUrl = isDesktop
       ? 'ralion://auth-callback'
       : typeof window !== 'undefined'
@@ -101,13 +112,13 @@ export class AuthService {
    * Send password reset recovery email
    */
   static async resetPassword(email: string) {
-    const isDesktop = typeof window !== 'undefined' && ((window as any).__RALION_DESKTOP__ || window.location.protocol === 'file:');
+    const isDesktop = isDesktopRuntime();
     
     let baseUrl = 'https://rasalilabs.com/ralion';
-    if (typeof window !== 'undefined' && window.location?.origin) {
+    if (!isDesktop && typeof window !== 'undefined' && window.location?.origin) {
       const isSubpath = window.location.pathname.startsWith('/ralion');
       baseUrl = isSubpath ? `${window.location.origin}/ralion` : window.location.origin;
-    } else if (process.env.NEXT_PUBLIC_APP_URL) {
+    } else if (!isDesktop && process.env.NEXT_PUBLIC_APP_URL) {
       baseUrl = process.env.NEXT_PUBLIC_APP_URL;
     }
 
@@ -171,7 +182,7 @@ export class AuthService {
    * Universal Login with Social OAuth Providers (Google, GitHub, Microsoft, Apple, LinkedIn, Facebook, Twitter, Discord)
    */
   static async loginWithProvider(provider: 'google' | 'github' | 'azure' | 'apple' | 'linkedin_oidc' | 'facebook' | 'twitter' | 'discord' | string) {
-    const isDesktop = typeof window !== 'undefined' && ((window as any).__RALION_DESKTOP__ || window.location.protocol === 'file:');
+    const isDesktop = isDesktopRuntime();
 
     const providerMap: Record<string, string> = {
       linkedin: 'linkedin_oidc',
@@ -237,7 +248,7 @@ export class AuthService {
    * Link a social account (OAuth) for Growth OS
    */
   static async linkSocialAccount(provider: string, customScopes?: string) {
-    const isDesktop = typeof window !== 'undefined' && ((window as any).__RALION_DESKTOP__ || window.location.protocol === 'file:');
+    const isDesktop = isDesktopRuntime();
 
     // Map common provider aliases to Supabase provider names
     const providerMap: Record<string, string> = {
@@ -406,8 +417,8 @@ export class AuthService {
       }
 
       const platformUrl = process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com';
-      if (window.location.protocol === 'file:') {
-        window.location.href = '/ralion/login';
+      if (isDesktopRuntime()) {
+        window.location.href = 'app://localhost/ralion/login';
       } else {
         window.location.href = `${platformUrl}/login`;
       }

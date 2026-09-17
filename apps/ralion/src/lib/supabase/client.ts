@@ -14,7 +14,23 @@ let _supabaseInstance: SupabaseClient | null = null;
 let _sharedRefreshPromise: Promise<{ data: { session: Session | null; user: any | null }; error: any | null }> | null = null;
 
 export const CANONICAL_SUPABASE_URL = 'https://yidsfihagwttlmhfynmf.supabase.co';
+// Supabase publishable keys are intentionally public client credentials. Security
+// remains enforced by Auth + RLS. Keeping the active publishable key as a desktop
+// fallback prevents CI-packaged Electron builds from crashing when build-time env
+// injection is unavailable.
+export const CANONICAL_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_ZBMkUxUqKAz1b5fQ9aqUcA_xL2SB85N';
 export const CANONICAL_STORAGE_KEY = 'ralion-app-auth-token';
+
+function isDesktopRuntime(): boolean {
+  if (typeof window === 'undefined') return false;
+  const protocol = window.location.protocol;
+  return Boolean(
+    (window as any).ralionDesktop?.isDesktop ||
+    (window as any).__RALION_DESKTOP__ ||
+    protocol === 'app:' ||
+    protocol === 'file:'
+  );
+}
 
 function resolveSupabaseUrl(): string {
   const envUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -70,11 +86,12 @@ function getOrCreateBrowserClient(): SupabaseClient {
 
   pruneLegacyStorageKeys();
 
-  const isDesktop = typeof window !== 'undefined' && ((window as any).__RALION_DESKTOP__ || window.location.protocol === 'file:');
+  const isDesktop = isDesktopRuntime();
   const supabaseUrl = resolveSupabaseUrl();
   const supabaseKey =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    (isDesktop ? CANONICAL_SUPABASE_PUBLISHABLE_KEY : undefined);
 
   if (!supabaseKey) {
     throw new Error(
@@ -87,7 +104,7 @@ function getOrCreateBrowserClient(): SupabaseClient {
       storageKey: CANONICAL_STORAGE_KEY,
       persistSession: true,
       autoRefreshToken: true,
-      detectSessionInUrl: !isDesktop, // Process OAuth callback tokens on web
+      detectSessionInUrl: !isDesktop, // Desktop receives OAuth tokens through ralion:// deep links.
     },
   });
 
