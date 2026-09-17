@@ -256,8 +256,6 @@ export async function generateHfVideo(options: {
   organizationId?: string;
 }): Promise<HfGenerationResult> {
   const cleanPrompt = options.prompt.trim();
-  const seed = Math.floor(Math.random() * 1000000);
-  const directVideoUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?model=flux-realism&width=1024&height=576&nologo=true&seed=${seed}`;
 
   try {
     const endpoint = getMariApiEndpoint('/api/mari/generate');
@@ -296,10 +294,8 @@ export async function generateHfVideo(options: {
   }
 
   return {
-    success: true,
-    url: directVideoUrl,
-    format: 'url',
-    model: 'zai-org/CogVideoX-2b',
+    success: false,
+    error: 'Real video generation is currently unavailable. No image or placeholder was substituted for a video.',
   };
 }
 
