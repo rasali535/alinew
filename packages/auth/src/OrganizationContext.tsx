@@ -44,8 +44,20 @@ let _activeContextResolution: Promise<void> | null = null;
 // Terminal redirect guard: once we redirect to /login we must not do it again.
 let _redirectedToLogin = false;
 
+function isDesktopRuntime(): boolean {
+  if (typeof window === 'undefined') return false;
+  const protocol = window.location.protocol;
+  return Boolean(
+    (window as any).ralionDesktop?.isDesktop ||
+    (window as any).__RALION_DESKTOP__ ||
+    protocol === 'app:' ||
+    protocol === 'file:'
+  );
+}
+
 function getContextApiBase(): string {
   if (typeof window === 'undefined') return '';
+  if (isDesktopRuntime()) return 'https://rasalilabs.com/ralion';
   const origin = window.location.origin;
   const hostname = window.location.hostname;
   if (hostname.includes('rasalilabs.com')) return `${origin}/ralion`;
@@ -166,7 +178,7 @@ async function terminateInvalidSession(): Promise<void> {
   if (_redirectedToLogin) return;
   _redirectedToLogin = true;
 
-  // Sign out locally only \u2014 do not call the Supabase server (server may be rejecting us anyway)
+  // Sign out locally only — do not call the Supabase server (server may be rejecting us anyway)
   const client = getSharedSupabaseClient();
   if (client?.auth?.signOut) {
     await client.auth.signOut({ scope: 'local' }).catch(() => {});
@@ -187,8 +199,8 @@ async function terminateInvalidSession(): Promise<void> {
     sessionStorage.clear();
   } catch {}
 
-  // Redirect once
-  window.location.href = '/login';
+  // Redirect once. The packaged renderer lives under app://localhost/ralion.
+  window.location.href = isDesktopRuntime() ? 'app://localhost/ralion/login' : '/login';
 }
 
 export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -357,7 +369,7 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, [clearResolvedContext]);
 
   useEffect(() => {
-    // Resolve once on mount from the current getSession() result \u2014 no forced refresh.
+    // Resolve once on mount from the current getSession() result — no forced refresh.
     resolveAuthoritativeContext();
 
     const handleOrgUpdate = () => resolveAuthoritativeContext();
