@@ -26,7 +26,25 @@ export function getMariBuildVersion(): string {
 
 export const MARI_BUILD_VERSION = getMariBuildVersion();
 
+export function isRalionDesktopRuntime(): boolean {
+  if (typeof window === 'undefined') return false;
+  const protocol = window.location.protocol;
+  return Boolean(
+    (window as any).ralionDesktop?.isDesktop ||
+    (window as any).__RALION_DESKTOP__ ||
+    protocol === 'app:' ||
+    protocol === 'file:'
+  );
+}
+
 export function getRalionApiBase(): string {
+  // The packaged Electron renderer runs at app://localhost. Treating that host
+  // like local web development incorrectly routes production calls to port 6509.
+  // Desktop always talks to the canonical HTTPS Ralion gateway.
+  if (isRalionDesktopRuntime()) {
+    return 'https://rasalilabs.com/ralion';
+  }
+
   const configuredApiUrl = process.env.NEXT_PUBLIC_RALION_API_URL || process.env.NEXT_PUBLIC_API_URL;
   if (configuredApiUrl && configuredApiUrl.trim() !== '' && !configuredApiUrl.includes('onrender.com')) {
     return configuredApiUrl.replace(/\/+$/, '');
