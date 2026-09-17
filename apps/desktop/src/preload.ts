@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import * as https from 'https';
+import * as zlib from 'zlib';
 
 // Production diagnostics error handlers
 if (typeof window !== 'undefined') {
@@ -75,6 +76,16 @@ function validateRalionApiUrl(rawUrl: string): URL {
   return url;
 }
 
+function decodeResponseBody(buffer: Buffer, encodingHeader: string | string[] | undefined): Buffer {
+  const encoding = Array.isArray(encodingHeader) ? encodingHeader[0] : encodingHeader;
+  const normalized = String(encoding || '').trim().toLowerCase();
+  if (!normalized || normalized === 'identity') return buffer;
+  if (normalized.includes('br')) return zlib.brotliDecompressSync(buffer);
+  if (normalized.includes('gzip')) return zlib.gunzipSync(buffer);
+  if (normalized.includes('deflate')) return zlib.inflateSync(buffer);
+  return buffer;
+}
+
 function requestRalionApi(payload: DesktopApiRequest, redirectDepth = 0): Promise<DesktopApiResponse> {
   if (!payload || typeof payload.url !== 'string') {
     return Promise.reject(new Error('Invalid desktop API request.'));
@@ -90,6 +101,10 @@ function requestRalionApi(payload: DesktopApiRequest, redirectDepth = 0): Promis
   }
 
   const headers = sanitizeApiHeaders(payload.headers || {});
+  // Keep transport deterministic for the desktop bridge. A decompression fallback
+  // below still protects us if a proxy compresses despite this preference.
+  headers['Accept-Encoding'] = 'identity';
+  headers['User-Agent'] = 'Ralion-OS-Desktop';
   const body = typeof payload.body === 'string' ? payload.body : undefined;
   if (body !== undefined) {
     headers['Content-Length'] = String(Buffer.byteLength(body, 'utf8'));
@@ -130,18 +145,27 @@ function requestRalionApi(payload: DesktopApiRequest, redirectDepth = 0): Promis
             return;
           }
 
-          const responseHeaders: Record<string, string> = {};
-          for (const [key, value] of Object.entries(res.headers)) {
-            if (Array.isArray(value)) responseHeaders[key] = value.join(', ');
-            else if (value !== undefined) responseHeaders[key] = String(value);
-          }
+          try {
+            const rawBuffer = Buffer.concat(chunks);
+            const decodedBuffer = decodeResponseBody(rawBuffer, res.headers['content-encoding']);
+            const responseHeaders: Record<string, string> = {};
+            for (const [key, value] of Object.entries(res.headers)) {
+              const normalized = key.toLowerCase();
+              if (normalized === 'content-encoding' || normalized === 'content-length') continue;
+              if (Array.isArray(value)) responseHeaders[key] = value.join(', ');
+              else if (value !== undefined) responseHeaders[key] = String(value);
+            }
+            responseHeaders['content-length'] = String(decodedBuffer.byteLength);
 
-          resolve({
-            status,
-            statusText: res.statusMessage || '',
-            headers: responseHeaders,
-            body: Buffer.concat(chunks).toString('utf8'),
-          });
+            resolve({
+              status,
+              statusText: res.statusMessage || '',
+              headers: responseHeaders,
+              body: decodedBuffer.toString('utf8'),
+            });
+          } catch (error) {
+            reject(error);
+          }
         });
       }
     );
