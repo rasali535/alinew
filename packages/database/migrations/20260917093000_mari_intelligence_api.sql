@@ -39,7 +39,7 @@ grant select, insert, update, delete on table public.mari_api_keys to service_ro
 
 create table if not exists public.mari_api_usage (
   id uuid primary key default gen_random_uuid(),
-  api_key_id uuid references public.mari_api_keys(id) on delete set null,
+  api_key_id uuid not null references public.mari_api_keys(id) on delete cascade,
   organization_id uuid not null references public.organizations(id) on delete cascade,
   workspace_id uuid not null references public.workspaces(id) on delete cascade,
   request_id text not null,
@@ -53,15 +53,13 @@ create table if not exists public.mari_api_usage (
   model text,
   latency_ms integer,
   created_at timestamptz not null default now(),
+  constraint mari_api_usage_key_request_unique unique (api_key_id, request_id),
   constraint mari_api_usage_status_code_check check (status_code between 100 and 599),
   constraint mari_api_usage_token_check check (prompt_tokens >= 0 and completion_tokens >= 0 and total_tokens >= 0),
   constraint mari_api_usage_credit_check check (credits_used >= 0),
   constraint mari_api_usage_rag_check check (rag_chunks >= 0)
 );
 
-create unique index if not exists mari_api_usage_key_request_uidx
-  on public.mari_api_usage (api_key_id, request_id)
-  where api_key_id is not null;
 create index if not exists mari_api_usage_workspace_created_idx
   on public.mari_api_usage (workspace_id, created_at desc);
 create index if not exists mari_api_usage_org_created_idx
