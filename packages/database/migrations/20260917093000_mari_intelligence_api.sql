@@ -13,6 +13,8 @@ create table if not exists public.mari_api_keys (
   key_hash text not null unique,
   scopes text[] not null default array['intelligence:read','knowledge:read']::text[],
   status text not null default 'ACTIVE',
+  monthly_request_limit integer not null default 1000,
+  monthly_credit_limit integer not null default 1000,
   expires_at timestamptz,
   last_used_at timestamptz,
   last_used_ip_hash text,
@@ -20,7 +22,9 @@ create table if not exists public.mari_api_keys (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint mari_api_keys_status_check check (status = any (array['ACTIVE'::text,'REVOKED'::text])),
-  constraint mari_api_keys_scopes_check check (cardinality(scopes) > 0)
+  constraint mari_api_keys_scopes_check check (cardinality(scopes) > 0),
+  constraint mari_api_keys_request_limit_check check (monthly_request_limit > 0),
+  constraint mari_api_keys_credit_limit_check check (monthly_credit_limit > 0)
 );
 
 create index if not exists mari_api_keys_workspace_status_idx
