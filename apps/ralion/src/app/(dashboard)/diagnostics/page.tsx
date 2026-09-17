@@ -124,6 +124,9 @@ export default function DesktopDiagnosticsPage() {
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  const clientOnline = typeof navigator === 'undefined' ? true : navigator.onLine;
+  const cachePresent = typeof window !== 'undefined' && Boolean(window.localStorage.getItem(CACHE_STORAGE_KEY));
+
   const runCheck = useCallback(async (
     id: string,
     category: DiagnosticCheck['category'],
@@ -240,8 +243,8 @@ export default function DesktopDiagnosticsPage() {
     })));
 
     results.push(await runCheck('user-role', 'Identity', 'User role and permissions', async () => ({
-      status: user?.id && user?.role ? 'pass' : 'fail',
-      detail: user?.id && user?.role
+      status: user?.uid && user?.role ? 'pass' : 'fail',
+      detail: user?.uid && user?.role
         ? `Authenticated role is available (${user.role}).`
         : 'User identity or role is unavailable in the organization provider.',
     })));
@@ -311,7 +314,7 @@ export default function DesktopDiagnosticsPage() {
     setChecks(results);
     setGeneratedAt(new Date().toISOString());
     setRunning(false);
-  }, [activeBranch?.id, organization?.id, organization?.name, runCheck, user?.id, user?.role]);
+  }, [activeBranch?.id, organization?.id, organization?.name, runCheck, user?.role, user?.uid]);
 
   useEffect(() => {
     void runDiagnostics();
@@ -336,10 +339,10 @@ export default function DesktopDiagnosticsPage() {
         osVersion: platform?.osVersion || null,
         electronVersion: platform?.electronVersion || null,
         rendererProtocol: window.location.protocol,
-        online: navigator.onLine,
+        online: clientOnline,
       },
       tenant: {
-        authenticated: Boolean(user?.id),
+        authenticated: Boolean(user?.uid),
         organizationResolved: Boolean(organization?.id),
         branchResolved: Boolean(activeBranch?.id),
         rolePresent: Boolean(user?.role),
@@ -347,7 +350,7 @@ export default function DesktopDiagnosticsPage() {
       summary,
       checks,
     };
-  }, [activeBranch?.id, checks, generatedAt, organization?.id, platform, summary, user?.id, user?.role]);
+  }, [activeBranch?.id, checks, clientOnline, generatedAt, organization?.id, platform, summary, user?.role, user?.uid]);
 
   const copyReport = async () => {
     if (!report) return;
@@ -447,11 +450,11 @@ export default function DesktopDiagnosticsPage() {
       <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {[
           { icon: Monitor, label: 'Native Runtime', value: isDesktop ? 'Desktop detected' : 'Browser mode' },
-          { icon: Wifi, label: 'Connectivity', value: navigator.onLine ? 'Network available' : 'Offline' },
+          { icon: Wifi, label: 'Connectivity', value: clientOnline ? 'Network available' : 'Offline' },
           { icon: ShieldCheck, label: 'Organization', value: organization?.id ? 'Context resolved' : 'Context missing' },
-          { icon: Database, label: 'Offline Cache', value: localStorage.getItem(CACHE_STORAGE_KEY) ? 'Cache present' : 'Not populated' },
+          { icon: Database, label: 'Offline Cache', value: cachePresent ? 'Cache present' : 'Not populated' },
           { icon: Bot, label: 'Mari Runtime', value: checks.find(c => c.id === 'local-ai-engine')?.status === 'pass' ? 'Local engine ready' : 'Cloud-first' },
-          { icon: Cloud, label: 'Cloud API', value: checks.find(c => c.id === 'cloud-health')?.status === 'pass' ? 'Healthy' : navigator.onLine ? 'Needs attention' : 'Offline' },
+          { icon: Cloud, label: 'Cloud API', value: checks.find(c => c.id === 'cloud-health')?.status === 'pass' ? 'Healthy' : clientOnline ? 'Needs attention' : 'Offline' },
         ].map(({ icon: Icon, label, value }) => (
           <div key={label} className="flex items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-800 text-zinc-300"><Icon className="h-5 w-5" /></span>
@@ -497,7 +500,7 @@ export default function DesktopDiagnosticsPage() {
 
       <section className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4">
         <div className="flex items-start gap-3">
-          {navigator.onLine ? <Wifi className="mt-0.5 h-4 w-4 text-emerald-400" /> : <WifiOff className="mt-0.5 h-4 w-4 text-amber-400" />}
+          {clientOnline ? <Wifi className="mt-0.5 h-4 w-4 text-emerald-400" /> : <WifiOff className="mt-0.5 h-4 w-4 text-amber-400" />}
           <div>
             <h3 className="text-xs font-bold text-white">How to use this during Windows validation</h3>
             <p className="mt-1 text-[11px] leading-5 text-zinc-500">
