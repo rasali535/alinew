@@ -1,32 +1,34 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import SEO from '../components/common/SEO';
-import { ralionModules, pricingPlans, faqs, ralionOSOverview } from '../data/mock';
+import { ralionModules, pricingPlans } from '../data/mock';
 import {
   Sparkles,
   ArrowRight,
   Bot,
-  Layers,
-  Cpu,
-  ShieldCheck,
-  TrendingUp,
   CheckCircle2,
   ChevronRight,
-  Database
+  Download,
+  Monitor,
+  Globe2,
+  Cloud,
+  WifiOff
 } from 'lucide-react';
+
+const WINDOWS_DOWNLOAD_URL = 'https://github.com/rasali535/alinew/releases/latest/download/ralion-os-windows-setup.exe';
 
 const RalionOSProduct = () => {
   return (
     <div className="pt-28 pb-20 bg-[#121212] text-white min-h-screen">
       <SEO
         title="Ralion OS — Empowered to Prosper | Ras Ali Labs"
-        description="Ralion OS is the flagship AI business operating system created by Ras Ali Labs. Unifies CRM, operations, Mari AI, growth intelligence and social workflows."
+        description="Download Ralion OS Desktop or use Mari AI on its own. Ralion OS brings CRM, operations, Mari AI, growth intelligence and business workflows into one connected platform."
         canonical="https://rasalilabs.com/products/ralion-os"
       />
 
       <div className="max-w-7xl mx-auto px-6 lg:px-12">
         {/* Flagship Header */}
-        <div className="text-center max-w-4xl mx-auto mb-20">
+        <div className="text-center max-w-4xl mx-auto mb-14">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-gold/10 border border-brand-gold/30 text-brand-gold text-xs font-bold uppercase tracking-wider mb-6">
             <Sparkles size={14} /> A Flagship Innovation by Ras Ali Labs
           </div>
@@ -40,23 +42,89 @@ const RalionOSProduct = () => {
           </p>
 
           <p className="text-white/75 text-lg md:text-xl leading-relaxed mb-10 max-w-3xl mx-auto">
-            Ralion OS brings business intelligence, Mari AI, growth, social media, customer management and operational tools into one connected platform.
+            Ralion OS brings business intelligence, Mari AI, growth, social media, customer management and operational tools into one connected platform — now available as a Windows desktop workspace with online sync and offline continuity.
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-4">
             <a
-              href="/ralion"
+              href={WINDOWS_DOWNLOAD_URL}
               className="px-8 py-4 rounded-xl bg-gradient-to-r from-brand-gold to-amber-500 text-black font-extrabold text-sm hover:scale-105 transition-all shadow-xl shadow-brand-gold/25 flex items-center gap-2"
             >
-              <Sparkles size={16} /> Launch Ralion Application <ArrowRight size={16} />
+              <Download size={17} /> Download Ralion OS for Windows
+            </a>
+
+            <a
+              href="/ralion"
+              className="px-8 py-4 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-sm transition-all border border-white/15 flex items-center gap-2"
+            >
+              Launch Ralion Web <ArrowRight size={16} />
             </a>
 
             <Link
               to="/request-demo"
-              className="px-8 py-4 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-sm transition-all border border-white/15"
+              className="px-8 py-4 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 font-bold text-sm transition-all border border-white/10"
             >
               Book an Enterprise Demo
             </Link>
+          </div>
+
+          <p className="mt-4 text-xs text-white/45">
+            Windows 10/11 x64 • Ralion OS 2.4.4 • Online-first, offline-capable • Automatic cloud sync on reconnect
+          </p>
+        </div>
+
+        {/* Choose your Ralion experience */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-20">
+          <div className="relative overflow-hidden rounded-3xl border border-brand-gold/35 bg-gradient-to-br from-brand-gold/10 via-[#181818] to-[#181818] p-7 md:p-9">
+            <div className="absolute -right-16 -top-16 w-52 h-52 rounded-full bg-brand-gold/10 blur-3xl" />
+            <div className="relative z-10">
+              <div className="w-12 h-12 rounded-2xl bg-brand-gold/15 border border-brand-gold/25 flex items-center justify-center text-brand-gold mb-5">
+                <Monitor size={23} />
+              </div>
+              <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-brand-gold mb-2">Full Business Workspace</div>
+              <h2 className="text-2xl md:text-3xl font-extrabold mb-3">Ralion OS Desktop</h2>
+              <p className="text-sm text-white/65 leading-relaxed mb-6">
+                For companies that want the complete operating workspace: Mari AI, customers, growth, tasks, documents and business operations in one desktop app.
+              </p>
+              <div className="grid sm:grid-cols-2 gap-3 mb-7 text-xs text-white/75">
+                <div className="flex items-center gap-2"><Cloud size={15} className="text-emerald-300" /> Live cloud sync</div>
+                <div className="flex items-center gap-2"><WifiOff size={15} className="text-emerald-300" /> Offline continuity</div>
+                <div className="flex items-center gap-2"><Bot size={15} className="text-emerald-300" /> Mari at the centre</div>
+                <div className="flex items-center gap-2"><CheckCircle2 size={15} className="text-emerald-300" /> Automatic reconnect sync</div>
+              </div>
+              <a
+                href={WINDOWS_DOWNLOAD_URL}
+                className="inline-flex items-center gap-2 rounded-xl bg-brand-gold text-black px-5 py-3 text-xs font-extrabold hover:scale-[1.02] transition-transform"
+              >
+                <Download size={15} /> Download Windows Installer
+              </a>
+            </div>
+          </div>
+
+          <div className="relative overflow-hidden rounded-3xl border border-purple-400/25 bg-gradient-to-br from-purple-500/10 via-[#181818] to-[#181818] p-7 md:p-9">
+            <div className="absolute -right-16 -top-16 w-52 h-52 rounded-full bg-purple-500/15 blur-3xl" />
+            <div className="relative z-10">
+              <div className="w-12 h-12 rounded-2xl bg-purple-500/15 border border-purple-400/25 flex items-center justify-center text-purple-300 mb-5">
+                <Bot size={23} />
+              </div>
+              <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-purple-300 mb-2">No Desktop Required</div>
+              <h2 className="text-2xl md:text-3xl font-extrabold mb-3">Need only Mari AI?</h2>
+              <p className="text-sm text-white/65 leading-relaxed mb-6">
+                Use Mari without installing the full Ralion OS desktop app. Mari AI can serve your business through the browser, your website widget and API integrations, while keeping the door open to add Ralion modules later.
+              </p>
+              <div className="grid sm:grid-cols-2 gap-3 mb-7 text-xs text-white/75">
+                <div className="flex items-center gap-2"><Globe2 size={15} className="text-purple-300" /> Browser access</div>
+                <div className="flex items-center gap-2"><Bot size={15} className="text-purple-300" /> Website AI widget</div>
+                <div className="flex items-center gap-2"><Cloud size={15} className="text-purple-300" /> Cloud business context</div>
+                <div className="flex items-center gap-2"><CheckCircle2 size={15} className="text-purple-300" /> Upgrade to full OS later</div>
+              </div>
+              <Link
+                to="/mari-ai"
+                className="inline-flex items-center gap-2 rounded-xl bg-purple-500 text-white px-5 py-3 text-xs font-extrabold hover:bg-purple-400 transition-colors"
+              >
+                Explore Mari AI Only <ArrowRight size={15} />
+              </Link>
+            </div>
           </div>
         </div>
 
@@ -65,34 +133,37 @@ const RalionOSProduct = () => {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
             <div className="lg:col-span-7 space-y-6">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/25 text-purple-400 text-xs font-bold uppercase">
-                <Bot size={14} /> Embedded AI
+                <Bot size={14} /> Intelligence Layer
               </div>
               <h2 className="text-3xl md:text-4xl font-extrabold text-white">
                 Mari — Your AI Business Growth Partner
               </h2>
               <p className="text-white/75 text-base leading-relaxed">
-                Mari AI is not just another isolated chatbot. Working with your tenant-scoped business context, Mari analyzes pipeline trends, formulates high-conversion campaign briefs, and directs automated creative rendering across all channels.
+                Mari can work as the intelligence inside the full Ralion OS or as a focused AI product for businesses that only need the browser, website widget or API experience. The same company can expand into Ralion modules later without starting over.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                 <div className="p-4 rounded-xl bg-black/40 border border-white/5">
                   <div className="text-white font-bold text-sm mb-1">Strategic Reasoning</div>
-                  <div className="text-white/60 text-xs">Identifies revenue opportunities and bottlenecks in your pipeline.</div>
+                  <div className="text-white/60 text-xs">Works with approved business context to produce practical direction.</div>
                 </div>
                 <div className="p-4 rounded-xl bg-black/40 border border-white/5">
-                  <div className="text-white font-bold text-sm mb-1">Autonomous Creatives</div>
-                  <div className="text-white/60 text-xs">Generates campaign posters and video concepts automatically.</div>
+                  <div className="text-white font-bold text-sm mb-1">Flexible Delivery</div>
+                  <div className="text-white/60 text-xs">Use Mari in Ralion, on your website, in a browser or through API integrations.</div>
                 </div>
               </div>
+              <Link to="/mari-ai" className="inline-flex items-center gap-2 text-sm font-bold text-purple-300 hover:text-purple-200">
+                See Mari AI options <ArrowRight size={15} />
+              </Link>
             </div>
             <div className="lg:col-span-5 flex justify-center">
               <div className="w-full bg-[#121212] border border-white/15 rounded-2xl p-6 text-center space-y-4">
                 <div className="w-16 h-16 rounded-full bg-purple-500/20 text-purple-400 mx-auto flex items-center justify-center font-bold text-2xl">
                   M
                 </div>
-                <div className="text-white font-bold text-lg">Mari Executive Assistant</div>
-                <div className="text-xs text-brand-gold font-mono">Status: Connected to Ralion Core</div>
+                <div className="text-white font-bold text-lg">Mari Business Intelligence</div>
+                <div className="text-xs text-brand-gold font-mono">Ralion OS • Web • Widget • API</div>
                 <p className="text-white/60 text-xs">
-                  "Ready to analyze your Q3 pipeline and generate multi-channel creative assets."
+                  One business intelligence layer, delivered through the channel your company actually needs.
                 </p>
               </div>
             </div>

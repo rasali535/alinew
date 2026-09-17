@@ -9,7 +9,18 @@ on:
       - "packages/ui/**"
       - "packages/auth/**"
       - ".github/workflows/ralion-os-desktop.yml"
+  push:
+    branches: ["main"]
+    paths:
+      - "apps/desktop/**"
+      - "apps/ralion/**"
+      - "packages/ui/**"
+      - "packages/auth/**"
+      - ".github/workflows/ralion-os-desktop.yml"
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   group: ralion-os-desktop-${{ github.ref }}
@@ -45,10 +56,85 @@ jobs:
       - name: Validate Windows installer
         run: npm run validate --workspace=@ralion/desktop
 
-      - name: Upload Ralion OS installer
+      - name: Read desktop release version
+        shell: pwsh
+        run: |
+          $version = (Get-Content apps/desktop/package.json | ConvertFrom-Json).version
+          "RALION_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Create stable website download alias
+        if: github.event_name != 'pull_request'
+        shell: pwsh
+        run: |
+          $source = "apps/desktop/release/ralion-os-$env:RALION_VERSION-setup.exe"
+          $target = "apps/desktop/release/ralion-os-windows-setup.exe"
+          if (-not (Test-Path $source)) { throw "Validated installer not found at $source" }
+          Copy-Item $source $target -Force
+
+      - name: Upload Ralion OS installer to CI
         uses: actions/upload-artifact@v4
         with:
           name: ralion-os-windows-${{ github.sha }}
           path: apps/desktop/release/*.exe
           if-no-files-found: error
           retention-days: 14
+
+  publish-release:
+    name: Publish Windows release
+    if: github.event_name != 'pull_request'
+    needs: windows-installer
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read desktop release version
+        shell: pwsh
+        run: |
+          $version = (Get-Content apps/desktop/package.json | ConvertFrom-Json).version
+          "RALION_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Download validated installer artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ralion-os-windows-${{ github.sha }}
+          path: release
+
+      - name: Verify release payload
+        shell: pwsh
+        run: |
+          $versioned = "release/ralion-os-$env:RALION_VERSION-setup.exe"
+          $stable = "release/ralion-os-windows-setup.exe"
+          if (-not (Test-Path $versioned)) { throw "Versioned installer missing: $versioned" }
+          if (-not (Test-Path $stable)) { throw "Stable installer alias missing: $stable" }
+          $header = [System.IO.File]::ReadAllBytes($versioned)[0..1]
+          if ($header[0] -ne 0x4D -or $header[1] -ne 0x5A) { throw "Installer is not a valid Windows PE executable" }
+
+      - name: Publish permanent Ralion OS Windows release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "ralion-os-v$env:RALION_VERSION"
+          $versioned = "release/ralion-os-$env:RALION_VERSION-setup.exe"
+          $stable = "release/ralion-os-windows-setup.exe"
+          $notes = @"
+          Ralion OS $env:RALION_VERSION for Windows x64.
+
+          Empowered to Prosper.
+
+          This release was built, runtime-verified and installer-validated by the Ralion OS desktop CI pipeline before publication.
+          "@
+
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release edit $tag --title "Ralion OS $env:RALION_VERSION" --notes $notes
+          } else {
+            gh release create $tag --title "Ralion OS $env:RALION_VERSION" --notes $notes
+          }
+
+          gh release upload $tag $versioned $stable --clobber
+          gh release edit $tag --latest
