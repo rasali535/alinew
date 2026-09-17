@@ -12,6 +12,7 @@ export type CustomerApiKeyScope = (typeof CUSTOMER_API_KEY_ALLOWED_SCOPES)[numbe
 export interface CustomerApiKeyRecord {
   id: string;
   organizationId: string;
+  workspaceId: string;
   name: string;
   keyPrefix: string;
   scopes: string[];
@@ -34,10 +35,17 @@ export interface CreatedCustomerApiKey {
 export interface AuthenticatedCustomerApiKey {
   apiKeyId: string;
   organizationId: string;
+  workspaceId: string;
   name: string;
   scopes: string[];
   createdBy: string | null;
   rateLimitPerMinute: number;
+}
+
+export interface ApiKeyRateLimitResult {
+  allowed: boolean;
+  remaining: number;
+  resetAt: string;
 }
 
 function hashApiKey(secret: string): string {
@@ -75,6 +83,7 @@ function mapRow(row: any): CustomerApiKeyRecord {
   return {
     id: row.id,
     organizationId: row.organization_id,
+    workspaceId: row.workspace_id,
     name: row.name,
     keyPrefix: row.key_prefix,
     scopes: Array.isArray(row.scopes) ? row.scopes : [],
@@ -93,6 +102,7 @@ function mapRow(row: any): CustomerApiKeyRecord {
 const SAFE_SELECT = [
   'id',
   'organization_id',
+  'workspace_id',
   'name',
   'key_prefix',
   'scopes',
@@ -107,12 +117,13 @@ const SAFE_SELECT = [
 ].join(', ');
 
 export class DeveloperApiKeysService {
-  static async list(organizationId: string): Promise<CustomerApiKeyRecord[]> {
+  static async list(organizationId: string, workspaceId: string): Promise<CustomerApiKeyRecord[]> {
     const supabase = getPrivilegedSupabase();
     const { data, error } = await supabase
       .from('developer_api_keys')
       .select(SAFE_SELECT)
       .eq('organization_id', organizationId)
+      .eq('workspace_id', workspaceId)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -124,6 +135,7 @@ export class DeveloperApiKeysService {
 
   static async create(params: {
     organizationId: string;
+    workspaceId: string;
     createdBy: string;
     name: string;
     scopes?: string[];
@@ -139,6 +151,7 @@ export class DeveloperApiKeysService {
       .from('developer_api_keys')
       .insert({
         organization_id: params.organizationId,
+        workspace_id: params.workspaceId,
         name: params.name,
         key_prefix: material.keyPrefix,
         key_hash: material.keyHash,
@@ -158,12 +171,13 @@ export class DeveloperApiKeysService {
     return { apiKey: mapRow(data), secret: material.secret };
   }
 
-  static async revoke(params: { organizationId: string; apiKeyId: string }): Promise<CustomerApiKeyRecord | null> {
+  static async revoke(params: { organizationId: string; workspaceId: string; apiKeyId: string }): Promise<CustomerApiKeyRecord | null> {
     const supabase = getPrivilegedSupabase();
     const { data, error } = await supabase
       .from('developer_api_keys')
       .update({ revoked_at: new Date().toISOString() })
       .eq('organization_id', params.organizationId)
+      .eq('workspace_id', params.workspaceId)
       .eq('id', params.apiKeyId)
       .is('revoked_at', null)
       .select(SAFE_SELECT)
@@ -178,6 +192,7 @@ export class DeveloperApiKeysService {
 
   static async rotate(params: {
     organizationId: string;
+    workspaceId: string;
     apiKeyId: string;
     rotatedBy: string;
   }): Promise<CreatedCustomerApiKey | null> {
@@ -196,6 +211,7 @@ export class DeveloperApiKeysService {
         created_by: params.rotatedBy,
       })
       .eq('organization_id', params.organizationId)
+      .eq('workspace_id', params.workspaceId)
       .eq('id', params.apiKeyId)
       .is('revoked_at', null)
       .select(SAFE_SELECT)
@@ -218,7 +234,7 @@ export class DeveloperApiKeysService {
     const supabase = getPrivilegedSupabase();
     const { data, error } = await supabase
       .from('developer_api_keys')
-      .select('id, organization_id, name, scopes, expires_at, revoked_at, created_by, rate_limit_per_minute')
+      .select('id, organization_id, workspace_id, name, scopes, expires_at, revoked_at, created_by, rate_limit_per_minute')
       .eq('key_hash', keyHash)
       .is('revoked_at', null)
       .maybeSingle();
@@ -229,24 +245,46 @@ export class DeveloperApiKeysService {
     const scopes = Array.isArray(data.scopes) ? data.scopes : [];
     if (!scopes.includes(requiredScope)) return null;
 
-    // Usage telemetry must never make a valid request fail closed. Authentication
-    // itself is determined only by the hash, lifecycle state, expiry, and scope.
     try {
       await supabase
         .from('developer_api_keys')
         .update({ last_used_at: new Date().toISOString() })
         .eq('id', data.id);
     } catch {
-      // Deliberately ignore last-used telemetry failure.
+      // Usage telemetry must never make a valid key fail authentication.
     }
 
     return {
       apiKeyId: data.id,
       organizationId: data.organization_id,
+      workspaceId: data.workspace_id,
       name: data.name,
       scopes,
       createdBy: data.created_by || null,
       rateLimitPerMinute: Number(data.rate_limit_per_minute || 60),
+    };
+  }
+
+  static async consumeRateLimit(apiKeyId: string, limit: number): Promise<ApiKeyRateLimitResult> {
+    const supabase = getPrivilegedSupabase();
+    const { data, error } = await supabase.rpc('ralion_consume_api_key_rate_limit', {
+      p_api_key_id: apiKeyId,
+      p_limit: Math.max(1, Math.floor(limit || 1)),
+    });
+
+    if (error || !data) {
+      throw new Error(`[DeveloperApiKeys] Rate-limit accounting failed: ${error?.message || 'No result returned'}`);
+    }
+
+    const result = Array.isArray(data) ? data[0] : data;
+    if (!result) {
+      throw new Error('[DeveloperApiKeys] Rate-limit accounting returned no row.');
+    }
+
+    return {
+      allowed: Boolean(result.allowed),
+      remaining: Number(result.remaining || 0),
+      resetAt: String(result.reset_at || new Date(Date.now() + 60_000).toISOString()),
     };
   }
 }
