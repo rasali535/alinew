@@ -447,6 +447,7 @@ function installDesktopFetchBridge() {
   if (!desktop?.isDesktop || typeof desktop.apiFetch !== 'function') return;
 
   const browserFetch = window.fetch.bind(window);
+  const apiFetch = desktop.apiFetch;
 
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const target = resolveDesktopApiTarget(input);
@@ -475,7 +476,7 @@ function installDesktopFetchBridge() {
     }
 
     try {
-      const result = await desktop.apiFetch({
+      const result = await apiFetch({
         url: target,
         method,
         headers: Object.fromEntries(headers.entries()),
