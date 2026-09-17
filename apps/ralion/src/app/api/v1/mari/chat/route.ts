@@ -77,7 +77,7 @@ function createRequestId(apiKeyId: string, suppliedId?: string | null): string {
   return `api_${digest}`;
 }
 
-function rateLimitHeaders(limit: number, remaining: number, resetAt: string): HeadersInit {
+function rateLimitHeaders(limit: number, remaining: number, resetAt: string): Record<string, string> {
   const resetEpochSeconds = Math.ceil(Date.parse(resetAt) / 1000);
   return {
     'X-RateLimit-Limit': String(limit),
@@ -234,7 +234,7 @@ ${contextPrompt || 'No additional verified business context was available for th
   try {
     reservation = await MariCreditsService.reserveReasoning({
       organizationId: apiKey.organizationId,
-      userId: actorUserId,
+      userId: actorUserId || undefined,
       requestId,
       provider: 'google',
       model: selectedModel.model,
@@ -261,9 +261,9 @@ ${contextPrompt || 'No additional verified business context was available for th
         credits: credits
           ? {
               remaining: credits.remainingCredits,
-              monthly_limit: credits.monthlyCredits,
+              monthly_limit: credits.monthlyQuota,
               plan: credits.planId,
-              next_reset_at: credits.nextResetAt,
+              next_reset_at: credits.periodEnd,
             }
           : undefined,
       },
