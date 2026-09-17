@@ -176,9 +176,10 @@ export async function GET(request: NextRequest) {
     const apiCredits30d = apiUsage.reduce((sum: number, row: any) => sum + Number(row.credits_used || 0), 0);
     const apiFailures30d = apiUsage.filter((row: any) => Number(row.status_code) >= 400).length;
 
+    const severityRank: Record<string, number> = { critical: 0, warning: 1, info: 2 };
     const alerts = widgetRows
       .flatMap((row: any) => row.alerts.map((alert: any) => ({ ...alert, widgetId: row.id, widgetName: row.name, organizationId: row.organizationId, organizationName: row.organizationName, domains: row.allowedDomains })))
-      .sort((a: any, b: any) => ({ critical: 0, warning: 1, info: 2 }[a.severity as 'critical' | 'warning' | 'info'] - ({ critical: 0, warning: 1, info: 2 }[b.severity as 'critical' | 'warning' | 'info']));
+      .sort((a: any, b: any) => (severityRank[a.severity] ?? 99) - (severityRank[b.severity] ?? 99));
 
     return NextResponse.json({
       success: true,
