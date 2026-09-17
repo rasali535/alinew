@@ -20,6 +20,7 @@ function reject(source, needle, label) {
 }
 
 const migration = read('supabase/migrations/20260917150500_mari_embeddable_widget.sql');
+const fkMigration = read('supabase/migrations/20260917152500_mari_widget_fk_indexes.sql');
 const service = read('apps/ralion/src/lib/services/mari/mariWidget.service.ts');
 const management = read('apps/ralion/src/app/api/mari/widgets/route.ts');
 const session = read('apps/ralion/src/app/api/mari/widget/session/route.ts');
@@ -29,25 +30,30 @@ const widgetPage = read('apps/ralion/src/app/mari-widget/page.tsx');
 const dashboard = read('apps/ralion/src/app/(dashboard)/developer/widgets/page.tsx');
 
 // Browser credential boundary.
-expect(service, "generatePublicToken", 'widgets use a dedicated public identifier');
-expect(service, "generateSessionToken", 'browser sessions use short-lived random tokens');
-expect(service, "hashValue(sessionToken)", 'raw widget session tokens are never stored');
-expect(embed, "data-widget", 'embed loader accepts only the public widget identifier');
-expect(widgetPage, "Authorization: `Bearer ${config.sessionToken}`", 'iframe authenticates with the temporary widget session');
+expect(service, 'generatePublicToken', 'widgets use a dedicated public identifier');
+expect(service, 'generateSessionToken', 'browser sessions use short-lived random tokens');
+expect(service, 'hashValue(sessionToken)', 'raw widget session tokens are never stored');
+expect(embed, 'data-widget', 'embed loader accepts only the public widget identifier');
+expect(widgetPage, 'Authorization: `Bearer ${config.sessionToken}`', 'iframe authenticates with the temporary widget session');
 reject(embed, 'mari_live_', 'embed loader must never contain a customer Mari API secret');
 reject(widgetPage, 'mari_live_', 'widget UI must never contain a customer Mari API secret');
 
 // Domain and tenant isolation.
 expect(service, 'isOriginAllowed(origin, widget.allowedDomains)', 'session creation enforces the widget domain allowlist');
-expect(service, "organization_id: params.organizationId", 'widget creation binds to the authenticated organisation');
-expect(service, "workspace_id: params.workspaceId", 'widget creation binds to the authenticated workspace');
+expect(service, 'organization_id: params.organizationId', 'widget creation binds to the authenticated organisation');
+expect(service, 'workspace_id: params.workspaceId', 'widget creation binds to the authenticated workspace');
 expect(management, "normalized === 'owner' || normalized === 'admin'", 'only owners/admins manage widgets');
-expect(session, "MARI_WIDGET_DOMAIN_DENIED", 'domain denial is explicit');
+expect(session, 'MARI_WIDGET_DOMAIN_DENIED', 'domain denial is explicit');
 
-// Public data boundary.
+// Public data and execution boundary.
 expect(chat, 'publicSafeBusinessContext', 'website chat sanitizes Ralion business context');
-expect(chat, 'Never reveal or claim access to CRM records', 'website prompt blocks private business data');
+expect(chat, 'Never reveal, infer, summarize or claim access to CRM records', 'website prompt blocks private business data');
+expect(chat, 'callPublicWidgetModel', 'widget uses its dedicated read-only model caller');
+reject(chat, 'MariUniversalCore', 'public widget cannot invoke the internal action-capable Mari core');
+reject(chat, 'callMariAiApi', 'public widget cannot invoke tenant-knowledge Mari chat hydration');
 reject(chat, 'MariKnowledgeRetrievalService', 'public widget does not retrieve private workspace documents');
+reject(chat, 'CreativeOrchestrator', 'public widget cannot execute creative generation tools');
+reject(chat, 'TenantCreditsService', 'public widget cannot invoke the legacy Mari credit path');
 
 // Durable billing and usage.
 expect(chat, 'MariCreditsService.reserveReasoning', 'website reasoning reserves durable Mari credits');
@@ -64,6 +70,9 @@ expect(migration, 'alter table public.mari_widget_usage enable row level securit
 expect(migration, 'revoke all on table public.mari_embed_widgets from anon, authenticated', 'browser roles cannot query widget configuration directly');
 expect(migration, 'revoke all on table public.mari_widget_sessions from anon, authenticated', 'browser roles cannot query session hashes');
 expect(migration, 'grant select, insert, update, delete on table public.mari_widget_usage to service_role', 'widget usage remains server-only');
+expect(fkMigration, 'mari_widget_sessions_organization_idx', 'session organisation foreign key is indexed');
+expect(fkMigration, 'mari_widget_sessions_workspace_idx', 'session workspace foreign key is indexed');
+expect(fkMigration, 'mari_widget_usage_workspace_idx', 'usage workspace foreign key is indexed');
 
 // Customer workflow.
 expect(dashboard, 'Embed Mari on a website', 'developer UI exposes website widget setup');
