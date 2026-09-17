@@ -17,6 +17,9 @@ type QueuedDesktopAction = {
   body: string | null;
   queuedAt?: string;
   attempts?: number;
+  actorId?: string | null;
+  workspaceId?: string | null;
+  organizationId?: string | null;
 };
 
 type DesktopBridge = {
@@ -157,71 +160,6 @@ async function resolveBody(input: RequestInfo | URL, init: RequestInit | undefin
   return null;
 }
 
-function readCache(): Record<string, CachedResponse> {
-  if (typeof window === 'undefined') return {};
-  try {
-    return JSON.parse(localStorage.getItem(CACHE_STORAGE_KEY) || '{}') || {};
-  } catch {
-    return {};
-  }
-}
-
-function writeCachedResponse(url: string, result: DesktopApiResponse) {
-  if (typeof window === 'undefined') return;
-  const body = result.body || '';
-  if (body.length > CACHE_MAX_BODY_BYTES) return;
-  const contentType = Object.entries(result.headers || {}).find(([key]) => key.toLowerCase() === 'content-type')?.[1] || '';
-  if (contentType && !contentType.includes('json') && !contentType.includes('text')) return;
-
-  try {
-    const cache = readCache();
-    cache[url] = {
-      status: result.status,
-      statusText: result.statusText || 'OK',
-      headers: result.headers || { 'content-type': 'application/json' },
-      body,
-      cachedAt: Date.now(),
-    };
-
-    const entries = Object.entries(cache).sort((a, b) => b[1].cachedAt - a[1].cachedAt).slice(0, CACHE_MAX_ENTRIES);
-    localStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(Object.fromEntries(entries)));
-  } catch {
-    // Cache failure must never prevent the live request from succeeding.
-  }
-}
-
-function readCachedResponse(url: string): Response | null {
-  const cached = readCache()[url];
-  if (!cached) return null;
-  const headers = new Headers(cached.headers || {});
-  headers.set('x-ralion-offline-cache', 'true');
-  headers.set('x-ralion-cached-at', new Date(cached.cachedAt).toISOString());
-  return new Response(cached.body, {
-    status: cached.status >= 200 && cached.status < 300 ? cached.status : 200,
-    statusText: cached.statusText || 'Offline Cache',
-    headers,
-  });
-}
-
-function isQueueableOfflineMutation(url: string, method: string, headers: Headers, body: string | null | undefined): boolean {
-  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return false;
-  if (body === undefined) return false;
-  const parsed = new URL(url);
-  if (!OFFLINE_QUEUE_PREFIXES.some(prefix => parsed.pathname.startsWith(prefix))) return false;
-  const contentType = headers.get('content-type') || 'application/json';
-  return contentType.includes('application/json') || contentType.includes('application/x-www-form-urlencoded');
-}
-
-function stripTransientHeaders(headers: Headers): Record<string, string> {
-  const saved: Record<string, string> = {};
-  headers.forEach((value, key) => {
-    const normalized = key.toLowerCase();
-    if (normalized === 'authorization' || normalized === 'x-user-id' || normalized === 'content-length') return;
-    saved[key] = value;
-  });
-  return saved;
-}
-
 function readStoredAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = {};
   try {
@@ -268,6 +206,85 @@ async function getCurrentAuthHeaders(): Promise<Record<string, string>> {
   return readStoredAuthHeaders();
 }
 
+function getTenantCacheKey(url: string): string | null {
+  if (typeof window === 'undefined') return null;
+  const auth = readStoredAuthHeaders();
+  const actor = auth['x-user-id'] || 'unknown-user';
+  const workspace = auth['x-workspace-id'] || '';
+  const organization = auth['x-organization-id'] || '';
+  if (!workspace && !organization) return null;
+  return `${actor}::${organization || 'no-org'}::${workspace || 'no-workspace'}::${url}`;
+}
+
+function readCache(): Record<string, CachedResponse> {
+  if (typeof window === 'undefined') return {};
+  try {
+    return JSON.parse(localStorage.getItem(CACHE_STORAGE_KEY) || '{}') || {};
+  } catch {
+    return {};
+  }
+}
+
+function writeCachedResponse(url: string, result: DesktopApiResponse) {
+  if (typeof window === 'undefined') return;
+  const cacheKey = getTenantCacheKey(url);
+  if (!cacheKey) return;
+  const body = result.body || '';
+  if (body.length > CACHE_MAX_BODY_BYTES) return;
+  const contentType = Object.entries(result.headers || {}).find(([key]) => key.toLowerCase() === 'content-type')?.[1] || '';
+  if (contentType && !contentType.includes('json') && !contentType.includes('text')) return;
+
+  try {
+    const cache = readCache();
+    cache[cacheKey] = {
+      status: result.status,
+      statusText: result.statusText || 'OK',
+      headers: result.headers || { 'content-type': 'application/json' },
+      body,
+      cachedAt: Date.now(),
+    };
+
+    const entries = Object.entries(cache).sort((a, b) => b[1].cachedAt - a[1].cachedAt).slice(0, CACHE_MAX_ENTRIES);
+    localStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(Object.fromEntries(entries)));
+  } catch {
+    // Cache failure must never prevent the live request from succeeding.
+  }
+}
+
+function readCachedResponse(url: string): Response | null {
+  const cacheKey = getTenantCacheKey(url);
+  if (!cacheKey) return null;
+  const cached = readCache()[cacheKey];
+  if (!cached) return null;
+  const headers = new Headers(cached.headers || {});
+  headers.set('x-ralion-offline-cache', 'true');
+  headers.set('x-ralion-cached-at', new Date(cached.cachedAt).toISOString());
+  return new Response(cached.body, {
+    status: cached.status >= 200 && cached.status < 300 ? cached.status : 200,
+    statusText: cached.statusText || 'Offline Cache',
+    headers,
+  });
+}
+
+function isQueueableOfflineMutation(url: string, method: string, headers: Headers, body: string | null | undefined): boolean {
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return false;
+  if (body === undefined) return false;
+  const parsed = new URL(url);
+  if (!OFFLINE_QUEUE_PREFIXES.some(prefix => parsed.pathname === prefix || parsed.pathname.startsWith(`${prefix}/`))) return false;
+  const contentType = headers.get('content-type') || 'application/json';
+  return contentType.includes('application/json') || contentType.includes('application/x-www-form-urlencoded');
+}
+
+function stripTransientHeaders(headers: Headers): Record<string, string> {
+  const saved: Record<string, string> = {};
+  headers.forEach((value, key) => {
+    const normalized = key.toLowerCase();
+    if (normalized === 'authorization' || normalized === 'x-user-id' || normalized === 'content-length') return;
+    saved[key] = value;
+  });
+  return saved;
+}
+
 function queuedResponse(actionId: string): Response {
   return new Response(JSON.stringify({
     success: true,
@@ -286,14 +303,39 @@ async function queueMutation(desktop: DesktopBridge, url: string, method: string
   const id = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
     : `offline-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const auth = readStoredAuthHeaders();
+  const actorId = headers.get('x-user-id') || auth['x-user-id'] || null;
+  const workspaceId = headers.get('x-workspace-id') || auth['x-workspace-id'] || null;
+  const organizationId = headers.get('x-organization-id') || auth['x-organization-id'] || null;
   const savedHeaders = stripTransientHeaders(headers);
   if (!savedHeaders['Idempotency-Key'] && !savedHeaders['idempotency-key']) {
     savedHeaders['Idempotency-Key'] = `ralion-desktop-${id}`;
   }
-  await desktop.queueOfflineAction?.({ id, url, method, headers: savedHeaders, body, queuedAt: new Date().toISOString(), attempts: 0 });
+  await desktop.queueOfflineAction?.({
+    id,
+    url,
+    method,
+    headers: savedHeaders,
+    body,
+    queuedAt: new Date().toISOString(),
+    attempts: 0,
+    actorId,
+    workspaceId,
+    organizationId,
+  });
   const pending = await desktop.getPendingActions?.().catch(() => []) || [];
   emitSyncState({ online: false, syncing: false, pending: pending.length });
   return queuedResponse(id);
+}
+
+function queuedActionMatchesCurrentIdentity(action: QueuedDesktopAction, auth: Record<string, string>): boolean {
+  const actor = auth['x-user-id'] || null;
+  const workspace = auth['x-workspace-id'] || null;
+  const organization = auth['x-organization-id'] || null;
+  if (action.actorId && actor && action.actorId !== actor) return false;
+  if (action.workspaceId && workspace && action.workspaceId !== workspace) return false;
+  if (action.organizationId && organization && action.organizationId !== organization) return false;
+  return true;
 }
 
 async function flushOfflineQueue(): Promise<void> {
@@ -308,13 +350,28 @@ async function flushOfflineQueue(): Promise<void> {
 
     const syncedIds: string[] = [];
     const freshAuth = await getCurrentAuthHeaders();
+    if (!freshAuth.Authorization) {
+      emitSyncState({ online: true, syncing: false, pending: pending.length });
+      return;
+    }
 
     for (const action of pending) {
+      if (!queuedActionMatchesCurrentIdentity(action, freshAuth)) {
+        console.warn('[Desktop Sync] Queued action belongs to a different user/workspace; leaving it untouched.', action.id);
+        break;
+      }
+
       try {
+        const replayHeaders: Record<string, string> = { ...(action.headers || {}) };
+        replayHeaders.Authorization = freshAuth.Authorization;
+        if (freshAuth['x-user-id']) replayHeaders['x-user-id'] = freshAuth['x-user-id'];
+        if (!replayHeaders['x-workspace-id'] && freshAuth['x-workspace-id']) replayHeaders['x-workspace-id'] = freshAuth['x-workspace-id'];
+        if (!replayHeaders['x-organization-id'] && freshAuth['x-organization-id']) replayHeaders['x-organization-id'] = freshAuth['x-organization-id'];
+
         const result = await desktop.apiFetch!({
           url: action.url,
           method: action.method,
-          headers: { ...(action.headers || {}), ...freshAuth },
+          headers: replayHeaders,
           body: action.body,
         });
 
@@ -459,7 +516,7 @@ function installDesktopFetchBridge() {
   };
 
   window.__ralionDesktopFetchInstalled__ = true;
-  console.info('[Desktop Network] Native Ralion API transport enabled with offline cache + automatic sync.');
+  console.info('[Desktop Network] Native Ralion API transport enabled with tenant-scoped offline cache + automatic sync.');
 }
 
 export function DesktopNetworkBootstrap({ children }: { children: React.ReactNode }) {
