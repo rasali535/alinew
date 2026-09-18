@@ -39,6 +39,7 @@ export interface OrchestratorGenerateOptions {
   cta?: string;
   caption?: string;
   mockFailure?: string;
+  requiredVisualElements?: string[];
 }
 
 export class CreativeOrchestrator {
@@ -79,6 +80,7 @@ export class CreativeOrchestrator {
       platform = 'facebook',
       cta = 'Learn More',
       mockFailure,
+      requiredVisualElements = [],
     } = options;
 
     if (!organizationId) {
@@ -244,6 +246,7 @@ export class CreativeOrchestrator {
         successfulResult.mimeType,
         {
           userPrompt: prompt,
+          expectedConcepts: requiredVisualElements.length > 0 ? requiredVisualElements : undefined,
           format,
         }
       );
@@ -286,7 +289,11 @@ export class CreativeOrchestrator {
             const retryQA = await VisualSemanticEvaluatorService.evaluateVisual(
               retryRes.buffer,
               retryRes.mimeType,
-              { userPrompt: prompt, format }
+              {
+                userPrompt: prompt,
+                expectedConcepts: requiredVisualElements.length > 0 ? requiredVisualElements : undefined,
+                format,
+              }
             );
 
             const currentIsBranded = Boolean(visualQAResult.prohibitedBrandingDetected);
