@@ -2,6 +2,7 @@ import 'server-only';
 
 import { BusinessContextService } from '@ralion/ai/server';
 import { MariKnowledgeRetrievalService } from './mariKnowledgeRetrieval.service';
+import { WorkflowOutcomeLearningService } from '@/lib/operations/workflowOutcomeLearning.service';
 
 export type WorkflowIntent = 'SALES_ENQUIRY' | 'SUPPORT' | 'COMPLAINT' | 'PRICING' | 'BOOKING' | 'PRAISE' | 'SPAM' | 'GENERAL';
 export type WorkflowRisk = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -49,12 +50,14 @@ export class MariWorkflowDecisionService {
     } catch {}
 
     const knowledge = await MariKnowledgeRetrievalService.retrieve({ workspaceId: params.workspaceId, query: message, limit: 5 }).catch(() => ({ chunks: [], documentsConsulted: [] }));
+    const learned = await WorkflowOutcomeLearningService.summarize(params.workspaceId).catch(() => ({ total: 0, measured: 0, successful: 0, successRate: null, recent: [] as any[] }));
     const company = text(business?.layer1?.companyName?.value || business?.organizationName || '', 180);
     const products = Array.isArray(business?.layer1?.productsAndServices?.value) ? business.layer1.productsAndServices.value.map((x:any)=>text(typeof x === 'string' ? x : x?.name || x?.title, 160)).filter(Boolean).slice(0,8) : [];
 
     const sources = ['WORKFLOW_EVENT'];
     if (business) sources.push('BUSINESS_CONTEXT');
     if (knowledge.chunks.length) sources.push('TENANT_KNOWLEDGE');
+    if (learned.measured > 0) sources.push('WORKFLOW_OUTCOMES');
 
     // Phase 2 safety contract: deterministic classification is allowed without paid
     // reasoning. It never invents prices, policies, availability or commitments.
@@ -71,7 +74,11 @@ export class MariWorkflowDecisionService {
       requiresApproval: !safeAuto,
       recommendedAction: base.intent === 'SPAM' ? 'IGNORE' : base.risk === 'HIGH' ? 'ESCALATE' : proposedResponse ? 'RESPOND' : 'CREATE_TASK',
       proposedResponse,
-      reason: base.risk === 'HIGH' ? 'Sensitive interaction requires human review.' : proposedResponse ? 'A response can be grounded in verified tenant context.' : 'No safe grounded response can be produced automatically.',
+      reason: base.risk === 'HIGH'
+        ? 'Sensitive interaction requires human review.'
+        : proposedResponse
+          ? `A response can be grounded in verified tenant context.${learned.measured > 0 ? ` Prior measured workflow outcomes: ${learned.successful}/${learned.measured} successful (${learned.successRate}%).` : ''}`
+          : 'No safe grounded response can be produced automatically.',
       contextSources: sources,
     };
   }
