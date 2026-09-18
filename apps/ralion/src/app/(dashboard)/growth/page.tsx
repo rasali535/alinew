@@ -282,6 +282,7 @@ function GrowthPageContent() {
 
   // Creative Studio Brand Logo / Typography / Overlay State
   const [creativeLogo, setCreativeLogo] = useState<string>('');
+  const effectiveCreativeLogo = creativeLogo || '/ralion-logo.png';
   const [logoPosition, setLogoPosition] = useState<'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'>('top-right');
   const [creativeMode, setCreativeMode] = useState<'poster' | 'video'>('poster');
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('FULL_BLEED_HERO');
@@ -1786,6 +1787,9 @@ function GrowthPageContent() {
             format: requestedFormat,
             organizationId: organization?.id || undefined,
             workspaceId: workspace?.id || undefined,
+            brandLogo: creativeLogo || undefined,
+            brandLogoPosition: logoPosition,
+            useRalionBrandFallback: !creativeLogo,
           }),
         });
 
@@ -1800,6 +1804,14 @@ function GrowthPageContent() {
             'Ralion generated real candidates, but none matched your brief closely enough, so they were rejected instead of showing you a generic image.' +
             score +
             ' Your creative credit was refunded. Retry to generate fresh candidates or edit the brief.';
+        } else if (data.errorCode === 'THIRD_PARTY_BRANDING_REJECTED') {
+          const branding = Array.isArray(data.detectedBranding) && data.detectedBranding.length
+            ? ` Detected: ${data.detectedBranding.join(', ')}.`
+            : '';
+          generationError =
+            'Ralion rejected the generated image because it contained provider branding, a watermark, or other third-party identity.' +
+            branding +
+            ' Your creative credit was refunded and nothing was added to the library. Retry to generate a clean candidate.';
         } else if (data.errorCode === 'FAILED_STORAGE') {
           generationError =
             'The creative was generated, but Ralion could not save it safely. Your creative credit was refunded. Please retry; if this repeats, the storage service needs administrator attention.';
@@ -4936,9 +4948,9 @@ function GrowthPageContent() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Shield className="w-4 h-4 text-purple-400" />
-                        <span className="text-xs font-bold text-white">Brand Logo &amp; Watermark</span>
+                        <span className="text-xs font-bold text-white">Brand Logo</span>
                       </div>
-                      <span className="text-[10px] text-zinc-400 font-medium">(Optional overlay on creative)</span>
+                      <span className="text-[10px] text-zinc-400 font-medium">(Your logo overrides the Ralion OS fallback mark)</span>
                     </div>
 
                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
@@ -5260,15 +5272,15 @@ function GrowthPageContent() {
                             className="w-full h-auto max-h-[420px] object-contain rounded-xl shadow-2xl"
                           />
 
-                          {/* Brand Logo Watermark */}
-                          {creativeLogo && (
+                          {/* Deterministic brand mark: tenant logo first, Ralion OS fallback otherwise. */}
+                          {effectiveCreativeLogo && (
                             <div className={`absolute p-2.5 rounded-xl bg-black/60 backdrop-blur-md border border-white/20 shadow-xl pointer-events-none transition-all z-10 ${
                               logoPosition === 'top-left' ? 'top-4 left-4' :
                               logoPosition === 'top-right' ? 'top-4 right-4' :
                               logoPosition === 'bottom-left' ? 'bottom-4 left-4' :
                               'bottom-4 right-4'
                             }`}>
-                              <img src={creativeLogo} alt="Brand Logo" className="h-8 w-auto max-w-[120px] object-contain" />
+                              <img src={effectiveCreativeLogo} alt={creativeLogo ? 'Brand Logo' : 'Ralion OS'} className="h-8 w-auto max-w-[120px] object-contain" />
                             </div>
                           )}
 
@@ -5325,14 +5337,14 @@ function GrowthPageContent() {
                             src={generatedVideo}
                             className="w-full rounded-xl max-h-[380px] object-cover shadow-2xl"
                           />
-                          {creativeLogo && (
+                          {effectiveCreativeLogo && (
                             <div className={`absolute p-2.5 rounded-xl bg-black/60 backdrop-blur-md border border-white/20 shadow-xl pointer-events-none ${
                               logoPosition === 'top-left' ? 'top-4 left-4' :
                               logoPosition === 'top-right' ? 'top-4 right-4' :
                               logoPosition === 'bottom-left' ? 'bottom-4 left-4' :
                               'bottom-4 right-4'
                             }`}>
-                              <img src={creativeLogo} alt="Brand Logo" className="h-8 w-auto max-w-[120px] object-contain" />
+                              <img src={effectiveCreativeLogo} alt={creativeLogo ? 'Brand Logo' : 'Ralion OS'} className="h-8 w-auto max-w-[120px] object-contain" />
                             </div>
                           )}
                         </div>
@@ -5460,7 +5472,7 @@ function GrowthPageContent() {
                                     }
 
                                     // 2. Draw Brand Logo if present
-                                    if (creativeLogo) {
+                                    if (effectiveCreativeLogo) {
                                       const logoImg = new window.Image();
                                       logoImg.crossOrigin = 'anonymous';
                                       logoImg.onload = () => {
@@ -5493,7 +5505,7 @@ function GrowthPageContent() {
                                         a.click();
                                         document.body.removeChild(a);
                                       };
-                                      logoImg.src = creativeLogo;
+                                      logoImg.src = effectiveCreativeLogo;
                                     } else {
                                       const brandedUrl = canvas.toDataURL('image/png');
                                       const a = document.createElement('a');

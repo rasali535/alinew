@@ -40,6 +40,8 @@ export interface VisualSemanticQAResult {
   detectedObjects: string[];
   missingRequiredObjects: string[];
   detectedFlaws: string[];
+  prohibitedBrandingDetected: boolean;
+  detectedBranding: string[];
   providerFeedback: string;
   recommendation: 'ACCEPT' | 'ENHANCE_PROMPT' | 'RETRY_ALT_PROVIDER';
 }
@@ -115,12 +117,18 @@ Evaluate and return ONLY valid JSON in this exact structure:
   "detectedObjects": [<string>, ...],
   "missingRequiredObjects": [<string>, ...],
   "detectedFlaws": [<string>, ...],
+  "prohibitedBrandingDetected": <true|false>,
+  "detectedBranding": [<string>, ...],
   "providerFeedback": "<detailed analysis>"
 }
 
 Strict Rules:
 - If the requested physical subject is clearly depicted, subjectScore >= 85.
 - If the image is completely unrelated (e.g. beach when truck requested), subjectScore <= 40 and visualRelevanceScore <= 40.
+- Check every REQUIRED CONCEPT independently. Missing a concrete requirement such as a named location, exact object count, lighting mood, or display type must reduce visualRelevanceScore.
+- Treat "dual", "two", or any explicit quantity as a hard visual requirement.
+- Any provider watermark, provider URL, stock watermark, model signature, or third-party logo/text not requested by the user is prohibited branding.
+- If prohibited branding is visible, set prohibitedBrandingDetected=true and list it in detectedBranding.
 - Check if composition leaves clean space for typography layout.
 `;
 
@@ -166,6 +174,10 @@ Strict Rules:
         const parsed = JSON.parse(rawJsonText);
         const visualRelevanceScore = Number(parsed.visualRelevanceScore) || Math.round((parsed.subjectScore * 0.4) + (parsed.environmentScore * 0.2) + (parsed.actionScore * 0.2) + (parsed.contextScore * 0.2));
         const designQualityScore = Number(parsed.designQualityScore) || Number(parsed.compositionScore) || 85;
+        const detectedBranding = Array.isArray(parsed.detectedBranding)
+          ? parsed.detectedBranding.map((item: any) => String(item)).filter(Boolean)
+          : [];
+        const prohibitedBrandingDetected = Boolean(parsed.prohibitedBrandingDetected) || detectedBranding.length > 0;
         const promptStructureScore = 95;
         const promptIntegrityScore = Number(parsed.promptIntegrityScore) || 96;
         const brandAccuracyScore = Number(parsed.brandAccuracyScore) || 95;
@@ -205,6 +217,8 @@ Strict Rules:
           detectedObjects: Array.isArray(parsed.detectedObjects) ? parsed.detectedObjects : expectedConcepts,
           missingRequiredObjects: Array.isArray(parsed.missingRequiredObjects) ? parsed.missingRequiredObjects : [],
           detectedFlaws: Array.isArray(parsed.detectedFlaws) ? parsed.detectedFlaws : [],
+          prohibitedBrandingDetected,
+          detectedBranding,
           providerFeedback: parsed.providerFeedback || 'Multimodal visual semantic validation completed.',
           recommendation,
         };
@@ -401,6 +415,8 @@ Strict Rules:
       detectedObjects: detectedObjects.length > 0 ? detectedObjects : expectedConcepts,
       missingRequiredObjects,
       detectedFlaws,
+      prohibitedBrandingDetected: false,
+      detectedBranding: [],
       providerFeedback: feedback || 'Visual semantic verification completed.',
       recommendation,
     };
@@ -412,22 +428,46 @@ Strict Rules:
   static extractRequiredConcepts(prompt: string, industry: string): string[] {
     const p = prompt.toLowerCase();
     const concepts: string[] = [];
+    const add = (concept: string) => {
+      if (!concepts.includes(concept)) concepts.push(concept);
+    };
 
     if (p.includes('truck') || p.includes('freight') || p.includes('logistics') || p.includes('cargo')) {
-      concepts.push('commercial freight truck', 'logistics corridor');
+      add('commercial freight truck');
+      add('logistics corridor');
       if (p.includes('refrigerat') || p.includes('cold-chain')) {
-        concepts.push('temperature-controlled cargo container');
+        add('temperature-controlled cargo container');
       }
     } else if (p.includes('cardio') || p.includes('doctor') || p.includes('health') || p.includes('clinic') || p.includes('medical')) {
-      concepts.push('medical practitioner', 'clinical diagnostic equipment');
+      add('medical practitioner');
+      add('clinical diagnostic equipment');
     } else if (p.includes('robotic') || p.includes('industrial') || p.includes('automation') || p.includes('factory')) {
-      concepts.push('robotic assembly arms', 'SCADA control telemetry');
+      add('robotic assembly arms');
+      add('SCADA control telemetry');
     } else if (p.includes('software') || p.includes('dashboard') || p.includes('executive') || p.includes('telemetry') || p.includes('enterprise')) {
-      concepts.push('African business executives', 'digital analytics telemetry');
+      add('African business executive');
+      add('business intelligence dashboard');
     }
 
-    if (concepts.length === 0) {
-      concepts.push(`${industry} commercial visual subject`, 'clean typography negative space');
+    // Preserve explicit creative constraints from Mari/user prompts instead of
+    // collapsing them into a broad industry label.
+    if (/\b(dual|two|2)\b/.test(p) && p.includes('monitor')) add('two distinct monitors');
+    if ((p.includes('glass') || p.includes('transparent')) && p.includes('monitor')) add('glass-like monitor styling');
+    if (p.includes('dashboard')) add('live data dashboards with visible charts and KPIs');
+    if (p.includes('warm') && (p.includes('light') || p.includes('ambient'))) add('warm ambient lighting');
+    if (p.includes('office')) add('elegant professional office environment');
+    if (p.includes('gaborone')) add('recognizable Gaborone context or skyline view');
+    if (p.includes('african') && p.includes('executive')) add('African corporate executive');
+    if (p.includes('photoreal') || p.includes('commercial photography')) add('photorealistic commercial photography');
+    if (p.includes('8k') || p.includes('high resolution') || p.includes('high-resolution')) add('high-detail premium commercial finish');
+
+    // Raw provider output must stay clean; customer/Ralion branding is applied
+    // only after the image passes semantic QA.
+    add('no provider watermark, provider URL, stock watermark, or third-party branding');
+
+    if (concepts.length === 1) {
+      add(`${industry} commercial visual subject`);
+      add('clean typography negative space');
     }
 
     return concepts;

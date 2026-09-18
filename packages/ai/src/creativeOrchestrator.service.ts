@@ -39,6 +39,7 @@ export interface OrchestratorGenerateOptions {
   cta?: string;
   caption?: string;
   mockFailure?: string;
+  requiredVisualElements?: string[];
 }
 
 export class CreativeOrchestrator {
@@ -79,6 +80,7 @@ export class CreativeOrchestrator {
       platform = 'facebook',
       cta = 'Learn More',
       mockFailure,
+      requiredVisualElements = [],
     } = options;
 
     if (!organizationId) {
@@ -244,6 +246,7 @@ export class CreativeOrchestrator {
         successfulResult.mimeType,
         {
           userPrompt: prompt,
+          expectedConcepts: requiredVisualElements.length > 0 ? requiredVisualElements : undefined,
           format,
         }
       );
@@ -256,7 +259,10 @@ export class CreativeOrchestrator {
 
       while (
         visualQAResult &&
-        visualQAResult.visualRelevanceScore < 80 &&
+        (
+          visualQAResult.visualRelevanceScore < 80 ||
+          visualQAResult.prohibitedBrandingDetected
+        ) &&
         semanticAttempts < maxSemanticAttempts
       ) {
         semanticAttempts += 1;
@@ -283,10 +289,20 @@ export class CreativeOrchestrator {
             const retryQA = await VisualSemanticEvaluatorService.evaluateVisual(
               retryRes.buffer,
               retryRes.mimeType,
-              { userPrompt: prompt, format }
+              {
+                userPrompt: prompt,
+                expectedConcepts: requiredVisualElements.length > 0 ? requiredVisualElements : undefined,
+                format,
+              }
             );
 
-            if (retryQA.visualRelevanceScore > visualQAResult.visualRelevanceScore) {
+            const currentIsBranded = Boolean(visualQAResult.prohibitedBrandingDetected);
+            const retryIsBranded = Boolean(retryQA.prohibitedBrandingDetected);
+            const retryIsCleaner = currentIsBranded && !retryIsBranded;
+            const retryScoresBetter =
+              retryQA.visualRelevanceScore > visualQAResult.visualRelevanceScore;
+
+            if (retryIsCleaner || (!retryIsBranded && retryScoresBetter)) {
               successfulResult = retryRes;
               visualQAResult = retryQA;
               improvedThisRound = true;
@@ -304,7 +320,10 @@ export class CreativeOrchestrator {
                 rawStoragePath = rawRetryInfo.rawStoragePath;
               } catch {}
 
-              if (visualQAResult.visualRelevanceScore >= 80) break;
+              if (
+                visualQAResult.visualRelevanceScore >= 80 &&
+                !visualQAResult.prohibitedBrandingDetected
+              ) break;
             }
           } catch (retryErr: any) {
             lastErrorMsg = retryErr?.message || lastErrorMsg;
@@ -316,18 +335,39 @@ export class CreativeOrchestrator {
         if (!improvedThisRound && semanticAttempts >= maxSemanticAttempts) break;
       }
 
-      // 4. Strict Minimum Relevance Gate (< 60 is definitely rejected)
-      if (visualQAResult && visualQAResult.visualRelevanceScore < 60) {
+      // 4. Customer-ready visual gate.
+      // Raw provider output must meet the semantic threshold AND contain no
+      // provider watermark/URL/third-party branding. Ralion/customer branding
+      // is applied later as a deterministic composition step.
+      if (visualQAResult?.prohibitedBrandingDetected) {
+        TenantCreditsService.addCredits(organizationId, creditCost, 'Refund for third-party branding rejection');
+        return {
+          success: false,
+          status: 'FAILED',
+          userFacingMessage: "I generated real variations, but the provider output contained third-party branding or a watermark, so I rejected it. Your creative credit was refunded.\n\n[Retry]",
+          errorDetails: {
+            errorCode: 'THIRD_PARTY_BRANDING_REJECTED',
+            stage: 'SEMANTIC_VALIDATION',
+            visualRelevanceScore: visualQAResult.visualRelevanceScore,
+            attempts: semanticAttempts,
+            detectedBranding: visualQAResult.detectedBranding,
+            details: visualQAResult.providerFeedback,
+          },
+        };
+      }
+
+      if (visualQAResult && visualQAResult.visualRelevanceScore < 80) {
         TenantCreditsService.addCredits(organizationId, creditCost, 'Refund for visual semantic relevance rejection');
         return {
           success: false,
           status: 'FAILED',
-          userFacingMessage: "I generated multiple real variations, but none matched your brief closely enough, so I rejected them rather than show you a generic image. Your creative credit was refunded.\n\n[Retry] [Edit Brief]",
+          userFacingMessage: "I generated multiple real variations, but none matched your brief closely enough to be customer-ready, so I rejected them rather than show you a generic image. Your creative credit was refunded.\n\n[Retry] [Edit Brief]",
           errorDetails: {
             errorCode: 'SEMANTIC_RELEVANCE_REJECTED',
             stage: 'SEMANTIC_VALIDATION',
             visualRelevanceScore: visualQAResult.visualRelevanceScore,
             attempts: semanticAttempts,
+            missingRequiredObjects: visualQAResult.missingRequiredObjects,
             details: visualQAResult.providerFeedback,
           },
         };

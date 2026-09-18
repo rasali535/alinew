@@ -317,6 +317,36 @@ export class MariCreativeIntelligenceService {
   }
 
   /**
+   * Extracts hard visual requirements directly from Mari's/user's brief.
+   * These are passed unchanged into generation QA so explicit constraints such
+   * as object counts, named places, lighting, display type and finish cannot be
+   * silently collapsed into a generic industry concept.
+   */
+  static extractHardVisualRequirements(userPrompt: string): string[] {
+    const p = (userPrompt || '').toLowerCase();
+    const requirements: string[] = [];
+    const add = (item: string) => {
+      if (item && !requirements.includes(item)) requirements.push(item);
+    };
+
+    if (p.includes('african') && p.includes('executive')) add('African corporate executive');
+    if (p.includes('dashboard')) add('live business intelligence dashboards with visible charts and KPIs');
+    if (/\b(dual|two|2)\b/.test(p) && p.includes('monitor')) add('two distinct monitors');
+    if ((p.includes('glass') || p.includes('transparent')) && p.includes('monitor')) add('glass-like monitor styling');
+    if (p.includes('warm') && (p.includes('light') || p.includes('ambient'))) add('warm ambient lighting');
+    if (p.includes('office')) add('elegant professional office environment');
+    if (p.includes('gaborone')) add('recognizable Gaborone context or skyline view');
+    if (p.includes('photoreal') || p.includes('commercial photography')) add('photorealistic commercial photography');
+    if (p.includes('8k') || p.includes('high resolution') || p.includes('high-resolution')) add('high-detail premium commercial finish');
+
+    // Raw AI output must be clean. Ralion/customer branding is deterministic
+    // post-generation composition and must never come from the provider.
+    add('no provider watermark, provider URL, stock watermark, or third-party branding');
+
+    return requirements;
+  }
+
+  /**
    * Builds explicit 11-section structured visual prompt with intentional negative space
    */
   static buildVisualPrompt(
