@@ -77,8 +77,11 @@ assert(
 );
 assert(
   providers.includes("DEFAULT_GEMINI_IMAGE_MODEL = 'gemini-3.1-flash-image'") &&
-    providers.includes("responseModalities: ['IMAGE']"),
-  'Creative images must prefer the configured Gemini native image provider.'
+    providers.includes("'https://generativelanguage.googleapis.com/v1beta/interactions'") &&
+    providers.includes("type: 'image'") &&
+    providers.includes("mime_type: 'image/jpeg'") &&
+    providers.includes("image_size: '2K'"),
+  'Creative images must support the configured Gemini native image provider through the Interactions API.'
 );
 assert(
   providers.includes('const pollinationsCandidates = pollinationsToken ? [') &&
