@@ -3,11 +3,12 @@ import { getServiceSupabase } from '@/lib/auth/serverAuth';
 import { writeOperationalAudit } from './audit';
 import { FacebookCommentsService } from '@/lib/services/social/facebookComments.service';
 import { SocialInboxService } from '@/lib/services/social/socialInbox.service';
+import { MariWorkflowDecisionService } from '@/lib/services/mari/mariWorkflowDecision.service';
 
 export type WorkflowTriggerEvent = 'CUSTOMER_CREATED' | 'DEAL_STAGE_CHANGED' | 'TASK_COMPLETED' | 'SOCIAL_COMMENT_RECEIVED' | 'SOCIAL_INBOX_RECEIVED' | 'MANUAL';
 
 type WorkflowAction = {
-  type?: 'CREATE_TASK' | 'CREATE_CALENDAR_EVENT' | 'AUDIT_LOG' | 'REPLY_SOCIAL_COMMENT' | 'REPLY_SOCIAL_INBOX';
+  type?: 'CREATE_TASK' | 'CREATE_CALENDAR_EVENT' | 'AUDIT_LOG' | 'MARI_DECISION' | 'REPLY_SOCIAL_COMMENT' | 'REPLY_SOCIAL_INBOX';
   config?: Record<string, any>;
 };
 
@@ -87,6 +88,19 @@ async function executeAction(
       .single();
     if (error) throw new Error(`CREATE_CALENDAR_EVENT failed: ${error.message}`);
     return { type: action.type, event: data };
+  }
+
+  if (action?.type === 'MARI_DECISION') {
+    const inboundMessage = cleanText(context.input?.message || context.input?.commentText || context.input?.messageText || config.message || '', 4000);
+    const decision = await MariWorkflowDecisionService.decide({
+      organizationId: context.organizationId || context.workspaceId,
+      workspaceId: context.workspaceId,
+      userId: context.userId || '',
+      message: inboundMessage,
+      channel: cleanText(context.input?.provider || context.input?.channel || '', 40) || undefined,
+      autoApproveLowRisk: config.autoApproveLowRisk === true,
+    });
+    return { type: action.type, decision };
   }
 
   if (action?.type === 'REPLY_SOCIAL_COMMENT') {
