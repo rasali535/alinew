@@ -230,8 +230,11 @@ export class PromptFaithfulImageProvider implements CreativeProvider {
       const model = process.env.RALION_GEMINI_IMAGE_MODEL || DEFAULT_GEMINI_IMAGE_MODEL;
       try {
         const aspectRatio = (request.format || '1:1').toLowerCase();
+        // Gemini 3 image generation now uses the Interactions API. Keep image
+        // output controls at the top-level response_format using the wire-format
+        // snake_case fields documented by Google.
         const response = await fetchWithTimeout(
-          `https://generativelanguage.googleapis.com/v1/models/${encodeURIComponent(model)}:generateContent`,
+          'https://generativelanguage.googleapis.com/v1beta/interactions',
           {
             method: 'POST',
             headers: {
@@ -240,34 +243,45 @@ export class PromptFaithfulImageProvider implements CreativeProvider {
               Accept: 'application/json',
             },
             body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: {
-                responseModalities: ['IMAGE'],
-                responseFormat: {
-                  image: {
-                    aspectRatio: ['1:1', '4:5', '16:9', '9:16'].includes(aspectRatio) ? aspectRatio : '1:1',
-                    imageSize: '2K',
-                  },
-                },
+              model,
+              input: prompt,
+              response_format: {
+                type: 'image',
+                mime_type: 'image/jpeg',
+                aspect_ratio: ['1:1', '4:5', '16:9', '9:16'].includes(aspectRatio) ? aspectRatio : '1:1',
+                image_size: '2K',
               },
             }),
             cache: 'no-store',
           },
-          Math.max(timeoutMs, 30_000),
+          Math.max(timeoutMs, 45_000),
         );
 
         if (response.ok) {
           const payload = await response.json() as any;
-          const parts = payload?.candidates?.[0]?.content?.parts || [];
-          const imagePart = parts.find((part: any) => part?.inlineData?.data || part?.inline_data?.data);
-          const inline = imagePart?.inlineData || imagePart?.inline_data;
-          if (inline?.data) {
-            const buffer = Buffer.from(inline.data, 'base64');
+          const outputImage = payload?.output_image || payload?.outputImage;
+          let encoded = outputImage?.data;
+          let mimeType = outputImage?.mime_type || outputImage?.mimeType || 'image/jpeg';
+
+          if (!encoded && Array.isArray(payload?.steps)) {
+            for (const step of payload.steps) {
+              if (step?.type !== 'model_output' || !Array.isArray(step?.content)) continue;
+              const imageBlock = step.content.find((block: any) => block?.type === 'image' && block?.data);
+              if (imageBlock?.data) {
+                encoded = imageBlock.data;
+                mimeType = imageBlock.mime_type || imageBlock.mimeType || mimeType;
+                break;
+              }
+            }
+          }
+
+          if (encoded) {
+            const buffer = Buffer.from(encoded, 'base64');
             const validation = validateImageBuffer(buffer);
             if (validation.valid) {
               return {
                 buffer,
-                mimeType: validation.mimeType || inline.mimeType || inline.mime_type || 'image/png',
+                mimeType: validation.mimeType || mimeType,
                 providerName: `Google ${model}`,
                 generationTimeMs: Date.now() - startedAt,
               };
