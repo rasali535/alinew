@@ -62,7 +62,7 @@ linux:
 # ── Auto Update ───────────────────────────────────────────────────────────────
 publish:
   provider: generic
-  url: https://ralion.rasalilabs.com/api/version/releases
+  url: https://rasalilabs.com/ralion/api/version/releases
 
 extraMetadata:
   main: dist/main.js
