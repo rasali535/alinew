@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import crypto from 'crypto';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../lib/cors';
-import { CreativeOrchestrator } from '@ralion/ai/server';
+import { CreativeOrchestrator, MariCreativeIntelligenceService } from '@ralion/ai/server';
 import { requireRalionContext } from '../../../../lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
@@ -71,6 +71,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const requiredVisualElements = Array.isArray(body.requiredVisualElements)
+      ? body.requiredVisualElements.map((item: unknown) => String(item)).filter(Boolean)
+      : typeof prompt === 'string'
+        ? MariCreativeIntelligenceService.extractHardVisualRequirements(prompt)
+        : [];
+
     const result = await (CreativeOrchestrator.generate as any)({
       organizationId: authenticatedOrgId,
       workspaceId: authenticatedWorkspaceId,
@@ -85,6 +91,7 @@ export async function POST(request: NextRequest) {
       platform,
       cta,
       mockFailure,
+      requiredVisualElements,
     });
 
     if (!result.success || !result.receipt) {
