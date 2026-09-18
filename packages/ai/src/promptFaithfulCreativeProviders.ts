@@ -7,6 +7,7 @@ import { validateImageBuffer, validateVideoBuffer } from './creativeAsset.servic
 
 const DEFAULT_IMAGE_MODEL = 'black-forest-labs/FLUX.1-schnell';
 const DEFAULT_GEMINI_IMAGE_MODEL = 'gemini-3.1-flash-image';
+const DEFAULT_OPENAI_IMAGE_MODEL = 'gpt-image-2';
 const DEFAULT_VIDEO_MODEL = 'zai-org/CogVideoX-2b';
 
 function normalizePrompt(raw: string): string {
@@ -147,7 +148,74 @@ export class PromptFaithfulImageProvider implements CreativeProvider {
     const timeoutMs = Math.max(8_000, Math.min(request.timeoutMs || 20_000, 30_000));
     const errors: string[] = [];
 
-    // Prefer Google's native image model when the existing Gemini server key is available.
+    // OpenAI GPT Image is a first-class clean provider. Keep the key server-side;
+    // return only validated image bytes to the orchestrator.
+    const openAiApiKey = process.env.OPENAI_API_KEY?.trim();
+    if (openAiApiKey) {
+      const model = process.env.RALION_OPENAI_IMAGE_MODEL || DEFAULT_OPENAI_IMAGE_MODEL;
+      try {
+        const sizeByFormat: Record<string, string> = {
+          '1:1': '1024x1024',
+          square: '1024x1024',
+          '4:5': '1024x1536',
+          portrait: '1024x1536',
+          '9:16': '1024x1536',
+          story: '1024x1536',
+          reel: '1024x1536',
+          '16:9': '1536x1024',
+          landscape: '1536x1024',
+        };
+        const size = sizeByFormat[(request.format || '1:1').toLowerCase()] || '1024x1024';
+        const response = await fetchWithTimeout(
+          'https://api.openai.com/v1/images/generations',
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${openAiApiKey}`,
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+            },
+            body: JSON.stringify({
+              model,
+              prompt,
+              size,
+              quality: 'high',
+              output_format: 'png',
+              n: 1,
+            }),
+            cache: 'no-store',
+          },
+          Math.max(timeoutMs, 45_000),
+        );
+
+        if (response.ok) {
+          const payload = await response.json() as any;
+          const encoded = payload?.data?.[0]?.b64_json;
+          if (encoded) {
+            const buffer = Buffer.from(encoded, 'base64');
+            const validation = validateImageBuffer(buffer);
+            if (validation.valid) {
+              return {
+                buffer,
+                mimeType: validation.mimeType || 'image/png',
+                providerName: `OpenAI ${model}`,
+                generationTimeMs: Date.now() - startedAt,
+              };
+            }
+            errors.push(`OpenAI returned invalid image data: ${validation.error || 'validation failed'}`);
+          } else {
+            errors.push('OpenAI image provider completed without image bytes.');
+          }
+        } else {
+          const errorText = await response.text().catch(() => '');
+          errors.push(`OpenAI image provider HTTP ${response.status}${errorText ? `: ${errorText.slice(0, 160)}` : ''}`);
+        }
+      } catch (error: any) {
+        errors.push(`OpenAI image provider: ${error?.message || String(error)}`);
+      }
+    }
+
+        // Prefer Google's native image model when the existing Gemini server key is available.
     // This produces clean first-party image bytes and avoids provider logos/watermarks
     // being burned into customer creatives. Pollinations remains a last-resort,
     // authenticated fallback only.
@@ -319,6 +387,7 @@ export class PromptFaithfulImageProvider implements CreativeProvider {
     const safeError = errors.slice(-5).join(' | ');
     console.warn('[PromptFaithfulImageProvider] Exhausted real image providers', {
       attemptedHuggingFace: Boolean(hfToken),
+      attemptedOpenAI: Boolean(openAiApiKey),
       attemptedGemini: Boolean(geminiApiKey),
       attemptedPollinations: pollinationsCandidates.length > 0,
       authenticatedPollinations: Boolean(pollinationsToken),
