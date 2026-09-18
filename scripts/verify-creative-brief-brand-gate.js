@@ -9,6 +9,7 @@ const growth = read('apps/ralion/src/app/(dashboard)/growth/page.tsx');
 const orchestrator = read('packages/ai/src/creativeOrchestrator.service.ts');
 const evaluator = read('packages/ai/src/visualSemanticEvaluator.service.ts');
 const mari = read('packages/ai/src/mariCreativeIntelligence.service.ts');
+const providers = read('packages/ai/src/promptFaithfulCreativeProviders.ts');
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -65,6 +66,22 @@ assert(
 assert(
   !growth.includes('Brand Logo &amp; Watermark'),
   'UI must not describe tenant/Ralion branding as a provider-style watermark.'
+);
+
+assert(
+  providers.includes("DEFAULT_GEMINI_IMAGE_MODEL = 'gemini-3.1-flash-image'") &&
+    providers.includes("responseModalities: ['IMAGE']"),
+  'Creative images must prefer the configured Gemini native image provider.'
+);
+assert(
+  providers.includes('const pollinationsCandidates = pollinationsToken ? [') &&
+    !providers.includes('Legacy anonymous route kept only as a compatibility fallback.'),
+  'Anonymous Pollinations image generation must never be a customer-facing fallback.'
+);
+assert(
+  providers.includes('attemptedGemini: Boolean(geminiApiKey)') &&
+    providers.includes('attemptedPollinations: pollinationsCandidates.length > 0'),
+  'Provider diagnostics must accurately report clean image provider attempts.'
 );
 
 console.log('Creative brief requirement and brand-gate invariants verified.');
