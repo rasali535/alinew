@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
       id: receipt.assetId,
       assetId: receipt.assetId,
       status: 'completed',
-      model: model || 'zai-org/CogVideoX-2b',
+      model: model || 'prompt-faithful-video-provider',
       receipt,
     }, undefined, request);
 

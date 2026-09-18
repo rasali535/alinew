@@ -1747,7 +1747,8 @@ function GrowthPageContent() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Media Generators — Real Server-Side Generation Pipeline & Durable Storage
+  // Media Generators — Prompt-faithful server generation only.
+  // Never manufacture a placeholder asset and report it as generated media.
   const generateMedia = async (type: 'poster' | 'video') => {
     const prompt = type === 'poster' ? posterPrompt : videoPrompt;
     if (!prompt.trim()) return;
@@ -1761,11 +1762,19 @@ function GrowthPageContent() {
     }
 
     try {
-      const targetOrg = typeof window !== 'undefined'
-        ? (window.localStorage.getItem('ralion_active_org') || window.localStorage.getItem('ralion_user_id') || '')
-        : '';
+      const normalizedPosterFormat: Record<string, string> = {
+        '1:1 Square': '1:1',
+        '4:5 Portrait': '4:5',
+        '16:9 Landscape': '16:9',
+        '9:16 Story / Reel': '9:16',
+      };
+
+      const requestedFormat = type === 'poster'
+        ? (normalizedPosterFormat[posterFormat] || '1:1')
+        : '16:9';
 
       let asset: any = null;
+      let generationError = 'Creative generation failed. No placeholder was created.';
 
       try {
         const res = await authFetch('/api/creatives/generate', {
@@ -1773,159 +1782,91 @@ function GrowthPageContent() {
           body: JSON.stringify({
             type: type === 'poster' ? 'POSTER_IMAGE' : 'VIDEO_REEL',
             prompt: prompt.trim(),
-            style: type === 'poster' ? posterStyle : videoVoiceover,
-            format: type === 'poster' ? posterFormat : videoLength,
-            organizationId: targetOrg,
+            style: type === 'poster' ? posterStyle : undefined,
+            format: requestedFormat,
+            organizationId: organization?.id || undefined,
+            workspaceId: workspace?.id || undefined,
           }),
         });
 
         const data = await res.json().catch(() => ({}));
         if (res.ok && data.success && data.asset) {
           asset = data.asset;
+        } else {
+          generationError = data.userFacingMessage || data.error || generationError;
         }
-      } catch (netErr) {
-        console.warn('[Growth Studio] Backend creative generate call notice:', netErr);
+      } catch (networkError: any) {
+        console.warn('[Growth Studio] Creative generation request failed:', networkError);
+        generationError = networkError?.message
+          ? 'Creative generation service is unavailable: ' + networkError.message
+          : 'Creative generation service is unavailable. No placeholder was created.';
       }
 
-      // Infallible Fallback: Neural Sovereign Synthesizer
       if (!asset) {
-        const assetId = `asset-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-        const assetTitle = prompt.length > 40 ? prompt.substring(0, 36).trim() + '...' : prompt.trim();
-        const safeTitle = assetTitle
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;');
-        const safeStyle = (posterStyle || 'Corporate Executive').toUpperCase();
-
-        const w = posterFormat.includes('16:9') ? 1024 : posterFormat.includes('9:16') ? 576 : posterFormat.includes('4:5') ? 816 : 1024;
-        const h = posterFormat.includes('16:9') ? 576 : posterFormat.includes('9:16') ? 1024 : posterFormat.includes('4:5') ? 1020 : 1024;
-
-        let logoSvgElement = '';
-        if (creativeLogo) {
-          const logoW = 150;
-          const logoH = 50;
-          let lx = 64;
-          let ly = 64;
-          if (logoPosition === 'top-right') {
-            lx = w - logoW - 64;
-            ly = 64;
-          } else if (logoPosition === 'bottom-left') {
-            lx = 64;
-            ly = h - logoH - 64;
-          } else if (logoPosition === 'bottom-right') {
-            lx = w - logoW - 64;
-            ly = h - logoH - 64;
-          }
-          logoSvgElement = `<g transform="translate(${lx}, ${ly})">
-            <rect width="${logoW}" height="${logoH}" rx="12" fill="rgba(15,23,42,0.85)" stroke="rgba(255,255,255,0.25)" stroke-width="1.5" />
-            <image href="${creativeLogo}" x="10" y="8" width="${logoW - 20}" height="${logoH - 16}" preserveAspectRatio="xMidYMid meet" />
-          </g>`;
-        }
-
-        const defaultBadge = `<g transform="translate(64, 64)">
-          <rect width="180" height="36" rx="18" fill="rgba(59,130,246,0.15)" stroke="rgba(96,165,250,0.35)" stroke-width="1" />
-          <circle cx="20" cy="18" r="5" fill="#38bdf8" />
-          <text x="36" y="23" fill="#93c5fd" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="600" letter-spacing="1">RALION GROWTH</text>
-        </g>`;
-
-        const svgContent = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="bgGrad" x1="0" y1="0" x2="${w}" y2="${h}" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#090d16" />
-      <stop offset="50%" stop-color="#0f172a" />
-      <stop offset="100%" stop-color="#030712" />
-    </linearGradient>
-    <linearGradient id="glowGrad" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.35" />
-      <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.08" />
-    </linearGradient>
-    <linearGradient id="accentGrad" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#38bdf8" />
-      <stop offset="50%" stop-color="#818cf8" />
-      <stop offset="100%" stop-color="#c084fc" />
-    </linearGradient>
-  </defs>
-  <rect width="${w}" height="${h}" fill="url(#bgGrad)" />
-  <circle cx="${w * 0.8}" cy="${h * 0.2}" r="${w * 0.4}" fill="url(#glowGrad)" />
-  <rect x="32" y="32" width="${w - 64}" height="${h - 64}" rx="24" stroke="rgba(255,255,255,0.14)" stroke-width="1.5" fill="rgba(15,23,42,0.4)" />
-  ${logoSvgElement ? `${defaultBadge}\n  ${logoSvgElement}` : defaultBadge}
-  <g transform="translate(64, ${h * 0.42})">
-    <text fill="url(#accentGrad)" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="${w > 800 ? 36 : 24}" font-weight="800" letter-spacing="-0.5">${safeTitle}</text>
-    <text y="${w > 800 ? 54 : 38}" fill="#94a3b8" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="${w > 800 ? 18 : 14}" font-weight="400">Engineered for high-velocity enterprise market expansion &amp; strategic growth.</text>
-  </g>
-  <g transform="translate(64, ${h - 96})">
-    <text fill="#64748b" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="500">STYLE: ${safeStyle}</text>
-    <g transform="translate(${Math.max(64, w - 280)}, -14)">
-      <rect width="152" height="40" rx="10" fill="url(#accentGrad)" />
-      <text x="76" y="25" text-anchor="middle" fill="#090d16" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="700">EXPLORE MORE &rarr;</text>
-    </g>
-  </g>
-</svg>`;
-
-        const mediaUrl = `data:image/svg+xml;utf8,${encodeURIComponent(svgContent)}`;
-        asset = {
-          id: assetId,
-          publicUrl: mediaUrl,
-          previewUrl: mediaUrl,
-          title: assetTitle,
-          prompt: prompt.trim(),
-        };
+        throw new Error(generationError);
       }
 
-      let finalDisplayUrl = asset.publicUrl || asset.previewUrl;
+      let finalDisplayUrl = asset.mediaUrl || asset.publicUrl || asset.previewUrl || asset.directUrl || '';
+      if (!finalDisplayUrl) {
+        throw new Error('The generation provider completed without a usable media URL. Nothing was added to the creative library.');
+      }
+
       try {
-        const resolvedSigned = await resolveSecureAssetUrl(asset.id || finalDisplayUrl);
+        const resolvedSigned = await resolveSecureAssetUrl(asset.id || asset.assetId || finalDisplayUrl);
         if (resolvedSigned?.signedUrl) finalDisplayUrl = resolvedSigned.signedUrl;
       } catch {}
 
+      const assetId = asset.id || asset.assetId || ('asset-' + Date.now());
+      const assetTitle = asset.title || (prompt.length > 40 ? prompt.substring(0, 36).trim() + '...' : prompt.trim());
+      const assetPrompt = asset.prompt || prompt.trim();
+      const providerLabel = asset.provider || asset.model || asset.generator || 'Prompt-Faithful Creative Engine';
+
       if (type === 'poster') {
         setGeneratedPoster(finalDisplayUrl);
-        setIsGeneratingPoster(false);
 
         const newItem: GeneratedContentItem = {
-          id: asset.id,
+          id: assetId,
           type: 'POSTER_IMAGE',
-          title: asset.title,
-          prompt: asset.prompt,
+          title: assetTitle,
+          prompt: assetPrompt,
           output: finalDisplayUrl,
           previewUrl: finalDisplayUrl,
-          modelUsed: `FLUX.1 Studio (${posterFormat}, ${posterStyle})`,
-          createdAt: 'Just now'
+          modelUsed: providerLabel,
+          createdAt: 'Just now',
         };
         setGeneratedGallery(prev => [newItem, ...prev]);
         setOauthAlert({
           type: 'success',
-          message: '🎨 Real high-resolution creative visual generated and saved to library!',
+          message: '🎨 Creative visual generated, validated, and saved to your library.',
         });
-        setTimeout(() => setOauthAlert(null), 4000);
       } else {
         setGeneratedVideo(finalDisplayUrl);
-        setIsGeneratingVideo(false);
 
         const newItem: GeneratedContentItem = {
-          id: asset.id,
+          id: assetId,
           type: 'VIDEO_REEL',
-          title: asset.title,
-          prompt: asset.prompt,
+          title: assetTitle,
+          prompt: assetPrompt,
           output: finalDisplayUrl,
           previewUrl: finalDisplayUrl,
-          modelUsed: `CogVideoX Motion Studio (${videoLength})`,
-          createdAt: 'Just now'
+          modelUsed: providerLabel,
+          createdAt: 'Just now',
         };
         setGeneratedGallery(prev => [newItem, ...prev]);
         setOauthAlert({
           type: 'success',
-          message: '🎥 Real CogVideoX video reel generated and ready for review!',
+          message: '🎥 Video generation completed, validated, and saved to your library.',
         });
-        setTimeout(() => setOauthAlert(null), 4000);
       }
-    } catch (e: any) {
-      console.error('[Growth Studio Media Gen Error]:', e);
+
+      setTimeout(() => setOauthAlert(null), 4000);
+    } catch (error: any) {
+      console.error('[Growth Studio Media Gen Error]:', error);
       setOauthAlert({
         type: 'error',
-        message: '❌ Connection error while generating creative media.',
+        message: '❌ ' + (error?.message || 'Creative generation failed. No placeholder was created.'),
       });
+    } finally {
       setIsGeneratingPoster(false);
       setIsGeneratingVideo(false);
     }
@@ -5398,50 +5339,22 @@ function GrowthPageContent() {
                     )}
                   </div>
 
-                  {/* Commercial Visual QA Scorecard Widget */}
+                  {/* Commercial Visual Validation — only shown after a real server-generated asset succeeds. */}
                   {generatedPoster && (
                     <div className="p-3 rounded-2xl bg-zinc-950 border border-zinc-800 flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
                           <Shield className="w-3.5 h-3.5 text-emerald-400" />
-                          <span className="text-[11px] font-bold text-white uppercase tracking-wider">Commercial Visual QA</span>
+                          <span className="text-[11px] font-bold text-white uppercase tracking-wider">Commercial Visual Validation</span>
                         </div>
-                        <span className="text-xs font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20">
-                          QA Grade: PASS (9.6 / 10)
+                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20">
+                          SERVER VALIDATED
                         </span>
                       </div>
-
-                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 text-center">
-                        <div className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800/60">
-                          <div className="text-[9px] text-zinc-400 font-bold">Visual</div>
-                          <div className="text-xs font-black text-white">9.7</div>
-                        </div>
-                        <div className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800/60">
-                          <div className="text-[9px] text-zinc-400 font-bold">Hierarchy</div>
-                          <div className="text-xs font-black text-white">9.5</div>
-                        </div>
-                        <div className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800/60">
-                          <div className="text-[9px] text-zinc-400 font-bold">Typography</div>
-                          <div className="text-xs font-black text-white">9.6</div>
-                        </div>
-                        <div className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800/60">
-                          <div className="text-[9px] text-zinc-400 font-bold">Branding</div>
-                          <div className="text-xs font-black text-white">9.8</div>
-                        </div>
-                        <div className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800/60">
-                          <div className="text-[9px] text-zinc-400 font-bold">Readability</div>
-                          <div className="text-xs font-black text-white">9.6</div>
-                        </div>
-                        <div className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800/60">
-                          <div className="text-[9px] text-zinc-400 font-bold">CTA</div>
-                          <div className="text-xs font-black text-white">9.6</div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 flex-wrap text-[10px] text-zinc-400 font-medium pt-0.5">
-                        <span className="text-emerald-400">✓ Agency Hierarchy</span>
-                        <span className="text-emerald-400">✓ High-Contrast Scrim</span>
-                        <span className="text-emerald-400">✓ Tenant Brand Isolated</span>
+                      <div className="flex items-center gap-2 flex-wrap text-[10px] text-zinc-400 font-medium">
+                        <span className="text-emerald-400">✓ Real provider output</span>
+                        <span className="text-emerald-400">✓ Semantic relevance gate applied</span>
+                        <span className="text-emerald-400">✓ Durable asset saved</span>
                       </div>
                     </div>
                   )}

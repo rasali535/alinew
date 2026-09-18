@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
       publicUrl: receipt.publicUrl,
       directUrl: receipt.mediaUrl,
       format: 'url',
-      model: assetType === 'VIDEO_REEL' ? 'zai-org/CogVideoX-2b' : 'black-forest-labs/FLUX.1-schnell',
+      model: assetType === 'VIDEO_REEL' ? 'prompt-faithful-video-provider' : 'prompt-faithful-image-provider',
       prompt: cleanPrompt,
       receipt,
     }, undefined, request);
