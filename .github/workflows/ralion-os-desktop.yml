@@ -79,7 +79,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ralion-os-windows-${{ github.sha }}
-          path: apps/desktop/release/*.exe
+          path: |
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.yml
+            apps/desktop/release/*.blockmap
           if-no-files-found: error
           retention-days: 14
 
@@ -115,7 +118,9 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $versioned = "release/ralion-os-$env:RALION_VERSION-setup.exe"
           $stable = "release/ralion-os-windows-setup.exe"
+          $latestYml = "release/latest.yml"
           if (-not (Test-Path $versioned)) { throw "Versioned installer missing: $versioned" }
+          if (-not (Test-Path $latestYml)) { throw "Auto-update metadata missing: $latestYml" }
           if (-not (Test-Path $stable)) { throw "Stable installer alias missing: $stable" }
           foreach ($installer in @($versioned, $stable)) {
             $bytes = [System.IO.File]::ReadAllBytes($installer)
@@ -174,6 +179,10 @@ jobs:
 
           Upload-ReleaseAsset $tag $versioned
           Upload-ReleaseAsset $tag $stable
+          Upload-ReleaseAsset $tag "release/latest.yml"
+          Get-ChildItem "release/*.blockmap" -ErrorAction SilentlyContinue | ForEach-Object {
+            Upload-ReleaseAsset $tag $_.FullName
+          }
 
           gh release edit $tag --latest
           Assert-GhSuccess 'marking release latest'
@@ -186,7 +195,8 @@ jobs:
           $assetNames = @($release.assets | ForEach-Object { $_.name })
           $expectedAssets = @(
             "ralion-os-$env:RALION_VERSION-setup.exe",
-            "ralion-os-windows-setup.exe"
+            "ralion-os-windows-setup.exe",
+            "latest.yml"
           )
           foreach ($expected in $expectedAssets) {
             if ($assetNames -notcontains $expected) {
