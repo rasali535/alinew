@@ -59,17 +59,21 @@ jobs:
       - name: Read desktop release version
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $version = (Get-Content apps/desktop/package.json | ConvertFrom-Json).version
+          if (-not $version) { throw 'Desktop release version is empty.' }
           "RALION_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Create stable website download alias
         if: github.event_name != 'pull_request'
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $source = "apps/desktop/release/ralion-os-$env:RALION_VERSION-setup.exe"
           $target = "apps/desktop/release/ralion-os-windows-setup.exe"
           if (-not (Test-Path $source)) { throw "Validated installer not found at $source" }
           Copy-Item $source $target -Force
+          if (-not (Test-Path $target)) { throw "Stable installer alias was not created at $target" }
 
       - name: Upload Ralion OS installer to CI
         uses: actions/upload-artifact@v4
@@ -94,7 +98,9 @@ jobs:
       - name: Read desktop release version
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $version = (Get-Content apps/desktop/package.json | ConvertFrom-Json).version
+          if (-not $version) { throw 'Desktop release version is empty.' }
           "RALION_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Download validated installer artifact
@@ -106,18 +112,24 @@ jobs:
       - name: Verify release payload
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $versioned = "release/ralion-os-$env:RALION_VERSION-setup.exe"
           $stable = "release/ralion-os-windows-setup.exe"
           if (-not (Test-Path $versioned)) { throw "Versioned installer missing: $versioned" }
           if (-not (Test-Path $stable)) { throw "Stable installer alias missing: $stable" }
-          $header = [System.IO.File]::ReadAllBytes($versioned)[0..1]
-          if ($header[0] -ne 0x4D -or $header[1] -ne 0x5A) { throw "Installer is not a valid Windows PE executable" }
+          foreach ($installer in @($versioned, $stable)) {
+            $bytes = [System.IO.File]::ReadAllBytes($installer)
+            if ($bytes.Length -lt 2 -or $bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) {
+              throw "Installer is not a valid Windows PE executable: $installer"
+            }
+          }
 
       - name: Publish permanent Ralion OS Windows release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          $ErrorActionPreference = 'Stop'
           $tag = "ralion-os-v$env:RALION_VERSION"
           $versioned = "release/ralion-os-$env:RALION_VERSION-setup.exe"
           $stable = "release/ralion-os-windows-setup.exe"
@@ -129,12 +141,57 @@ jobs:
           This release was built, runtime-verified and installer-validated by the Ralion OS desktop CI pipeline before publication.
           "@
 
-          gh release view $tag *> $null
-          if ($LASTEXITCODE -eq 0) {
-            gh release edit $tag --title "Ralion OS $env:RALION_VERSION" --notes $notes
-          } else {
-            gh release create $tag --title "Ralion OS $env:RALION_VERSION" --notes $notes
+          function Assert-GhSuccess([string]$operation) {
+            if ($LASTEXITCODE -ne 0) {
+              throw "GitHub CLI failed during $operation (exit code $LASTEXITCODE)."
+            }
           }
 
-          gh release upload $tag $versioned $stable --clobber
+          function Upload-ReleaseAsset([string]$releaseTag, [string]$filePath) {
+            $maxAttempts = 4
+            for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+              Write-Host "Uploading $filePath (attempt $attempt/$maxAttempts)..."
+              gh release upload $releaseTag $filePath --clobber
+              if ($LASTEXITCODE -eq 0) {
+                return
+              }
+              if ($attempt -lt $maxAttempts) {
+                Start-Sleep -Seconds (5 * $attempt)
+              }
+            }
+            throw "Failed to upload release asset after $maxAttempts attempts: $filePath"
+          }
+
+          gh release view $tag *> $null
+          $releaseExists = $LASTEXITCODE -eq 0
+          if ($releaseExists) {
+            gh release edit $tag --title "Ralion OS $env:RALION_VERSION" --notes $notes
+            Assert-GhSuccess 'release metadata update'
+          } else {
+            gh release create $tag --title "Ralion OS $env:RALION_VERSION" --notes $notes --target $env:GITHUB_SHA
+            Assert-GhSuccess 'release creation'
+          }
+
+          Upload-ReleaseAsset $tag $versioned
+          Upload-ReleaseAsset $tag $stable
+
           gh release edit $tag --latest
+          Assert-GhSuccess 'marking release latest'
+
+          $releaseJson = gh release view $tag --json assets,tagName,isDraft
+          Assert-GhSuccess 'release asset verification query'
+          $release = $releaseJson | ConvertFrom-Json
+          if ($release.isDraft) { throw "Release $tag is unexpectedly still a draft." }
+
+          $assetNames = @($release.assets | ForEach-Object { $_.name })
+          $expectedAssets = @(
+            "ralion-os-$env:RALION_VERSION-setup.exe",
+            "ralion-os-windows-setup.exe"
+          )
+          foreach ($expected in $expectedAssets) {
+            if ($assetNames -notcontains $expected) {
+              throw "Published release is missing required asset: $expected. Assets present: $($assetNames -join ', ')"
+            }
+          }
+
+          Write-Host "Verified published release assets: $($assetNames -join ', ')"
