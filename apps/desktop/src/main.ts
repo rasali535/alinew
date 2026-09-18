@@ -84,6 +84,7 @@ const store = new Store<{
 }>();
 
 const RALION_API = process.env.RALION_API_URL || process.env.NEXT_PUBLIC_API_URL || 'https://rasalilabs.com';
+const RALION_UPDATE_URL = process.env.RALION_UPDATE_URL || 'https://rasalilabs.com/ralion/api/version/releases';
 const OFFLINE_GRACE_DAYS = 7;
 
 let autoUpdater: any = null;
@@ -260,7 +261,9 @@ function createWindow() {
     mainWindow = null;
   });
 
-  if (app.isPackaged && process.env.ENABLE_AUTO_UPDATE === 'true') {
+  // Packaged releases update by default. Set ENABLE_AUTO_UPDATE=false only for
+  // controlled diagnostics/emergency rollback scenarios.
+  if (app.isPackaged && process.env.ENABLE_AUTO_UPDATE !== 'false') {
     setupAutoUpdater();
   }
 }
@@ -310,7 +313,18 @@ function setupAutoUpdater() {
   try {
     autoUpdater.setFeedURL({
       provider: 'generic',
-      url: `${RALION_API}/api/version/releases`,
+      url: RALION_UPDATE_URL,
+    });
+
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+
+    autoUpdater.on('checking-for-update', () => {
+      log.info('[AutoUpdater] Checking for updates:', RALION_UPDATE_URL);
+    });
+
+    autoUpdater.on('update-not-available', (info: any) => {
+      log.info('[AutoUpdater] App is current:', info?.version || app.getVersion());
     });
 
     autoUpdater.on('error', (err: any) => {
