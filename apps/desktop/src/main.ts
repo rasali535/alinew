@@ -88,6 +88,13 @@ const RALION_UPDATE_URL = process.env.RALION_UPDATE_URL || 'https://rasalilabs.c
 const OFFLINE_GRACE_DAYS = 7;
 
 let autoUpdater: any = null;
+let updateState = {
+  status: 'idle',
+  currentVersion: app.getVersion(),
+  availableVersion: null as string | null,
+  percent: 0,
+  message: 'Ralion is ready to check for updates.',
+};
 try {
   const updaterModule = require('electron-updater');
   autoUpdater = updaterModule.autoUpdater;
@@ -307,6 +314,11 @@ function createTray() {
 }
 
 // ─── Auto Updater ─────────────────────────────────────────────────────────────
+function publishUpdateState(patch: Partial<typeof updateState>) {
+  updateState = { ...updateState, ...patch, currentVersion: app.getVersion() };
+  mainWindow?.webContents.send('update-status', updateState);
+}
+
 function setupAutoUpdater() {
   if (!autoUpdater) return;
 
@@ -321,18 +333,22 @@ function setupAutoUpdater() {
 
     autoUpdater.on('checking-for-update', () => {
       log.info('[AutoUpdater] Checking for updates:', RALION_UPDATE_URL);
+      publishUpdateState({ status: 'checking', percent: 0, message: 'Checking for Ralion updates…' });
     });
 
     autoUpdater.on('update-not-available', (info: any) => {
       log.info('[AutoUpdater] App is current:', info?.version || app.getVersion());
+      publishUpdateState({ status: 'current', availableVersion: null, percent: 0, message: 'Ralion is up to date.' });
     });
 
     autoUpdater.on('error', (err: any) => {
       if (log.warn) log.warn('[AutoUpdater Warning - Offline or Unreachable]', err?.message || err);
+      publishUpdateState({ status: 'error', message: 'Unable to check for updates. Please try again.' });
     });
 
     autoUpdater.on('update-available', (info: any) => {
       log.info('[AutoUpdater] Update available:', info?.version);
+      publishUpdateState({ status: 'available', availableVersion: info?.version || null, percent: 0, message: `Ralion ${info?.version || 'update'} is downloading…` });
       if (Notification.isSupported()) {
         new Notification({
           title: 'Ralion Update Available',
@@ -341,8 +357,14 @@ function setupAutoUpdater() {
       }
     });
 
+    autoUpdater.on('download-progress', (progress: any) => {
+      const percent = Math.max(0, Math.min(100, Math.round(Number(progress?.percent) || 0)));
+      publishUpdateState({ status: 'downloading', percent, message: `Downloading update… ${percent}%` });
+    });
+
     autoUpdater.on('update-downloaded', (info: any) => {
       log.info('[AutoUpdater] Update downloaded:', info?.version);
+      publishUpdateState({ status: 'ready', availableVersion: info?.version || null, percent: 100, message: `Ralion ${info?.version || 'update'} is ready to install.` });
       if (mainWindow) {
         dialog.showMessageBox(mainWindow, {
           type: 'info',
@@ -412,6 +434,35 @@ function buildAppMenu() {
 // ─── IPC Handlers ──────────────────────────────────────────────────────────────
 function registerIpcHandlers() {
   ipcMain.handle('get-device-id', () => getDeviceId());
+
+  ipcMain.handle('get-update-status', () => updateState);
+
+  ipcMain.handle('check-updates', async () => {
+    if (!app.isPackaged) {
+      publishUpdateState({ status: 'development', message: 'Update checks are available in installed Ralion builds.' });
+      return updateState;
+    }
+    if (!autoUpdater) {
+      publishUpdateState({ status: 'error', message: 'The Ralion updater is unavailable.' });
+      return updateState;
+    }
+    try {
+      await autoUpdater.checkForUpdates();
+      return updateState;
+    } catch (error: any) {
+      log.warn('[AutoUpdater Manual Check Warning]', error?.message || error);
+      publishUpdateState({ status: 'error', message: 'Unable to check for updates. Please try again.' });
+      return updateState;
+    }
+  });
+
+  ipcMain.handle('install-update', () => {
+    if (autoUpdater && updateState.status === 'ready') {
+      setImmediate(() => autoUpdater.quitAndInstall());
+      return { success: true };
+    }
+    return { success: false, error: 'No downloaded update is ready to install.' };
+  });
 
   ipcMain.handle('get-platform-info', () => ({
     platform: process.platform,
