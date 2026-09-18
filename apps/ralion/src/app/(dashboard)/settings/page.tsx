@@ -17,6 +17,7 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<'KNOWLEDGE' | 'PLUGINS' | 'ROLES' | 'BRANCHES' | 'SECURITY'>('KNOWLEDGE');
   const [isDesktopEnv, setIsDesktopEnv] = useState(false);
   const [deviceId, setDeviceId] = useState('RALION-HW-HASH-2026-BW-882109');
+  const [updateState, setUpdateState] = useState<any>({ status: 'idle', currentVersion: '', availableVersion: null, percent: 0, message: 'Ready to check for updates.' });
   const [isSyncingWebsite, setIsSyncingWebsite] = useState(false);
   const [websiteSyncSuccess, setWebsiteSyncSuccess] = useState<string | null>(null);
   const [wkKnowledge, setWkKnowledge] = useState<any>(null);
@@ -110,8 +111,22 @@ export default function SettingsPage() {
       setIsDesktopEnv(true);
       (window as any).ralionDesktop.getDeviceId().then((id: string) => setDeviceId(id));
       (window as any).ralionDesktop.getOfflineStatus().then((status: any) => setOfflineStatus(status));
+      (window as any).ralionDesktop.getUpdateStatus?.().then((status: any) => status && setUpdateState(status));
+      const unsubscribe = (window as any).ralionDesktop.onUpdateStatus?.((status: any) => setUpdateState(status));
+      return () => { if (typeof unsubscribe === 'function') unsubscribe(); };
     }
   }, []);
+
+  const handleCheckUpdates = async () => {
+    const desktop = (window as any).ralionDesktop;
+    if (!desktop?.checkUpdates) return;
+    const status = await desktop.checkUpdates();
+    if (status) setUpdateState(status);
+  };
+
+  const handleInstallUpdate = async () => {
+    await (window as any).ralionDesktop?.installUpdate?.();
+  };
 
   const togglePlugin = (id: string) => {
     setEnabledPlugins(prev =>
@@ -377,6 +392,44 @@ export default function SettingsPage() {
                   <RefreshCw className="w-3.5 h-3.5" /> Force Sync Now
                 </Button>
               </div>
+
+              {isDesktopEnv && (
+                <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <h4 className="font-bold text-white flex items-center gap-1.5">
+                        <RefreshCw className={`w-4 h-4 text-blue-400 ${updateState.status === 'checking' || updateState.status === 'downloading' ? 'animate-spin' : ''}`} />
+                        Ralion Software Updates
+                      </h4>
+                      <p className="text-zinc-400 text-[11px] mt-1">
+                        Installed version: <strong className="text-white font-mono">{updateState.currentVersion || 'Ralion Desktop'}</strong>
+                        {updateState.availableVersion ? <> • Available: <strong className="text-emerald-400 font-mono">{updateState.availableVersion}</strong></> : null}
+                      </p>
+                      <p className="text-zinc-500 text-[11px] mt-1">{updateState.message}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {updateState.status === 'ready' ? (
+                        <Button variant="primary" size="sm" onClick={handleInstallUpdate}>Install & Restart</Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleCheckUpdates}
+                          disabled={updateState.status === 'checking' || updateState.status === 'downloading'}
+                        >
+                          Check for Updates
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  {updateState.status === 'downloading' && (
+                    <div className="mt-3 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+                      <div className="h-full bg-blue-500 transition-all" style={{ width: `${updateState.percent || 0}%` }} />
+                    </div>
+                  )}
+                  <div className="mt-2 text-[10px] text-emerald-400 font-mono">Automatic updates enabled</div>
+                </div>
+              )}
 
               <div className="p-4 rounded-xl bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-blue-500/30 flex items-center justify-between">
                 <div>
