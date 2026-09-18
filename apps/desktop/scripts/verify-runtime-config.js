@@ -32,6 +32,7 @@ let hasPublishableKey = false;
 let hasApiBase = false;
 let hasNetworkBootstrap = false;
 let hasDiagnosticsBundle = false;
+let hasUpdateUi = false;
 
 for (const file of files) {
   const source = fs.readFileSync(file, 'utf8');
@@ -39,7 +40,8 @@ for (const file of files) {
   if (source.includes(EXPECTED_API_BASE)) hasApiBase = true;
   if (source.includes('Native Ralion API transport enabled')) hasNetworkBootstrap = true;
   if (source.includes('Ralion OS Diagnostics') && source.includes('Run full validation')) hasDiagnosticsBundle = true;
-  if (hasPublishableKey && hasApiBase && hasNetworkBootstrap && hasDiagnosticsBundle) break;
+  if (source.includes('Ralion Software Updates') && source.includes('Check for Updates') && source.includes('Automatic updates enabled')) hasUpdateUi = true;
+  if (hasPublishableKey && hasApiBase && hasNetworkBootstrap && hasDiagnosticsBundle && hasUpdateUi) break;
 }
 
 if (!hasPublishableKey) {
@@ -54,6 +56,11 @@ if (!hasApiBase) {
 
 if (!hasNetworkBootstrap) {
   console.error('[Desktop Runtime Config] Native desktop network bootstrap is absent from the packaged renderer.');
+  process.exit(1);
+}
+
+if (!hasUpdateUi) {
+  console.error('[Desktop Runtime Config] Visible software update controls are absent from the packaged renderer.');
   process.exit(1);
 }
 
@@ -88,4 +95,5 @@ console.log('[Desktop Runtime Config] Supabase publishable client configuration:
 console.log('[Desktop Runtime Config] Ralion production API routing: VERIFIED');
 console.log('[Desktop Runtime Config] Native desktop API transport: VERIFIED');
 console.log('[Desktop Runtime Config] Installed-app diagnostics surface: VERIFIED');
+console.log('[Desktop Runtime Config] Visible software updater controls: VERIFIED');
 console.log('[Desktop Runtime Config] Packaged renderer runtime configuration is ready.');
