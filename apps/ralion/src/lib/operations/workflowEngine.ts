@@ -4,6 +4,7 @@ import { writeOperationalAudit } from './audit';
 import { FacebookCommentsService } from '@/lib/services/social/facebookComments.service';
 import { SocialInboxService } from '@/lib/services/social/socialInbox.service';
 import { MariWorkflowDecisionService } from '@/lib/services/mari/mariWorkflowDecision.service';
+import { WorkflowOutcomeLearningService } from './workflowOutcomeLearning.service';
 
 export type WorkflowTriggerEvent = 'CUSTOMER_CREATED' | 'DEAL_STAGE_CHANGED' | 'TASK_COMPLETED' | 'SOCIAL_COMMENT_RECEIVED' | 'SOCIAL_INBOX_RECEIVED' | 'MANUAL';
 
@@ -181,6 +182,17 @@ async function executeOneWorkflow(workflow: any, context: WorkflowExecutionConte
       const action = actions[index];
       const result = await executeAction(action, context);
       results.push(result);
+      if (action?.type !== 'MARI_DECISION') {
+        await WorkflowOutcomeLearningService.record({
+          workflowRunId: run.id,
+          workflowId: workflow.id,
+          workspaceId: context.workspaceId,
+          organizationId: context.organizationId,
+          outcomeType: `ACTION_${action?.type || 'UNKNOWN'}`,
+          success: result?.skipped !== true,
+          metadata: { triggerEvent: context.triggerEvent, actionType: action?.type, result },
+        }).catch((error:any) => console.warn('[WorkflowEngine] Outcome recording notice:', error?.message || error));
+      }
 
       if (action?.type === 'MARI_DECISION' && result?.decision?.requiresApproval) {
         const proposedAction = actions[index + 1] || {};
@@ -300,7 +312,14 @@ export async function resumeApprovedWorkflowRun(params: { runId: string; workspa
         if (action.type === 'REPLY_SOCIAL_COMMENT') config.replyText = proposed;
         else config.messageText = proposed;
       }
-      results.push(await executeAction({ ...action, config }, context));
+      const resumedResult = await executeAction({ ...action, config }, context);
+      results.push(resumedResult);
+      await WorkflowOutcomeLearningService.record({
+        workflowRunId: run.id, workflowId: workflow.id, workspaceId: params.workspaceId,
+        organizationId: params.organizationId || workflow.organization_id,
+        outcomeType: `ACTION_${action?.type || 'UNKNOWN'}`, success: resumedResult?.skipped !== true,
+        metadata: { triggerEvent: run.trigger_event, actionType: action?.type, result: resumedResult, afterApproval: true },
+      }).catch((error:any) => console.warn('[WorkflowEngine] Outcome recording notice:', error?.message || error));
     }
     await supabase.from('workflow_runs').update({ status: 'SUCCEEDED', output: { actions: results, approvalId: approval.id, resumed: true }, finished_at: new Date().toISOString() }).eq('id', run.id).eq('workspace_id', params.workspaceId);
     return { workflowId: workflow.id, runId: run.id, status: 'SUCCEEDED', actions: results };
