@@ -19,10 +19,13 @@ interface WorkflowItem {
   last_executed_at?: string | null;
 }
 interface WorkflowRun { id: string; workflow_id: string; trigger_event: string; status: string; started_at: string; error?: string | null; }
+interface WorkflowApproval { id:string; workflow_run_id:string; status:string; decision?:{intent?:string;confidence?:number;risk?:string;proposedResponse?:string;reason?:string}; created_at:string; }
 
 export default function WorkflowsPage() {
   const [workflows, setWorkflows] = useState<WorkflowItem[]>([]);
   const [runs, setRuns] = useState<WorkflowRun[]>([]);
+  const [approvals, setApprovals] = useState<WorkflowApproval[]>([]);
+  const [outcomeSummary, setOutcomeSummary] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -31,8 +34,12 @@ export default function WorkflowsPage() {
 
   const load = async () => {
     setLoading(true);
-    const res = await authFetch('/api/workflows');
+    const [res, approvalRes, outcomeRes] = await Promise.all([authFetch('/api/workflows'), authFetch('/api/workflows/approvals'), authFetch('/api/workflows/outcomes')]);
     const body = await res.json().catch(() => ({}));
+    const approvalBody = await approvalRes.json().catch(() => ({}));
+    const outcomeBody = await outcomeRes.json().catch(() => ({}));
+    if (approvalRes.ok) setApprovals(approvalBody.approvals || []);
+    if (outcomeRes.ok) setOutcomeSummary(outcomeBody.summary || null);
     if (!res.ok) setError(body.error || 'Failed to load workflows.');
     else { setWorkflows(body.workflows || []); setRuns(body.runs || []); setError(null); }
     setLoading(false);
@@ -73,6 +80,11 @@ export default function WorkflowsPage() {
     await load();
   };
 
+  const reviewApproval = async (approvalId:string, status:'APPROVED'|'REJECTED') => {
+    const res=await authFetch('/api/workflows/approvals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({approvalId,status})});
+    const body=await res.json().catch(()=>({})); if(!res.ok) return setError(body.error||'Approval failed.'); await load();
+  };
+
   const deleteWorkflow = async (id: string) => {
     const res = await authFetch(`/api/workflows?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
     const body = await res.json().catch(() => ({}));
@@ -86,6 +98,10 @@ export default function WorkflowsPage() {
         <div className="flex items-center justify-between border-b border-zinc-800/80 pb-5"><div><div className="flex items-center gap-2"><h1 className="text-2xl font-black tracking-tight text-white">Visual No-Code Workflows</h1><Badge variant="success">Execution Engine</Badge></div><p className="text-xs text-zinc-400 mt-1">Durable definitions and run history. Supported actions execute on the server and are audited.</p></div><Button variant="primary" size="sm" onClick={() => setModalOpen(true)}><Plus className="w-4 h-4" /> Build Workflow</Button></div>
         {error && <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs text-rose-300">{error}</div>}
         {loading ? <div className="flex justify-center py-16 text-zinc-400"><Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading workflows…</div> : <div className="grid grid-cols-1 gap-4">{workflows.map(workflow => <Card key={workflow.id} className="p-5"><div className="flex flex-col md:flex-row md:items-center justify-between gap-4"><div className="flex flex-col gap-2"><div className="flex items-center gap-3"><div className={`p-2 rounded-xl border ${workflow.is_active ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' : 'bg-zinc-800 border-zinc-700 text-zinc-500'}`}><Zap className="w-5 h-5" /></div><div><h3 className="text-sm font-bold text-white flex items-center gap-2">{workflow.name}<Badge variant={workflow.is_active ? 'success' : 'default'}>{workflow.is_active ? 'Active' : 'Paused'}</Badge></h3><p className="text-xs text-zinc-400 font-mono mt-1">Trigger: <span className="text-blue-400">{workflow.trigger_event}</span></p></div></div><div className="mt-2 flex flex-wrap items-center gap-2 pl-12"><span className="px-2.5 py-1 rounded-lg bg-zinc-800 border border-zinc-700 text-[11px] text-zinc-200">{workflow.trigger_event}</span>{workflow.actions.map((action, index) => <React.Fragment key={index}><ArrowRight className="w-3.5 h-3.5 text-zinc-500" /><span className="px-2.5 py-1 rounded-lg bg-blue-900/30 border border-blue-500/30 text-[11px] text-blue-300">{action.type}</span></React.Fragment>)}</div></div><div className="flex items-center gap-2"><div className="text-right mr-2"><span className="text-[10px] text-zinc-500 block">Executions</span><span className="text-sm font-mono font-bold text-white">{workflow.executions_count}</span></div><Button variant="outline" size="sm" disabled={!workflow.is_active || runningId === workflow.id} onClick={() => void runWorkflow(workflow)}><Play className="w-3.5 h-3.5" /> {runningId === workflow.id ? 'Running…' : 'Run'}</Button><Button variant={workflow.is_active ? 'outline' : 'primary'} size="sm" onClick={() => void toggleWorkflow(workflow)}>{workflow.is_active ? 'Pause' : 'Enable'}</Button><button onClick={() => void deleteWorkflow(workflow.id)} className="p-2 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-rose-400"><Trash2 className="w-4 h-4" /></button></div></div></Card>)}{!workflows.length && <Card className="p-10 text-center text-sm text-zinc-500">No workflows yet. Build one to connect customer, deal or task events to server-side actions.</Card>}</div>}
+
+        {approvals.length > 0 && <Card><CardHeader><CardTitle>Mari Approval Queue</CardTitle><CardDescription>High-risk or uncertain decisions wait for a person before Ralion acts.</CardDescription></CardHeader><CardContent className="space-y-3">{approvals.map(a=><div key={a.id} className="rounded-xl border border-zinc-800 bg-zinc-950 p-4"><div className="flex flex-col md:flex-row md:items-center justify-between gap-3"><div><div className="text-xs font-bold text-white">{a.decision?.intent||'Decision'} · {a.decision?.risk||'REVIEW'} risk</div><div className="text-[11px] text-zinc-400 mt-1">{a.decision?.reason||'Human review required.'}</div>{a.decision?.proposedResponse&&<div className="text-xs text-zinc-300 mt-2">Suggested: “{a.decision.proposedResponse}”</div>}</div><div className="flex gap-2"><Button size="sm" variant="outline" onClick={()=>void reviewApproval(a.id,'REJECTED')}>Reject</Button><Button size="sm" variant="primary" onClick={()=>void reviewApproval(a.id,'APPROVED')}>Approve & Continue</Button></div></div></div>)}</CardContent></Card>}
+
+        <Card><CardHeader><CardTitle>Workflow Learning</CardTitle><CardDescription>Measured outcomes feed future Mari workflow decisions.</CardDescription></CardHeader><CardContent><div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center"><div><div className="text-xl font-bold text-white">{outcomeSummary?.total||0}</div><div className="text-[10px] text-zinc-500">Outcomes</div></div><div><div className="text-xl font-bold text-white">{outcomeSummary?.measured||0}</div><div className="text-[10px] text-zinc-500">Measured</div></div><div><div className="text-xl font-bold text-white">{outcomeSummary?.successful||0}</div><div className="text-[10px] text-zinc-500">Successful</div></div><div><div className="text-xl font-bold text-white">{outcomeSummary?.successRate==null?'—':`${outcomeSummary.successRate}%`}</div><div className="text-[10px] text-zinc-500">Success Rate</div></div></div></CardContent></Card>
 
         <Card><CardHeader><CardTitle>Recent Workflow Runs</CardTitle><CardDescription>Real execution history from the active workspace</CardDescription></CardHeader><CardContent className="p-0"><div className="overflow-x-auto"><table className="w-full text-left text-xs text-zinc-300"><thead className="bg-zinc-900 border-b border-zinc-800"><tr><th className="p-4">Started</th><th className="p-4">Trigger</th><th className="p-4">Status</th><th className="p-4">Error</th></tr></thead><tbody className="divide-y divide-zinc-800/60">{runs.slice(0, 20).map(run => <tr key={run.id}><td className="p-4">{new Date(run.started_at).toLocaleString()}</td><td className="p-4 font-mono">{run.trigger_event}</td><td className="p-4"><Badge variant={run.status === 'SUCCEEDED' ? 'success' : run.status === 'FAILED' ? 'danger' : 'default'}>{run.status}</Badge></td><td className="p-4 text-rose-300">{run.error || '—'}</td></tr>)}{!runs.length && <tr><td colSpan={4} className="p-8 text-center text-zinc-500">No executions yet.</td></tr>}</tbody></table></div></CardContent></Card>
 
