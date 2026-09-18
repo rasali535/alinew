@@ -104,6 +104,8 @@ export async function POST(request: NextRequest) {
         errorStage: result.errorDetails?.stage,
         visualRelevanceScore: result.errorDetails?.visualRelevanceScore,
         attempts: result.errorDetails?.attempts,
+        detectedBranding: result.errorDetails?.detectedBranding,
+        missingRequiredObjects: result.errorDetails?.missingRequiredObjects,
         userFacingMessage: result.userFacingMessage,
         requestId,
       }, { status: httpStatus }, request);
