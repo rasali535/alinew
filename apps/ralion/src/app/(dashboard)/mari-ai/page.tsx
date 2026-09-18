@@ -341,10 +341,14 @@ export default function MariAiPage() {
     const targetMarket = businessContext?.layer1?.targetMarket?.value || 'Executive Decision-Makers';
     const topic = businessContext?.layer1?.valueProposition?.value || businessContext?.layer1?.industry?.value || 'Commercial Enterprise Solutions';
 
-    // Store creative prompt in localStorage if moving to Growth Studio
+    // Only hand a prompt to Growth when Mari explicitly supplied a real
+    // creative brief. Navigation actions such as "View Generated" must never
+    // become fake prompts in Creative Studio.
     if (typeof window !== 'undefined' && targetRoute.includes('growth')) {
-      const creativePrompt = (action.payload as any)?.prompt || `${actionLabel} for ${orgName} targeting ${targetMarket}`;
-      localStorage.setItem('ralion_creative_prompt', creativePrompt);
+      const creativePrompt = (action.payload as any)?.prompt;
+      if (typeof creativePrompt === 'string' && creativePrompt.trim()) {
+        localStorage.setItem('ralion_creative_prompt', creativePrompt.trim());
+      }
     }
 
     // Display Mari response in chat thread

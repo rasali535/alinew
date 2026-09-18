@@ -194,9 +194,16 @@ export class PromptFaithfulImageProvider implements CreativeProvider {
     }
 
     const pollinationsPrompt = encodeURIComponent(prompt);
+    const pollinationsToken =
+      process.env.POLLINATIONS_API_KEY ||
+      process.env.POLLINATIONS_TOKEN ||
+      undefined;
     const pollinationsCandidates = [
-      `https://image.pollinations.ai/prompt/${pollinationsPrompt}?model=flux&width=${dimensions.width}&height=${dimensions.height}&seed=${seed}&nologo=true&enhance=false`,
-      `https://image.pollinations.ai/prompt/${pollinationsPrompt}?model=flux&width=${dimensions.width}&height=${dimensions.height}&seed=${seed + 1}&nologo=true&enhance=false`,
+      // Current Pollinations generation route.
+      `https://gen.pollinations.ai/image/${pollinationsPrompt}?model=flux&width=${dimensions.width}&height=${dimensions.height}&seed=${seed}&nologo=true&enhance=false`,
+      `https://gen.pollinations.ai/image/${pollinationsPrompt}?model=flux&width=${dimensions.width}&height=${dimensions.height}&seed=${seed + 1}&nologo=true&enhance=false`,
+      // Legacy anonymous route kept only as a compatibility fallback.
+      `https://image.pollinations.ai/prompt/${pollinationsPrompt}?model=flux&width=${dimensions.width}&height=${dimensions.height}&seed=${seed + 2}&nologo=true&enhance=false`,
     ];
 
     for (const url of pollinationsCandidates) {
@@ -208,6 +215,7 @@ export class PromptFaithfulImageProvider implements CreativeProvider {
             headers: {
               'User-Agent': 'RalionOS/1.0 prompt-faithful-creative-provider',
               Accept: 'image/avif,image/webp,image/png,image/jpeg,image/*,*/*;q=0.8',
+              ...(pollinationsToken ? { Authorization: `Bearer ${pollinationsToken}` } : {}),
             },
             cache: 'no-store',
           },
@@ -237,8 +245,15 @@ export class PromptFaithfulImageProvider implements CreativeProvider {
       }
     }
 
+    const safeError = errors.slice(-5).join(' | ');
+    console.warn('[PromptFaithfulImageProvider] Exhausted real image providers', {
+      attemptedHuggingFace: Boolean(hfToken),
+      attemptedPollinations: true,
+      authenticatedPollinations: Boolean(pollinationsToken),
+      errors: safeError,
+    });
     throw new Error(
-      `No prompt-faithful image provider completed the brief. ${errors.slice(-3).join(' | ')}`.trim(),
+      `No prompt-faithful image provider completed the brief. ${safeError}`.trim(),
     );
   }
 }
