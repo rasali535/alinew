@@ -5,6 +5,8 @@ import {
 } from './creativeProvider.interface';
 import { validateImageBuffer, validateVideoBuffer } from './creativeAsset.service';
 
+const HF_API_KEY = process.env.HUGGINGFACE_API_KEY || '';
+
 function sanitizePrompt(raw: string): string {
   return raw
     .replace(/[\u2018\u2019]/g, "'")
@@ -282,71 +284,108 @@ export class CogVideoXProvider implements CreativeProvider {
   readonly supportedTypes = ['VIDEO_REEL' as const];
 
   async generate(req: CreativeProviderRequest): Promise<CreativeProviderResult> {
+    if (!HF_API_KEY) {
+      throw new Error('HUGGINGFACE_API_KEY is not configured for real video generation');
+    }
+
     const t0 = Date.now();
     const clean = sanitizePrompt(req.prompt);
-    const seed = req.seed || Math.floor(Math.random() * 1000000);
-    const fullVideoPrompt = `${clean}, cinematic commercial video reel, ${req.style || 'cinematic'}`;
-    const shortPrompt = clean.slice(0, 220);
-
-    const candidateUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(shortPrompt)}?nologo=true&seed=${seed}&width=1024&height=576`;
-
-    try {
-      const res = await fetchWithTimeout(candidateUrl, {
+    const model = 'zai-org/CogVideoX-2b';
+    const res = await fetchWithTimeout(
+      `https://api-inference.huggingface.co/models/${model}`,
+      {
+        method: 'POST',
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-          'Accept': 'image/*,*/*;q=0.8',
+          Authorization: `Bearer ${HF_API_KEY}`,
+          'Content-Type': 'application/json',
+          'x-wait-for-model': 'true',
+          Accept: 'video/mp4,video/*;q=0.9,application/octet-stream;q=0.8',
         },
+        body: JSON.stringify({ inputs: clean }),
         cache: 'no-store',
-      }, req.timeoutMs || 3000);
+      },
+      Math.max(req.timeoutMs || 90000, 90000)
+    );
 
-      if (res.ok) {
-        const mp4Buffer = generateSyntheticMotionMp4(clean, req.style, req.format);
-        const val = validateVideoBuffer(mp4Buffer);
-        if (val.valid) {
-          return {
-            buffer: mp4Buffer,
-            mimeType: 'video/mp4',
-            providerName: 'CogVideoX Motion Studio',
-            durationSeconds: 15,
-            generationTimeMs: Date.now() - t0,
-          };
-        }
-      }
-    } catch {}
+    if (!res.ok) {
+      const message = await res.text().catch(() => '');
+      throw new Error(`CogVideoX HTTP ${res.status}${message ? `: ${message.slice(0, 160)}` : ''}`);
+    }
 
-    const fallbackMp4 = generateSyntheticMotionMp4(clean, req.style, req.format);
+    const contentType = (res.headers.get('content-type') || '').toLowerCase();
+    if (contentType.includes('application/json') || contentType.startsWith('image/')) {
+      throw new Error(`CogVideoX returned non-video content type: ${contentType || 'unknown'}`);
+    }
+
+    const buffer = Buffer.from(await getArrayBufferWithTimeout(res, 90000));
+    const val = validateVideoBuffer(buffer);
+    if (!val.valid) {
+      throw new Error(val.error || 'CogVideoX returned an invalid video container');
+    }
+
     return {
-      buffer: fallbackMp4,
-      mimeType: 'video/mp4',
+      buffer,
+      mimeType: val.mimeType || (contentType.includes('video/') ? contentType.split(';')[0] : 'video/mp4'),
       providerName: this.name,
-      durationSeconds: 15,
+      durationSeconds: val.duration,
       generationTimeMs: Date.now() - t0,
     };
   }
 }
 
 /**
- * Provider B (Fallback Video): Short-Form Motion Engine
+ * Provider B (Fallback Video): CogVideoX 5B
+ * This is still a real text-to-video provider; it never fabricates a local MP4.
  */
 export class FallbackVideoProvider implements CreativeProvider {
-  readonly name = 'Motion Stream Engine';
+  readonly name = 'CogVideoX 5B Motion Studio';
   readonly supportedTypes = ['VIDEO_REEL' as const];
 
   async generate(req: CreativeProviderRequest): Promise<CreativeProviderResult> {
-    const t0 = Date.now();
-    const clean = sanitizePrompt(req.prompt).slice(0, 200);
-    const buffer = generateSyntheticMotionMp4(clean, req.style, req.format);
-    const val = validateVideoBuffer(buffer);
+    if (!HF_API_KEY) {
+      throw new Error('HUGGINGFACE_API_KEY is not configured for real video generation');
+    }
 
+    const t0 = Date.now();
+    const clean = sanitizePrompt(req.prompt);
+    const model = 'zai-org/CogVideoX-5b';
+    const res = await fetchWithTimeout(
+      `https://api-inference.huggingface.co/models/${model}`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${HF_API_KEY}`,
+          'Content-Type': 'application/json',
+          'x-wait-for-model': 'true',
+          Accept: 'video/mp4,video/*;q=0.9,application/octet-stream;q=0.8',
+        },
+        body: JSON.stringify({ inputs: clean }),
+        cache: 'no-store',
+      },
+      Math.max(req.timeoutMs || 120000, 120000)
+    );
+
+    if (!res.ok) {
+      const message = await res.text().catch(() => '');
+      throw new Error(`CogVideoX 5B HTTP ${res.status}${message ? `: ${message.slice(0, 160)}` : ''}`);
+    }
+
+    const contentType = (res.headers.get('content-type') || '').toLowerCase();
+    if (contentType.includes('application/json') || contentType.startsWith('image/')) {
+      throw new Error(`CogVideoX 5B returned non-video content type: ${contentType || 'unknown'}`);
+    }
+
+    const buffer = Buffer.from(await getArrayBufferWithTimeout(res, 120000));
+    const val = validateVideoBuffer(buffer);
     if (!val.valid) {
-      throw new Error(val.error || 'Invalid video container atom');
+      throw new Error(val.error || 'CogVideoX 5B returned an invalid video container');
     }
 
     return {
       buffer,
-      mimeType: val.mimeType || 'video/mp4',
+      mimeType: val.mimeType || (contentType.includes('video/') ? contentType.split(';')[0] : 'video/mp4'),
       providerName: this.name,
-      durationSeconds: val.duration || 15,
+      durationSeconds: val.duration,
       generationTimeMs: Date.now() - t0,
     };
   }
