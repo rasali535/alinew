@@ -127,14 +127,14 @@ export class FluxImageProvider implements CreativeProvider {
             'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
           },
           cache: 'no-store',
-        }, Math.min(req.timeoutMs || 5000, 5000));
+        }, Math.min(req.timeoutMs || 15000, 15000));
 
         if (!res.ok) {
           lastError = `Provider HTTP error ${res.status}`;
           continue;
         }
 
-        const arrayBuf = await getArrayBufferWithTimeout(res, 5000);
+        const arrayBuf = await getArrayBufferWithTimeout(res, 12000);
         const buffer = Buffer.from(arrayBuf);
         const val = validateImageBuffer(buffer);
 
@@ -154,13 +154,7 @@ export class FluxImageProvider implements CreativeProvider {
       }
     }
 
-    const fallbackBuffer = generatePhotorealisticRasterJpeg(clean, req.style, dims.width, dims.height, seed);
-    return {
-      buffer: fallbackBuffer,
-      mimeType: 'image/jpeg',
-      providerName: this.name,
-      generationTimeMs: Date.now() - t0,
-    };
+    throw new Error(lastError || 'FLUX.1 image generation failed');
   }
 }
 
@@ -191,14 +185,14 @@ export class FluxRealismImageProvider implements CreativeProvider {
             'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
           },
           cache: 'no-store',
-        }, Math.min(req.timeoutMs || 5000, 5000));
+        }, Math.min(req.timeoutMs || 15000, 15000));
 
         if (!res.ok) {
           lastError = `Provider HTTP error ${res.status}`;
           continue;
         }
 
-        const arrayBuf = await getArrayBufferWithTimeout(res, 5000);
+        const arrayBuf = await getArrayBufferWithTimeout(res, 12000);
         const buffer = Buffer.from(arrayBuf);
         const val = validateImageBuffer(buffer);
 
@@ -218,14 +212,7 @@ export class FluxRealismImageProvider implements CreativeProvider {
       }
     }
 
-    // Fallback to high-definition raster JPEG synthesis
-    const fallbackBuffer = generatePhotorealisticRasterJpeg(clean, req.style, dims.width, dims.height, seed);
-    return {
-      buffer: fallbackBuffer,
-      mimeType: 'image/jpeg',
-      providerName: this.name,
-      generationTimeMs: Date.now() - t0,
-    };
+    throw new Error(lastError || 'FLUX realism image generation failed');
   }
 }
 
@@ -256,14 +243,14 @@ export class ResilientImageProvider implements CreativeProvider {
             'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
           },
           cache: 'no-store',
-        }, Math.min(req.timeoutMs || 5000, 5000));
+        }, Math.min(req.timeoutMs || 15000, 15000));
 
         if (!res.ok) {
           lastError = `Provider HTTP error ${res.status}`;
           continue;
         }
 
-        const arrayBuf = await getArrayBufferWithTimeout(res, 5000);
+        const arrayBuf = await getArrayBufferWithTimeout(res, 12000);
         const buffer = Buffer.from(arrayBuf);
         const val = validateImageBuffer(buffer);
 
@@ -283,13 +270,7 @@ export class ResilientImageProvider implements CreativeProvider {
       }
     }
 
-    const fallbackBuffer = generatePhotorealisticRasterJpeg(clean, req.style, dims.width, dims.height, seed);
-    return {
-      buffer: fallbackBuffer,
-      mimeType: 'image/jpeg',
-      providerName: this.name,
-      generationTimeMs: Date.now() - t0,
-    };
+    throw new Error(lastError || 'Resilient FLUX image generation failed');
   }
 }
 
