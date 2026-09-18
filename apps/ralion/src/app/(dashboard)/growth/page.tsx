@@ -1792,6 +1792,17 @@ function GrowthPageContent() {
         const data = await res.json().catch(() => ({}));
         if (res.ok && data.success && data.asset) {
           asset = data.asset;
+        } else if (data.errorCode === 'SEMANTIC_RELEVANCE_REJECTED') {
+          const score = typeof data.visualRelevanceScore === 'number'
+            ? ` Best relevance score: ${data.visualRelevanceScore}/100.`
+            : '';
+          generationError =
+            'Ralion generated real candidates, but none matched your brief closely enough, so they were rejected instead of showing you a generic image.' +
+            score +
+            ' Your creative credit was refunded. Retry to generate fresh candidates or edit the brief.';
+        } else if (data.errorCode === 'FAILED_STORAGE') {
+          generationError =
+            'The creative was generated, but Ralion could not save it safely. Your creative credit was refunded. Please retry; if this repeats, the storage service needs administrator attention.';
         } else {
           generationError = data.userFacingMessage || data.error || generationError;
         }

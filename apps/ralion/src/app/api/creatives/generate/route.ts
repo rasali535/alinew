@@ -101,6 +101,9 @@ export async function POST(request: NextRequest) {
         status: result.status,
         error: result.userFacingMessage || 'Creative generation failed.',
         errorCode,
+        errorStage: result.errorDetails?.stage,
+        visualRelevanceScore: result.errorDetails?.visualRelevanceScore,
+        attempts: result.errorDetails?.attempts,
         userFacingMessage: result.userFacingMessage,
         requestId,
       }, { status: httpStatus }, request);
