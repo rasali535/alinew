@@ -1,11 +1,13 @@
 import 'server-only';
 import { getServiceSupabase } from '@/lib/auth/serverAuth';
 import { writeOperationalAudit } from './audit';
+import { FacebookCommentsService } from '@/lib/services/social/facebookComments.service';
+import { SocialInboxService } from '@/lib/services/social/socialInbox.service';
 
-export type WorkflowTriggerEvent = 'CUSTOMER_CREATED' | 'DEAL_STAGE_CHANGED' | 'TASK_COMPLETED' | 'MANUAL';
+export type WorkflowTriggerEvent = 'CUSTOMER_CREATED' | 'DEAL_STAGE_CHANGED' | 'TASK_COMPLETED' | 'SOCIAL_COMMENT_RECEIVED' | 'SOCIAL_INBOX_RECEIVED' | 'MANUAL';
 
 type WorkflowAction = {
-  type?: 'CREATE_TASK' | 'CREATE_CALENDAR_EVENT' | 'AUDIT_LOG';
+  type?: 'CREATE_TASK' | 'CREATE_CALENDAR_EVENT' | 'AUDIT_LOG' | 'REPLY_SOCIAL_COMMENT' | 'REPLY_SOCIAL_INBOX';
   config?: Record<string, any>;
 };
 
@@ -85,6 +87,42 @@ async function executeAction(
       .single();
     if (error) throw new Error(`CREATE_CALENDAR_EVENT failed: ${error.message}`);
     return { type: action.type, event: data };
+  }
+
+  if (action?.type === 'REPLY_SOCIAL_COMMENT') {
+    const replyText = cleanText(config.replyText || context.input?.replyText || '', 2000);
+    const commentId = cleanText(context.input?.commentId || config.commentId || '', 200);
+    const postId = cleanText(context.input?.postId || config.postId || '', 200);
+    if (!replyText || !commentId || !postId) throw new Error('REPLY_SOCIAL_COMMENT requires reply text, commentId and postId.');
+    const reply = await FacebookCommentsService.replyToComment({
+      commentId,
+      postId,
+      replyText,
+      userId: context.userId || undefined,
+      workspaceId: context.workspaceId,
+      organizationId: context.organizationId || context.workspaceId,
+      pageId: cleanText(context.input?.pageId || config.pageId || '', 200) || undefined,
+    });
+    return { type: action.type, replyId: reply.externalReplyId, commentId, postId };
+  }
+
+  if (action?.type === 'REPLY_SOCIAL_INBOX') {
+    const messageText = cleanText(config.messageText || context.input?.replyText || '', 2000);
+    const conversationId = cleanText(context.input?.conversationId || config.conversationId || '', 300);
+    const recipientId = cleanText(context.input?.recipientId || config.recipientId || conversationId, 300);
+    const provider = cleanText(context.input?.provider || config.provider || 'facebook', 30).toLowerCase() as any;
+    if (!messageText || !conversationId) throw new Error('REPLY_SOCIAL_INBOX requires message text and conversationId.');
+    const result = await SocialInboxService.sendReply({
+      connectionId: cleanText(context.input?.connectionId || config.connectionId || '', 200) || undefined,
+      provider,
+      conversationId,
+      recipientId,
+      messageText,
+      userId: context.userId || '',
+      workspaceId: context.workspaceId,
+      organizationId: context.organizationId || context.workspaceId,
+    });
+    return { type: action.type, messageId: result.messageId, conversationId, status: result.status };
   }
 
   if (action?.type === 'AUDIT_LOG') {
