@@ -334,13 +334,8 @@ export async function callMariAiApi(
 
     // ── 🎥 Video Direct Trigger ──────────────────────────────────────────
     if (selection.endpoint === 'video') {
-      const seed = Math.floor(Math.random() * 1000000);
       const orgId = businessContext?.organizationId;
       const hfVid = await generateHfVideo({ prompt, quality: 'fast', organizationId: orgId });
-      const videoUrl = hfVid.success && hfVid.url
-        ? hfVid.url
-        : `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt.trim())}?model=flux-realism&width=1024&height=576&nologo=true&seed=${seed}`;
-      const vidModel = hfVid.model?.split('/')[1] || 'CogVideoX-2b';
       const promptTokens = estimateTokenCount(prompt);
       const completionTokens = 45;
       const usage: MariTokenUsage = {
@@ -349,8 +344,25 @@ export async function callMariAiApi(
         totalTokens: promptTokens + completionTokens,
       };
 
+      if (!hfVid.success || !hfVid.url) {
+        return {
+          text: `I couldn't complete a real video for that brief, so I haven't marked anything as generated. ${hfVid.error || 'Please retry or edit the brief.'}`,
+          modelInfo: {
+            model: 'mari-video-generator',
+            category: 'Mari Video Generator',
+            endpoint: 'video',
+            tokens: usage,
+          },
+          usage,
+          tokens: usage,
+          detectedIntent,
+          responseSource: 'media_generator',
+        };
+      }
+
+      const vidModel = hfVid.model?.split('/')[1] || 'CogVideoX-2b';
       return {
-        text: `🎥 Video Generated:\n\nPrompt: "${prompt}"\n\n[Watch Video](${videoUrl})\n\n*(CogVideoX · ${vidModel})*`,
+        text: `🎥 Video Generated:\n\nPrompt: "${prompt}"\n\n[Watch Video](${hfVid.url})\n\n*(CogVideoX · ${vidModel})*`,
         modelInfo: {
           model: 'mari-video-generator',
           category: 'Mari Video Generator',
@@ -366,13 +378,8 @@ export async function callMariAiApi(
 
     // ── 🎨 Image Direct Trigger ───────────────────────────────────────────
     if (selection.endpoint === 'image') {
-      const seed = Math.floor(Math.random() * 1000000);
       const orgId = businessContext?.organizationId;
       const hfImg = await generateHfImage({ prompt, quality: 'fast', organizationId: orgId });
-      const imgUrl = hfImg.success && hfImg.url
-        ? hfImg.url
-        : `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt.trim())}?model=flux&width=1024&height=768&nologo=true&seed=${seed}`;
-      const imgModel = hfImg.model?.split('/')[1] || 'FLUX.1-schnell';
       const promptTokens = estimateTokenCount(prompt);
       const completionTokens = 35;
       const usage: MariTokenUsage = {
@@ -381,8 +388,25 @@ export async function callMariAiApi(
         totalTokens: promptTokens + completionTokens,
       };
 
+      if (!hfImg.success || !hfImg.url) {
+        return {
+          text: `I couldn't complete a suitable image for that brief, so I haven't marked anything as generated. ${hfImg.error || 'Please retry or edit the brief.'}`,
+          modelInfo: {
+            model: 'mari-image-generator',
+            category: 'Mari Image Generator',
+            endpoint: 'image',
+            tokens: usage,
+          },
+          usage,
+          tokens: usage,
+          detectedIntent,
+          responseSource: 'media_generator',
+        };
+      }
+
+      const imgModel = hfImg.model?.split('/')[1] || 'FLUX.1-schnell';
       return {
-        text: `🎨 Image Generated:\n\n![Generated Image](${imgUrl})\n\n*(Black Forest Labs · ${imgModel})*`,
+        text: `🎨 Image Generated:\n\n![Generated Image](${hfImg.url})\n\n*(Black Forest Labs · ${imgModel})*`,
         modelInfo: {
           model: 'mari-image-generator',
           category: 'Mari Image Generator',
