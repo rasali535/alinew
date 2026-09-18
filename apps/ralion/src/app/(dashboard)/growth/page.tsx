@@ -211,6 +211,7 @@ function GrowthPageContent() {
   const [posts, setPosts] = useState<ContentPost[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [generatedGallery, setGeneratedGallery] = useState<GeneratedContentItem[]>(initialGeneratedContent);
+  const [focusedAssetId, setFocusedAssetId] = useState<string | null>(null);
   const [connectedAccounts, setConnectedAccounts] = useState<SocialAccount[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
@@ -325,6 +326,143 @@ function GrowthPageContent() {
       }
     }
   }, []);
+
+  // Honour Mari deep-links into Growth/Social.
+  useEffect(() => {
+    const requestedTab = (searchParams.get('tab') || '').toLowerCase();
+    const requestedAssetId = searchParams.get('assetId');
+
+    const tabMap: Record<string, typeof activeTab> = {
+      overview: 'OVERVIEW',
+      accounts: 'ACCOUNTS',
+      channels: 'ACCOUNTS',
+      content: 'CONTENT',
+      social: 'CONTENT',
+      inbox: 'INBOX',
+      campaigns: 'CAMPAIGNS',
+      ai_studio: 'AI_STUDIO',
+      creatives: 'CREATIVES',
+      analytics: 'ANALYTICS',
+      generated: 'GENERATED_OUTPUT',
+      generated_output: 'GENERATED_OUTPUT',
+      output: 'GENERATED_OUTPUT',
+    };
+
+    if (requestedTab && tabMap[requestedTab]) {
+      setActiveTab(tabMap[requestedTab]);
+    } else if (requestedAssetId) {
+      setActiveTab('GENERATED_OUTPUT');
+    }
+
+    setFocusedAssetId(requestedAssetId || null);
+  }, [searchParams]);
+
+  // Hydrate Growth/Social generated output from the durable creative vault.
+  // This makes assets generated from Mari commands visible across navigation,
+  // refreshes and sessions instead of existing only in local component state.
+  useEffect(() => {
+    if (!organization?.id || !workspace?.id) return;
+
+    let cancelled = false;
+
+    const loadDurableCreativeOutput = async () => {
+      try {
+        const res = await authFetch('/api/creatives/list?limit=50&offset=0', {
+          headers: {
+            'x-organization-id': organization.id,
+            'x-workspace-id': workspace.id,
+          },
+        });
+        if (!res.ok) return;
+
+        const data = await res.json().catch(() => ({}));
+        const assets = Array.isArray(data.assets) ? data.assets : [];
+        if (cancelled || assets.length === 0) return;
+
+        const durableItems: GeneratedContentItem[] = assets
+          .filter((asset: any) => asset?.assetId || asset?.id)
+          .map((asset: any) => {
+            const assetId = asset.assetId || asset.id;
+            const assetType =
+              asset.assetType === 'VIDEO_REEL' || String(asset.mimeType || '').startsWith('video/')
+                ? 'VIDEO_REEL'
+                : 'POSTER_IMAGE';
+            const mediaUrl =
+              asset.mediaUrl ||
+              asset.publicUrl ||
+              asset.previewUrl ||
+              `/api/creatives/${encodeURIComponent(assetId)}/delivery`;
+
+            return {
+              id: assetId,
+              type: assetType,
+              title: asset.title || 'Ralion Generated Creative',
+              prompt: asset.prompt || '',
+              output: mediaUrl,
+              previewUrl: mediaUrl,
+              modelUsed: asset.provider || asset.model || 'Ralion Prompt-Faithful Creative Engine',
+              createdAt: asset.createdAt || asset.generatedAt || 'Saved',
+            };
+          });
+
+        setGeneratedGallery(prev => {
+          const byId = new Map<string, GeneratedContentItem>();
+          for (const item of [...prev, ...durableItems]) byId.set(item.id, item);
+          return Array.from(byId.values());
+        });
+      } catch (error) {
+        console.warn('[Growth] Durable creative output hydration notice:', error);
+      }
+    };
+
+    loadDurableCreativeOutput();
+    return () => {
+      cancelled = true;
+    };
+  }, [organization?.id, workspace?.id]);
+
+  // If Mari opens an asset in Social, create a safe draft using the durable
+  // generated asset. Nothing is published until the user explicitly confirms.
+  useEffect(() => {
+    const requestedTab = (searchParams.get('tab') || '').toLowerCase();
+    const requestedAssetId = searchParams.get('assetId');
+    if (requestedTab !== 'content' || !requestedAssetId) return;
+
+    const item = generatedGallery.find(asset => asset.id === requestedAssetId);
+    if (!item) return;
+
+    setPosts(prev => {
+      const draftId = `mari-creative-${item.id}`;
+      if (prev.some(post => post.id === draftId)) return prev;
+
+      return [
+        {
+          id: draftId,
+          title: item.title,
+          body: item.prompt || 'Generated with Mari AI in Ralion OS.',
+          platform: 'facebook',
+          hashtags: ['#RalionOS'],
+          status: 'draft',
+          mediaUrl: item.output,
+          mediaType: item.type === 'VIDEO_REEL' ? 'video' : 'image',
+          engagement: { likes: 0, shares: 0, reach: 0, comments: 0 },
+        },
+        ...prev,
+      ];
+    });
+  }, [generatedGallery, searchParams]);
+
+  // Focus the exact asset when arriving from Mari's "View Generated" action.
+  useEffect(() => {
+    if (!focusedAssetId || activeTab !== 'GENERATED_OUTPUT') return;
+    const timer = window.setTimeout(() => {
+      document.getElementById(`creative-output-${focusedAssetId}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [focusedAssetId, activeTab, generatedGallery]);
 
   const handleMariBrainstorm = async () => {
     setIsBrainstorming(true);
@@ -5586,7 +5724,15 @@ function GrowthPageContent() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {generatedGallery.map(item => (
-                  <div key={item.id} className="p-3.5 rounded-2xl bg-zinc-900/80 border border-zinc-800 flex flex-col justify-between gap-3 group hover:border-purple-500/40 transition-all shadow-md">
+                  <div
+                    key={item.id}
+                    id={`creative-output-${item.id}`}
+                    className={`p-3.5 rounded-2xl bg-zinc-900/80 border flex flex-col justify-between gap-3 group transition-all shadow-md ${
+                      focusedAssetId === item.id
+                        ? 'border-cyan-400 ring-2 ring-cyan-400/30 shadow-cyan-500/10'
+                        : 'border-zinc-800 hover:border-purple-500/40'
+                    }`}
+                  >
                     <div className="aspect-video w-full rounded-xl overflow-hidden bg-black/60 relative">
                       {item.type === 'POSTER_IMAGE' ? (
                         <SecureImage
