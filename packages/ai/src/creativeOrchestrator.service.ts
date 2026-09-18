@@ -169,7 +169,7 @@ export class CreativeOrchestrator {
           prompt: prompt.trim(),
           style,
           format,
-          timeoutMs: 15000,
+          timeoutMs: type === 'VIDEO_REEL' ? 120000 : 30000,
         };
         const result = await provider.generate(req);
 
@@ -248,33 +248,51 @@ export class CreativeOrchestrator {
         }
       );
 
-      // 3. Bounded Regeneration on Visual Failure (Max 1 retry attempt)
-      if (visualQAResult && visualQAResult.visualRelevanceScore < 80) {
-        console.warn(`[CreativeOrchestrator] FAILED_VISUAL_QA (${visualQAResult.visualRelevanceScore}/100) — attempting bounded visual regeneration...`);
-        const enhancedPrompt = `${prompt}, photorealistic high-fidelity physical depiction of ${visualQAResult.missingRequiredObjects.join(', ') || 'the requested subject'}`;
-        
-        // Try next alternate provider
-        for (const altProvider of this.imageProviders) {
-          if (altProvider.name === successfulResult.providerName) continue;
+      // 3. Prompt-faithful semantic retries.
+      // Generate multiple real candidates from the SAME user brief using different seeds.
+      // Do not append machine-authored subjects/objects just to game the relevance score.
+      const maxSemanticAttempts = 3;
+      let semanticAttempts = 1;
+
+      while (
+        visualQAResult &&
+        visualQAResult.visualRelevanceScore < 80 &&
+        semanticAttempts < maxSemanticAttempts
+      ) {
+        semanticAttempts += 1;
+        console.warn(
+          `[CreativeOrchestrator] FAILED_VISUAL_QA (${visualQAResult.visualRelevanceScore}/100) — generating faithful candidate ${semanticAttempts}/${maxSemanticAttempts}...`
+        );
+
+        let improvedThisRound = false;
+
+        for (const retryProvider of this.imageProviders) {
           try {
-            const retryRes = await altProvider.generate({
+            const retryRes = await retryProvider.generate({
               type: 'POSTER_IMAGE',
-              prompt: enhancedPrompt,
+              prompt: prompt.trim(),
               style,
               format,
-              timeoutMs: 15000,
+              seed: Math.floor(Math.random() * 1_000_000),
+              timeoutMs: 30000,
             });
+
             const retryVal = validateImageBuffer(retryRes.buffer);
-            if (retryVal.valid) {
-              const retryQA = await VisualSemanticEvaluatorService.evaluateVisual(
-                retryRes.buffer,
-                retryRes.mimeType,
-                { userPrompt: prompt, format }
-              );
-              if (retryQA.visualRelevanceScore > visualQAResult.visualRelevanceScore) {
-                successfulResult = retryRes;
-                visualQAResult = retryQA;
-                // Re-save enhanced raw binary
+            if (!retryVal.valid) continue;
+
+            const retryQA = await VisualSemanticEvaluatorService.evaluateVisual(
+              retryRes.buffer,
+              retryRes.mimeType,
+              { userPrompt: prompt, format }
+            );
+
+            if (retryQA.visualRelevanceScore > visualQAResult.visualRelevanceScore) {
+              successfulResult = retryRes;
+              visualQAResult = retryQA;
+              improvedThisRound = true;
+
+              // Keep the raw asset aligned with the best candidate only.
+              try {
                 const rawRetryInfo = await CreativeAssetService.saveRawBinaryAsset({
                   assetId: tempAssetId,
                   organizationId,
@@ -284,11 +302,18 @@ export class CreativeOrchestrator {
                 });
                 rawPublicUrl = rawRetryInfo.rawPublicUrl;
                 rawStoragePath = rawRetryInfo.rawStoragePath;
-                break;
-              }
+              } catch {}
+
+              if (visualQAResult.visualRelevanceScore >= 80) break;
             }
-          } catch {}
+          } catch (retryErr: any) {
+            lastErrorMsg = retryErr?.message || lastErrorMsg;
+          }
         }
+
+        // A new seed can still produce a different candidate on the next attempt,
+        // even when this round does not beat the current best result.
+        if (!improvedThisRound && semanticAttempts >= maxSemanticAttempts) break;
       }
 
       // 4. Strict Minimum Relevance Gate (< 60 is definitely rejected)
@@ -297,11 +322,12 @@ export class CreativeOrchestrator {
         return {
           success: false,
           status: 'FAILED',
-          userFacingMessage: "I couldn't create a suitable visual for this brief. I don't want to give you a generic image that doesn't represent your business.\n\n[Retry] [Edit Brief]",
+          userFacingMessage: "I generated multiple real variations, but none matched your brief closely enough, so I rejected them rather than show you a generic image. Your creative credit was refunded.\n\n[Retry] [Edit Brief]",
           errorDetails: {
             errorCode: 'SEMANTIC_RELEVANCE_REJECTED',
             stage: 'SEMANTIC_VALIDATION',
             visualRelevanceScore: visualQAResult.visualRelevanceScore,
+            attempts: semanticAttempts,
             details: visualQAResult.providerFeedback,
           },
         };
