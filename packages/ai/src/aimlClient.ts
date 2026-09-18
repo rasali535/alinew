@@ -197,8 +197,6 @@ export async function generateHfImage(options: {
   organizationId?: string;
 }): Promise<HfGenerationResult> {
   const cleanPrompt = options.prompt.trim();
-  const seed = Math.floor(Math.random() * 1000000);
-  const directFluxUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?model=flux&width=1024&height=768&nologo=true&seed=${seed}`;
 
   try {
     const endpoint = getMariApiEndpoint('/api/mari/generate');
@@ -236,12 +234,9 @@ export async function generateHfImage(options: {
     }
   }
 
-  // Guaranteed direct live FLUX image generator
   return {
-    success: true,
-    url: directFluxUrl,
-    format: 'url',
-    model: 'black-forest-labs/FLUX.1-schnell',
+    success: false,
+    error: 'The canonical creative service could not complete and validate this image.',
   };
 }
 
