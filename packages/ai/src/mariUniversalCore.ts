@@ -35,6 +35,7 @@ import { mariKnowledgeManager } from './knowledgeBase';
 import { TenantCreditsService, CREDIT_COSTS } from './tenantCredits.service';
 import { CreativeOrchestrator } from './creativeOrchestrator.service';
 import { CreativeAssetService } from './creativeAsset.service';
+import { MariCreativeIntelligenceService } from './mariCreativeIntelligence.service';
 
 const MARI_CLASSIFIER_MODEL = process.env.MARI_GEMINI_CLASSIFIER_MODEL || 'gemini-3.5-flash-lite';
 const MARI_RESPONSE_MODEL = process.env.MARI_GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-3.5-flash';
@@ -1571,16 +1572,30 @@ export class MariUniversalCore {
         };
       }
 
-      modelAttempted = 'Mari Creative Orchestrator (FLUX / Neural Engine)';
+      modelAttempted = 'Mari Creative Orchestrator (Prompt-Faithful Engine)';
 
       try {
+        // The exact user/Mari brief is the creative source of truth.
+        // Business identity is context, not a replacement prompt.
+        const exactCreativeBrief = cleanOriginalPrompt.trim();
+        const normalizedFormat =
+          format === 'PORTRAIT_4_5' ? '4:5'
+          : format === 'LANDSCAPE_16_9' ? '16:9'
+          : format === 'STORY_9_16' ? '9:16'
+          : format === 'SQUARE_1_1' ? '1:1'
+          : format;
+        const requiredVisualElements =
+          MariCreativeIntelligenceService.extractHardVisualRequirements(exactCreativeBrief);
+
         const genResult = await CreativeOrchestrator.generate({
           organizationId: orgId,
+          workspaceId,
           type: assetType === 'REEL' ? 'VIDEO_REEL' : 'POSTER_IMAGE',
-          prompt: `${brand}${product ? ` - ${product}` : ''}: ${description || 'Commercial Flyer'}.${tagline ? ` Tagline: ${tagline}.` : ''}${website ? ` Website: ${website}.` : ''} Modern high-impact commercial flyer.`,
-          title: `${product || brand} Launch ${assetType}`,
-          format,
-          campaign: `${product || brand} Launch`,
+          prompt: exactCreativeBrief,
+          requiredVisualElements,
+          title: `${product || brand} ${assetType}`,
+          format: normalizedFormat,
+          campaign: `${product || brand} Creative`,
           platform: 'facebook',
           cta: website ? `Visit ${website}` : 'Learn More',
         });
@@ -1598,12 +1613,16 @@ export class MariUniversalCore {
           const flyerResponse = `### Creative Generation Job Dispatched & Completed\n\nI have generated a high-impact commercial **${assetType}** for **${brand}**:\n\n• **Asset ID**: \`${verifiedAssetId}\`\n• **Asset Type**: ${assetType}\n• **Parent Brand**: ${brand}\n• **Product**: ${product || brand}\n${tagline ? `• **Tagline**: ${tagline}\n` : ''}${description ? `• **Description**: ${description}\n` : ''}${website ? `• **Website**: ${website}\n` : ''}• **Dimensions**: 1080x1350 (Facebook Portrait 4:5 Default)\n• **Status**: **${jobStatus}**\n\n**Preview & Asset Download**:\n[View Generated Asset](${mediaUrl})\n\nYour asset has been securely stored in the Ralion Creative Vault and is ready to publish to connected social channels.`;
 
           const flyerAction: MariActionPayload = {
-            id: `flyer_${verifiedAssetId}`,
-            type: 'GENERATE_FLYER',
-            label: 'View Generated Flyer',
-            title: `${product || brand} Launch ${assetType}`,
-            description: tagline || 'Exclusive Offer',
-            payload: { route: '/marketing/flyers', assetId: verifiedAssetId, mediaUrl },
+            id: `creative_${verifiedAssetId}`,
+            type: 'NAVIGATE',
+            label: 'View Generated',
+            title: `${product || brand} ${assetType}`,
+            description: 'Open the generated asset in Growth & Social output.',
+            payload: {
+              route: `/growth?tab=generated_output&assetId=${encodeURIComponent(verifiedAssetId)}`,
+              assetId: verifiedAssetId,
+              mediaUrl,
+            },
           };
 
           console.log(JSON.stringify({
@@ -1655,7 +1674,7 @@ export class MariUniversalCore {
             suggestedActions: [
               flyerAction,
               { type: 'NAVIGATE', label: 'Open Creative Studio', payload: { route: '/growth?tab=creatives' } },
-              { type: 'NAVIGATE', label: 'Publish to Facebook', payload: { route: `/growth?tab=publish&assetId=${verifiedAssetId}` } },
+              { type: 'NAVIGATE', label: 'Open in Social', payload: { route: `/growth?tab=content&assetId=${encodeURIComponent(verifiedAssetId)}` } },
             ],
             ragContext: null,
             contextSources: ['CreativeOrchestrator', 'BusinessIdentityResolver'],
@@ -1670,15 +1689,29 @@ export class MariUniversalCore {
             requestId,
           };
         } else {
-          const errorMsg = genResult?.userFacingMessage || (genResult as any)?.errorDetails?.errorMessage || 'Creative asset generation encountered a storage or provider error.';
+          const creativeError = (genResult as any)?.errorDetails || {};
+          const errorMsg =
+            genResult?.userFacingMessage ||
+            creativeError.errorMessage ||
+            'Creative generation could not be completed.';
+          const errorStage = creativeError.stage || 'GENERATION';
+          const errorCode = creativeError.errorCode || 'GENERATION_FAILED';
+
+          console.warn('[MariCore] Creative generation rejected/failed', {
+            requestId,
+            errorCode,
+            errorStage,
+            providerError: creativeError.errorMessage || undefined,
+          });
+
           return {
-            answer: `Creative asset generation could not be completed: ${errorMsg}\n\nPlease verify your storage credentials and retry.`,
+            answer: `Creative asset generation could not be completed: ${errorMsg}\n\nStage: ${errorStage}. No incomplete asset was marked as generated.`,
             capabilityMode: 'ACTION',
             detectedIntent: 'CREATIVE_STUDIO',
             semanticDecisionSource,
             requestedAction: 'GENERATE_CREATIVE_JOB',
             requestedSources: ['GROWTH'],
-            toolsActuallyExecuted: [],
+            toolsActuallyExecuted: ['CreativeOrchestrator.generate'],
             modelAttempted,
             modelSucceeded: false,
             modelUsed: 'Mari Creative Orchestrator',
@@ -1688,12 +1721,17 @@ export class MariUniversalCore {
             responseModelSucceeded: false,
             actualModelUsed: null,
             modelsAttempted: allModelsAttempted,
-            modelFailureCodes,
+            modelFailureCodes: {
+              ...modelFailureCodes,
+              CREATIVE_GENERATION: String(errorCode),
+            },
             responseSource: 'local_grounded',
             fallbackUsed: true,
-            fallbackReason: 'CREATIVE_STORAGE_ERROR',
+            fallbackReason: String(errorCode),
             buildVersion: MARI_BUILD_VERSION,
-            suggestedActions: [],
+            suggestedActions: [
+              { type: 'NAVIGATE', label: 'Open Creative Studio', payload: { route: '/growth?tab=creatives' } },
+            ],
             ragContext: null,
             contextSources: ['CreativeOrchestrator'],
             tenantId: orgId,
@@ -1705,7 +1743,7 @@ export class MariUniversalCore {
         }
       } catch (genErr: any) {
         return {
-          answer: `Creative asset generation could not be completed: ${genErr?.message || 'Storage error'}\n\nPlease verify storage configuration.`,
+          answer: `Creative asset generation could not be completed: ${genErr?.message || 'Generation error'}.\n\nNo incomplete asset was marked as generated.`,
           capabilityMode: 'ACTION',
           detectedIntent: 'CREATIVE_STUDIO',
           semanticDecisionSource,
