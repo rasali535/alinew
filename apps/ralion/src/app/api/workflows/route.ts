@@ -5,8 +5,8 @@ import { writeOperationalAudit } from '@/lib/operations/audit';
 
 export const dynamic = 'force-dynamic';
 
-const TRIGGERS = new Set(['CUSTOMER_CREATED', 'DEAL_STAGE_CHANGED', 'TASK_COMPLETED', 'MANUAL']);
-const ACTIONS = new Set(['CREATE_TASK', 'CREATE_CALENDAR_EVENT', 'AUDIT_LOG']);
+const TRIGGERS = new Set(['CUSTOMER_CREATED', 'DEAL_STAGE_CHANGED', 'TASK_COMPLETED', 'SOCIAL_COMMENT_RECEIVED', 'SOCIAL_INBOX_RECEIVED', 'MANUAL']);
+const ACTIONS = new Set(['CREATE_TASK', 'CREATE_CALENDAR_EVENT', 'AUDIT_LOG', 'REPLY_SOCIAL_COMMENT', 'REPLY_SOCIAL_INBOX']);
 
 export async function OPTIONS(request: NextRequest) {
   return handleCorsPreflight(request);
