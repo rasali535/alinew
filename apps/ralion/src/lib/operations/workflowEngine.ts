@@ -264,3 +264,48 @@ export async function executeWorkflowsForEvent(context: WorkflowExecutionContext
   }
   return executions;
 }
+
+
+export async function resumeApprovedWorkflowRun(params: { runId: string; workspaceId: string; organizationId?: string | null; userId?: string | null }) {
+  const supabase = getServiceSupabase();
+  const { data: run, error: runError } = await supabase.from('workflow_runs').select('*').eq('id', params.runId).eq('workspace_id', params.workspaceId).maybeSingle();
+  if (runError || !run) throw new Error(runError?.message || 'Workflow run not found.');
+  if (run.status !== 'WAITING_APPROVAL') throw new Error('Workflow run is not waiting for approval.');
+
+  const { data: approval, error: approvalError } = await supabase.from('workflow_approvals').select('*').eq('workflow_run_id', run.id).eq('workspace_id', params.workspaceId).eq('status', 'APPROVED').maybeSingle();
+  if (approvalError || !approval) throw new Error(approvalError?.message || 'Approved workflow decision not found.');
+
+  const { data: workflow, error: workflowError } = await supabase.from('workflows').select('*').eq('id', run.workflow_id).eq('workspace_id', params.workspaceId).maybeSingle();
+  if (workflowError || !workflow) throw new Error(workflowError?.message || 'Workflow not found.');
+
+  const prior = Array.isArray(run.output?.actions) ? run.output.actions : [];
+  const startIndex = Math.max(0, Number(run.output?.pausedAtActionIndex || prior.length));
+  const actions = Array.isArray(workflow.actions) ? workflow.actions.slice(0, 20) : [];
+  const results = [...prior];
+  const context: WorkflowExecutionContext = {
+    workspaceId: params.workspaceId,
+    organizationId: params.organizationId || workflow.organization_id,
+    userId: params.userId,
+    triggerEvent: run.trigger_event as WorkflowTriggerEvent,
+    input: run.input || {},
+    workflowId: workflow.id,
+  };
+
+  try {
+    for (let index = startIndex; index < actions.length; index += 1) {
+      const action = actions[index];
+      const config = { ...(action.config || {}) };
+      if ((action.type === 'REPLY_SOCIAL_COMMENT' || action.type === 'REPLY_SOCIAL_INBOX') && !config.replyText && !config.messageText) {
+        const proposed = cleanText(approval.decision?.proposedResponse || '', 2000);
+        if (action.type === 'REPLY_SOCIAL_COMMENT') config.replyText = proposed;
+        else config.messageText = proposed;
+      }
+      results.push(await executeAction({ ...action, config }, context));
+    }
+    await supabase.from('workflow_runs').update({ status: 'SUCCEEDED', output: { actions: results, approvalId: approval.id, resumed: true }, finished_at: new Date().toISOString() }).eq('id', run.id).eq('workspace_id', params.workspaceId);
+    return { workflowId: workflow.id, runId: run.id, status: 'SUCCEEDED', actions: results };
+  } catch (error: any) {
+    await supabase.from('workflow_runs').update({ status: 'FAILED', error: String(error?.message || error).slice(0,4000), output: { actions: results, approvalId: approval.id, resumed: true }, finished_at: new Date().toISOString() }).eq('id', run.id).eq('workspace_id', params.workspaceId);
+    throw error;
+  }
+}
