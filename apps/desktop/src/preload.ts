@@ -204,7 +204,14 @@ contextBridge.exposeInMainWorld('ralionDesktop', {
   showNotification: (title: string, body: string) =>
     ipcRenderer.invoke('show-notification', { title, body }),
   openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
+  getUpdateStatus: () => ipcRenderer.invoke('get-update-status'),
   checkUpdates: () => ipcRenderer.invoke('check-updates'),
+  installUpdate: () => ipcRenderer.invoke('install-update'),
+  onUpdateStatus: (callback: (status: any) => void) => {
+    const listener = (_event: unknown, status: any) => callback(status);
+    ipcRenderer.on('update-status', listener);
+    return () => ipcRenderer.removeListener('update-status', listener);
+  },
   onMariToggle: (callback: () => void) => {
     const listener = () => callback();
     ipcRenderer.on('mari:toggle', listener);
