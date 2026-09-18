@@ -177,8 +177,44 @@ async function executeOneWorkflow(workflow: any, context: WorkflowExecutionConte
   const results: Record<string, any>[] = [];
   try {
     const actions = Array.isArray(workflow.actions) ? workflow.actions : [];
-    for (const action of actions.slice(0, 20)) {
-      results.push(await executeAction(action, context));
+    for (let index = 0; index < actions.slice(0, 20).length; index += 1) {
+      const action = actions[index];
+      const result = await executeAction(action, context);
+      results.push(result);
+
+      if (action?.type === 'MARI_DECISION' && result?.decision?.requiresApproval) {
+        const proposedAction = actions[index + 1] || {};
+        const { data: approval, error: approvalError } = await supabase
+          .from('workflow_approvals')
+          .insert({
+            workflow_run_id: run.id,
+            workflow_id: workflow.id,
+            workspace_id: context.workspaceId,
+            organization_id: context.organizationId || null,
+            status: 'PENDING',
+            decision: result.decision,
+            proposed_action: proposedAction,
+          })
+          .select('id')
+          .single();
+        if (approvalError) throw new Error(`Failed to create workflow approval: ${approvalError.message}`);
+
+        await supabase.from('workflow_runs').update({
+          status: 'WAITING_APPROVAL',
+          output: { actions: results, approvalId: approval.id, pausedAtActionIndex: index + 1 },
+        }).eq('id', run.id).eq('workspace_id', context.workspaceId);
+
+        return { workflowId: workflow.id, runId: run.id, status: 'WAITING_APPROVAL', approvalId: approval.id, actions: results };
+      }
+
+      if (action?.type === 'MARI_DECISION' && result?.decision?.recommendedAction === 'IGNORE') {
+        await supabase.from('workflow_runs').update({
+          status: 'SKIPPED',
+          output: { actions: results, reason: 'Mari classified the event as safe to ignore.' },
+          finished_at: new Date().toISOString(),
+        }).eq('id', run.id).eq('workspace_id', context.workspaceId);
+        return { workflowId: workflow.id, runId: run.id, status: 'SKIPPED', actions: results };
+      }
     }
 
     await supabase
