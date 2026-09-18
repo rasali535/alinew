@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { corsJsonResponse } from '@/lib/cors';
 import { requireRalionContext, getServiceSupabase } from '@/lib/auth/serverAuth';
+import { resumeApprovedWorkflowRun } from '@/lib/operations/workflowEngine';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,5 +28,18 @@ export async function POST(request: NextRequest) {
     .eq('id',approvalId).eq('workspace_id',ctx.workspace.id).eq('status','PENDING').select('*').maybeSingle();
   if(error||!data) return corsJsonResponse({success:false,error:error?.message||'Approval not found or already reviewed'},{status:error?500:409},request);
   if(status==='REJECTED') await db.from('workflow_runs').update({status:'SKIPPED',finished_at:new Date().toISOString(),output:{approvalId,rejected:true}}).eq('id',data.workflow_run_id).eq('workspace_id',ctx.workspace.id);
-  return corsJsonResponse({success:true,approval:data,resumeRequired:status==='APPROVED'},undefined,request);
+  let execution = null;
+  if (status === 'APPROVED') {
+    try {
+      execution = await resumeApprovedWorkflowRun({
+        runId: data.workflow_run_id,
+        workspaceId: ctx.workspace.id,
+        organizationId: ctx.organization?.id || ctx.workspace.organization_id,
+        userId: ctx.user.id,
+      });
+    } catch (resumeError: any) {
+      return corsJsonResponse({ success: false, approval: data, error: resumeError?.message || 'Approved, but workflow resume failed.' }, { status: 500 }, request);
+    }
+  }
+  return corsJsonResponse({success:true,approval:data,execution},undefined,request);
 }
