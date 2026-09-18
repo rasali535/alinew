@@ -6,6 +6,7 @@ import {
 import { validateImageBuffer, validateVideoBuffer } from './creativeAsset.service';
 
 const DEFAULT_IMAGE_MODEL = 'black-forest-labs/FLUX.1-schnell';
+const DEFAULT_GEMINI_IMAGE_MODEL = 'gemini-3.1-flash-image';
 const DEFAULT_VIDEO_MODEL = 'zai-org/CogVideoX-2b';
 
 function normalizePrompt(raw: string): string {
@@ -146,6 +147,76 @@ export class PromptFaithfulImageProvider implements CreativeProvider {
     const timeoutMs = Math.max(8_000, Math.min(request.timeoutMs || 20_000, 30_000));
     const errors: string[] = [];
 
+    // Prefer Google's native image model when the existing Gemini server key is available.
+    // This produces clean first-party image bytes and avoids provider logos/watermarks
+    // being burned into customer creatives. Pollinations remains a last-resort,
+    // authenticated fallback only.
+    const geminiApiKey =
+      process.env.GEMINI_API_KEY ||
+      process.env.GOOGLE_AI_API_KEY ||
+      process.env.GOOGLE_API_KEY ||
+      process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+      undefined;
+
+    if (geminiApiKey) {
+      const model = process.env.RALION_GEMINI_IMAGE_MODEL || DEFAULT_GEMINI_IMAGE_MODEL;
+      try {
+        const aspectRatio = (request.format || '1:1').toLowerCase();
+        const response = await fetchWithTimeout(
+          `https://generativelanguage.googleapis.com/v1/models/${encodeURIComponent(model)}:generateContent`,
+          {
+            method: 'POST',
+            headers: {
+              'x-goog-api-key': geminiApiKey,
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+            },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: {
+                responseModalities: ['IMAGE'],
+                responseFormat: {
+                  image: {
+                    aspectRatio: ['1:1', '4:5', '16:9', '9:16'].includes(aspectRatio) ? aspectRatio : '1:1',
+                    imageSize: '2K',
+                  },
+                },
+              },
+            }),
+            cache: 'no-store',
+          },
+          Math.max(timeoutMs, 30_000),
+        );
+
+        if (response.ok) {
+          const payload = await response.json() as any;
+          const parts = payload?.candidates?.[0]?.content?.parts || [];
+          const imagePart = parts.find((part: any) => part?.inlineData?.data || part?.inline_data?.data);
+          const inline = imagePart?.inlineData || imagePart?.inline_data;
+          if (inline?.data) {
+            const buffer = Buffer.from(inline.data, 'base64');
+            const validation = validateImageBuffer(buffer);
+            if (validation.valid) {
+              return {
+                buffer,
+                mimeType: validation.mimeType || inline.mimeType || inline.mime_type || 'image/png',
+                providerName: `Google ${model}`,
+                generationTimeMs: Date.now() - startedAt,
+              };
+            }
+            errors.push(`Gemini returned invalid image data: ${validation.error || 'validation failed'}`);
+          } else {
+            errors.push('Gemini image provider completed without image bytes.');
+          }
+        } else {
+          const errorText = await response.text().catch(() => '');
+          errors.push(`Gemini image provider HTTP ${response.status}${errorText ? `: ${errorText.slice(0, 160)}` : ''}`);
+        }
+      } catch (error: any) {
+        errors.push(`Gemini image provider: ${error?.message || String(error)}`);
+      }
+    }
+
     const hfToken = getHuggingFaceToken();
     if (hfToken) {
       const model = process.env.RALION_IMAGE_MODEL || DEFAULT_IMAGE_MODEL;
@@ -198,13 +269,13 @@ export class PromptFaithfulImageProvider implements CreativeProvider {
       process.env.POLLINATIONS_API_KEY ||
       process.env.POLLINATIONS_TOKEN ||
       undefined;
-    const pollinationsCandidates = [
-      // Current Pollinations generation route.
+    // Anonymous Pollinations output can visibly brand generated media even when
+    // nologo=true is requested. Never let that output reach a customer creative.
+    // Only use Pollinations when Ralion has an authenticated provider token.
+    const pollinationsCandidates = pollinationsToken ? [
       `https://gen.pollinations.ai/image/${pollinationsPrompt}?model=flux&width=${dimensions.width}&height=${dimensions.height}&seed=${seed}&nologo=true&enhance=false`,
       `https://gen.pollinations.ai/image/${pollinationsPrompt}?model=flux&width=${dimensions.width}&height=${dimensions.height}&seed=${seed + 1}&nologo=true&enhance=false`,
-      // Legacy anonymous route kept only as a compatibility fallback.
-      `https://image.pollinations.ai/prompt/${pollinationsPrompt}?model=flux&width=${dimensions.width}&height=${dimensions.height}&seed=${seed + 2}&nologo=true&enhance=false`,
-    ];
+    ] : [];
 
     for (const url of pollinationsCandidates) {
       try {
@@ -248,7 +319,8 @@ export class PromptFaithfulImageProvider implements CreativeProvider {
     const safeError = errors.slice(-5).join(' | ');
     console.warn('[PromptFaithfulImageProvider] Exhausted real image providers', {
       attemptedHuggingFace: Boolean(hfToken),
-      attemptedPollinations: true,
+      attemptedGemini: Boolean(geminiApiKey),
+      attemptedPollinations: pollinationsCandidates.length > 0,
       authenticatedPollinations: Boolean(pollinationsToken),
       errors: safeError,
     });
