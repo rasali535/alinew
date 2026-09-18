@@ -69,6 +69,13 @@ assert(
 );
 
 assert(
+  providers.includes("DEFAULT_OPENAI_IMAGE_MODEL = 'gpt-image-2'") &&
+    providers.includes("'https://api.openai.com/v1/images/generations'") &&
+    providers.includes("quality: 'high'") &&
+    providers.includes("output_format: 'png'"),
+  'Creative images must support OpenAI GPT Image as a clean primary provider.'
+);
+assert(
   providers.includes("DEFAULT_GEMINI_IMAGE_MODEL = 'gemini-3.1-flash-image'") &&
     providers.includes("responseModalities: ['IMAGE']"),
   'Creative images must prefer the configured Gemini native image provider.'
@@ -79,7 +86,8 @@ assert(
   'Anonymous Pollinations image generation must never be a customer-facing fallback.'
 );
 assert(
-  providers.includes('attemptedGemini: Boolean(geminiApiKey)') &&
+  providers.includes('attemptedOpenAI: Boolean(openAiApiKey)') &&
+    providers.includes('attemptedGemini: Boolean(geminiApiKey)') &&
     providers.includes('attemptedPollinations: pollinationsCandidates.length > 0'),
   'Provider diagnostics must accurately report clean image provider attempts.'
 );
