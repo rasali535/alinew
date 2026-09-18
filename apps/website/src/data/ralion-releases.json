@@ -1,33 +1,33 @@
 {
-  "currentVersion": "2.4.4",
+  "currentVersion": "2.5.0",
   "product": "Ralion OS Desktop",
-  "lastUpdated": "2026-09-17",
+  "lastUpdated": "2026-09-18",
   "storageBucket": "github-releases",
   "releases": [
     {
       "product_name": "Ralion OS",
       "product": "Ralion OS Desktop",
-      "version": "2.4.4",
+      "version": "2.5.0",
       "platform": "Windows",
       "architecture": "x64",
-      "filename": "ralion-os-2.4.4-setup.exe",
-      "filesize": 89227531,
-      "filesizeFormatted": "85.09 MB",
-      "checksum": "084f93f8062757e685c73da2ef7806a9bdb5f88ab3e3e65a6cc36a9bfea71074",
-      "releaseDate": "2026-09-17",
+      "filename": "ralion-os-2.5.0-setup.exe",
+      "filesize": 89235931,
+      "filesizeFormatted": "85.10 MB",
+      "checksum": "8f793832b4562dae480cb7ef79b590d0f843349f9cfc86eabea0b46073a378c1",
+      "releaseDate": "2026-09-18",
       "downloadUrl": "https://github.com/rasali535/alinew/releases/latest/download/ralion-os-windows-setup.exe",
       "is_latest": true,
       "enabled": true,
       "releaseNotes": [
-        "Ralion OS 2.4.4 Windows Desktop",
-        "Installed-app Diagnostics with pass, warning and fail health checks",
-        "Sanitized diagnostics report export for Windows validation and support",
+        "Ralion OS 2.5.0 Windows Desktop",
+        "New updater-enabled desktop baseline",
+        "Visible Software Updates controls in Settings → Security",
+        "Automatic updates enabled by default for installed builds",
+        "Check for Updates and Install & Restart controls",
+        "Download progress and update status reporting",
+        "Canonical Ralion update feed with latest.yml and differential blockmap support",
         "Native secure HTTPS bridge for Ralion cloud APIs",
         "Online-first operation with offline cached reads",
-        "Safe offline queue for supported customer, task, calendar and lead actions",
-        "Automatic reconnect detection and background sync",
-        "Tenant-bound offline cache and queued actions",
-        "Automatic online update checks",
         "Mari-centred Ralion OS desktop workspace"
       ]
     },
@@ -45,7 +45,9 @@
       "downloadUrl": "",
       "is_latest": false,
       "enabled": false,
-      "releaseNotes": ["macOS package is not yet part of the current public desktop release."]
+      "releaseNotes": [
+        "macOS package is not yet part of the current public desktop release."
+      ]
     },
     {
       "product_name": "Ralion OS",
@@ -61,7 +63,9 @@
       "downloadUrl": "",
       "is_latest": false,
       "enabled": false,
-      "releaseNotes": ["Linux package is not yet part of the current public desktop release."]
+      "releaseNotes": [
+        "Linux package is not yet part of the current public desktop release."
+      ]
     }
   ]
 }
