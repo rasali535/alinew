@@ -363,7 +363,7 @@ export const pricingPlans = [
       '1 Connected Social Account',
       '1 Isolated Workspace',
       'Mari AI Business Growth Partner',
-      'AI Creative Generation — Starter & above',
+      '100 AI Monthly Credits for Mari',
       'Core Customer CRM & Pipeline',
       'Social Publishing & Scheduling',
       'Multi-Tenant Data Isolation'
