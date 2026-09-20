@@ -4,7 +4,7 @@
  *
  * Strict Architectural Guarantees:
  * 1. Zero cross-tenant balance leakage: Every debit, credit, and query requires explicit tenant/organization UUID.
- * 2. Explicit Tier Resolution: Default uninitialized tier is strictly COMMUNITY (250 credits/month, no rollover).
+ * 2. Explicit Tier Resolution: Default uninitialized tier is strictly COMMUNITY (100 credits/month, no rollover).
  * 3. Segregated Credit Pools: Separates renewable plan credits from bonus/purchased/admin credits.
  * 4. Atomic, Idempotent, and Transactional: Correlation keys prevent double debiting or re-granting on retries.
  * 5. Immutable Ledger: Full audit trail with balanceBefore, balanceAfter, correlationId, provider, model, and metadata.
@@ -36,7 +36,7 @@ export interface CreditTransaction extends TenantCreditLedgerRecord {
  * Authoritative Plan Allowances (Monthly)
  */
 export const TIER_MONTHLY_CREDITS: Record<SubscriptionPlanId, number> = {
-  COMMUNITY: 250,
+  COMMUNITY: 100,
   STARTER: 1000,
   PROFESSIONAL: 5000,
   ENTERPRISE: 25000,
@@ -52,6 +52,9 @@ export const CREDIT_COSTS = {
   POSTER_IMAGE: 10,
   VIDEO_REEL: 50,
   MARI_STRATEGY: 1,
+  MARI_ADVANCED_STRATEGY: 5,
+  WORKFLOW_MARI_DECISION: 1,
+  PREMIUM_IMAGE: 50,
   SOCIAL_PUBLISH: 0, // Ordinary social publishing costs 0 credits
   WEBSITE_ANALYSIS: 5,
 } as const;
@@ -62,6 +65,8 @@ export const CREDIT_COSTS = {
  */
 export const ESTIMATED_PROVIDER_COSTS_USD = {
   GEMINI_FLASH_1K_TOKENS: 0.0001,
+  OPENAI_STANDARD_IMAGE_GEN: 0.015,
+  OPENAI_PREMIUM_IMAGE_GEN: 0.211,
   FLUX_IMAGE_GEN: 0.003,
   COGVIDEO_REEL_GEN: 0.05,
   GEMINI_VISION_EVAL: 0.0002,
@@ -91,7 +96,7 @@ export class TenantCreditsService {
 
   /**
    * Initializes or fetches an authoritative tenant wallet.
-   * Default tier is strictly COMMUNITY (250 credits/month).
+   * Default tier is strictly COMMUNITY (100 credits/month).
    */
   static getOrCreateWallet(
     organizationId: string,
@@ -345,7 +350,7 @@ export class TenantCreditsService {
 
   /**
    * Processes an automated monthly cycle renewal.
-   * Community plan credits reset strictly to 250 without accumulation/rollover.
+   * Community plan credits reset strictly to 100 without accumulation/rollover.
    * Bonus credits are preserved.
    */
   static processMonthlyRenewal(organizationId: string): { success: boolean; newBalance: number; transactionId: string } {
@@ -440,7 +445,7 @@ export class TenantCreditsService {
       type: 'MIGRATION_ADJUSTMENT',
       sourceFeature: 'SYSTEM',
       correlationId,
-      reason: 'Authoritative Community tier credit reconciliation (750 -> 250 credits/month)',
+      reason: 'Authoritative Community tier credit reconciliation (750 -> 100 credits/month)',
       createdAt: wallet.updatedAt,
       timestamp: wallet.updatedAt,
     };
