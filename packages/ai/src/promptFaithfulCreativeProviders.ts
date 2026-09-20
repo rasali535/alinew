@@ -7,7 +7,7 @@ import { validateImageBuffer, validateVideoBuffer } from './creativeAsset.servic
 
 const DEFAULT_IMAGE_MODEL = 'black-forest-labs/FLUX.1-schnell';
 const DEFAULT_GEMINI_IMAGE_MODEL = 'gemini-3.1-flash-image';
-const DEFAULT_OPENAI_IMAGE_MODEL = 'gpt-image-2';
+const DEFAULT_OPENAI_IMAGE_MODEL = 'gpt-image-1-mini';
 const DEFAULT_VIDEO_MODEL = 'zai-org/CogVideoX-2b';
 
 function normalizePrompt(raw: string): string {
@@ -146,6 +146,7 @@ export class PromptFaithfulImageProvider implements CreativeProvider {
     const dimensions = resolveDimensions(request);
     const seed = request.seed ?? Math.floor(Math.random() * 1_000_000);
     const timeoutMs = Math.max(8_000, Math.min(request.timeoutMs || 20_000, 30_000));
+    const openAiTimeoutMs = Math.max(90_000, Math.min(Number(process.env.RALION_OPENAI_IMAGE_TIMEOUT_MS) || 120_000, 180_000));
     const errors: string[] = [];
 
     // OpenAI GPT Image is a first-class clean provider. Keep the key server-side;
@@ -153,6 +154,8 @@ export class PromptFaithfulImageProvider implements CreativeProvider {
     const openAiApiKey = process.env.OPENAI_API_KEY?.trim();
     if (openAiApiKey) {
       const model = process.env.RALION_OPENAI_IMAGE_MODEL || DEFAULT_OPENAI_IMAGE_MODEL;
+      const quality = (process.env.RALION_OPENAI_IMAGE_QUALITY || 'medium').toLowerCase();
+      const safeQuality = ['low', 'medium', 'high'].includes(quality) ? quality : 'medium';
       try {
         const sizeByFormat: Record<string, string> = {
           '1:1': '1024x1024',
@@ -179,13 +182,14 @@ export class PromptFaithfulImageProvider implements CreativeProvider {
               model,
               prompt,
               size,
-              quality: 'high',
-              output_format: 'png',
+              quality: safeQuality,
+              output_format: 'jpeg',
+              output_compression: 90,
               n: 1,
             }),
             cache: 'no-store',
           },
-          Math.max(timeoutMs, 45_000),
+          openAiTimeoutMs,
         );
 
         if (response.ok) {
@@ -197,7 +201,7 @@ export class PromptFaithfulImageProvider implements CreativeProvider {
             if (validation.valid) {
               return {
                 buffer,
-                mimeType: validation.mimeType || 'image/png',
+                mimeType: validation.mimeType || 'image/jpeg',
                 providerName: `OpenAI ${model}`,
                 generationTimeMs: Date.now() - startedAt,
               };
@@ -211,7 +215,7 @@ export class PromptFaithfulImageProvider implements CreativeProvider {
           errors.push(`OpenAI image provider HTTP ${response.status}${errorText ? `: ${errorText.slice(0, 160)}` : ''}`);
         }
       } catch (error: any) {
-        errors.push(`OpenAI image provider: ${error?.message || String(error)}`);
+        errors.push(`OpenAI image provider: ${error?.name === 'AbortError' ? `timed out after ${openAiTimeoutMs}ms` : (error?.message || String(error))}`);
       }
     }
 
