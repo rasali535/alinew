@@ -96,6 +96,20 @@ if (!globalState.__ralionCreativeDurableCreditsPatched) {
     const durableSubscription = await DurableBillingDatabaseService.getSubscription(organizationId);
     BillingDatabaseService.saveSubscription(durableSubscription);
 
+    const plan = await DurableTenantCreditsService.resolvePlan(organizationId);
+    if (options.type !== 'VIDEO_REEL' && plan.planId === 'COMMUNITY') {
+      return {
+        success: false,
+        status: 'FAILED' as const,
+        userFacingMessage: 'AI image generation is available on Starter, Professional and Enterprise plans. Upgrade your plan to create images with Mari.',
+        errorDetails: {
+          errorCode: 'ENTITLEMENT_REQUIRED',
+          stage: 'ENTITLEMENT_CHECK',
+          details: 'Community includes Mari AI credits but does not include AI image generation. Purchased credits do not bypass plan entitlements.',
+        },
+      };
+    }
+
     const featureKey = options.type === 'VIDEO_REEL' ? 'cogvideoVideos' : 'fluxImages';
     const entitlement = EntitlementService.checkFeature(organizationId, featureKey);
     if (!entitlement.allowed) {
