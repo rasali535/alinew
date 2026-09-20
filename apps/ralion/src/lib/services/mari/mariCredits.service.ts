@@ -5,7 +5,7 @@ import { getPrivilegedSupabase } from '@/lib/supabase/server';
 export type MariCreditPlanId = 'COMMUNITY' | 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE';
 
 export const MARI_MONTHLY_CREDIT_QUOTAS: Record<MariCreditPlanId, number> = {
-  COMMUNITY: 250,
+  COMMUNITY: 100,
   STARTER: 1000,
   PROFESSIONAL: 5000,
   ENTERPRISE: 25000,
