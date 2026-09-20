@@ -69,11 +69,14 @@ assert(
 );
 
 assert(
-  providers.includes("DEFAULT_OPENAI_IMAGE_MODEL = 'gpt-image-2'") &&
+  providers.includes("DEFAULT_OPENAI_IMAGE_MODEL = 'gpt-image-1-mini'") &&
     providers.includes("'https://api.openai.com/v1/images/generations'") &&
-    providers.includes("quality: 'high'") &&
-    providers.includes("output_format: 'png'"),
-  'Creative images must support OpenAI GPT Image as a clean primary provider.'
+    providers.includes("RALION_OPENAI_IMAGE_QUALITY || 'medium'") &&
+    providers.includes("quality: safeQuality") &&
+    providers.includes("output_format: 'jpeg'") &&
+    providers.includes('output_compression: 90') &&
+    providers.includes('RALION_OPENAI_IMAGE_TIMEOUT_MS'),
+  'Creative images must use the cost-controlled OpenAI image path with a durable generation timeout.'
 );
 assert(
   providers.includes("DEFAULT_GEMINI_IMAGE_MODEL = 'gemini-3.1-flash-image'") &&
