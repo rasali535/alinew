@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import { CreativeAssetService, getProductionStorageProvider } from '@ralion/ai/server';
 import { requireRalionContext } from '../../../../../lib/auth/serverAuth';
-import { getPrivilegedSupabase } from '../../../../../lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,32 +33,19 @@ export async function GET(
     );
   }
 
-  // 2. Browser <img>/<video> requests cannot attach the SPA bearer header.
-  // Prefer the authenticated session when present. For legacy asset URLs with no
-  // bearer transport, resolve the asset server-side and only allow delivery when
-  // the filename maps to exactly one durable tenant-owned CreativeAsset.
+  // 2. Require an authenticated Ralion context. Browser media should use the
+  // authenticated /api/creatives/[assetId]/delivery endpoint to obtain a
+  // short-lived signed storage URL instead of making filenames public.
   const authResult = await requireRalionContext(request);
-  let authenticatedOrgId = authResult.context?.organization.id || null;
-  let authenticatedWorkspaceId = authResult.context?.workspace.id || null;
-
-  if (!authenticatedOrgId || !authenticatedWorkspaceId) {
-    const supabase = getPrivilegedSupabase();
-    const { data: rows, error } = await supabase
-      .from('creative_assets')
-      .select('organization_id, workspace_id')
-      .eq('filename', safeName)
-      .limit(2);
-
-    if (error || !rows || rows.length !== 1 || !rows[0].organization_id || !rows[0].workspace_id) {
-      return authResult.response || new NextResponse(
-        JSON.stringify({ error: 'AUTHENTICATION_REQUIRED', message: 'Authentication required to access creative assets.' }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
-    authenticatedOrgId = rows[0].organization_id;
-    authenticatedWorkspaceId = rows[0].workspace_id;
+  if (authResult.response || !authResult.context) {
+    return authResult.response || new NextResponse(
+      JSON.stringify({ error: 'AUTHENTICATION_REQUIRED', message: 'Authentication required to access creative assets.' }),
+      { status: 401, headers: { 'Content-Type': 'application/json' } }
+    );
   }
+
+  const authenticatedOrgId = authResult.context.organization.id;
+  const authenticatedWorkspaceId = authResult.context.workspace.id;
 
   // 3. Verify untrusted query parameters or headers against authenticated context
   const { searchParams } = new URL(request.url);
@@ -81,10 +67,8 @@ export async function GET(
   }
 
   // 4. Locate CreativeAsset record and verify strict tenant and workspace ownership
-  // Both IDs are guaranteed above: either by the verified session or by the
-  // unique durable asset lookup. Narrow the nullable inference for TypeScript.
-  const resolvedOrgId = authenticatedOrgId as string;
-  const resolvedWorkspaceId = authenticatedWorkspaceId as string;
+  const resolvedOrgId = authenticatedOrgId;
+  const resolvedWorkspaceId = authenticatedWorkspaceId;
   const asset = await CreativeAssetService.getAssetByFilename(safeName, resolvedOrgId, resolvedWorkspaceId);
   if (asset) {
     if (asset.organizationId !== resolvedOrgId) {
