@@ -60,6 +60,8 @@ export class SocialTokenManager {
         metadata: mergedMeta,
         token_status: 'TOKEN_VALID',
         connection_status: 'CONNECTED',
+        disconnected_at: null,
+        connected_at: new Date().toISOString(),
         last_sync_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }).eq('id', params.connectionId);
