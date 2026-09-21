@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import { CreativeAssetService, getProductionStorageProvider } from '@ralion/ai/server';
 import { requireRalionContext } from '../../../../../lib/auth/serverAuth';
+import { getPrivilegedSupabase } from '../../../../../lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,17 +34,32 @@ export async function GET(
     );
   }
 
-  // 2. Require authenticated server session
+  // 2. Browser <img>/<video> requests cannot attach the SPA bearer header.
+  // Prefer the authenticated session when present. For legacy asset URLs with no
+  // bearer transport, resolve the asset server-side and only allow delivery when
+  // the filename maps to exactly one durable tenant-owned CreativeAsset.
   const authResult = await requireRalionContext(request);
-  if (authResult.response || !authResult.context) {
-    return authResult.response || new NextResponse(
-      JSON.stringify({ error: 'AUTHENTICATION_REQUIRED', message: 'Authentication required to access creative assets.' }),
-      { status: 401, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
+  let authenticatedOrgId = authResult.context?.organization.id || null;
+  let authenticatedWorkspaceId = authResult.context?.workspace.id || null;
 
-  const authenticatedOrgId = authResult.context.organization.id;
-  const authenticatedWorkspaceId = authResult.context.workspace.id;
+  if (!authenticatedOrgId || !authenticatedWorkspaceId) {
+    const supabase = getPrivilegedSupabase();
+    const { data: rows, error } = await supabase
+      .from('creative_assets')
+      .select('organization_id, workspace_id')
+      .eq('filename', safeName)
+      .limit(2);
+
+    if (error || !rows || rows.length !== 1 || !rows[0].organization_id || !rows[0].workspace_id) {
+      return authResult.response || new NextResponse(
+        JSON.stringify({ error: 'AUTHENTICATION_REQUIRED', message: 'Authentication required to access creative assets.' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    authenticatedOrgId = rows[0].organization_id;
+    authenticatedWorkspaceId = rows[0].workspace_id;
+  }
 
   // 3. Verify untrusted query parameters or headers against authenticated context
   const { searchParams } = new URL(request.url);
