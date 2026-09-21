@@ -16,7 +16,8 @@
  */
 
 import 'server-only';
-import { decryptToken } from '@ralion/integrations/server';
+import { decryptToken, META_GRAPH_API_VERSION } from '@ralion/integrations/server';
+import { MetaCredentialService } from '../metaCredential.service';
 import { getPrivilegedSupabase as getServiceSupabase } from '@/lib/supabase/server';
 
 export const AUTHORITATIVE_META_APP_ID = '1759273775121373';
@@ -166,84 +167,29 @@ export class FacebookConnectionStateService {
         c => c.connection_status === 'CONNECTED' || c.connection_status === 'ACTIVE'
       );
 
-      // Also check fallback token tables if native connection exists
-      let encryptedToken: string | null = null;
+      // Resolve the selected operational Page independently from the OAuth
+      // authorization identity. Page discovery must always use the dedicated
+      // Facebook user credential, never a Page token stored on social_connections.
       let facebookUserId: string | undefined = undefined;
       let facebookUserName: string | undefined = undefined;
-      let activeConnRecord: any = null;
+      const activeConnRecord = activeConnections.find(c =>
+        c.account_type === 'BUSINESS' ||
+        c.metadata?.is_page === true ||
+        c.metadata?.provider_account_type === 'FACEBOOK_PAGE'
+      ) || null;
 
-      // Prefer an active Business Page connection when one exists; otherwise
-      // use the profile token as the discovery authority. This prevents a newer
-      // PERSONAL OAuth row from hiding an already-selected Page.
-      const orderedConnections = [
-        ...activeConnections.filter(c =>
-          c.account_type === 'BUSINESS' ||
-          c.metadata?.is_page === true ||
-          c.metadata?.provider_account_type === 'FACEBOOK_PAGE'
-        ),
-        ...activeConnections.filter(c =>
-          !(c.account_type === 'BUSINESS' ||
-            c.metadata?.is_page === true ||
-            c.metadata?.provider_account_type === 'FACEBOOK_PAGE')
-        ),
-      ];
-      for (const conn of orderedConnections) {
-        if (conn.metadata?.encrypted_access_token) {
-          encryptedToken = conn.metadata.encrypted_access_token;
-          facebookUserId = conn.metadata?.facebookUserId || conn.provider_account_id;
-          facebookUserName = conn.account_name || conn.username;
-          activeConnRecord = conn;
-          break;
+      let accessToken: string | null = null;
+      if (userId) {
+        const credential = await MetaCredentialService.getValidToken(userId, 'facebook');
+        if (credential?.accessToken && !credential.isExpired) {
+          accessToken = credential.accessToken;
+          facebookUserId = credential.metaUserId || undefined;
         }
       }
 
-      if (!encryptedToken && userId) {
-        // Check social_account_tokens
-        const { data: sat } = await supabase
-          .from('social_account_tokens')
-          .select('encrypted_access_token, account_handle, page_id')
-          .eq('user_id', userId)
-          .eq('provider', 'facebook')
-          .maybeSingle();
-
-        if (sat?.encrypted_access_token) {
-          encryptedToken = sat.encrypted_access_token;
-        }
-      }
-
-      // If no active connections or tokens found, verify state is cleanly DISCONNECTED
-      if (!encryptedToken && activeConnections.length === 0) {
+      if (!accessToken) {
         stateCache.set(cacheKey, { result: defaultDisconnectedResult, cachedAt: now });
         return defaultDisconnectedResult;
-      }
-
-      // If only a Zernio-only connection exists without native token
-      if (!encryptedToken && activeConnections.length > 0) {
-        const isZernioOnly = activeConnections.every(c => c.infrastructure_provider === 'zernio' && !c.access_token);
-        if (isZernioOnly) {
-          // Zernio account without native token cannot establish canonical Meta Page access
-          const result: FacebookConnectionStateResult = {
-            ...defaultDisconnectedResult,
-            userConnectionExists: true,
-            state: 'PROFILE_CONNECTED_PAGE_ACCESS_UNAVAILABLE',
-            reason: 'ZERNIO_NATIVE_TOKEN_MISSING',
-            statusMessage: 'Your Facebook account is connected, but Facebook Page access is not currently available.',
-            ctaAction: 'RECONNECT_PAGE_ACCESS',
-            ctaLabel: 'Reconnect Facebook with Page Access',
-          };
-          stateCache.set(cacheKey, { result, cachedAt: now });
-          return result;
-        }
-      }
-
-      // 2. Decrypt User Access Token
-      let accessToken: string | null = null;
-      try {
-        if (encryptedToken) {
-          accessToken = decryptToken(encryptedToken);
-        }
-      } catch (decErr: any) {
-        console.warn('[FacebookStateService] Token decryption failure:', decErr.message);
       }
 
       if (!accessToken || !accessToken.startsWith('EAA')) {
@@ -268,7 +214,7 @@ export class FacebookConnectionStateService {
       try {
         // App secret proof / debug_token check
         const debugRes = await fetch(
-          `https://graph.facebook.com/v19.0/debug_token?input_token=${encodeURIComponent(accessToken)}&access_token=${encodeURIComponent(accessToken)}`
+          `https://graph.facebook.com/${META_GRAPH_API_VERSION}/debug_token?input_token=${encodeURIComponent(accessToken)}&access_token=${encodeURIComponent(accessToken)}`
         );
         if (debugRes.ok) {
           const dJson = await debugRes.json();
@@ -318,7 +264,7 @@ export class FacebookConnectionStateService {
       // Check Permissions via /me/permissions
       try {
         const permRes = await fetch(
-          `https://graph.facebook.com/v19.0/me/permissions?access_token=${encodeURIComponent(accessToken)}`
+          `https://graph.facebook.com/${META_GRAPH_API_VERSION}/me/permissions?access_token=${encodeURIComponent(accessToken)}`
         );
         if (permRes.ok) {
           const pJson = await permRes.json();
@@ -336,7 +282,7 @@ export class FacebookConnectionStateService {
 
       if (hasPagesShowList) {
         try {
-          let nextPageUrl: string | null = `https://graph.facebook.com/v19.0/me/accounts?fields=id,name,username,category,tasks,picture,followers_count,fan_count,about,website,phone,single_line_address&limit=100&access_token=${encodeURIComponent(accessToken)}`;
+          let nextPageUrl: string | null = `https://graph.facebook.com/${META_GRAPH_API_VERSION}/me/accounts?fields=id,name,username,category,tasks,picture,followers_count,fan_count,about,website,phone,single_line_address&limit=100&access_token=${encodeURIComponent(accessToken)}`;
 
           while (nextPageUrl) {
             const pageRes: Response = await fetch(nextPageUrl);
@@ -365,7 +311,7 @@ export class FacebookConnectionStateService {
       // Check User Profile Name if not yet loaded
       if (!facebookUserName) {
         try {
-          const meRes = await fetch(`https://graph.facebook.com/v19.0/me?fields=id,name&access_token=${encodeURIComponent(accessToken)}`);
+          const meRes = await fetch(`https://graph.facebook.com/${META_GRAPH_API_VERSION}/me?fields=id,name&access_token=${encodeURIComponent(accessToken)}`);
           if (meRes.ok) {
             const meJson = await meRes.json();
             facebookUserId = meJson.id;
