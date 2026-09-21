@@ -81,7 +81,7 @@ export async function GET(
     }
 
     // 3. Locate asset
-    let asset = CreativeAssetService.getAsset(assetId);
+    let asset = CreativeAssetService.getAsset(assetId, authenticatedOrgId, authenticatedWorkspaceId);
     if (!asset) {
       asset = await CreativeAssetService.getAssetAsync(assetId, authenticatedOrgId, authenticatedWorkspaceId);
     }
