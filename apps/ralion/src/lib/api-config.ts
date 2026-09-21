@@ -88,14 +88,16 @@ async function getBrowserSession(forceRefresh = false): Promise<{ access_token: 
   // OrganizationContext has already server-verified this session in many cases.
   // Reuse that canonical token before asking another webpack chunk/client instance
   // to rehydrate Supabase storage independently.
-  if (!forceRefresh) {
-    const sharedToken = (window as any).__ralion_access_token__;
-    if (typeof sharedToken === 'string' && sharedToken.length > 20) {
-      return {
-        access_token: sharedToken,
-        user: (window as any).__ralion_access_token_user__ || undefined,
-      };
-    }
+  // Prefer the canonical runtime token published by OrganizationContext.
+  // Do this for both ordinary requests and recovery attempts: the context route
+  // has already verified this JWT with Supabase, so dropping it during a
+  // separate refresh attempt would turn a healthy session into AUTH_TOKEN_MISSING.
+  const sharedToken = (window as any).__ralion_access_token__;
+  if (typeof sharedToken === 'string' && sharedToken.length > 20) {
+    return {
+      access_token: sharedToken,
+      user: (window as any).__ralion_access_token_user__ || undefined,
+    };
   }
 
   if (forceRefresh) {
@@ -280,13 +282,11 @@ export async function authFetch(pathOrUrl: string, init?: RequestInit): Promise<
 
       if (shouldRefresh) {
         const refreshedAuth = await getRalionAuthHeaders({ refresh: true });
-        const recoveredMissingSession = !hadSession && Boolean(refreshedAuth.Authorization);
-        const replacedInvalidSession =
-          hadSession &&
-          Boolean(refreshedAuth.Authorization) &&
-          refreshedAuth.Authorization !== initialAuth.Authorization;
-
-        if (recoveredMissingSession || replacedInvalidSession) {
+        // Retry once whenever recovery yields a bearer token. For
+        // AUTH_TOKEN_MISSING the recovered token may legitimately be identical
+        // to the server-verified runtime token; requiring it to change prevented
+        // the retry and left billing/social requests at 401.
+        if (refreshedAuth.Authorization) {
           headers = mergeAuthHeaders(init?.headers, refreshedAuth, true);
           if (!headers.has('Content-Type') && init?.body && typeof init.body === 'string') {
             headers.set('Content-Type', 'application/json');
