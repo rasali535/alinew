@@ -14,6 +14,7 @@ import { SocialTokenManager } from './socialTokenManager.service';
 import { FacebookCommentsService } from './facebookComments.service';
 import { FacebookConnectionStateService } from './facebookConnectionState.service';
 import { getPrivilegedSupabase as getServiceSupabase } from '@/lib/supabase/server';
+import { MetaCredentialService } from '../metaCredential.service';
 
 export { META_GRAPH_API_VERSION };
 
@@ -419,18 +420,32 @@ export class FacebookPageManagementService {
       .eq('organization_id', tenantId)
       .eq('user_id', userId);
 
-    let encryptedAccessToken: string | null = null;
-    let encryptedRefreshToken: string | null = null;
-    let tokenExpiresAt: string | null = null;
     let zernioProfileId: string | null = null;
     let facebookUserId: string | null = null;
 
     for (const c of allUserConns || []) {
-      if (!encryptedAccessToken && c.metadata?.encrypted_access_token) encryptedAccessToken = c.metadata.encrypted_access_token;
-      if (!encryptedRefreshToken && c.metadata?.encrypted_refresh_token) encryptedRefreshToken = c.metadata.encrypted_refresh_token;
-      if (!tokenExpiresAt && c.metadata?.token_expires_at) tokenExpiresAt = c.metadata.token_expires_at;
       if (!zernioProfileId && c.zernio_profile_id) zernioProfileId = c.zernio_profile_id;
       if (!facebookUserId && c.metadata?.facebookUserId) facebookUserId = c.metadata.facebookUserId;
+    }
+
+    // The Facebook person is an authorization identity, not an operational
+    // social connection. Resolve its OAuth credential from the dedicated Meta
+    // credential store, exchange it for the selected Page token, and persist
+    // only that Page token on the operational Page connection below.
+    const oauthCredential = await MetaCredentialService.getValidToken(userId, 'facebook');
+    if (!oauthCredential?.accessToken || oauthCredential.isExpired) {
+      const err = new Error('Facebook authorization is missing or expired. Reconnect Facebook before selecting a Page.');
+      (err as any).statusCode = 401;
+      (err as any).code = 'FACEBOOK_REAUTH_REQUIRED';
+      throw err;
+    }
+    facebookUserId = facebookUserId || oauthCredential.metaUserId || null;
+    const pageAccessToken = await resolvePageAccessToken(oauthCredential.accessToken, params.pageId);
+    if (!pageAccessToken) {
+      const err = new Error('Could not obtain an access token for the selected Facebook Page.');
+      (err as any).statusCode = 403;
+      (err as any).code = 'FACEBOOK_PAGE_TOKEN_UNAVAILABLE';
+      throw err;
     }
 
     const pageHandle = params.pageData.username
@@ -449,9 +464,9 @@ export class FacebookPageManagementService {
       workspaceId,
       organizationId: tenantId,
       facebookUserId,
-      encrypted_access_token: encryptedAccessToken,
-      encrypted_refresh_token: encryptedRefreshToken,
-      token_expires_at: tokenExpiresAt,
+      // Credential fields are attached atomically by SocialTokenManager after
+      // the Page row exists. Never copy the personal OAuth token onto a Page.
+      token_expires_at: null,
       selected_at: new Date().toISOString(),
       zernioAccountId: params.pageData.zernioAccountId || undefined,
       zernioProfileId: zernioProfileId || undefined,
@@ -473,7 +488,7 @@ export class FacebookPageManagementService {
           followers_count: Number(params.pageData.followersCount ?? existingPageConn.followers_count ?? 0),
           account_type: 'BUSINESS',
           connection_status: 'CONNECTED',
-          token_status: encryptedAccessToken ? 'TOKEN_VALID' : existingPageConn.token_status,
+          token_status: 'TOKEN_PENDING',
           metadata: { ...(existingPageConn.metadata || {}), ...pageMeta, pageAccessToken: undefined, access_token: undefined },
           updated_at: new Date().toISOString(),
         })
@@ -495,7 +510,7 @@ export class FacebookPageManagementService {
           profile_image_url: params.pageData.avatarUrl || null,
           account_type: 'BUSINESS',
           connection_status: 'CONNECTED',
-          token_status: encryptedAccessToken ? 'TOKEN_VALID' : 'TOKEN_MISSING',
+          token_status: 'TOKEN_PENDING',
           followers_count: Number(params.pageData.followersCount || 0),
           metadata: pageMeta,
           infrastructure_provider: 'zernio',
@@ -508,6 +523,19 @@ export class FacebookPageManagementService {
       if (error) throw error;
       connectionId = inserted?.id || null;
     }
+
+    if (!connectionId) {
+      throw new Error('Facebook Page connection could not be persisted.');
+    }
+
+    // Store the genuine Page access token encrypted on the Page connection.
+    // The Page is only marked CONNECTED/TOKEN_VALID after this succeeds.
+    await SocialTokenManager.saveCredentials({
+      connectionId,
+      accessToken: pageAccessToken,
+      userId,
+      provider: 'facebook',
+    });
 
     await AuditLoggerService.log({
       eventType: 'FACEBOOK_PAGE_CONNECTED' as any,
