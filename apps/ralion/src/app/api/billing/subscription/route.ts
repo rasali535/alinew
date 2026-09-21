@@ -18,14 +18,9 @@ export async function GET(request: NextRequest) {
     const serverCtx = required.context;
 
     const organizationId = serverCtx.organization?.id || serverCtx.workspace.organization_id || serverCtx.workspace.id;
-    const requestedOrgId = new URL(request.url).searchParams.get('organizationId') || request.headers.get('x-organization-id');
-    if (requestedOrgId && requestedOrgId !== organizationId && requestedOrgId !== serverCtx.workspace.id) {
-      return corsJsonResponse(
-        { success: false, code: 'TENANT_CONTEXT_MISMATCH', error: 'The requested billing organization does not match the authenticated tenant.' },
-        { status: 403 },
-        request
-      );
-    }
+    // Billing identity is derived exclusively from the authenticated server
+    // context. Legacy clients may still send display-name organizationId query
+    // parameters; never use those as tenant authority.
 
     const sub = await DurableBillingDatabaseService.getSubscription(organizationId);
     const now = new Date();
