@@ -126,6 +126,8 @@ async function readCurrentSession(forceRefresh = false): Promise<{ accessToken: 
         const refreshed = await callGlobalRefresh();
         const refreshedSession = refreshed?.data?.session;
         if (refreshedSession?.access_token) {
+          (window as any).__ralion_access_token__ = refreshedSession.access_token;
+          (window as any).__ralion_access_token_user__ = refreshedSession.user || null;
           return { accessToken: refreshedSession.access_token, user: refreshedSession.user || null };
         }
         // Refresh failed — do not fall through to getSession (stale token may re-trigger storm)
@@ -136,6 +138,10 @@ async function readCurrentSession(forceRefresh = false): Promise<{ accessToken: 
         const result = await sharedClient.auth.getSession();
         const session = result?.data?.session;
         if (session?.access_token) {
+          // Publish the same verified browser token used by authoritative context
+          // resolution so API helpers cannot lose auth during chunk/session hydration.
+          (window as any).__ralion_access_token__ = session.access_token;
+          (window as any).__ralion_access_token_user__ = session.user || null;
           return { accessToken: session.access_token, user: session.user || null };
         }
       }
@@ -144,7 +150,12 @@ async function readCurrentSession(forceRefresh = false): Promise<{ accessToken: 
     }
   }
 
-  return readStoredSessionFallback();
+  const stored = readStoredSessionFallback();
+  if (stored.accessToken) {
+    (window as any).__ralion_access_token__ = stored.accessToken;
+    (window as any).__ralion_access_token_user__ = stored.user || null;
+  }
+  return stored;
 }
 
 async function fetchAuthoritativeContext(accessToken: string, method: 'GET' | 'POST' = 'GET') {
@@ -186,6 +197,8 @@ async function terminateInvalidSession(): Promise<void> {
 
   // Clear all Ralion and Supabase auth storage
   try {
+    delete (window as any).__ralion_access_token__;
+    delete (window as any).__ralion_access_token_user__;
     localStorage.removeItem('ralion-app-auth-token');
     localStorage.removeItem('ralion_active_workspace_id');
     localStorage.removeItem('ralion_organization_id');
