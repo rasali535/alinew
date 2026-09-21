@@ -81,15 +81,19 @@ export async function GET(
   }
 
   // 4. Locate CreativeAsset record and verify strict tenant and workspace ownership
-  const asset = await CreativeAssetService.getAssetByFilename(safeName, authenticatedOrgId, authenticatedWorkspaceId);
+  // Both IDs are guaranteed above: either by the verified session or by the
+  // unique durable asset lookup. Narrow the nullable inference for TypeScript.
+  const resolvedOrgId = authenticatedOrgId as string;
+  const resolvedWorkspaceId = authenticatedWorkspaceId as string;
+  const asset = await CreativeAssetService.getAssetByFilename(safeName, resolvedOrgId, resolvedWorkspaceId);
   if (asset) {
-    if (asset.organizationId !== authenticatedOrgId) {
+    if (asset.organizationId !== resolvedOrgId) {
       return new NextResponse(
         JSON.stringify({ error: 'FORBIDDEN', message: 'Access denied: Cross-tenant asset access prohibited.' }),
         { status: 403, headers: { 'Content-Type': 'application/json' } }
       );
     }
-    if (asset.workspaceId && asset.workspaceId !== authenticatedWorkspaceId) {
+    if (asset.workspaceId && asset.workspaceId !== resolvedWorkspaceId) {
       return new NextResponse(
         JSON.stringify({ error: 'FORBIDDEN', message: 'Access denied: Cross-workspace asset access prohibited.' }),
         { status: 403, headers: { 'Content-Type': 'application/json' } }
@@ -100,12 +104,12 @@ export async function GET(
   // 5. Download strictly from tenant-scoped storage path
   const storage = getProductionStorageProvider();
   const assetId = asset?.id || safeName.replace(/\.[^/.]+$/, '').replace(/-raw$/, '');
-  const canonicalStoragePath = asset?.storagePath || `organizations/${authenticatedOrgId}/workspaces/${authenticatedWorkspaceId}/assets/${assetId}/${safeName}`;
+  const canonicalStoragePath = asset?.storagePath || `organizations/${resolvedOrgId}/workspaces/${resolvedWorkspaceId}/assets/${assetId}/${safeName}`;
 
   let downloadResult = await storage.download(canonicalStoragePath);
 
   // Fallback only within the same workspace's namespace if storagePath is registered differently
-  if (!downloadResult && asset?.storagePath && asset.organizationId === authenticatedOrgId && (!asset.workspaceId || asset.workspaceId === authenticatedWorkspaceId)) {
+  if (!downloadResult && asset?.storagePath && asset.organizationId === resolvedOrgId && (!asset.workspaceId || asset.workspaceId === resolvedWorkspaceId)) {
     downloadResult = await storage.download(asset.storagePath);
   }
 
