@@ -133,36 +133,64 @@ export class MetaCredentialService {
    */
   static async getValidToken(userId: string, provider: 'facebook' | 'instagram' | 'meta' | 'whatsapp' = 'facebook') {
     const supabase = getServiceSupabase();
-    const { data, error } = await supabase
-      .from('meta_connections')
-      .select('*')
+
+    // Production's canonical OAuth credential store is social_account_tokens.
+    // Keep meta_connections as an optional compatibility source only; some
+    // deployments do not have that legacy table at all.
+    const { data: tokenRow, error: tokenError } = await supabase
+      .from('social_account_tokens')
+      .select('encrypted_access_token, scopes, page_id, expires_at, account_label, extra_meta, status')
       .eq('user_id', userId)
       .eq('provider', provider)
-      .eq('connection_status', 'connected')
-      .order('updated_at', { ascending: false })
-      .limit(1)
+      .eq('status', 'connected')
       .maybeSingle();
 
-    if (error || !data || !data.encrypted_access_token) {
-      return null;
+    if (!tokenError && tokenRow?.encrypted_access_token) {
+      const decryptedToken = decryptToken(tokenRow.encrypted_access_token);
+      if (!decryptedToken) {
+        console.error('[MetaCredentialService] Failed to decrypt stored token for requested account.');
+        return null;
+      }
+
+      const isExpired = tokenRow.expires_at ? new Date(tokenRow.expires_at) < new Date() : false;
+      return {
+        accessToken: decryptedToken,
+        metaUserId: tokenRow.extra_meta?.facebookUserId || tokenRow.extra_meta?.metaUserId || undefined,
+        scopes: tokenRow.scopes || [],
+        isExpired,
+        pageId: tokenRow.page_id,
+        expiresAt: tokenRow.expires_at ? new Date(tokenRow.expires_at) : undefined,
+      };
     }
 
-    const decryptedToken = decryptToken(data.encrypted_access_token);
-    if (!decryptedToken) {
-      console.error('[MetaCredentialService] Failed to decrypt stored token for requested account.');
+    // Optional legacy compatibility fallback.
+    try {
+      const { data } = await supabase
+        .from('meta_connections')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('provider', provider)
+        .eq('connection_status', 'connected')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!data?.encrypted_access_token) return null;
+      const decryptedToken = decryptToken(data.encrypted_access_token);
+      if (!decryptedToken) return null;
+      const isExpired = data.token_expires_at ? new Date(data.token_expires_at) < new Date() : false;
+
+      return {
+        accessToken: decryptedToken,
+        metaUserId: data.meta_user_id,
+        scopes: data.scopes || [],
+        isExpired,
+        pageId: data.page_id,
+        expiresAt: data.token_expires_at ? new Date(data.token_expires_at) : undefined,
+      };
+    } catch {
       return null;
     }
-
-    const isExpired = data.token_expires_at ? new Date(data.token_expires_at) < new Date() : false;
-
-    return {
-      accessToken: decryptedToken,
-      metaUserId: data.meta_user_id,
-      scopes: data.scopes,
-      isExpired,
-      pageId: data.page_id,
-      expiresAt: data.token_expires_at ? new Date(data.token_expires_at) : undefined,
-    };
   }
 
   /**
