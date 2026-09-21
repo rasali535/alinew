@@ -211,10 +211,15 @@ export class FacebookPageManagementService {
       }
     }
 
+    // social_connections is the canonical store for connected Facebook Pages.
+    // The legacy facebook_pages table is not present in production.
     const { count } = await supabase
-      .from('facebook_pages')
+      .from('social_connections')
       .select('id', { count: 'exact', head: true })
-      .eq('organization_id', tenantId);
+      .eq('organization_id', tenantId)
+      .eq('provider', 'facebook')
+      .eq('account_type', 'BUSINESS')
+      .in('connection_status', ['CONNECTED', 'ACTIVE']);
 
     const current = count || 0;
     const remaining = Math.max(0, limit - current);
@@ -361,16 +366,18 @@ export class FacebookPageManagementService {
     const supabase = getServiceSupabase();
     const entitlement = await this.getOrganizationEntitlement(tenantId, userId);
 
-    const { data: existing } = await supabase
-      .from('social_destinations')
-      .select('*')
+    // social_connections is authoritative. social_destinations is a removed
+    // legacy table and must not be queried on the Page-connect path.
+    const { data: existingPageConnection } = await supabase
+      .from('social_connections')
+      .select('id, connection_status')
       .eq('organization_id', tenantId)
       .eq('user_id', userId)
-      .eq('platform', 'facebook')
-      .eq('provider_page_id', params.pageId)
+      .eq('provider', 'facebook')
+      .eq('provider_account_id', params.pageId)
       .maybeSingle();
 
-    const isReconnect = Boolean(existing && existing.status === 'CONNECTED' && existing.is_active);
+    const isReconnect = Boolean(existingPageConnection);
     if (!isReconnect && entitlement.current >= entitlement.limit) {
       await AuditLoggerService.log({
         eventType: 'FACEBOOK_PAGE_CONNECTION_BLOCKED' as any,
@@ -404,21 +411,6 @@ export class FacebookPageManagementService {
       connected_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
-
-    let destination: any = null;
-    try {
-      const { data: dest, error: destinationError } = await supabase
-        .from('social_destinations')
-        .upsert(destinationPayload, { onConflict: 'organization_id,platform,provider_page_id' })
-        .select()
-        .maybeSingle();
-
-      if (!destinationError && dest) {
-        destination = dest;
-      }
-    } catch {
-      // social_destinations table may be absent; social_connections is authoritative
-    }
 
     const { data: allUserConns } = await supabase
       .from('social_connections')
@@ -531,7 +523,7 @@ export class FacebookPageManagementService {
     FacebookConnectionStateService.invalidateCache(userId);
 
     const updatedEntitlement = await this.getOrganizationEntitlement(tenantId, userId);
-    return { success: true, destination: destination || destinationPayload, entitlement: updatedEntitlement };
+    return { success: true, destination: destinationPayload, entitlement: updatedEntitlement };
   }
 
   static async disconnectPage(params: {
