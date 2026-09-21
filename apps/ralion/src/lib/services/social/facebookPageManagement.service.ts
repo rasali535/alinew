@@ -489,6 +489,8 @@ export class FacebookPageManagementService {
           account_type: 'BUSINESS',
           connection_status: 'DISCONNECTED',
           token_status: 'REAUTH_REQUIRED',
+          disconnected_at: null,
+          connected_at: new Date().toISOString(),
           metadata: { ...(existingPageConn.metadata || {}), ...pageMeta, pageAccessToken: undefined, access_token: undefined },
           updated_at: new Date().toISOString(),
         })
