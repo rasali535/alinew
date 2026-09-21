@@ -80,8 +80,8 @@ const PLANS: Array<{
     price: 0,
     description: 'Core business tools for solo operators',
     badge: 'Free Forever',
-    credits: 250,
-    features: ['Core CRM & Tasks', '250 Monthly Credits', '1 Social Account'],
+    credits: 100,
+    features: ['Core CRM & Tasks', '100 Monthly Credits for Mari', '1 Social Account'],
   },
   {
     id: 'STARTER',
@@ -260,8 +260,8 @@ export default function BillingPage() {
   };
 
   const currentPlanId = subData?.subscription?.planId || 'COMMUNITY';
-  const creditBalance = subData?.credits?.balance ?? 250;
-  const creditQuota = subData?.credits?.monthlyQuota ?? 250;
+  const creditBalance = subData?.credits?.balance ?? 100;
+  const creditQuota = subData?.credits?.monthlyQuota ?? 100;
   const reservedCredits = subData?.credits?.reserved ?? 0;
   const usedCredits = subData?.credits?.used ?? Math.max(0, creditQuota - creditBalance);
   const renewalDate = subData?.currentPeriodEnd
