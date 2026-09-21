@@ -250,7 +250,12 @@ export class CreativeOrchestrator {
       // 3. Prompt-faithful semantic retries.
       // Generate multiple real candidates from the SAME user brief using different seeds.
       // Do not append machine-authored subjects/objects just to game the relevance score.
-      const maxSemanticAttempts = 3;
+      // One paid provider generation per customer creative request. Semantic QA
+      // may reject the result, but must not silently trigger additional paid
+      // image generations inside the same 10-credit request. Besides protecting
+      // unit economics, this keeps the synchronous request below proxy/gateway
+      // timeouts for typography-heavy flyers.
+      const maxSemanticAttempts = 1;
       let semanticAttempts = 1;
 
       while (
