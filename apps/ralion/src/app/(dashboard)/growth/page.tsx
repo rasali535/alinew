@@ -885,7 +885,9 @@ function GrowthPageContent() {
                   avatarUrl: c.profile_image_url || c.avatar_url,
                   followers: fCount > 0 ? fCount.toLocaleString() : '0',
                   providerAccountId: c.provider_account_id,
-                };
+                  accountType: c.account_type,
+                  metadata: c.metadata || {},
+                } as SocialAccount;
               });
             }
           }
