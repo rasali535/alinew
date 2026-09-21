@@ -43,13 +43,17 @@ export async function GET(request: NextRequest) {
     }
 
     const credits = await DurableTenantCreditsService.getSummary(organizationId);
+    const platformAdmin = serverCtx.isPlatformAdmin === true;
 
     return corsJsonResponse(
       {
         success: true,
         subscription: sub,
-        effectivePlan,
-        status: effectiveStatus,
+        effectivePlan: platformAdmin
+          ? { ...effectivePlan, planId: 'PLATFORM_ADMIN', name: 'Platform Admin', description: 'Internal Ras Ali Labs platform administration with full feature access.' }
+          : effectivePlan,
+        platformAdmin,
+        status: platformAdmin ? 'INTERNAL' : effectiveStatus,
         isPastDue,
         currentPeriodEnd: sub.currentPeriodEnd,
         credits: {
