@@ -1091,8 +1091,22 @@ export class SocialPublishingService {
           const targetPageId = params.pageId || conn.metadata?.pageId || conn.page_id || conn.provider_account_id;
           let publishToken = token;
 
-          // For Facebook Pages, resolve authentic Page Access Token
-          if (platform === 'facebook' && targetPageId && targetPageId !== 'me' && !conn.mock_token) {
+          // Facebook Page connections persist the genuine Page Access Token in
+          // social_connections during explicit Page selection. Do not feed that
+          // Page token back into /me/accounts as though it were a user token.
+          // Only resolve user -> Page token for legacy/non-Page connections.
+          if (
+            platform === 'facebook' &&
+            targetPageId &&
+            targetPageId !== 'me' &&
+            !conn.mock_token &&
+            !(
+              conn.account_type === 'BUSINESS' ||
+              conn.account_type === 'PAGE' ||
+              conn.metadata?.is_page === true ||
+              conn.metadata?.provider_account_type === 'FACEBOOK_PAGE'
+            )
+          ) {
             const pageToken = await resolvePageAccessToken(token, targetPageId, conn.metadata);
             if (!pageToken) {
               platformResults[platform] = {
