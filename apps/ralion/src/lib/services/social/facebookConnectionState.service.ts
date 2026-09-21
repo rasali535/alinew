@@ -172,7 +172,22 @@ export class FacebookConnectionStateService {
       let facebookUserName: string | undefined = undefined;
       let activeConnRecord: any = null;
 
-      for (const conn of activeConnections) {
+      // Prefer an active Business Page connection when one exists; otherwise
+      // use the profile token as the discovery authority. This prevents a newer
+      // PERSONAL OAuth row from hiding an already-selected Page.
+      const orderedConnections = [
+        ...activeConnections.filter(c =>
+          c.account_type === 'BUSINESS' ||
+          c.metadata?.is_page === true ||
+          c.metadata?.provider_account_type === 'FACEBOOK_PAGE'
+        ),
+        ...activeConnections.filter(c =>
+          !(c.account_type === 'BUSINESS' ||
+            c.metadata?.is_page === true ||
+            c.metadata?.provider_account_type === 'FACEBOOK_PAGE')
+        ),
+      ];
+      for (const conn of orderedConnections) {
         if (conn.metadata?.encrypted_access_token) {
           encryptedToken = conn.metadata.encrypted_access_token;
           facebookUserId = conn.metadata?.facebookUserId || conn.provider_account_id;
