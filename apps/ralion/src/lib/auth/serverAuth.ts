@@ -548,11 +548,32 @@ export async function resolveRalionAuthContext(
 
   // Platform administration is an account-level privilege. It does not grant
   // membership in, or tenant context for, any customer workspace.
-  const isPlatformAdmin = PlatformAdminService.verifyAdminAuthorization(
+  // Platform-admin authority is durable server-side state. App metadata is
+  // retained as a bootstrap signal, but it is not sufficient on its own.
+  const metadataPlatformAdmin = PlatformAdminService.verifyAdminAuthorization(
     authUser.user_metadata,
     authUser.email,
     authUser.app_metadata
   );
+  let durablePlatformAdmin = false;
+  try {
+    const { data: adminGrant, error: adminGrantError } = await adminClient
+      .from('platform_admins')
+      .select('user_id, organization_id, role, status')
+      .eq('user_id', authUser.id)
+      .eq('organization_id', organizationId)
+      .eq('role', 'PLATFORM_ADMIN')
+      .eq('status', 'ACTIVE')
+      .maybeSingle();
+    if (adminGrantError) {
+      console.error('[ServerAuth] Platform admin grant lookup failed:', { code: adminGrantError.code });
+    } else {
+      durablePlatformAdmin = Boolean(adminGrant);
+    }
+  } catch (adminGrantErr: any) {
+    console.error('[ServerAuth] Platform admin grant lookup exception:', adminGrantErr?.message);
+  }
+  const isPlatformAdmin = metadataPlatformAdmin && durablePlatformAdmin;
 
   const resolvedContext: RalionSessionContext = {
     user: { id: authUser.id, email: authUser.email || '', user_metadata: authUser.user_metadata, app_metadata: authUser.app_metadata },
