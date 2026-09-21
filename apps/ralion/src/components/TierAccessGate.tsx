@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Card, Button, Badge } from '@ralion/ui';
 import { Lock, Sparkles, ShieldCheck, ArrowRight, Zap, TrendingUp, Layers } from 'lucide-react';
 import { AuthService, UserProfile } from '@/lib/services/auth.service';
-import { getRalionApiUrl } from '@/lib/api-config';
+import { authFetch } from '@/lib/api-config';
 
 interface TierAccessGateProps {
   requiredTier: 'COMMUNITY' | 'STANDARD' | 'PROFESSIONAL' | 'ENTERPRISE';
@@ -43,22 +43,21 @@ export const TierAccessGate: React.FC<TierAccessGateProps> = ({
         }
       }
 
-      const orgId = user?.orgName || (typeof window !== 'undefined' ? localStorage.getItem('ralion_active_workspace_id') || localStorage.getItem('ralion_organization_id') : null);
-
-      // Fetch server-authoritative subscription state
-      if (orgId && orgId !== 'default-org') {
-        try {
-          const res = await fetch(getRalionApiUrl(`/api/billing/subscription?organizationId=${encodeURIComponent(orgId)}`));
-          if (res.ok) {
-            const data = await res.json();
-            if (data.success && data.subscription) {
-              setServerPlan(data.subscription.planId || data.effectivePlan?.planId || null);
-              setSubStatus(data.subscription.status || 'ACTIVE');
-            }
+      // Fetch server-authoritative subscription state through the canonical
+      // authenticated API client. Tenant identity is derived by the server from
+      // the verified JWT/workspace context; never send a display name as an
+      // organization identifier and never bypass authFetch here.
+      try {
+        const res = await authFetch('/api/billing/subscription');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.subscription) {
+            setServerPlan(data.subscription.planId || data.effectivePlan?.planId || null);
+            setSubStatus(data.subscription.status || 'ACTIVE');
           }
-        } catch (e) {
-          console.warn('[TierAccessGate] Server subscription query note:', e);
         }
+      } catch (e) {
+        console.warn('[TierAccessGate] Server subscription query note:', e);
       }
     } catch (err) {
       console.warn('[TierAccessGate] Auth check note:', err);
