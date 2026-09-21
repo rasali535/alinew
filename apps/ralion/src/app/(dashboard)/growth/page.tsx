@@ -1356,12 +1356,19 @@ function GrowthPageContent() {
           hasFacebook ? fetchPageAnalytics() : Promise.resolve(null),
         ]);
       } else if (accounts.length === 0) {
-        // Clean empty state when no accounts connected
+        // There may still be a valid Facebook OAuth authorization identity even
+        // when no operational Page connection exists. Probe Page discovery
+        // before presenting the generic empty state so users do not get sent
+        // through OAuth again unnecessarily.
+        const discoveredPages = await fetchFacebookPages().catch(() => []);
+        if (!isMounted) return;
+        if (discoveredPages.length > 0) {
+          setIsPageSelectionModalOpen(true);
+        }
         setFacebookPagePosts([]);
         setConnectionPosts({});
         setPostComments([]);
         setInboxConversations([]);
-        setAvailableFacebookPages([]);
         setPageAnalytics(null);
         setMarketResearchReport(null);
         setMariGrowthScore(null);
@@ -1391,40 +1398,6 @@ function GrowthPageContent() {
       isMounted = false;
     };
   }, [loadConnectedAccounts, fetchPostsForConnection, fetchFacebookPages, selectedAccountId]);
-
-  // ── Auto-Detect OAuth Callback & Auto-Open Page Selection Modal ─────────
-  useEffect(() => {
-    if (!searchParams) return;
-    const connectedParam = searchParams.get('connected');
-    const profileConnected = searchParams.get('profile_connected');
-    const pageConnected = searchParams.get('page_connected');
-    const oauthError = searchParams.get('oauth_error');
-    const handle = searchParams.get('handle');
-
-    if (oauthError) {
-      setOauthAlert({
-        type: 'error',
-        message: `✕ OAuth Connection Notice: ${decodeURIComponent(oauthError)}`,
-      });
-      return;
-    }
-
-    if (connectedParam === 'facebook' || profileConnected === 'true') {
-      setOauthAlert({
-        type: 'success',
-        message: `✓ Facebook Profile connected (${handle ? decodeURIComponent(handle) : 'Authorized'})! Please choose your Facebook Page below.`,
-      });
-      setIsPageSelectionModalOpen(true);
-      fetchFacebookPages();
-      loadConnectedAccounts();
-    } else if (pageConnected === 'true') {
-      setOauthAlert({
-        type: 'success',
-        message: '✓ Facebook Page successfully connected and activated for Ralion Growth Studio!',
-      });
-      loadConnectedAccounts();
-    }
-  }, [searchParams, fetchFacebookPages, loadConnectedAccounts]);
 
   // ── Tab-Level Lazy Loading (Deffered Non-Critical Data) ───────────────────
   useEffect(() => {
@@ -1463,6 +1436,7 @@ function GrowthPageContent() {
     const oauthError = searchParams.get('oauth_error');
     const stage = searchParams.get('stage');
     const facebookParam = searchParams.get('facebook');
+    const profileConnected = searchParams.get('profile_connected');
 
     // Intercept raw OAuth code if redirected directly to /growth, resolving provider accurately
     if (codeParam) {
@@ -1544,11 +1518,12 @@ function GrowthPageContent() {
       if (connectionIdParam) {
         setSelectedAccountId(connectionIdParam);
       }
-      if (connected === 'facebook' && (stage === '1' || facebookParam === 'account_connected')) {
+      if ((connected === 'facebook' || profileConnected === 'true') && (stage === '1' || facebookParam === 'account_connected' || profileConnected === 'true')) {
         setOauthAlert({
           type: 'success',
-          message: `✅ Facebook login connected (${handle || ''}). You can now connect your managed Facebook Page below.`
+          message: `✅ Facebook authorization complete (${handle || 'Authorized'}). Choose the Page you want Ralion to manage.`
         });
+        setIsPageSelectionModalOpen(true);
       } else if (connected === 'facebook' && (stage === '2' || facebookParam === 'page_connected')) {
         setFacebookPageStatus('CONNECTED');
         setOauthAlert({
