@@ -97,7 +97,8 @@ if (!globalState.__ralionCreativeDurableCreditsPatched) {
     BillingDatabaseService.saveSubscription(durableSubscription);
 
     const plan = await DurableTenantCreditsService.resolvePlan(organizationId);
-    if (options.type !== 'VIDEO_REEL' && plan.planId === 'COMMUNITY') {
+    const platformAdmin = (options as any).platformAdmin === true;
+    if (!platformAdmin && options.type !== 'VIDEO_REEL' && plan.planId === 'COMMUNITY') {
       return {
         success: false,
         status: 'FAILED' as const,
@@ -112,7 +113,7 @@ if (!globalState.__ralionCreativeDurableCreditsPatched) {
 
     const featureKey = options.type === 'VIDEO_REEL' ? 'cogvideoVideos' : 'fluxImages';
     const entitlement = EntitlementService.checkFeature(organizationId, featureKey);
-    if (!entitlement.allowed) {
+    if (!platformAdmin && !entitlement.allowed) {
       return {
         success: false,
         status: 'FAILED' as const,
@@ -141,6 +142,7 @@ if (!globalState.__ralionCreativeDurableCreditsPatched) {
         workspaceId: options.workspaceId || null,
         format: options.format || null,
         campaign: options.campaign || null,
+        platformAdmin,
       },
     });
 
