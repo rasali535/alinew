@@ -28,6 +28,10 @@ export async function GET(request: NextRequest) {
       .eq('workspace_id', context.workspace.id)
       .eq('organization_id', context.organization.id)
       .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected', 'active'])
+      // A Facebook person is an OAuth authorization identity, never an
+      // operational social destination in Ralion. Only selected Pages belong
+      // in the connected-accounts surface.
+      .or('provider.neq.facebook,account_type.in.(BUSINESS,PAGE)')
       .order('created_at', { ascending: false });
 
     if (error) {
