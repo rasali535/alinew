@@ -212,7 +212,12 @@ export async function GET(
       extraMeta,
     });
 
-    const stageQuery = intent === 'page_connection' ? '&stage=2&page_connected=true' : '&stage=1&profile_connected=true';
+    // Facebook OAuth only establishes the user/profile token and discovers
+    // manageable Pages. A Page is not connected until the user explicitly
+    // selects one via POST /api/social/facebook/pages.
+    const stageQuery = provider === 'facebook'
+      ? '&stage=1&profile_connected=true'
+      : (intent === 'page_connection' ? '&stage=2&page_connected=true' : '&stage=1&profile_connected=true');
     const connectionQuery = storeResult.connectionId ? `&connection_id=${encodeURIComponent(storeResult.connectionId)}` : '';
     const finalRedirectUrl = `${growthRedirect}?connected=${provider}&handle=${encodeURIComponent(profile.handle)}${connectionQuery}${stageQuery}`;
     const redirectResponse = NextResponse.redirect(finalRedirectUrl);
