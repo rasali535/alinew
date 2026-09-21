@@ -16,7 +16,7 @@
  */
 
 import 'server-only';
-import { decryptToken, META_GRAPH_API_VERSION } from '@ralion/integrations/server';
+import { META_GRAPH_API_VERSION } from '@ralion/integrations/server';
 import { MetaCredentialService } from '../metaCredential.service';
 import { getPrivilegedSupabase as getServiceSupabase } from '@/lib/supabase/server';
 
