@@ -248,23 +248,32 @@ export async function authFetch(pathOrUrl: string, init?: RequestInit): Promise<
       credentials: init?.credentials || 'include',
     });
 
-    // Only retry when the server explicitly says the presented token is invalid.
-    // AUTH_TOKEN_MISSING means there was no token — refreshing won't help.
-    // Unknown 401 codes, 403, 409, and 500 must never trigger a refresh cycle.
-    if (res.status === 401 && hadSession && typeof window !== 'undefined') {
-      let shouldRefresh = false;
+    // Recover once from either an invalid token or a session-hydration race.
+    // A protected request can fire before Supabase has rehydrated local storage,
+    // which previously sent no Authorization header and made OAuth/billing fail
+    // with AUTH_TOKEN_MISSING even though the browser still had a valid session.
+    // Never retry unrelated 401s, 403s, 409s, or server errors.
+    if (res.status === 401 && typeof window !== 'undefined') {
+      let authCode = '';
       try {
         const cloned = res.clone();
         const body = await cloned.json();
-        // Refresh if and only if the server returned the exact token-invalid code.
-        if (body?.code === 'AUTH_TOKEN_INVALID') {
-          shouldRefresh = true;
-        }
+        authCode = String(body?.code || '');
       } catch {}
+
+      const shouldRefresh =
+        authCode === 'AUTH_TOKEN_INVALID' ||
+        authCode === 'AUTH_TOKEN_MISSING';
 
       if (shouldRefresh) {
         const refreshedAuth = await getRalionAuthHeaders({ refresh: true });
-        if (refreshedAuth.Authorization && refreshedAuth.Authorization !== initialAuth.Authorization) {
+        const recoveredMissingSession = !hadSession && Boolean(refreshedAuth.Authorization);
+        const replacedInvalidSession =
+          hadSession &&
+          Boolean(refreshedAuth.Authorization) &&
+          refreshedAuth.Authorization !== initialAuth.Authorization;
+
+        if (recoveredMissingSession || replacedInvalidSession) {
           headers = mergeAuthHeaders(init?.headers, refreshedAuth, true);
           if (!headers.has('Content-Type') && init?.body && typeof init.body === 'string') {
             headers.set('Content-Type', 'application/json');
