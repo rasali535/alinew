@@ -179,11 +179,15 @@ export class FacebookConnectionStateService {
       ) || null;
 
       let accessToken: string | null = null;
+      let storedDiscoveredPages: any[] = [];
       if (userId) {
         const credential = await MetaCredentialService.getValidToken(userId, 'facebook');
         if (credential?.accessToken && !credential.isExpired) {
           accessToken = credential.accessToken;
           facebookUserId = credential.metaUserId || undefined;
+          storedDiscoveredPages = Array.isArray(credential.extraMeta?.discovered_pages)
+            ? credential.extraMeta.discovered_pages
+            : [];
         }
       }
 
@@ -308,6 +312,24 @@ export class FacebookConnectionStateService {
         }
       }
 
+      // If Meta already returned managed Pages during the OAuth callback, retain
+      // that discovery result as a short-lived chooser fallback. The actual Page
+      // connection still re-validates access by resolving a genuine Page token.
+      if (availablePages.length === 0 && storedDiscoveredPages.length > 0) {
+        for (const p of storedDiscoveredPages) {
+          if (!p?.id || !p?.name) continue;
+          availablePages.push({
+            pageId: String(p.id),
+            name: p.name,
+            username: p.username || `@${String(p.name).toLowerCase().replace(/\\s+/g, '_')}`,
+            category: p.category || 'Business',
+            followersCount: Number(p.followers ?? p.followers_count ?? 0),
+            avatarUrl: p.avatar || p.avatarUrl || null,
+            tasks: Array.isArray(p.tasks) ? p.tasks : [],
+          });
+        }
+      }
+
       // Check User Profile Name if not yet loaded
       if (!facebookUserName) {
         try {
@@ -346,7 +368,7 @@ export class FacebookConnectionStateService {
 
       // Check state branches:
       // STATE: PROFILE_CONNECTED_PAGE_ACCESS_UNAVAILABLE
-      if (!hasPagesShowList || (availablePages.length === 0 && !selectedPage)) {
+      if ((availablePages.length === 0 && !selectedPage)) {
         const result: FacebookConnectionStateResult = {
           state: 'PROFILE_CONNECTED_PAGE_ACCESS_UNAVAILABLE',
           provider: 'facebook',
@@ -366,8 +388,8 @@ export class FacebookConnectionStateService {
           availablePagesCount: availablePages.length,
           availablePages,
           pageAccessible: false,
-          requiresReauth: !hasPagesShowList,
-          reason: !hasPagesShowList ? 'LACKS_PAGES_SHOW_LIST_SCOPE' : 'NO_PAGES_RETURNED_BY_META',
+          requiresReauth: false,
+          reason: 'NO_PAGES_RETURNED_BY_META',
           statusMessage: 'Your Facebook account is connected, but Facebook Page access is not currently available.',
           ctaAction: 'RECONNECT_PAGE_ACCESS',
           ctaLabel: 'Reconnect Facebook with Page Access',
