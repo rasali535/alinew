@@ -85,6 +85,19 @@ let _sessionPromise: Promise<any> | null = null;
 async function getBrowserSession(forceRefresh = false): Promise<{ access_token: string; user?: any; refresh_token?: string } | null> {
   if (typeof window === 'undefined') return null;
 
+  // OrganizationContext has already server-verified this session in many cases.
+  // Reuse that canonical token before asking another webpack chunk/client instance
+  // to rehydrate Supabase storage independently.
+  if (!forceRefresh) {
+    const sharedToken = (window as any).__ralion_access_token__;
+    if (typeof sharedToken === 'string' && sharedToken.length > 20) {
+      return {
+        access_token: sharedToken,
+        user: (window as any).__ralion_access_token_user__ || undefined,
+      };
+    }
+  }
+
   if (forceRefresh) {
     try {
       // Prefer the globally registered deduplicated refresh function (set by client.ts)
