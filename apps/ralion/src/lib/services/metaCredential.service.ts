@@ -160,6 +160,7 @@ export class MetaCredentialService {
         isExpired,
         pageId: tokenRow.page_id,
         expiresAt: tokenRow.expires_at ? new Date(tokenRow.expires_at) : undefined,
+        extraMeta: tokenRow.extra_meta || {},
       };
     }
 
@@ -187,6 +188,7 @@ export class MetaCredentialService {
         isExpired,
         pageId: data.page_id,
         expiresAt: data.token_expires_at ? new Date(data.token_expires_at) : undefined,
+        extraMeta: {},
       };
     } catch {
       return null;
