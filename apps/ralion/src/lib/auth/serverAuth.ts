@@ -11,6 +11,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, User } from '@supabase/supabase-js';
 import { corsJsonResponse } from '../cors';
+import { PlatformAdminService } from '@ralion/auth/server';
 import {
   CANONICAL_SUPABASE_URL,
   getPrivilegedSupabase,
@@ -87,6 +88,7 @@ export interface RalionSessionContext {
   workspace: RalionWorkspace;
   membership: RalionWorkspaceMembership;
   organization: { id: string; name: string; tier?: string };
+  isPlatformAdmin: boolean;
 }
 
 export type RalionAuthStatus =
@@ -536,6 +538,14 @@ export async function resolveRalionAuthContext(
     role: membershipRole,
   };
 
+  // Platform administration is an account-level privilege. It does not grant
+  // membership in, or tenant context for, any customer workspace.
+  const isPlatformAdmin = PlatformAdminService.verifyAdminAuthorization(
+    authUser.user_metadata,
+    authUser.email,
+    authUser.app_metadata
+  );
+
   const resolvedContext: RalionSessionContext = {
     user: { id: authUser.id, email: authUser.email || '', user_metadata: authUser.user_metadata, app_metadata: authUser.app_metadata },
     profile,
@@ -544,8 +554,9 @@ export async function resolveRalionAuthContext(
     organization: {
       id: organizationId,
       name: orgName,
-      tier: authUser.user_metadata?.tier || 'STANDARD',
+      tier: isPlatformAdmin ? 'PLATFORM_ADMIN' : (authUser.user_metadata?.tier || 'STANDARD'),
     },
+    isPlatformAdmin,
   };
 
   return {
