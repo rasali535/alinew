@@ -142,6 +142,14 @@ export function tenantDatabaseErrorResponse(request: NextRequest, message = 'Dat
 export function extractAuthToken(request: NextRequest): string | null {
   const authHeader = request.headers.get('authorization') || request.headers.get('Authorization');
   if (authHeader?.startsWith('Bearer ')) return authHeader.substring(7).trim();
+
+  // Hostinger's /ralion reverse proxy can strip Authorization before forwarding
+  // to the dynamic backend. The browser API client mirrors the same bearer JWT
+  // into this application-specific header so authentication survives that hop.
+  // It is not a trust bypass: resolveRalionAuthContext still verifies the token
+  // cryptographically with Supabase auth.getUser() below.
+  const forwardedToken = request.headers.get('x-ralion-auth-token');
+  if (forwardedToken?.trim()) return forwardedToken.trim();
   const cookieNames = ['sb-yidsfihagwttlmhfynmf-auth-token', 'ralion-app-auth-token', 'sb-access-token', 'supabase-auth-token', 'sb:token'];
   for (const name of cookieNames) {
     const cookie = request.cookies.get(name);
