@@ -92,6 +92,7 @@ export async function POST(request: NextRequest) {
       cta,
       mockFailure,
       requiredVisualElements,
+      platformAdmin: authResult.context.isPlatformAdmin === true,
     });
 
     if (!result.success || !result.receipt) {
