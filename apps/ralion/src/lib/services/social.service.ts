@@ -64,8 +64,14 @@ export async function storeOAuthTokens(params: {
     params.accountHandle.replace(/^@/, '') ||
     `${params.provider}_${Date.now()}`;
 
-  // 1. Primary multi-account isolated persistence in social_connections
+  // 1. Primary multi-account isolated persistence in social_connections.
+  // Facebook PERSONAL identities are authorization credentials only. They are
+  // kept in token storage below so Page discovery can use them, but they must
+  // never become operational social connections.
   let connectionId: string | undefined;
+  const isFacebookAuthorizationIdentity =
+    params.provider.toLowerCase() === 'facebook' && !params.pageId;
+  if (!isFacebookAuthorizationIdentity) {
   try {
     const { data: connData, error: connErr } = await supabase.from('social_connections').upsert({
       user_id: params.userId,
@@ -103,6 +109,7 @@ export async function storeOAuthTokens(params: {
     }
   } catch (dbErr: any) {
     console.warn('[SocialService] social_connections multi-account upsert notice:', dbErr.message);
+  }
   }
 
   // 3. Keep backward-compatible social_account_tokens table updated
