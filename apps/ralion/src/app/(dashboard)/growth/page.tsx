@@ -1075,7 +1075,7 @@ function GrowthPageContent() {
     setNewPost({
       title: day.topic,
       body: `${day.suggestedCaption}\n\n${day.callToAction}`,
-      platform: 'facebook',
+      platform: ((connectedAccounts.find(a => a.id === selectedAccountId)?.provider || 'facebook') as ContentPost['platform']),
       hashtags: (day.hashtags || []).join(' '),
       scheduledAt: '',
     });
@@ -1491,7 +1491,7 @@ function GrowthPageContent() {
         const data = await res.json().catch(() => ({}));
         const conversations = Array.isArray(data.conversations)
           ? data.conversations.filter((conversation: any) =>
-              !conversation?.provider || String(conversation.provider).toLowerCase() === selectedConn.provider
+              String(conversation?.provider || '').toLowerCase() === selectedConn.provider
             )
           : [];
 
@@ -1716,6 +1716,7 @@ function GrowthPageContent() {
 
     setNewPost(prev => ({ ...prev, platform: selectedConn.provider as ContentPost['platform'] }));
     setPreviewPlatform(selectedConn.provider);
+    setPageWorkspaceTab('OVERVIEW');
     setPostComments([]);
     setSelectedCommentPost(null);
     setIsCommentsModalOpen(false);
@@ -1897,7 +1898,9 @@ function GrowthPageContent() {
         setOauthAlert({ type: 'success', message: `✅ ${connected.charAt(0).toUpperCase() + connected.slice(1)} connected successfully! Account: ${handle || ''}` });
       }
       loadConnectedAccounts();
-      fetchFacebookPages();
+      if (connected === 'facebook' || profileConnected === 'true') {
+        fetchFacebookPages();
+      }
       // Clean URL in place without triggering double-basePath or re-render loops
       if (typeof window !== 'undefined') {
         window.history.replaceState({}, '', window.location.pathname);
@@ -3052,7 +3055,13 @@ function GrowthPageContent() {
             {tab === 'AI_STUDIO' && <Sparkles className="w-3.5 h-3.5 text-purple-300" />}
             {tab === 'CREATIVES' && <Play className="w-3.5 h-3.5 text-pink-400" />}
             {tab === 'GENERATED_OUTPUT' && <Sparkles className="w-3.5 h-3.5 text-cyan-400" />}
-            {tab === 'OVERVIEW' ? 'Social Manager Hub' : tab === 'INBOX' ? `Social Inbox (${inboxConversations.length})` : tab === 'GENERATED_OUTPUT' ? `All Outputs (${generatedGallery.length})` : tab.replace('_', ' ')}
+            {tab === 'OVERVIEW'
+              ? 'Social Manager Hub'
+              : tab === 'INBOX'
+                ? `${selectedPlatformLabel} Inbox (${inboxConversations.length})`
+                : tab === 'GENERATED_OUTPUT'
+                  ? `All Outputs (${generatedGallery.length})`
+                  : tab.replace('_', ' ')}
           </button>
         ))}
       </div>
@@ -4060,7 +4069,6 @@ function GrowthPageContent() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {connectedAccounts.map((acc) => {
                   const isSelected = selectedAccountId === acc.id || (!selectedAccountId && connectedAccounts.length === 1 && connectedAccounts[0]?.id === acc.id);
-                  const isFb = acc.provider === 'facebook';
                   return (
                     <div
                       key={acc.id}
@@ -4120,7 +4128,7 @@ function GrowthPageContent() {
                             }}
                             className="text-indigo-400 hover:text-indigo-300 font-semibold"
                           >
-                            Create Post
+                            Create ${acc.provider === "instagram" ? "Instagram" : acc.provider === "facebook" ? "Facebook" : acc.provider.charAt(0).toUpperCase() + acc.provider.slice(1)} Post
                           </button>
                           <span>•</span>
                           <button
@@ -4161,7 +4169,7 @@ function GrowthPageContent() {
             )}
           </div>
 
-          {facebookPageStatus === 'PAGE_ACCESS_PENDING' || (fbConn && availableFacebookPages.length === 0 && !activeFbPage) ? (
+          {isSelectedFacebook && (facebookPageStatus === 'PAGE_ACCESS_PENDING' || (fbConn && availableFacebookPages.length === 0 && !activeFbPage)) ? (
             <div className="p-6 rounded-3xl bg-gradient-to-br from-zinc-900/90 via-zinc-950 to-zinc-900 border border-amber-500/30 shadow-2xl flex flex-col gap-5">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-4">
                 <div className="flex items-center gap-3.5">
@@ -4538,7 +4546,7 @@ function GrowthPageContent() {
                     </p>
                   </div>
                   <p className="text-[10px] text-zinc-400 mt-2">
-                    {totalReach > 0 ? 'Aggregated from tracked posts' : 'Meta reach insights unavailable'}
+                    {totalReach > 0 ? 'Aggregated from selected-account posts' : `${selectedPlatformLabel} reach insights unavailable`}
                   </p>
                 </div>
                 <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 flex flex-col justify-between">
@@ -4993,7 +5001,7 @@ function GrowthPageContent() {
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-zinc-900/80 p-4 rounded-2xl border border-zinc-800 shadow-xl">
             <div>
               <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                <Inbox className="w-4 h-4 text-teal-400" /> Unified Social Inbox & Messenger
+                <Inbox className="w-4 h-4 text-teal-400" /> {selectedPlatform === 'facebook' ? 'Facebook Messenger Inbox' : selectedPlatform === 'instagram' ? 'Instagram Inbox' : `${selectedPlatformLabel} Inbox`}
               </h2>
               <p className="text-xs text-zinc-400 mt-0.5">
                 Read and respond to direct customer messages for <strong>{currentAccountName}</strong> ({currentAccountHandle || '@account'}) on {selectedPlatformLabel}.
@@ -5064,7 +5072,7 @@ function GrowthPageContent() {
 
                 {inboxConversations.length === 0 && (
                   <div className="p-8 text-center text-xs text-zinc-500 italic">
-                    No active inbox conversations found.
+                    No active ${selectedPlatformLabel} conversations found for the selected account.
                   </div>
                 )}
               </div>
