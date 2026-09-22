@@ -2112,11 +2112,14 @@ function GrowthPageContent() {
   };
 
   // ── Sync analytics from real platform APIs ────────────────────────────────
-  const handleSyncAccount = async (providerKey: string) => {
+  const handleSyncAccount = async (providerKey: string, connectionId?: string) => {
     setIsSyncing(providerKey);
     try {
-      const targetConn = connectedAccounts.find(a => a.id === selectedAccountId && a.provider === providerKey)
-        || connectedAccounts.find(a => a.provider === providerKey);
+      const targetConn = (connectionId && connectedAccounts.find(a => a.id === connectionId && a.provider === providerKey))
+        || connectedAccounts.find(a => a.id === selectedAccountId && a.provider === providerKey)
+        || (connectedAccounts.filter(a => a.provider === providerKey).length === 1
+          ? connectedAccounts.find(a => a.provider === providerKey)
+          : undefined);
       const queryParam = targetConn?.id ? `?socialConnectionId=${encodeURIComponent(targetConn.id)}` : '';
       const res = await authFetch(`/api/oauth/${providerKey}/sync${queryParam}`, { method: 'POST' });
       const contentType = res.headers.get('content-type') || '';
@@ -4126,7 +4129,7 @@ function GrowthPageContent() {
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedAccountId(acc.id);
-                              void handleSyncAccount(acc.provider);
+                              void handleSyncAccount(acc.provider, acc.id);
                             }}
                             className="text-emerald-400 hover:text-emerald-300 disabled:opacity-50"
                           >
