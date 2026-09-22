@@ -38,6 +38,7 @@ export interface OrchestratorGenerateOptions {
   caption?: string;
   mockFailure?: string;
   requiredVisualElements?: string[];
+  requiredTextElements?: string[];
 }
 
 export class CreativeOrchestrator {
@@ -77,7 +78,12 @@ export class CreativeOrchestrator {
       cta = 'Learn More',
       mockFailure,
       requiredVisualElements = [],
+      requiredTextElements = [],
     } = options;
+
+    const resolvedRequiredTextElements = requiredTextElements.length > 0
+      ? requiredTextElements
+      : VisualSemanticEvaluatorService.extractRequiredText(prompt);
 
     if (!organizationId) {
       return {
@@ -243,6 +249,7 @@ export class CreativeOrchestrator {
         {
           userPrompt: prompt,
           expectedConcepts: requiredVisualElements.length > 0 ? requiredVisualElements : undefined,
+          requiredTextElements: resolvedRequiredTextElements,
           format,
         }
       );
@@ -262,7 +269,8 @@ export class CreativeOrchestrator {
         visualQAResult &&
         (
           visualQAResult.visualRelevanceScore < 80 ||
-          visualQAResult.prohibitedBrandingDetected
+          visualQAResult.prohibitedBrandingDetected ||
+          visualQAResult.textFidelityPassed === false
         ) &&
         semanticAttempts < maxSemanticAttempts
       ) {
@@ -293,17 +301,25 @@ export class CreativeOrchestrator {
               {
                 userPrompt: prompt,
                 expectedConcepts: requiredVisualElements.length > 0 ? requiredVisualElements : undefined,
+                requiredTextElements: resolvedRequiredTextElements,
                 format,
               }
             );
 
             const currentIsBranded = Boolean(visualQAResult.prohibitedBrandingDetected);
             const retryIsBranded = Boolean(retryQA.prohibitedBrandingDetected);
+            const currentTextPassed = visualQAResult.textFidelityPassed !== false;
+            const retryTextPassed = retryQA.textFidelityPassed !== false;
             const retryIsCleaner = currentIsBranded && !retryIsBranded;
+            const retryFixesText = !currentTextPassed && retryTextPassed;
             const retryScoresBetter =
               retryQA.visualRelevanceScore > visualQAResult.visualRelevanceScore;
 
-            if (retryIsCleaner || (!retryIsBranded && retryScoresBetter)) {
+            if (
+              retryIsCleaner ||
+              retryFixesText ||
+              (!retryIsBranded && retryTextPassed && retryScoresBetter)
+            ) {
               successfulResult = retryRes;
               visualQAResult = retryQA;
               improvedThisRound = true;
@@ -323,7 +339,8 @@ export class CreativeOrchestrator {
 
               if (
                 visualQAResult.visualRelevanceScore >= 80 &&
-                !visualQAResult.prohibitedBrandingDetected
+                !visualQAResult.prohibitedBrandingDetected &&
+                visualQAResult.textFidelityPassed !== false
               ) break;
             }
           } catch (retryErr: any) {
@@ -352,6 +369,25 @@ export class CreativeOrchestrator {
             visualRelevanceScore: visualQAResult.visualRelevanceScore,
             attempts: semanticAttempts,
             detectedBranding: visualQAResult.detectedBranding,
+            details: visualQAResult.providerFeedback,
+          },
+        };
+      }
+
+      if (visualQAResult?.textFidelityPassed === false) {
+        TenantCreditsService.addCredits(organizationId, creditCost, 'Refund for rendered text fidelity rejection');
+        return {
+          success: false,
+          status: 'FAILED',
+          userFacingMessage: "I generated the creative, but the rendered copy did not match the required wording exactly, so I rejected it rather than give you a customer-facing asset with incorrect text. Your creative credit was refunded.\n\n[Retry] [Edit Brief]",
+          errorDetails: {
+            errorCode: 'TEXT_FIDELITY_REJECTED',
+            stage: 'SEMANTIC_VALIDATION',
+            copyAccuracyScore: visualQAResult.copyAccuracyScore,
+            attempts: semanticAttempts,
+            requiredText: visualQAResult.requiredText,
+            missingRequiredText: visualQAResult.missingRequiredText,
+            detectedTextErrors: visualQAResult.detectedTextErrors,
             details: visualQAResult.providerFeedback,
           },
         };
