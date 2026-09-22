@@ -76,6 +76,25 @@ interface ChatMessage {
   modelUsed?: string;
 }
 
+const MAX_PERSISTED_MARI_MESSAGES = 80;
+
+function mariConversationStorageKey(orgId: string, workspaceId: string, userId: string): string {
+  return `ralion:${orgId}:${workspaceId}:${userId || 'user'}:mari:last_conversation`;
+}
+
+function parsePersistedMariMessages(raw: string | null): ChatMessage[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item: any) => item && (item.sender === 'USER' || item.sender === 'MARI') && typeof item.text === 'string')
+      .slice(-MAX_PERSISTED_MARI_MESSAGES);
+  } catch {
+    return [];
+  }
+}
+
 export default function MariAiPage() {
   const router = useRouter();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -105,6 +124,7 @@ export default function MariAiPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputQuery, setInputQuery] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const conversationHydratedRef = useRef(false);
 
   // Knowledge Documents State & Website Sync
   const [documentsList, setDocumentsList] = useState<KnowledgeDocument[]>([]);
@@ -222,6 +242,18 @@ export default function MariAiPage() {
 
       setActivityStream([]);
 
+      // Restore the most recent tenant/user-scoped Mari thread before deciding
+      // whether a welcome message is needed. This survives refreshes and module navigation.
+      let persistedConversation: ChatMessage[] = [];
+      if (typeof window !== 'undefined' && activeOrgId && activeWorkspaceId) {
+        const conversationKey = mariConversationStorageKey(activeOrgId, activeWorkspaceId, activeUserId);
+        persistedConversation = parsePersistedMariMessages(localStorage.getItem(conversationKey));
+        if (persistedConversation.length > 0) {
+          setMessages(persistedConversation);
+        }
+        conversationHydratedRef.current = true;
+      }
+
       // Check if returning from a completed Growth/Social action
       let returnGreetingAdded = false;
       if (typeof window !== 'undefined') {
@@ -231,9 +263,10 @@ export default function MariAiPage() {
             const lastAction = JSON.parse(lastActionRaw);
             localStorage.removeItem(`ralion:${activeOrgId}:last_action_result`);
             localStorage.removeItem('ralion_last_action_result');
-            setMessages([
+            setMessages(prev => [
+              ...prev,
               {
-                id: 'm-welcome-back',
+                id: `m-welcome-back-${Date.now()}`,
                 sender: 'MARI',
                 text: `Welcome back, ${userName}! I've verified your recent workflow:\n\n` +
                   `• ${lastAction.summary}\n` +
@@ -252,7 +285,7 @@ export default function MariAiPage() {
       }
 
       // Initial greeting grounded in truthful learning gate
-      if (messages.length === 0 && !returnGreetingAdded) {
+      if (persistedConversation.length === 0 && !returnGreetingAdded) {
         const isFbConn = Boolean(context?.layer2?.social?.isConnected && context.layer2.social.connectedPageName?.value !== 'Not Connected');
         const isWebConn = Boolean(context?.layer1?.websiteKnowledge?.value && (context.layer1.websiteKnowledge.value as any).status === 'INGESTED');
 
@@ -310,6 +343,15 @@ export default function MariAiPage() {
 
     loadGrowthIntelligence();
   }, [isOrganizationLoading, activeOrgId]);
+
+  // Persist the latest Mari thread per organization/workspace/user so refreshes
+  // and navigation never reset the conversation to a blank session.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !conversationHydratedRef.current) return;
+    if (!activeOrgId || !activeWorkspaceId || messages.length === 0) return;
+    const key = mariConversationStorageKey(activeOrgId, activeWorkspaceId, activeUserId);
+    localStorage.setItem(key, JSON.stringify(messages.slice(-MAX_PERSISTED_MARI_MESSAGES)));
+  }, [messages, activeOrgId, activeWorkspaceId, activeUserId]);
 
   // Scroll to bottom when messages update
   useEffect(() => {
