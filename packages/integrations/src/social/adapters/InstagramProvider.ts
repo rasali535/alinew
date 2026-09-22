@@ -358,16 +358,25 @@ export class InstagramProvider extends SocialProvider {
 
   async sendMessage(accessToken: string, message: SocialMessagePayload): Promise<SocialMessageResult> {
     try {
-      const res = await fetch(`https://graph.facebook.com/v19.0/me/messages?access_token=${encodeURIComponent(accessToken)}`, {
+      const igAccountId = message.accountId || message.pageId || 'me';
+      const res = await fetch(`${this.getGraphBase()}/${encodeURIComponent(igAccountId)}/messages`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
         body: JSON.stringify({
           recipient: { id: message.recipientId },
           message: { text: message.messageText }
         })
       });
-      const data = await res.json();
-      return { success: !data.error, messageId: data.message_id, status: data.error ? 'FAILED' : 'SENT', error: data.error?.message };
+      const data = await res.json().catch(() => ({}));
+      return {
+        success: res.ok && !data.error,
+        messageId: data.message_id,
+        status: res.ok && !data.error ? 'SENT' : 'FAILED',
+        error: data.error?.message || (!res.ok ? `Instagram messaging HTTP ${res.status}` : undefined)
+      };
     } catch (err: any) {
       return { success: false, status: 'FAILED', error: err.message };
     }
