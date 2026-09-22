@@ -115,7 +115,48 @@ export async function POST(
 
     let posts: any[] = [];
     try {
-      switch (provider) {
+      if (provider === 'instagram') {
+        const version = (process.env.INSTAGRAM_GRAPH_VERSION || process.env.META_GRAPH_VERSION || 'v26.0')
+          .replace(/^\/+|\/+$/g, '');
+        const accountId = targetConn.provider_account_id || 'me';
+        const fields = 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,comments_count,like_count';
+        const params = new URLSearchParams({ fields, limit: '25' });
+        const igRes = await fetch(
+          `https://graph.instagram.com/${version}/${encodeURIComponent(accountId)}/media?${params.toString()}`,
+          {
+            headers: { Authorization: `Bearer ${accessToken}` },
+            signal: AbortSignal.timeout(10000),
+          }
+        );
+        const igData = await igRes.json().catch(() => ({}));
+        if (!igRes.ok || igData.error) {
+          const err: any = new Error(igData.error?.message || `Instagram sync failed (HTTP ${igRes.status}).`);
+          err.statusCode = igRes.status || 502;
+          throw err;
+        }
+        posts = (Array.isArray(igData.data) ? igData.data : []).map((media: any) => ({
+          id: String(media.id || ''),
+          platformPostId: String(media.id || ''),
+          title: media.caption
+            ? String(media.caption).split(/\r?\n/)[0].slice(0, 80)
+            : `Instagram ${String(media.media_type || 'Post').toLowerCase()}`,
+          body: String(media.caption || ''),
+          publishedAt: media.timestamp || undefined,
+          mediaUrls: [media.media_url || media.thumbnail_url].filter(Boolean),
+          mediaType: String(media.media_type || '').toUpperCase() === 'VIDEO' ||
+            String(media.media_type || '').toUpperCase() === 'REELS'
+            ? 'video'
+            : 'image',
+          permalink: media.permalink || undefined,
+          engagement: {
+            likes: Number(media.like_count || 0),
+            comments: Number(media.comments_count || 0),
+            shares: 0,
+            reach: 0,
+          },
+        }));
+      } else {
+        switch (provider) {
         case 'linkedin':
           posts = await linkedinAdapter.fetchPosts(accessToken);
           break;
@@ -132,6 +173,7 @@ export async function POST(
           break;
         default:
           posts = [];
+        }
       }
     } catch (fetchError: any) {
       if (fetchError.message?.includes('401') || fetchError.message?.includes('unauthorized')) {
