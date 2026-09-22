@@ -470,6 +470,22 @@ export class BusinessContextService {
       ? "Your connected Facebook account is a personal profile. Facebook Page business posts, followers, and analytics are not available yet. Connect a Facebook Page to unlock Page-level business intelligence."
       : undefined;
 
+    const isInstagramConnected = Boolean(instagramConnection);
+    const normalizedChannels = connectedSocialChannels.map((row: any) => ({
+      provider: String(row.provider || '').toLowerCase(),
+      connectionId: String(row.id || ''),
+      providerAccountId: String(row.provider_account_id || ''),
+      accountName: String(row.account_name || row.username || row.provider || 'Connected Account'),
+      username: row.username || undefined,
+      accountType: row.account_type || undefined,
+      followersCount: Number(row.followers_count || 0),
+      status: String(row.connection_status || 'CONNECTED'),
+      scopes: Array.isArray(row.scopes) ? row.scopes : [],
+      capabilities: row.capabilities || {},
+      metadata: row.metadata || {},
+      lastSyncedAt: row.last_sync_at || undefined,
+    }));
+
     // 1. Resolve Canonical Business Identity via authoritative BusinessIdentityResolver
     const { BusinessIdentityResolver } = require('./businessIdentityResolver');
     const resolvedIdentity = BusinessIdentityResolver.resolveIdentity(orgId, {
@@ -649,25 +665,9 @@ export class BusinessContextService {
       ? tasksList.filter((t: any) => t.status === 'PENDING' && t.priority === 'HIGH').length 
       : 0;
 
-    const isInstagramConnected = Boolean(instagramConnection);
     const isSocialConnected = Boolean(isSocialPageConnected || isPersonalFb || isInstagramConnected || connectedSocialChannels.length > 0);
     const followers = isSocialPageConnected ? (Number(fbPage?.fanCount) || 0) : 0;
     const pageName = isSocialPageConnected ? (fbPage?.name || 'Facebook Page') : (isPersonalFb ? 'Personal Profile (Business Page Not Connected)' : 'Not Connected');
-
-    const normalizedChannels = connectedSocialChannels.map((row: any) => ({
-      provider: String(row.provider || '').toLowerCase(),
-      connectionId: String(row.id || ''),
-      providerAccountId: String(row.provider_account_id || ''),
-      accountName: String(row.account_name || row.username || row.provider || 'Connected Account'),
-      username: row.username || undefined,
-      accountType: row.account_type || undefined,
-      followersCount: Number(row.followers_count || 0),
-      status: String(row.connection_status || 'CONNECTED'),
-      scopes: Array.isArray(row.scopes) ? row.scopes : [],
-      capabilities: row.capabilities || {},
-      metadata: row.metadata || {},
-      lastSyncedAt: row.last_sync_at || undefined,
-    }));
 
     const connectionState = options?.localOverrides?.facebookState || (fbPage?.connectionState) || (isSocialPageConnected ? 'PAGE_CONNECTED' : (isPersonalFb ? 'PROFILE_CONNECTED_PAGE_ACCESS_UNAVAILABLE' : (isSocialConnected ? 'PROFILE_CONNECTED_PAGE_NOT_SELECTED' : 'DISCONNECTED')));
     const isPageAccessUnavailable = connectionState === 'PROFILE_CONNECTED_PAGE_ACCESS_UNAVAILABLE' || (isPersonalFb && !isSocialPageConnected);
