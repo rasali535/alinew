@@ -5,6 +5,7 @@ import {
   storeOAuthTokens,
 } from '@/lib/services/social.service';
 import { metaAdapterV26 } from '@/lib/services/metaAdapter.service';
+import { instagramBusinessAdapter } from '@/lib/services/instagramBusinessAdapter.service';
 
 export const dynamic = 'force-dynamic';
 
@@ -127,29 +128,29 @@ export async function GET(
         break;
       }
       case 'instagram': {
-        const tokens = await metaAdapterV26.exchangeCode(code, 'instagram');
+        const tokens = await instagramBusinessAdapter.exchangeCode(code);
         accessToken = tokens.accessToken;
         expiresAt = new Date(Date.now() + tokens.expiresIn * 1000);
-        const pages = await metaAdapterV26.getPages(accessToken);
-        const firstPage = pages[0];
-        if (firstPage) {
-          const igAccount = await metaAdapterV26.getInstagramAccount(firstPage.id, firstPage.accessToken);
-          if (igAccount) {
-            pageId = igAccount.id;
-            providerAccountId = igAccount.id;
-            profile = { handle: `@${igAccount.username}`, name: igAccount.username, avatar: igAccount.avatar, followersCount: igAccount.followers };
-            extraMeta = {
-              graphVersion: metaAdapterV26.graphVersion(),
-              pageAccessToken: firstPage.accessToken,
-              pageId: firstPage.id,
-              igUserId: igAccount.id,
-              organizationId,
-              workspaceId,
-            };
-          }
-        }
-        if (!profile.handle) profile = { handle: '@instagram_account', name: 'Instagram', followersCount: 0 };
-        accountLabel = 'Instagram Professional';
+
+        const igProfile = await instagramBusinessAdapter.getProfile(accessToken);
+        pageId = igProfile.id;
+        providerAccountId = igProfile.id;
+        profile = {
+          handle: `@${igProfile.username}`,
+          name: igProfile.name,
+          avatar: igProfile.avatar,
+          followersCount: igProfile.followersCount,
+        };
+        extraMeta = {
+          graphVersion: instagramBusinessAdapter.graphVersion(),
+          oauthMode: 'instagram_login',
+          igUserId: igProfile.id,
+          accountType: igProfile.accountType,
+          organizationId,
+          workspaceId,
+          tokenRefreshSupported: true,
+        };
+        accountLabel = `Instagram Professional (@${igProfile.username})`;
         break;
       }
       case 'x':
