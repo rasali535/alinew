@@ -603,7 +603,7 @@ function GrowthPageContent() {
           title: item.title,
           body: item.prompt || 'Generated with Mari AI in Ralion OS.',
           platform: 'facebook',
-          hashtags: ['#RalionOS'],
+          hashtags: ['#Growth'],
           status: 'draft',
           mediaUrl: item.output,
           mediaType: item.type === 'VIDEO_REEL' ? 'video' : 'image',
@@ -739,7 +739,7 @@ function GrowthPageContent() {
     title: '',
     body: '',
     platform: 'facebook',
-    hashtags: '#RalionOS #EnterpriseAI',
+    hashtags: '#Growth',
     scheduledAt: '',
   });
 
@@ -1191,7 +1191,7 @@ function GrowthPageContent() {
               title: p.title || `${provider} Post`,
               body: p.body || '',
               platform: provider as any,
-              hashtags: p.hashtags || ['#RalionOS', '#Growth'],
+              hashtags: p.hashtags || ['#Growth'],
               status: p.status === 'published' ? 'published' : p.status === 'scheduled' ? 'scheduled' : 'draft',
               publishedAt: p.publishedAt ? new Date(p.publishedAt).toLocaleString() : undefined,
               rawPublishedAt: p.publishedAt || p.createdAt || p.published_at || p.created_time || p.scheduledFor || new Date().toISOString(),
@@ -2484,7 +2484,7 @@ function GrowthPageContent() {
       title: item.title,
       body: isMedia ? item.prompt : item.output,
       platform: 'facebook',
-      hashtags: ['#RalionOS', '#EnterpriseAI'],
+      hashtags: ['#Growth'],
       status: 'draft',
       mediaUrl: isMedia ? item.output : undefined,
       mediaType: item.type === 'VIDEO_REEL' ? 'video' : item.type === 'POSTER_IMAGE' ? 'image' : undefined,
@@ -4311,7 +4311,7 @@ function GrowthPageContent() {
                       const activeAcc = connectedAccounts.find(a => a.id === selectedAccountId) || (connectedAccounts.length === 1 ? connectedAccounts[0] : null);
                       setNewPost({
                         title: `${activeAcc?.label || 'Social'} Update`,
-                        body: 'Ralion OS Social Infrastructure is officially live with verified multi-channel integration.',
+                        body: '',
                         platform: (activeAcc?.provider as any) || 'facebook',
                         hashtags: `#${(activeAcc?.label || 'RalionOS').replace(/\s+/g, '')} #Growth`,
                         scheduledAt: '',
@@ -4702,7 +4702,7 @@ function GrowthPageContent() {
                                     title: hook.split(':')[0] || 'Business Spotlight',
                                     body: hook,
                                     platform: (activeAcc?.provider as ContentPost['platform']) || 'facebook',
-                                    hashtags: '#RalionOS #Growth',
+                                    hashtags: '#Growth',
                                     scheduledAt: '',
                                   });
                                   setIsCreateOpen(true);
@@ -4753,7 +4753,7 @@ function GrowthPageContent() {
                                 title: ins.title,
                                 body: ins.suggestedPrompt || ins.summary,
                                 platform: (activeAcc?.provider as ContentPost['platform']) || 'facebook',
-                                hashtags: '#RalionOS #Growth',
+                                hashtags: '#Growth',
                                 scheduledAt: '',
                               });
                               setIsCreateOpen(true);
@@ -5144,7 +5144,7 @@ function GrowthPageContent() {
                                 : 'bg-zinc-950 border border-zinc-800 text-zinc-200 rounded-bl-none'
                             }`}>
                               <p className="font-semibold text-[10px] opacity-75 mb-1">
-                                {isOutbound ? 'Ras Ali Labs Support' : activeConv.participantName}
+                                {isOutbound ? currentAccountName : activeConv.participantName}
                               </p>
                               <p className="whitespace-pre-wrap">{msg.message_text}</p>
                             </div>
@@ -5162,9 +5162,9 @@ function GrowthPageContent() {
                         <Sparkles className="w-3 h-3 text-purple-400" /> Mari AI Quick Replies:
                       </span>
                       {[
-                        'We would be delighted to schedule an enterprise architecture demo for your team this week.',
-                        'All Ralion OS deployments include sovereign multi-region encryption and dedicated SADC telemetry.',
-                        'Thank you for reaching out! Our lead technical consultant will contact you via email shortly.'
+                        'Thanks for reaching out. How can we help you today?',
+                        'We can share more details and help you with the next step.',
+                        'Thank you for your message. A member of our team will follow up shortly.'
                       ].map((promptText, i) => (
                         <button
                           key={i}
@@ -5359,7 +5359,7 @@ function GrowthPageContent() {
                       title: aiPrompt.substring(0, 30) + '...',
                       body: aiResult,
                       platform: 'linkedin',
-                      hashtags: '#RalionOS #MariAI',
+                      hashtags: '#Growth',
                       scheduledAt: ''
                     });
                     setIsCreateOpen(true);
@@ -6646,7 +6646,7 @@ function GrowthPageContent() {
               type="text" 
               value={newPost.hashtags} 
               onChange={e => setNewPost({ ...newPost, hashtags: e.target.value })} 
-              placeholder="#RalionOS #EnterpriseAI" 
+              placeholder="#yourbrand #growth" 
               className="w-full mt-1 px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white focus:outline-none font-mono text-indigo-400" 
             />
           </div>
@@ -6817,7 +6817,7 @@ function GrowthPageContent() {
                     title: '',
                     body: '',
                     platform: targetPlatform as ContentPost['platform'],
-                    hashtags: '#RalionOS #Growth',
+                    hashtags: '#Growth',
                     scheduledAt: '',
                     mediaUrl: undefined,
                     mediaType: undefined,
@@ -6946,7 +6946,7 @@ function GrowthPageContent() {
                         type="text"
                         value={newCommentReplyText}
                         onChange={e => setNewCommentReplyText(e.target.value)}
-                        placeholder="Reply to this comment as Ras Ali Labs..."
+                        placeholder={`Reply to this comment as ${currentAccountName}...`}
                         className="flex-1 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-white focus:outline-none focus:border-indigo-500 font-sans"
                       />
                       <Button
