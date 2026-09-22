@@ -21,14 +21,21 @@ export const instagramBusinessAdapter = {
   scopes: [
     'instagram_business_basic',
     'instagram_business_content_publish',
+    'instagram_business_manage_comments',
+    'instagram_business_manage_messages',
+    'instagram_business_manage_insights',
   ],
+
+  resolvedScopes(): string[] {
+    const configuredScopes = process.env.INSTAGRAM_OAUTH_SCOPES;
+    return configuredScopes
+      ? configuredScopes.split(',').map((s) => s.trim()).filter(Boolean)
+      : [...this.scopes];
+  },
 
   getAuthUrl(state: string): string {
     if (!this.clientId()) throw new Error('Instagram App ID is not configured');
-    const configuredScopes = process.env.INSTAGRAM_OAUTH_SCOPES;
-    const scopes = configuredScopes
-      ? configuredScopes.split(',').map((s) => s.trim()).filter(Boolean)
-      : this.scopes;
+    const scopes = this.resolvedScopes();
 
     const params = new URLSearchParams({
       client_id: this.clientId(),
