@@ -25,6 +25,7 @@ export class SocialInboxService {
     workspaceId?: string;
     organizationId?: string;
     provider?: SocialPlatformType;
+    connectionId?: string;
   } | string, legacyProvider?: SocialPlatformType) {
     if (!params) return [];
 
@@ -40,6 +41,7 @@ export class SocialInboxService {
     const workspaceId = typeof params === 'object' ? params.workspaceId : undefined;
     const organizationId = typeof params === 'object' ? params.organizationId : undefined;
     const provider = typeof params === 'object' ? params.provider : legacyProvider;
+    const connectionId = typeof params === 'object' ? params.connectionId : undefined;
 
     if (!userId || !workspaceId || !organizationId) return [];
 
@@ -50,29 +52,29 @@ export class SocialInboxService {
     try {
       let connQuery = supabase
         .from('social_connections')
-        .select('zernio_profile_id, zernio_account_id, workspace_id, user_id')
+        .select('id, provider, zernio_profile_id, zernio_account_id, workspace_id, organization_id, user_id')
         .eq('provider', provider || 'facebook')
-        .eq('connection_status', 'CONNECTED')
+        .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected', 'active'])
         .eq('organization_id', organizationId)
         .eq('workspace_id', workspaceId)
         .eq('user_id', userId)
-        .not('zernio_profile_id', 'is', null)
         .order('updated_at', { ascending: false });
 
+      if (connectionId) {
+        connQuery = connQuery.eq('id', connectionId);
+      }
+
       const { data: conns, error: connError } = await connQuery.limit(1);
-      if (connError) return [];
+      if (connError) {
+        console.warn('[SocialInboxService] Connection lookup notice:', connError.message);
+      }
       const conn = Array.isArray(conns) && conns.length > 0 ? conns[0] : null;
       if (conn?.zernio_profile_id) {
         profileId = conn.zernio_profile_id;
         accountId = conn.zernio_account_id || null;
       }
-    } catch {
-      // Database connection fallback -> return empty conversations safely
-      return [];
-    }
-
-    if (!profileId) {
-      return [];
+    } catch (e: any) {
+      console.warn('[SocialInboxService] Connection lookup notice:', e?.message);
     }
 
     if (profileId === MASTER_PLATFORM_ZERNIO_PROFILE_ID) {
@@ -131,8 +133,8 @@ export class SocialInboxService {
 
               conversationMap.set(convId, {
                 conversationId: convId,
-                provider: (conv.platform || 'facebook').toLowerCase(),
-                participantName: conv.participantName || 'Facebook User',
+                provider: (conv.platform || provider || 'facebook').toLowerCase(),
+                participantName: conv.participantName || (provider === 'instagram' ? 'Instagram User' : 'Facebook User'),
                 participantId: conv.participantId || convId,
                 avatarUrl: conv.participantPicture || null,
                 lastMessage: conv.lastMessage || (messages[messages.length - 1]?.message_text) || '',
@@ -159,10 +161,12 @@ export class SocialInboxService {
       if (provider) {
         query = query.eq('provider', provider);
       }
+      if (connectionId) {
+        query = query.eq('connection_id', connectionId);
+      }
       query = query
         .eq('organization_id', organizationId)
-        .eq('workspace_id', workspaceId)
-        .eq('sender_id', userId);
+        .eq('workspace_id', workspaceId);
 
       const { data, error } = await query;
 
@@ -173,7 +177,7 @@ export class SocialInboxService {
           if (!conversationMap.has(convId)) {
             conversationMap.set(convId, {
               conversationId: convId,
-              provider: msg.provider || 'facebook',
+              provider: msg.provider || provider || 'facebook',
               participantName: msg.sender_name || msg.sender_id || 'User',
               participantId: msg.sender_id || 'unknown',
               avatarUrl: msg.sender_avatar_url || null,
