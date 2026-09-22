@@ -1927,6 +1927,18 @@ function GrowthPageContent() {
             'Ralion rejected the generated image because it contained provider branding, a watermark, or other third-party identity.' +
             branding +
             ' Your creative credit was refunded and nothing was added to the library. Retry to generate a clean candidate.';
+        } else if (data.errorCode === 'TEXT_FIDELITY_REJECTED') {
+          const missing = Array.isArray(data.missingRequiredText) && data.missingRequiredText.length
+            ? ` Missing or incorrect: ${data.missingRequiredText.join(' | ')}.`
+            : '';
+          const textErrors = Array.isArray(data.detectedTextErrors) && data.detectedTextErrors.length
+            ? ` QA found: ${data.detectedTextErrors.join(' | ')}.`
+            : '';
+          generationError =
+            'Ralion rejected the generated creative because customer-facing text did not match the brief exactly.' +
+            missing +
+            textErrors +
+            ' Your creative credit was refunded and the incorrect asset was not added to the library.';
         } else if (data.errorCode === 'FAILED_STORAGE') {
           generationError =
             'The creative was generated, but Ralion could not save it safely. Your creative credit was refunded. Please retry; if this repeats, the storage service needs administrator attention.';
