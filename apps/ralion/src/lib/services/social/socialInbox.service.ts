@@ -111,7 +111,7 @@ export class SocialInboxService {
                   messages = rawMsgs.filter(Boolean).map((m: any) => ({
                     id: m.id || `msg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
                     direction: m.direction === 'outgoing' ? 'OUTBOUND' : 'INBOUND',
-                    sender_name: m.senderName || 'Facebook User',
+                    sender_name: m.senderName || (provider === 'instagram' ? 'Instagram User' : provider === 'facebook' ? 'Facebook User' : 'Social User'),
                     sender_id: m.senderId || 'unknown',
                     message_text: m.message || m.text || '',
                     timestamp: m.createdAt ? new Date(m.createdAt).toLocaleString() : 'Recent',
@@ -125,7 +125,7 @@ export class SocialInboxService {
                 messages.push({
                   id: `msg_${convId}_last`,
                   direction: 'INBOUND',
-                  sender_name: conv.participantName || 'Facebook User',
+                  sender_name: conv.participantName || (provider === 'instagram' ? 'Instagram User' : provider === 'facebook' ? 'Facebook User' : 'Social User'),
                   message_text: conv.lastMessage,
                   timestamp: conv.updatedTime ? new Date(conv.updatedTime).toLocaleString() : 'Recent',
                 });
@@ -230,27 +230,41 @@ export class SocialInboxService {
     // 1. Authoritatively resolve tenant connection
     let conn: any = null;
 
-    if (params.connectionId && !params.connectionId.startsWith('acc-') && !params.connectionId.startsWith('fb-page-')) {
+    const hasExplicitConnectionId = Boolean(
+      params.connectionId &&
+      !params.connectionId.startsWith('acc-') &&
+      !params.connectionId.startsWith('fb-page-')
+    );
+
+    if (hasExplicitConnectionId) {
       const { data } = await supabase
         .from('social_connections')
         .select('id, provider, provider_account_id, access_token, infrastructure_provider, zernio_profile_id, zernio_account_id, organization_id, workspace_id, user_id')
         .eq('id', params.connectionId)
         .eq('provider', provider)
-        .eq('connection_status', 'CONNECTED')
+        .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected', 'active'])
         .eq('organization_id', params.organizationId)
         .eq('workspace_id', params.workspaceId)
         .eq('user_id', params.userId)
         .maybeSingle();
       conn = data;
+
+      if (!conn) {
+        const connectionError: any = new Error('[SocialInboxService] The selected social connection is unavailable or does not belong to this workspace.');
+        connectionError.statusCode = 403;
+        connectionError.code = 'SOCIAL_CONNECTION_REQUIRED';
+        throw connectionError;
+      }
     }
 
-    if (!conn) {
-      // Find active connection for this tenant/workspace/user
+    if (!conn && !hasExplicitConnectionId) {
+      // Only use provider fallback when the caller did not supply an exact
+      // connection. Explicit selection is an isolation boundary.
       const { data } = await supabase
         .from('social_connections')
         .select('id, provider, provider_account_id, access_token, infrastructure_provider, zernio_profile_id, zernio_account_id, organization_id, workspace_id, user_id')
         .eq('provider', provider)
-        .eq('connection_status', 'CONNECTED')
+        .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected', 'active'])
         .eq('organization_id', params.organizationId)
         .eq('workspace_id', params.workspaceId)
         .eq('user_id', params.userId)
