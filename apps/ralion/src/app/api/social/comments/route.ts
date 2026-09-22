@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { FacebookCommentsService } from '@/lib/services/social/facebookComments.service';
+import { InstagramCommentsService } from '@/lib/services/social/instagramComments.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 import { getCurrentRalionContext, authRequiredResponse } from '@/lib/auth/serverAuth';
 
@@ -14,22 +15,48 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const postId = searchParams.get('postId') || undefined;
     const pageId = searchParams.get('pageId') || undefined;
+    const provider = (searchParams.get('provider') || 'facebook').trim().toLowerCase();
+    const connectionId = searchParams.get('connectionId') || undefined;
 
     const context = await getCurrentRalionContext(request, { requireAuth: true });
     if (!context) {
       return authRequiredResponse(request);
     }
 
+    if (provider === 'instagram') {
+      if (!connectionId || !postId) {
+        return corsJsonResponse(
+          { success: false, error: 'connectionId and Instagram media postId are required.', comments: [] },
+          { status: 400 },
+          request
+        );
+      }
+      const comments = await InstagramCommentsService.getComments({
+        connectionId,
+        postId,
+        organizationId: context.organization?.id || context.workspace.id,
+        workspaceId: context.workspace.id,
+        userId: context.user.id,
+      });
+      return corsJsonResponse({
+        success: true,
+        provider: 'instagram',
+        comments,
+        total: comments.length,
+      }, undefined, request);
+    }
+
     const comments = await FacebookCommentsService.getComments({
       postId,
       pageId,
-      organizationId: context.workspace.id,
+      organizationId: context.organization?.id || context.workspace.id,
       workspaceId: context.workspace.id,
       userId: context.user.id,
     });
 
     return corsJsonResponse({
       success: true,
+      provider: 'facebook',
       comments,
       total: comments.length,
     }, undefined, request);
@@ -50,7 +77,8 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { commentId, postId, replyText, authorName, pageId } = body;
+    const { commentId, postId, replyText, authorName, pageId, connectionId } = body;
+    const provider = typeof body.provider === 'string' ? body.provider.trim().toLowerCase() : 'facebook';
 
     if (!commentId || !replyText?.trim()) {
       return corsJsonResponse(
@@ -67,6 +95,36 @@ export async function POST(request: NextRequest) {
     }
 
     const effectiveAuthor = authorName || context.workspace?.name || context.organization?.name || 'Ralion Workspace';
+
+    if (provider === 'instagram') {
+      if (!connectionId || !postId) {
+        return corsJsonResponse(
+          { success: false, platform: 'instagram', error: 'connectionId and postId are required for Instagram comments.', statusCode: 400 },
+          { status: 400 },
+          request
+        );
+      }
+      const reply = await InstagramCommentsService.replyToComment({
+        connectionId,
+        commentId,
+        postId,
+        replyText: replyText.trim(),
+        userId: context.user.id,
+        workspaceId: context.workspace.id,
+        organizationId: context.organization?.id || context.workspace.id,
+        authorName: effectiveAuthor,
+      });
+      return corsJsonResponse({
+        success: true,
+        provider: 'native',
+        platform: 'instagram',
+        postId: reply.postId,
+        commentId: reply.commentId,
+        replyId: reply.externalReplyId,
+        reply,
+        message: 'Reply posted successfully to Instagram.',
+      }, undefined, request);
+    }
 
     const reply = await FacebookCommentsService.replyToComment({
       commentId,
