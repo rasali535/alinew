@@ -70,6 +70,35 @@ export interface Layer2BusinessState {
       phone?: string;
       singleLineAddress?: string;
     };
+    connectedChannels?: Array<{
+      provider: string;
+      connectionId: string;
+      providerAccountId: string;
+      accountName: string;
+      username?: string;
+      accountType?: string;
+      followersCount?: number;
+      status: string;
+      scopes?: string[];
+      capabilities?: Record<string, any>;
+      metadata?: Record<string, any>;
+      lastSyncedAt?: string;
+    }>;
+    instagram?: {
+      isConnected: boolean;
+      connectionId?: string;
+      accountId?: string;
+      accountName?: ProvenanceItem<string>;
+      username?: ProvenanceItem<string>;
+      accountType?: ProvenanceItem<string>;
+      followersCount?: ProvenanceItem<number>;
+      scopes?: string[];
+      canPublish?: boolean;
+      canReadInsights?: boolean;
+      canManageComments?: boolean;
+      canManageMessages?: boolean;
+      lastSyncedAt?: string;
+    };
   };
   operations: {
     pendingTasksCount: ProvenanceItem<number>;
@@ -270,6 +299,8 @@ export class BusinessContextService {
       (options?.workspaceId ? WebsiteIngestionService.getWebsiteKnowledge(options.workspaceId) : null) ||
       WebsiteIngestionService.getWebsiteKnowledge(cleanOrgId);
     let fbPage = options?.localOverrides?.fbPage;
+    let connectedSocialChannels: any[] = [];
+    let instagramConnection: any = null;
 
     // Tenant-isolated localStorage validation. Never read a global Facebook-page key.
     // For workspace-scoped context, require exact canonical organization, workspace, and user match.
@@ -376,6 +407,46 @@ export class BusinessContextService {
       } catch (srvErr: any) {
         console.warn('[BusinessContext] Server-side Facebook connection query notice:', srvErr?.message);
       }
+
+      try {
+        const { createClient } = require('@supabase/supabase-js');
+        const sUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const sKey =
+          process.env.SUPABASE_SECRET_KEY ||
+          process.env.SUPABASE_SERVICE_ROLE_KEY ||
+          process.env.SUPABASE_SERVICE_KEY;
+
+        if (sUrl && sKey && cleanOrgId !== 'unconfigured-tenant' && cleanOrgId !== 'public-visitor') {
+          const sClient = createClient(sUrl, sKey, { auth: { persistSession: false } });
+          let channelQuery = sClient
+            .from('social_connections')
+            .select('id,provider,provider_account_id,account_name,username,account_type,connection_status,token_status,scopes,capabilities,metadata,followers_count,last_sync_at')
+            .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected', 'active']);
+
+          const targetOrgId = options?.organizationId || cleanOrgId;
+          const targetWorkspaceId = options?.workspaceId;
+          const targetUserId = options?.userId;
+
+          if (targetOrgId) channelQuery = channelQuery.eq('organization_id', targetOrgId);
+          if (targetWorkspaceId) channelQuery = channelQuery.eq('workspace_id', targetWorkspaceId);
+          if (targetUserId) channelQuery = channelQuery.eq('user_id', targetUserId);
+
+          const channelRes = await channelQuery.order('updated_at', { ascending: false });
+          connectedSocialChannels = (channelRes.data || []).filter((row: any) => {
+            if (String(row.provider || '').toLowerCase() !== 'facebook') return true;
+            return row.account_type === 'BUSINESS' ||
+              row.account_type === 'PAGE' ||
+              row.metadata?.is_page === true ||
+              row.metadata?.provider_account_type === 'FACEBOOK_PAGE';
+          });
+
+          instagramConnection = connectedSocialChannels.find(
+            (row: any) => String(row.provider || '').toLowerCase() === 'instagram'
+          ) || null;
+        }
+      } catch (channelErr: any) {
+        console.warn('[BusinessContext] Multi-channel social connection query notice:', channelErr?.message);
+      }
     }
 
     const isPersonalFb = Boolean(
@@ -425,9 +496,19 @@ export class BusinessContextService {
       Boolean(registeredProfile?.companyName)
     );
 
+    const hasOperationalSocial = isSocialPageConnected || isInstagramConnected || normalizedChannels.length > 0;
+    const connectedProviderNames = Array.from(new Set(normalizedChannels.map((channel: any) => channel.provider))).filter(Boolean);
+    const socialSourceLabel = connectedProviderNames.length > 0
+      ? connectedProviderNames.map((provider: string) => provider.charAt(0).toUpperCase() + provider.slice(1)).join(' + ')
+      : (isSocialPageConnected ? 'Facebook' : '');
+
     const primarySource = isIdentityVerified
-      ? (isSocialPageConnected && isWkValid ? 'Business Profile + Website + Facebook' : (isWkValid ? 'Business Profile + Website' : 'Business Knowledge Profile'))
-      : (isWkValid ? (websiteKnowledge?.source || 'LIVE_INGESTED') : (isSocialPageConnected ? 'Facebook Social Attachment' : 'Unverified Workspace'));
+      ? (hasOperationalSocial && isWkValid
+          ? `Business Profile + Website + ${socialSourceLabel || 'Social'}`
+          : (isWkValid ? 'Business Profile + Website' : (hasOperationalSocial ? `Business Knowledge Profile + ${socialSourceLabel || 'Social'}` : 'Business Knowledge Profile')))
+      : (isWkValid
+          ? (websiteKnowledge?.source || 'LIVE_INGESTED')
+          : (hasOperationalSocial ? `${socialSourceLabel || 'Social'} Attachment` : 'Unverified Workspace'));
 
     const contactsList = options?.localOverrides?.contacts || [];
     const hasRealContacts = contactsList.length > 0;
@@ -568,9 +649,25 @@ export class BusinessContextService {
       ? tasksList.filter((t: any) => t.status === 'PENDING' && t.priority === 'HIGH').length 
       : 0;
 
-    const isSocialConnected = Boolean(isSocialPageConnected || isPersonalFb);
+    const isInstagramConnected = Boolean(instagramConnection);
+    const isSocialConnected = Boolean(isSocialPageConnected || isPersonalFb || isInstagramConnected || connectedSocialChannels.length > 0);
     const followers = isSocialPageConnected ? (Number(fbPage?.fanCount) || 0) : 0;
     const pageName = isSocialPageConnected ? (fbPage?.name || 'Facebook Page') : (isPersonalFb ? 'Personal Profile (Business Page Not Connected)' : 'Not Connected');
+
+    const normalizedChannels = connectedSocialChannels.map((row: any) => ({
+      provider: String(row.provider || '').toLowerCase(),
+      connectionId: String(row.id || ''),
+      providerAccountId: String(row.provider_account_id || ''),
+      accountName: String(row.account_name || row.username || row.provider || 'Connected Account'),
+      username: row.username || undefined,
+      accountType: row.account_type || undefined,
+      followersCount: Number(row.followers_count || 0),
+      status: String(row.connection_status || 'CONNECTED'),
+      scopes: Array.isArray(row.scopes) ? row.scopes : [],
+      capabilities: row.capabilities || {},
+      metadata: row.metadata || {},
+      lastSyncedAt: row.last_sync_at || undefined,
+    }));
 
     const connectionState = options?.localOverrides?.facebookState || (fbPage?.connectionState) || (isSocialPageConnected ? 'PAGE_CONNECTED' : (isPersonalFb ? 'PROFILE_CONNECTED_PAGE_ACCESS_UNAVAILABLE' : (isSocialConnected ? 'PROFILE_CONNECTED_PAGE_NOT_SELECTED' : 'DISCONNECTED')));
     const isPageAccessUnavailable = connectionState === 'PROFILE_CONNECTED_PAGE_ACCESS_UNAVAILABLE' || (isPersonalFb && !isSocialPageConnected);
@@ -690,6 +787,46 @@ export class BusinessContextService {
           phone: fbPage?.phone,
           singleLineAddress: fbPage?.singleLineAddress,
         },
+        connectedChannels: normalizedChannels,
+        instagram: {
+          isConnected: isInstagramConnected,
+          connectionId: instagramConnection?.id || undefined,
+          accountId: instagramConnection?.provider_account_id || instagramConnection?.metadata?.igUserId || undefined,
+          accountName: {
+            value: instagramConnection?.account_name || 'Not Connected',
+            provenance: isInstagramConnected ? 'VERIFIED' : 'UNVERIFIED',
+            source: 'Instagram Graph API',
+            confidence: isInstagramConnected ? 1.0 : 0.0,
+            lastVerifiedAt: timestamp,
+          },
+          username: {
+            value: instagramConnection?.username || '',
+            provenance: isInstagramConnected && instagramConnection?.username ? 'VERIFIED' : 'UNVERIFIED',
+            source: 'Instagram Graph API',
+            confidence: isInstagramConnected && instagramConnection?.username ? 1.0 : 0.0,
+            lastVerifiedAt: timestamp,
+          },
+          accountType: {
+            value: instagramConnection?.metadata?.accountType || instagramConnection?.account_type || '',
+            provenance: isInstagramConnected ? 'VERIFIED' : 'UNVERIFIED',
+            source: 'Instagram Graph API',
+            confidence: isInstagramConnected ? 1.0 : 0.0,
+            lastVerifiedAt: timestamp,
+          },
+          followersCount: {
+            value: Number(instagramConnection?.followers_count || 0),
+            provenance: isInstagramConnected ? 'VERIFIED' : 'UNVERIFIED',
+            source: 'Instagram Graph API',
+            confidence: isInstagramConnected ? 1.0 : 0.0,
+            lastVerifiedAt: timestamp,
+          },
+          scopes: Array.isArray(instagramConnection?.scopes) ? instagramConnection.scopes : [],
+          canPublish: Boolean(instagramConnection?.scopes?.includes('instagram_business_content_publish')),
+          canReadInsights: Boolean(instagramConnection?.scopes?.includes('instagram_business_manage_insights')),
+          canManageComments: Boolean(instagramConnection?.scopes?.includes('instagram_business_manage_comments')),
+          canManageMessages: Boolean(instagramConnection?.scopes?.includes('instagram_business_manage_messages')),
+          lastSyncedAt: instagramConnection?.last_sync_at || undefined,
+        },
       },
       operations: {
         pendingTasksCount: {
@@ -794,10 +931,31 @@ export class BusinessContextService {
       ? `- CRM Pipeline Revenue: $${l2.crm.totalPipelineValue.value.toLocaleString()} across ${l2.crm.activeCustomersCount.value} active clients & ${l2.crm.prospectsCount.value} prospects. Deals: ${l2.crm.recentDeals.map(d => `${d.name} ($${d.value.toLocaleString()})`).join(', ')}`
       : `- CRM: No active deals connected yet.`;
 
-    const socialSection = l2.social.isConnected
-      ? `- Facebook Page: "${l2.social.connectedPageName?.value}" | ${l2.social.followersCount?.value} followers | Reach Growth: +${l2.social.reachGrowthPct?.value}% | Top Content: ${l2.social.topPerformingType?.value}`
-      : context.isPersonalSocialProfile
-      ? `- Social Accounts: A personal Facebook profile is connected, but NO Facebook Business Page is connected. Do NOT claim Facebook Page posts, followers, or performance analytics. If asked about Facebook performance, explain that the connected account is a personal profile and recommend connecting a Facebook Page.`
+    const channelLines: string[] = [];
+    if (l2.social.hasSelectedPage) {
+      channelLines.push(
+        `- Facebook Page: "${l2.social.connectedPageName?.value}" | ${l2.social.followersCount?.value ?? 'unknown'} followers | Top Content: ${l2.social.topPerformingType?.value || 'not analyzed'}`
+      );
+    } else if (context.isPersonalSocialProfile) {
+      channelLines.push('- Facebook: A personal authorization profile exists, but NO operational Facebook Business Page is connected. Do NOT claim Page posts, followers, or analytics.');
+    }
+
+    if (l2.social.instagram?.isConnected) {
+      const ig = l2.social.instagram;
+      channelLines.push(
+        `- Instagram Professional: "${ig.accountName?.value}"${ig.username?.value ? ` (@${String(ig.username.value).replace(/^@/, '')})` : ''} | ${ig.followersCount?.value ?? 'unknown'} followers | account type: ${ig.accountType?.value || 'professional'} | publishing: ${ig.canPublish ? 'enabled' : 'not granted'} | insights: ${ig.canReadInsights ? 'enabled' : 'not granted'} | comments: ${ig.canManageComments ? 'enabled' : 'not granted'} | messages: ${ig.canManageMessages ? 'enabled' : 'not granted'}`
+      );
+    }
+
+    for (const channel of l2.social.connectedChannels || []) {
+      if (channel.provider === 'facebook' || channel.provider === 'instagram') continue;
+      channelLines.push(
+        `- ${channel.provider.charAt(0).toUpperCase() + channel.provider.slice(1)}: "${channel.accountName}"${channel.username ? ` (@${String(channel.username).replace(/^@/, '')})` : ''} | status: ${channel.status}`
+      );
+    }
+
+    const socialSection = channelLines.length > 0
+      ? channelLines.join('\n')
       : `- Social Accounts: Not connected.`;
 
     return `=== AUTHORITATIVE BUSINESS KNOWLEDGE (Organization: ${l1.companyName.value}) ===
@@ -840,6 +998,9 @@ CRITICAL OPERATIONAL RULES:
    **What I believe deserves attention**: ...
    *Would you like me to turn this into a growth plan?*
 5. If asked for information that is genuinely missing from both Layer 1 and Layer 2, state honestly: "I know your business is focused on X and Y, but I don't currently have verified information about Z. [Add Business Knowledge] [Connect Data Source]".
-6. ALWAYS aim your responses toward practical BUSINESS GROWTH (Revenue, Customers, Audience, Efficiency).`;
+6. ALWAYS aim your responses toward practical BUSINESS GROWTH (Revenue, Customers, Audience, Efficiency).
+7. Treat each social channel independently. A connected Facebook Page does NOT imply Instagram is connected, and a connected Instagram Professional account does NOT imply Facebook is connected.
+8. When Instagram is connected, use the verified Instagram account name, username, followers and granted capabilities above. Never reply that Instagram is unavailable if the verified Instagram Professional channel appears in LIVE BUSINESS STATE.
+9. If Instagram is not connected, say that specifically without implying all social channels are disconnected.`;
   }
 }
