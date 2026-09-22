@@ -233,7 +233,7 @@ export class SocialInboxService {
     if (params.connectionId && !params.connectionId.startsWith('acc-') && !params.connectionId.startsWith('fb-page-')) {
       const { data } = await supabase
         .from('social_connections')
-        .select('id, provider, access_token, infrastructure_provider, zernio_profile_id, zernio_account_id, organization_id, workspace_id, user_id')
+        .select('id, provider, provider_account_id, access_token, infrastructure_provider, zernio_profile_id, zernio_account_id, organization_id, workspace_id, user_id')
         .eq('id', params.connectionId)
         .eq('provider', provider)
         .eq('connection_status', 'CONNECTED')
@@ -248,7 +248,7 @@ export class SocialInboxService {
       // Find active connection for this tenant/workspace/user
       const { data } = await supabase
         .from('social_connections')
-        .select('id, provider, access_token, infrastructure_provider, zernio_profile_id, zernio_account_id, organization_id, workspace_id, user_id')
+        .select('id, provider, provider_account_id, access_token, infrastructure_provider, zernio_profile_id, zernio_account_id, organization_id, workspace_id, user_id')
         .eq('provider', provider)
         .eq('connection_status', 'CONNECTED')
         .eq('organization_id', params.organizationId)
@@ -306,6 +306,7 @@ export class SocialInboxService {
         conversationId: params.conversationId,
         recipientId: params.recipientId,
         messageText: params.messageText,
+        accountId: conn.provider_account_id || undefined,
       });
     }
 
