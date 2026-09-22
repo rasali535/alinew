@@ -42,6 +42,10 @@ export interface VisualSemanticQAResult {
   detectedFlaws: string[];
   prohibitedBrandingDetected: boolean;
   detectedBranding: string[];
+  textFidelityPassed: boolean;
+  requiredText: string[];
+  missingRequiredText: string[];
+  detectedTextErrors: string[];
   providerFeedback: string;
   recommendation: 'ACCEPT' | 'ENHANCE_PROMPT' | 'RETRY_ALT_PROVIDER';
 }
@@ -50,6 +54,7 @@ export interface EvaluateVisualOptions {
   brief?: StructuredCreativeBrief;
   userPrompt?: string;
   expectedConcepts?: string[];
+  requiredTextElements?: string[];
   format?: string;
   targetIndustry?: string;
 }
@@ -68,11 +73,19 @@ export class VisualSemanticEvaluatorService {
     const userPrompt = options.userPrompt || brief?.visualDirection.prompt || 'Enterprise commercial visual';
     const industry = options.targetIndustry || brief?.industry || 'Commercial Enterprise';
     const expectedConcepts = options.expectedConcepts || this.extractRequiredConcepts(userPrompt, industry);
+    const requiredTextElements = options.requiredTextElements || this.extractRequiredText(userPrompt);
 
     // If image is a standard JPEG/PNG/WebP, attempt Multimodal Vision
     if (mimeType.includes('jpeg') || mimeType.includes('jpg') || mimeType.includes('png') || mimeType.includes('webp')) {
       try {
-        const visionResult = await this.evaluateWithGeminiVision(imageBuffer, mimeType, userPrompt, expectedConcepts, industry);
+        const visionResult = await this.evaluateWithGeminiVision(
+          imageBuffer,
+          mimeType,
+          userPrompt,
+          expectedConcepts,
+          requiredTextElements,
+          industry
+        );
         if (visionResult) {
           return visionResult;
         }
@@ -82,7 +95,15 @@ export class VisualSemanticEvaluatorService {
     }
 
     // Dynamic semantic visual analysis engine
-    return this.evaluateDynamicSemantic(imageBuffer, mimeType, userPrompt, expectedConcepts, industry, options.imageSourcePrompt);
+    return this.evaluateDynamicSemantic(
+      imageBuffer,
+      mimeType,
+      userPrompt,
+      expectedConcepts,
+      requiredTextElements,
+      industry,
+      options.imageSourcePrompt
+    );
   }
 
   /**
@@ -93,6 +114,7 @@ export class VisualSemanticEvaluatorService {
     mimeType: string,
     userPrompt: string,
     expectedConcepts: string[],
+    requiredTextElements: string[],
     industry: string
   ): Promise<VisualSemanticQAResult | null> {
     const base64Data = imageBuffer.toString('base64');
@@ -104,6 +126,7 @@ Analyze this commercial advertisement image strictly against the following reque
 USER REQUEST: "${cleanPrompt}"
 TARGET INDUSTRY: "${industry}"
 REQUIRED CONCEPTS: ${JSON.stringify(expectedConcepts)}
+REQUIRED RENDERED TEXT (must be visually verified): ${JSON.stringify(requiredTextElements)}
 
 Evaluate and return ONLY valid JSON in this exact structure:
 {
@@ -119,6 +142,10 @@ Evaluate and return ONLY valid JSON in this exact structure:
   "detectedFlaws": [<string>, ...],
   "prohibitedBrandingDetected": <true|false>,
   "detectedBranding": [<string>, ...],
+  "copyAccuracyScore": <number 0-100>,
+  "textFidelityPassed": <true|false>,
+  "missingRequiredText": [<string>, ...],
+  "detectedTextErrors": [<string>, ...],
   "providerFeedback": "<detailed analysis>"
 }
 
@@ -129,6 +156,13 @@ Strict Rules:
 - Treat "dual", "two", or any explicit quantity as a hard visual requirement.
 - Any provider watermark, provider URL, stock watermark, model signature, or third-party logo/text not requested by the user is prohibited branding.
 - If prohibited branding is visible, set prohibitedBrandingDetected=true and list it in detectedBranding.
+- Treat every REQUIRED RENDERED TEXT item as a hard acceptance requirement.
+- Verify spelling and word order from the actual rendered pixels, not from the prompt. Do not assume requested text is present.
+- URLs, domains, email addresses, phone numbers, prices, product names, headlines, taglines and CTA wording must be rendered correctly. A hallucinated or misspelled URL/domain is a hard failure.
+- Unintended broken words/hyphenation (for example "opera- ting" instead of "operating"), substituted characters, missing words, gibberish, or visibly corrupted text must set textFidelityPassed=false and be listed in detectedTextErrors.
+- Line wrapping is allowed only when it does not change spelling, characters, word order, meaning, or brand identity.
+- If any required text is missing or incorrect, set textFidelityPassed=false, populate missingRequiredText/detectedTextErrors, and set copyAccuracyScore below 80.
+- If there is no REQUIRED RENDERED TEXT, set textFidelityPassed=true.
 - Check if composition leaves clean space for typography layout.
 `;
 
@@ -178,13 +212,25 @@ Strict Rules:
           ? parsed.detectedBranding.map((item: any) => String(item)).filter(Boolean)
           : [];
         const prohibitedBrandingDetected = Boolean(parsed.prohibitedBrandingDetected) || detectedBranding.length > 0;
+        const missingRequiredText = Array.isArray(parsed.missingRequiredText)
+          ? parsed.missingRequiredText.map((item: any) => String(item)).filter(Boolean)
+          : [];
+        const detectedTextErrors = Array.isArray(parsed.detectedTextErrors)
+          ? parsed.detectedTextErrors.map((item: any) => String(item)).filter(Boolean)
+          : [];
+        const textFidelityPassed = requiredTextElements.length === 0
+          ? true
+          : Boolean(parsed.textFidelityPassed) && missingRequiredText.length === 0 && detectedTextErrors.length === 0;
         const promptStructureScore = 95;
         const promptIntegrityScore = Number(parsed.promptIntegrityScore) || 96;
         const brandAccuracyScore = Number(parsed.brandAccuracyScore) || 95;
-        const copyAccuracyScore = Number(parsed.copyAccuracyScore) || 94;
-        const overallScore = Math.round((visualRelevanceScore * 0.6) + (designQualityScore * 0.4));
-        const passed = visualRelevanceScore >= 80 && designQualityScore >= 75;
-        const customerReady = promptIntegrityScore >= 80 && visualRelevanceScore >= 80 && designQualityScore >= 75 && brandAccuracyScore >= 80 && copyAccuracyScore >= 80;
+        const parsedCopyAccuracy = Number(parsed.copyAccuracyScore);
+        const copyAccuracyScore = Number.isFinite(parsedCopyAccuracy) && parsedCopyAccuracy >= 0
+          ? parsedCopyAccuracy
+          : (textFidelityPassed ? 100 : 40);
+        const overallScore = Math.round((visualRelevanceScore * 0.55) + (designQualityScore * 0.3) + (copyAccuracyScore * 0.15));
+        const passed = visualRelevanceScore >= 80 && designQualityScore >= 75 && textFidelityPassed;
+        const customerReady = promptIntegrityScore >= 80 && visualRelevanceScore >= 80 && designQualityScore >= 75 && brandAccuracyScore >= 80 && copyAccuracyScore >= 80 && textFidelityPassed;
 
         let qualityTier: VisualSemanticQAResult['qualityTier'] = 'REJECTED';
         if (overallScore >= 90) qualityTier = 'EXCEPTIONAL';
@@ -219,6 +265,10 @@ Strict Rules:
           detectedFlaws: Array.isArray(parsed.detectedFlaws) ? parsed.detectedFlaws : [],
           prohibitedBrandingDetected,
           detectedBranding,
+          textFidelityPassed,
+          requiredText: requiredTextElements,
+          missingRequiredText,
+          detectedTextErrors,
           providerFeedback: parsed.providerFeedback || 'Multimodal visual semantic validation completed.',
           recommendation,
         };
@@ -239,6 +289,7 @@ Strict Rules:
     mimeType: string,
     userPrompt: string,
     expectedConcepts: string[],
+    requiredTextElements: string[],
     industry: string,
     imageSourcePrompt?: string
   ): VisualSemanticQAResult {
@@ -379,10 +430,22 @@ Strict Rules:
     const promptStructureScore = 95;
     const promptIntegrityScore = 96;
     const brandAccuracyScore = 95;
-    const copyAccuracyScore = 94;
-    const overallScore = Math.round(visualRelevanceScore * 0.6 + designQualityScore * 0.4);
-    const passed = visualRelevanceScore >= 80 && designQualityScore >= 75;
-    const customerReady = promptIntegrityScore >= 80 && visualRelevanceScore >= 80 && designQualityScore >= 75 && brandAccuracyScore >= 80 && copyAccuracyScore >= 80;
+
+    // Text-heavy creatives must never be approved by the non-vision fallback.
+    // Without multimodal inspection we cannot prove that a generated raster
+    // rendered the requested headline/CTA/domain correctly.
+    const textFidelityPassed = requiredTextElements.length === 0;
+    const missingRequiredText = textFidelityPassed ? [] : [...requiredTextElements];
+    const detectedTextErrors = textFidelityPassed
+      ? []
+      : ['Rendered text could not be visually verified because multimodal QA was unavailable.'];
+    if (!textFidelityPassed) {
+      detectedFlaws.push('Required rendered text was not visually verified.');
+    }
+    const copyAccuracyScore = textFidelityPassed ? 94 : 0;
+    const overallScore = Math.round(visualRelevanceScore * 0.55 + designQualityScore * 0.3 + copyAccuracyScore * 0.15);
+    const passed = visualRelevanceScore >= 80 && designQualityScore >= 75 && textFidelityPassed;
+    const customerReady = promptIntegrityScore >= 80 && visualRelevanceScore >= 80 && designQualityScore >= 75 && brandAccuracyScore >= 80 && copyAccuracyScore >= 80 && textFidelityPassed;
 
     let qualityTier: VisualSemanticQAResult['qualityTier'] = 'REJECTED';
     if (overallScore >= 90) qualityTier = 'EXCEPTIONAL';
@@ -417,9 +480,44 @@ Strict Rules:
       detectedFlaws,
       prohibitedBrandingDetected: false,
       detectedBranding: [],
+      textFidelityPassed,
+      requiredText: requiredTextElements,
+      missingRequiredText,
+      detectedTextErrors,
       providerFeedback: feedback || 'Visual semantic verification completed.',
       recommendation,
     };
+  }
+
+  /**
+   * Extracts text that the brief explicitly requires to appear in the rendered
+   * creative. This is intentionally conservative: quoted phrases, URLs/domains,
+   * email addresses and explicit headline/CTA labels become hard QA checks.
+   */
+  static extractRequiredText(prompt: string): string[] {
+    const source = String(prompt || '').trim();
+    const required: string[] = [];
+    const add = (value: string) => {
+      const clean = value.replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').replace(/\s+/g, ' ').trim();
+      if (clean.length >= 2 && !required.some(item => item.toLowerCase() === clean.toLowerCase())) {
+        required.push(clean);
+      }
+    };
+
+    for (const match of source.matchAll(/[“"]([^”"]{2,160})[”"]/g)) add(match[1]);
+    for (const match of source.matchAll(/\b(?:https?:\/\/)?(?:www\.)?[a-z0-9][a-z0-9.-]*\.[a-z]{2,}(?:\/[^\s,;]*)?/gi)) add(match[0]);
+    for (const match of source.matchAll(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi)) add(match[0]);
+
+    const labelledPatterns = [
+      /(?:headline|title)\s*[:=-]\s*([^\n.;]{3,120})/gi,
+      /(?:cta|call to action)\s*[:=-]\s*([^\n.;]{2,80})/gi,
+      /(?:tagline|slogan)\s*[:=-]\s*([^\n.;]{2,120})/gi,
+    ];
+    for (const pattern of labelledPatterns) {
+      for (const match of source.matchAll(pattern)) add(match[1]);
+    }
+
+    return required.slice(0, 12);
   }
 
   /**
