@@ -495,6 +495,65 @@ export class SocialPublishingService {
       }
 
       if (insErr && (insErr.code === '23505' || insErr.message?.includes('duplicate key') || insErr.message?.includes('uq_social_publish_idempotency'))) {
+        // The unique key is permanent, while publish deduplication is only a
+        // 24-hour window. Re-read the tuple before calling this a concurrency
+        // conflict: an older claim should be safely recycled for a fresh
+        // dispatch instead of blocking the same payload forever.
+        const { data: conflicting } = await supabase
+          .from('social_publish_idempotency')
+          .select('*')
+          .eq('user_id', params.userId)
+          .eq('organization_id', params.organizationId)
+          .eq('workspace_id', params.workspaceId)
+          .eq('destination', params.destination)
+          .eq('idempotency_key', params.idempotencyKey)
+          .maybeSingle();
+
+        if (conflicting) {
+          const createdAtMs = new Date(conflicting.created_at).getTime();
+          const olderThan24h = Number.isFinite(createdAtMs) && createdAtMs <= Date.now() - 24 * 60 * 60 * 1000;
+
+          if (olderThan24h) {
+            const now = new Date().toISOString();
+            const { error: recycleErr } = await supabase
+              .from('social_publish_idempotency')
+              .update({
+                body_hash: params.bodyHash,
+                status: 'IN_PROGRESS',
+                lease_token: leaseToken,
+                post_id: null,
+                external_receipt_id: null,
+                platform_results: {},
+                error_message: null,
+                retry_count: 0,
+                claimed_at: now,
+                completed_at: null,
+                failed_at: null,
+                expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+                created_at: now,
+                updated_at: now,
+              })
+              .eq('id', conflicting.id);
+
+            if (!recycleErr) {
+              return {
+                conflict: false,
+                claimId: conflicting.id,
+                leaseToken,
+                claimStatus: 'CLAIMED_REUSED_EXPIRED',
+                message: 'Reused expired idempotency claim.',
+              };
+            }
+          }
+
+          return {
+            conflict: true,
+            claimStatus: 'IN_PROGRESS_CONFLICT',
+            claimId: conflicting.id,
+            message: 'A publish dispatch with this exact payload is currently in flight.',
+          };
+        }
+
         return {
           conflict: true,
           claimStatus: 'IN_PROGRESS_CONFLICT',
