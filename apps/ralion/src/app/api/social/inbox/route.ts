@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
       return corsJsonResponse({ success: false, error: 'INVALID_PROVIDER', conversations: [] }, { status: 400 }, request);
     }
     const provider = rawProvider as SocialPlatformType | undefined;
+    const connectionId = request.nextUrl.searchParams.get('connectionId')?.trim() || undefined;
     const context = await getCurrentRalionContext(request, { requireAuth: true });
     if (!context) {
       return authRequiredResponse(request);
@@ -28,6 +29,7 @@ export async function GET(request: NextRequest) {
       workspaceId: context.workspace?.id,
       organizationId: context.organization?.id || context.workspace?.organization_id || undefined,
       provider,
+      connectionId,
     });
 
     return corsJsonResponse({
