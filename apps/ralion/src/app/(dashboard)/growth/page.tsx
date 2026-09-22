@@ -196,6 +196,40 @@ export interface SocialAccount {
 
 const initialGeneratedContent: GeneratedContentItem[] = [];
 
+const MAX_PERSISTED_GROWTH_MARI_MESSAGES = 60;
+const CREATIVE_RUN_MAX_AGE_MS = 30 * 60 * 1000;
+
+type PersistedCreativeRun = {
+  status: 'RUNNING' | 'COMPLETED' | 'FAILED';
+  type: 'poster' | 'video';
+  prompt: string;
+  startedAt: string;
+  completedAt?: string;
+  assetId?: string;
+  mediaUrl?: string;
+  error?: string;
+};
+
+function growthMariStorageKey(orgId: string, workspaceId: string, userId: string): string {
+  return `ralion:${orgId}:${workspaceId}:${userId || 'user'}:growth:mari:last_conversation`;
+}
+
+function creativeRunStorageKey(orgId: string, workspaceId: string, userId: string): string {
+  return `ralion:${orgId}:${workspaceId}:${userId || 'user'}:creative:last_generation`;
+}
+
+function readCreativeRun(raw: string | null): PersistedCreativeRun | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || !['RUNNING', 'COMPLETED', 'FAILED'].includes(parsed.status)) return null;
+    if (!['poster', 'video'].includes(parsed.type) || typeof parsed.prompt !== 'string') return null;
+    return parsed as PersistedCreativeRun;
+  } catch {
+    return null;
+  }
+}
+
 const platformConfig: Record<string, { label: string; color: string; bg: string; iconChar: string; providerKey: string }> = {
   facebook: { label: 'Facebook Page', color: '#1877f2', bg: 'bg-indigo-600/10 border-indigo-500/30 text-indigo-400', iconChar: 'fb', providerKey: 'facebook' },
   instagram: { label: 'Instagram Business', color: '#E4405F', bg: 'bg-pink-600/10 border-pink-500/30 text-pink-300', iconChar: 'ig', providerKey: 'instagram' },
@@ -205,6 +239,11 @@ const splineChartDates = ['Day 1', 'Day 5', 'Day 10', 'Day 15', 'Day 20', 'Day 2
 
 function GrowthPageContent() {
   const { organization, workspace, user } = useOrganization();
+  const growthOrgId = organization?.id || '';
+  const growthWorkspaceId = workspace?.id || '';
+  const growthUserId = (user as any)?.uid || (user as any)?.id || '';
+  const growthMariHydratedRef = React.useRef(false);
+  const creativeRunHydratedRef = React.useRef(false);
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -422,6 +461,125 @@ function GrowthPageContent() {
     };
   }, [organization?.id, workspace?.id]);
 
+  // Restore an in-flight or completed creative run when the user returns to
+  // Growth/Social. The actual media is authoritative from the durable creative vault.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !growthOrgId || !growthWorkspaceId) return;
+    const key = creativeRunStorageKey(growthOrgId, growthWorkspaceId, growthUserId);
+    const saved = readCreativeRun(localStorage.getItem(key));
+    creativeRunHydratedRef.current = true;
+    if (!saved) return;
+
+    if (saved.type === 'poster') setPosterPrompt(saved.prompt);
+    else setVideoPrompt(saved.prompt);
+
+    if (saved.status === 'COMPLETED' && saved.mediaUrl) {
+      if (saved.type === 'poster') setGeneratedPoster(saved.mediaUrl);
+      else setGeneratedVideo(saved.mediaUrl);
+      return;
+    }
+
+    if (saved.status !== 'RUNNING') return;
+
+    const startedMs = Date.parse(saved.startedAt);
+    if (!Number.isFinite(startedMs) || Date.now() - startedMs > CREATIVE_RUN_MAX_AGE_MS) {
+      localStorage.setItem(key, JSON.stringify({
+        ...saved,
+        status: 'FAILED',
+        error: 'Generation did not complete within the recovery window.',
+      }));
+      return;
+    }
+
+    if (saved.type === 'poster') setIsGeneratingPoster(true);
+    else setIsGeneratingVideo(true);
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    const reconcile = async () => {
+      try {
+        const res = await authFetch('/api/creatives/list?limit=30&offset=0', {
+          headers: {
+            'x-organization-id': growthOrgId,
+            'x-workspace-id': growthWorkspaceId,
+          },
+        });
+        if (!res.ok || cancelled) return;
+        const data = await res.json().catch(() => ({}));
+        const assets = Array.isArray(data.assets) ? data.assets : [];
+        const normalizedPrompt = saved.prompt.trim().toLowerCase();
+        const match = assets.find((asset: any) => {
+          const assetPrompt = String(asset.prompt || '').trim().toLowerCase();
+          const assetType = asset.assetType || (String(asset.mimeType || '').startsWith('video/') ? 'VIDEO_REEL' : 'POSTER_IMAGE');
+          const typeMatches = saved.type === 'poster' ? assetType === 'POSTER_IMAGE' : assetType === 'VIDEO_REEL';
+          const createdMs = Date.parse(asset.createdAt || asset.generatedAt || '');
+          const timeMatches = !Number.isFinite(createdMs) || createdMs >= startedMs - 120000;
+          return typeMatches && timeMatches && assetPrompt === normalizedPrompt;
+        });
+
+        if (!match) {
+          if (Date.now() - startedMs > CREATIVE_RUN_MAX_AGE_MS) {
+            const failed = { ...saved, status: 'FAILED' as const, error: 'Generation did not complete within the recovery window.' };
+            localStorage.setItem(key, JSON.stringify(failed));
+            setIsGeneratingPoster(false);
+            setIsGeneratingVideo(false);
+            if (timer) clearInterval(timer);
+          }
+          return;
+        }
+
+        const assetId = match.assetId || match.id;
+        let mediaUrl = match.mediaUrl || match.publicUrl || match.previewUrl || `/api/creatives/${encodeURIComponent(assetId)}/delivery`;
+        try {
+          const resolved = await resolveSecureAssetUrl(assetId);
+          if (resolved?.signedUrl) mediaUrl = resolved.signedUrl;
+        } catch {}
+
+        const item: GeneratedContentItem = {
+          id: assetId,
+          type: saved.type === 'poster' ? 'POSTER_IMAGE' : 'VIDEO_REEL',
+          title: match.title || (saved.prompt.length > 40 ? saved.prompt.slice(0, 36).trim() + '...' : saved.prompt),
+          prompt: match.prompt || saved.prompt,
+          output: mediaUrl,
+          previewUrl: mediaUrl,
+          modelUsed: match.provider || match.model || 'Prompt-Faithful Creative Engine',
+          createdAt: match.createdAt || match.generatedAt || 'Just now',
+        };
+
+        setGeneratedGallery(prev => [item, ...prev.filter(existing => existing.id !== item.id)]);
+        if (saved.type === 'poster') setGeneratedPoster(mediaUrl);
+        else setGeneratedVideo(mediaUrl);
+        setIsGeneratingPoster(false);
+        setIsGeneratingVideo(false);
+        localStorage.setItem(key, JSON.stringify({
+          ...saved,
+          status: 'COMPLETED',
+          completedAt: new Date().toISOString(),
+          assetId,
+          mediaUrl,
+        }));
+        setOauthAlert({
+          type: 'success',
+          message: saved.type === 'poster'
+            ? '🎨 Your creative finished while you were away and is ready.'
+            : '🎥 Your video finished while you were away and is ready.',
+        });
+        if (timer) clearInterval(timer);
+      } catch (error) {
+        console.warn('[Growth] Creative run reconciliation notice:', error);
+      }
+    };
+
+    void reconcile();
+    timer = setInterval(() => { void reconcile(); }, 5000);
+
+    return () => {
+      cancelled = true;
+      if (timer) clearInterval(timer);
+    };
+  }, [growthOrgId, growthWorkspaceId, growthUserId]);
+
   // If Mari opens an asset in Social, create a safe draft using the durable
   // generated asset. Nothing is published until the user explicitly confirms.
   useEffect(() => {
@@ -630,6 +788,26 @@ function GrowthPageContent() {
     },
   ]);
   const [isAskingMari, setIsAskingMari] = useState(false);
+
+  // Keep the Growth/Social Mari thread across refreshes and module navigation.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !growthOrgId || !growthWorkspaceId) return;
+    const key = growthMariStorageKey(growthOrgId, growthWorkspaceId, growthUserId);
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        setMariChatMessages(parsed.slice(-MAX_PERSISTED_GROWTH_MARI_MESSAGES));
+      }
+    } catch {}
+    growthMariHydratedRef.current = true;
+  }, [growthOrgId, growthWorkspaceId, growthUserId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !growthMariHydratedRef.current) return;
+    if (!growthOrgId || !growthWorkspaceId || mariChatMessages.length === 0) return;
+    const key = growthMariStorageKey(growthOrgId, growthWorkspaceId, growthUserId);
+    localStorage.setItem(key, JSON.stringify(mariChatMessages.slice(-MAX_PERSISTED_GROWTH_MARI_MESSAGES)));
+  }, [mariChatMessages, growthOrgId, growthWorkspaceId, growthUserId]);
 
   // ── Mari AI 5-Minute Business Learning & Brand Voice State ───────────────
   const [businessKnowledge, setBusinessKnowledge] = useState<any | null>(null);
@@ -1878,6 +2056,19 @@ function GrowthPageContent() {
       setGeneratedVideo('');
     }
 
+    const creativeRunKey = (typeof window !== 'undefined' && growthOrgId && growthWorkspaceId)
+      ? creativeRunStorageKey(growthOrgId, growthWorkspaceId, growthUserId)
+      : '';
+    const startedAt = new Date().toISOString();
+    if (creativeRunKey) {
+      localStorage.setItem(creativeRunKey, JSON.stringify({
+        status: 'RUNNING',
+        type,
+        prompt: prompt.trim(),
+        startedAt,
+      } satisfies PersistedCreativeRun));
+    }
+
     try {
       const normalizedPosterFormat: Record<string, string> = {
         '1:1 Square': '1:1',
@@ -1972,6 +2163,18 @@ function GrowthPageContent() {
       const assetPrompt = asset.prompt || prompt.trim();
       const providerLabel = asset.provider || asset.model || asset.generator || 'Prompt-Faithful Creative Engine';
 
+      if (creativeRunKey) {
+        localStorage.setItem(creativeRunKey, JSON.stringify({
+          status: 'COMPLETED',
+          type,
+          prompt: assetPrompt,
+          startedAt,
+          completedAt: new Date().toISOString(),
+          assetId,
+          mediaUrl: finalDisplayUrl,
+        } satisfies PersistedCreativeRun));
+      }
+
       if (type === 'poster') {
         setGeneratedPoster(finalDisplayUrl);
 
@@ -2013,6 +2216,16 @@ function GrowthPageContent() {
       setTimeout(() => setOauthAlert(null), 4000);
     } catch (error: any) {
       console.error('[Growth Studio Media Gen Error]:', error);
+      if (creativeRunKey) {
+        localStorage.setItem(creativeRunKey, JSON.stringify({
+          status: 'FAILED',
+          type,
+          prompt: prompt.trim(),
+          startedAt,
+          completedAt: new Date().toISOString(),
+          error: error?.message || 'Creative generation failed.',
+        } satisfies PersistedCreativeRun));
+      }
       setOauthAlert({
         type: 'error',
         message: '❌ ' + (error?.message || 'Creative generation failed. No placeholder was created.'),
