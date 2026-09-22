@@ -3674,10 +3674,36 @@ function GrowthPageContent() {
 
               {/* Mari AI Live Strategic Suggestions Widget */}
               {(() => {
-                const fbConn = connectedAccounts.find(a => a.provider === 'facebook' && a.status === 'connected');
-                const selectedFbPage = availableFacebookPages.find(p => p.status === 'CONNECTED' || p.isCurrentDestination);
-                const hasPageConnected = Boolean(selectedFbPage || (fbConn && ((fbConn as any).accountType === 'BUSINESS' || (fbConn as any).metadata?.is_page === true)));
-                const pageDisplayName = selectedFbPage?.name || fbConn?.label || businessKnowledge?.businessName || 'Your Business';
+                const selectedConn = activeAcc;
+                const selectedIsFacebook = selectedConn?.provider === 'facebook';
+                const selectedFbPage = selectedIsFacebook
+                  ? availableFacebookPages.find(p =>
+                      p.pageId === selectedConn?.providerAccountId ||
+                      p.id === selectedConn?.id ||
+                      p.status === 'CONNECTED' ||
+                      p.isCurrentDestination
+                    )
+                  : null;
+                const selectedIsFacebookPage = Boolean(
+                  selectedIsFacebook &&
+                  selectedConn &&
+                  (
+                    selectedFbPage ||
+                    selectedConn.accountType === 'BUSINESS' ||
+                    selectedConn.accountType === 'PAGE' ||
+                    selectedConn.metadata?.is_page === true ||
+                    selectedConn.metadata?.provider_account_type === 'FACEBOOK_PAGE'
+                  )
+                );
+                const pageDisplayName =
+                  selectedConn?.label ||
+                  selectedFbPage?.name ||
+                  businessKnowledge?.businessName ||
+                  'Your Business';
+                const selectedPosts = selectedConn
+                  ? (connectionPosts[selectedConn.id] || [])
+                  : [];
+                const bestSlot = optimalPostingSlots.find(slot => slot.isPeak) || optimalPostingSlots[0];
 
                 return (
                   <Card className="p-6 border-indigo-500/30 bg-gradient-to-b from-indigo-950/40 via-zinc-900 to-zinc-900 shadow-2xl">
@@ -3689,12 +3715,14 @@ function GrowthPageContent() {
                         <div>
                           <h3 className="text-sm font-black text-white">Mari AI Growth Suggestions</h3>
                           <p className="text-[10px] text-zinc-400">
-                            {hasPageConnected ? `Real-time intelligence for ${pageDisplayName}` : 'Audience growth & engagement suggestions'}
+                            {selectedConn
+                              ? `${selectedPlatformLabel} intelligence for ${pageDisplayName}`
+                              : 'Audience growth & engagement suggestions'}
                           </p>
                         </div>
                       </div>
 
-                      {hasPageConnected && (
+                      {selectedIsFacebookPage && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -3706,15 +3734,14 @@ function GrowthPageContent() {
                       )}
                     </div>
 
-                    {/* Banner when Facebook profile is connected but no page is selected */}
-                    {fbConn && !hasPageConnected && (
+                    {selectedIsFacebook && !selectedIsFacebookPage && (
                       <div className="mb-3 p-3.5 rounded-xl bg-amber-950/40 border border-amber-500/40 flex flex-col gap-2">
                         <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
                           <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
-                          <span>Facebook connected — select a Page to unlock live social intelligence</span>
+                          <span>Facebook authorization is active — select a Page to unlock Page intelligence</span>
                         </div>
                         <p className="text-[11px] text-zinc-300 leading-relaxed">
-                          Your personal Facebook account is linked, but Mari AI needs your managed Facebook Page to analyze engagement, followers, and optimal posting times.
+                          Mari only uses an operational Facebook Page for Page posts, followers and analytics. The personal Facebook identity remains authorization-only.
                         </p>
                         <Button
                           variant="primary"
@@ -3727,18 +3754,15 @@ function GrowthPageContent() {
                       </div>
                     )}
 
-                    {!fbConn && (
+                    {!selectedConn && (
                       <div className="mb-3 p-3 rounded-xl bg-indigo-950/30 border border-indigo-500/30 flex items-center justify-between gap-2">
                         <div className="text-[11px] text-zinc-300">
-                          Connect Facebook Page for live audience calibration
+                          Connect a social account for channel-specific growth intelligence
                         </div>
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => {
-                            setSelectedConnectPlatform('facebook');
-                            setIsConnectModalOpen(true);
-                          }}
+                          onClick={() => setIsConnectModalOpen(true)}
                           className="text-[10px] py-1 px-2 text-indigo-300 border-indigo-500/40"
                         >
                           Connect
@@ -3761,7 +3785,9 @@ function GrowthPageContent() {
                           <Zap className="w-3 h-3 text-emerald-400" /> Optimal Publishing Window
                         </div>
                         <div className="text-xs text-zinc-200 mt-1 font-sans">
-                          Audience activity peak window: <strong className="text-white">03:30 PM CAT</strong>
+                          {bestSlot && selectedPosts.length > 0
+                            ? <>Ralion-tracked peak window: <strong className="text-white">{bestSlot.time}</strong></>
+                            : 'Not enough selected-account engagement data yet to claim a peak window.'}
                         </div>
                       </div>
 
@@ -3775,11 +3801,13 @@ function GrowthPageContent() {
                         <Button
                           variant="primary"
                           size="sm"
+                          disabled={!selectedConn}
                           onClick={() => {
+                            if (!selectedConn) return;
                             setNewPost({
                               title: `${pageDisplayName} Strategic Growth Update`,
                               body: `Delivering dependable solutions and strategic value for ${pageDisplayName}. Discover how our dedicated operational standards empower customer success...`,
-                              platform: (activeAcc?.provider as ContentPost['platform']) || 'facebook',
+                              platform: selectedConn.provider as ContentPost['platform'],
                               hashtags: `#${pageDisplayName.replace(/\s+/g, '')} #EnterpriseOS #Innovation #Growth`,
                               scheduledAt: '',
                             });
