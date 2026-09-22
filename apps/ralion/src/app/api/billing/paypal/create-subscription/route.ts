@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../../lib/cors';
 import { requireRalionContext } from '../../../../../lib/auth/serverAuth';
-import { PayPalCardVaultService } from '@ralion/integrations/server';
+import { DurablePayPalService } from '@ralion/integrations/server';
 import { DurableBillingDatabaseService } from '@ralion/database/server';
 import { SubscriptionPlanId } from '@ralion/database';
 
@@ -77,20 +77,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await PayPalCardVaultService.createOrder({
+    const appBase = (process.env.NEXT_PUBLIC_APP_URL || 'https://rasalilabs.com/ralion').replace(/\/$/, '');
+    const result = await DurablePayPalService.createSubscription({
       organizationId,
       planId: validPlan,
+      billingCycle: 'MONTHLY',
       userId: serverCtx.user.id,
+      returnUrl: `${appBase}/billing?paypal=success`,
+      cancelUrl: `${appBase}/billing?paypal=cancelled`,
     });
-    const appBase = (process.env.NEXT_PUBLIC_APP_URL || 'https://rasalilabs.com/ralion').replace(/\/$/, '');
-    const approveUrl = `${appBase}/billing/paypal-card?orderId=${encodeURIComponent(result.orderId)}&plan=${encodeURIComponent(validPlan)}`;
+
+    if (!result.success || !result.subscriptionId || !result.approveUrl) {
+      return corsJsonResponse(
+        {
+          success: false,
+          code: 'PAYPAL_SUBSCRIPTION_CREATE_FAILED',
+          error: result.error || 'PayPal subscription checkout could not be created.',
+        },
+        { status: 400 },
+        request
+      );
+    }
 
     return corsJsonResponse(
       {
         success: true,
-        subscriptionId: result.orderId,
-        approveUrl,
-        checkoutMode: 'paypal_card_vault',
+        subscriptionId: result.subscriptionId,
+        approveUrl: result.approveUrl,
+        checkoutMode: 'paypal_subscription',
         planId: validPlan,
         billingCycle: 'MONTHLY',
       },
@@ -98,9 +112,9 @@ export async function POST(request: NextRequest) {
       request
     );
   } catch (err: any) {
-    console.error('[PayPal Card Checkout API] Error:', err);
+    console.error('[PayPal Subscription Checkout API] Error:', err);
     return corsJsonResponse(
-      { success: false, code: 'PAYPAL_CARD_CHECKOUT_CREATE_FAILED', error: err instanceof Error ? err.message : 'Internal server error creating PayPal card checkout.' },
+      { success: false, code: 'PAYPAL_SUBSCRIPTION_CREATE_FAILED', error: err instanceof Error ? err.message : 'Internal server error creating PayPal subscription checkout.' },
       { status: 400 },
       request
     );
