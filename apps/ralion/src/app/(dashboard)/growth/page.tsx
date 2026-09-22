@@ -3069,7 +3069,7 @@ function GrowthPageContent() {
                 onClick={() => setIsCreateOpen(true)}
                 className="gap-1.5 text-xs font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-indigo-600/20"
               >
-                <Plus className="w-4 h-4" /> Create Facebook Post
+                <Plus className="w-4 h-4" /> Create {selectedPlatformLabel} Post
               </Button>
             </div>
           </div>
@@ -3282,7 +3282,7 @@ function GrowthPageContent() {
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-zinc-500 text-xs">
                       <BarChart2 className="w-8 h-8 text-zinc-600 mb-2" />
                       <p className="font-semibold text-zinc-400">Data unavailable</p>
-                      <p className="text-[11px] text-zinc-500 mt-0.5">Publish Facebook posts to generate real-time growth curves.</p>
+                      <p className="text-[11px] text-zinc-500 mt-0.5">Publish posts on the selected social account to generate Ralion-tracked growth curves.</p>
                     </div>
                   ) : (
                     (() => {
@@ -3418,14 +3418,14 @@ function GrowthPageContent() {
                       {posts.length === 0 ? (
                         <tr>
                           <td colSpan={5} className="py-8 text-center text-zinc-500">
-                            No Facebook posts found. Publish your first post using the composer above.
+                            No posts found for the selected social account. Publish your first post using the composer above.
                           </td>
                         </tr>
                       ) : (
                         posts.slice(0, 5).map(post => (
                           <tr key={post.id} className="hover:bg-zinc-800/30 transition-all">
                             <td className="py-3.5 pr-4 max-w-xs">
-                              <div className="font-bold text-white text-xs line-clamp-1">{post.title || 'Facebook Post'}</div>
+                              <div className="font-bold text-white text-xs line-clamp-1">{post.title || `${selectedPlatformLabel} Post`}</div>
                               <div className="text-[11px] text-zinc-400 line-clamp-1 mt-0.5">{post.body}</div>
                               <div className="text-[10px] text-zinc-500 font-mono mt-1">{post.publishedAt || 'Recently'}</div>
                             </td>
@@ -3446,7 +3446,7 @@ function GrowthPageContent() {
                                 <button
                                   onClick={() => handleOpenCommentsModal({ id: post.id, body: post.body })}
                                   className="p-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/40 transition-all flex items-center gap-1 text-[11px]"
-                                  title="Read & Reply to Facebook Comments"
+                                  title={selectedPlatform === 'facebook' ? 'Read & Reply to Facebook Comments' : `${selectedPlatformLabel} comments`}
                                 >
                                   <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
                                 </button>
@@ -4008,7 +4008,7 @@ function GrowthPageContent() {
               </div>
             ) : (
               <div className="text-center py-4 text-xs text-zinc-500">
-                No social accounts connected yet. Click above to connect Facebook, LinkedIn, X, TikTok, or YouTube.
+                No social accounts connected yet. Click above to connect Facebook, Instagram, LinkedIn, X, TikTok, or YouTube.
               </div>
             )}
           </div>
@@ -4075,7 +4075,7 @@ function GrowthPageContent() {
                 </div>
                 <h2 className="text-2xl font-black text-white tracking-tight">Connect Your Social Channels</h2>
                 <p className="text-xs text-zinc-400 mt-2 leading-relaxed">
-                  Link Facebook, LinkedIn, X, TikTok, or YouTube to publish updates, schedule multi-format posts, manage conversations, and activate Mari AI audience growth analytics.
+                  Link Facebook, Instagram, LinkedIn, X, TikTok, or YouTube to publish updates, schedule multi-format posts, manage conversations, and activate Mari AI audience growth analytics.
                 </p>
               </div>
 
@@ -4091,7 +4091,7 @@ function GrowthPageContent() {
               </div>
             </div>
           ) : (
-            /* Selected Facebook Page Management Master Workspace */
+            /* Selected Social Account Management Workspace */
             <div className="p-6 rounded-3xl bg-gradient-to-br from-indigo-950/50 via-zinc-900 to-zinc-950 border border-indigo-500/30 shadow-2xl flex flex-col gap-6">
               {/* Header / Hero */}
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-5 border-b border-zinc-800 pb-5">
@@ -4436,7 +4436,7 @@ function GrowthPageContent() {
                           </Badge>
                         </div>
                         <p className="text-xs text-zinc-300 mt-1">
-                          During Facebook connection, Mari AI calibrated your business identity ({businessKnowledge?.businessName || activeFbPage?.name || fbConn?.label || 'your business'}), historical engagement, and regional audience to calibrate custom copy and growth angles.
+                          Mari AI calibrated your business identity ({businessKnowledge?.businessName || currentAccountName || 'your business'}), available channel engagement, and audience signals to calibrate custom copy and growth angles.
                         </p>
                       </div>
 
@@ -4454,7 +4454,7 @@ function GrowthPageContent() {
                           size="sm" 
                           onClick={() => {
                             fetchBusinessLearningData();
-                            setOauthAlert({ type: 'success', message: '⚡ Mari AI re-calibrated business intelligence with live Facebook Graph feed!' });
+                            setOauthAlert({ type: 'success', message: `⚡ Mari AI re-calibrated business intelligence for ${selectedPlatformLabel}.` });
                           }}
                           className="text-xs border-zinc-800 text-zinc-300 hover:bg-zinc-900"
                         >
@@ -4548,7 +4548,7 @@ function GrowthPageContent() {
                     <Sparkles className="w-8 h-8 text-purple-400 animate-pulse" />
                     <h4 className="text-sm font-bold text-white">Mari AI Business Knowledge Calibration</h4>
                     <p className="text-xs text-zinc-400 max-w-md">
-                      {fbConn ? 'Mari AI is calibrating your business brand voice and audience models from your connected Facebook Page.' : 'Connect your Facebook Page to calibrate custom brand voice and audience growth intelligence.'}
+                      {activeAcc ? `Mari AI is calibrating your business brand voice and audience models from ${selectedPlatformLabel} and your wider Ralion business context.` : 'Connect a social account to calibrate custom brand voice and audience growth intelligence.'}
                     </p>
                   </div>
                 )}
@@ -4650,7 +4650,7 @@ function GrowthPageContent() {
                 {/* Mari AI Contextual Chat */}
                 <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 flex flex-col gap-3">
                   <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-purple-400" /> Ask Mari AI About Facebook Growth
+                    <Sparkles className="w-3.5 h-3.5 text-purple-400" /> Ask Mari AI About {selectedPlatformLabel} Growth
                   </h4>
                   
                   <div className="flex flex-col gap-2 max-h-48 overflow-y-auto p-2">
@@ -4848,7 +4848,7 @@ function GrowthPageContent() {
                 <Inbox className="w-4 h-4 text-teal-400" /> Unified Social Inbox & Messenger
               </h2>
               <p className="text-xs text-zinc-400 mt-0.5">
-                Read and respond to direct customer messages across Facebook Messenger as <strong>{activeFbPage?.name || fbConn?.label || 'Your Facebook Page'}</strong> ({activeFbPage?.username || fbConn?.handle || '@page'}).
+                Read and respond to direct customer messages for <strong>{currentAccountName}</strong> ({currentAccountHandle || '@account'}) on {selectedPlatformLabel}.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -4893,8 +4893,8 @@ function GrowthPageContent() {
                             {conv.participantName.slice(0, 2).toUpperCase()}
                           </div>
                         )}
-                        <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-blue-600 border-2 border-zinc-900 flex items-center justify-center text-[8px] text-white font-bold">
-                          fb
+                        <span className="absolute -bottom-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-blue-600 border-2 border-zinc-900 flex items-center justify-center text-[8px] text-white font-bold">
+                          {(conv.provider || selectedPlatform).slice(0, 2)}
                         </span>
                       </div>
 
@@ -4945,7 +4945,7 @@ function GrowthPageContent() {
                         <div>
                           <div className="flex items-center gap-2">
                             <h3 className="text-sm font-bold text-white">{activeConv.participantName}</h3>
-                            <Badge variant="success" className="text-[9px]">Facebook Messenger</Badge>
+                            <Badge variant="success" className="text-[9px]">{selectedPlatform === 'facebook' ? 'Facebook Messenger' : selectedPlatformLabel}</Badge>
                           </div>
                           <p className="text-[11px] text-zinc-400 font-mono">Recipient ID: {activeConv.participantId}</p>
                         </div>
@@ -4953,7 +4953,7 @@ function GrowthPageContent() {
 
                       <div className="text-right">
                         <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Replying as Ras Ali Labs
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Replying as {currentAccountName}
                         </span>
                       </div>
                     </div>
@@ -5008,7 +5008,7 @@ function GrowthPageContent() {
                         rows={2}
                         value={inboxReplyText}
                         onChange={e => setInboxReplyText(e.target.value)}
-                        placeholder="Write direct response to customer as Ras Ali Labs..."
+                        placeholder={`Write direct response as ${currentAccountName}...`}
                         className="flex-1 p-3 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-teal-500 resize-none font-sans"
                       />
                       <Button
@@ -6398,7 +6398,7 @@ function GrowthPageContent() {
               rows={4} 
               value={newPost.body} 
               onChange={e => setNewPost({ ...newPost, body: e.target.value })} 
-              placeholder="Write Facebook post content..." 
+              placeholder={`Write ${selectedPlatformLabel} post content...`} 
               className="w-full mt-1 p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white resize-none focus:border-indigo-500 focus:outline-none font-mono" 
             />
           </div>
@@ -6451,7 +6451,7 @@ function GrowthPageContent() {
                       </Badge>
                       <p className="text-xs font-semibold text-white truncate">{newPost.mediaFileName || 'Media attached'}</p>
                     </div>
-                    <p className="text-[10px] text-emerald-400 mt-0.5">✓ Ready to publish to Facebook Page</p>
+                    <p className="text-[10px] text-emerald-400 mt-0.5">✓ Ready to publish to {selectedAccountLabel}</p>
                   </div>
                 </div>
 
@@ -6659,7 +6659,7 @@ function GrowthPageContent() {
             setIsCommentsModalOpen(false);
             setSelectedCommentPost(null);
           }} 
-          title="Facebook Post Comments & Community Management"
+          title={`${selectedPlatformLabel} Comments & Community Management`}
         >
           <div className="flex flex-col gap-4">
             {/* Post Snippet */}
@@ -6669,7 +6669,7 @@ function GrowthPageContent() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-white text-xs">{activeFbPage?.name || fbConn?.label || 'Facebook Page'}</span>
+                  <span className="font-bold text-white text-xs">{currentAccountName}</span>
                   <span className="text-[10px] text-zinc-500 font-mono">{activeFbPage?.username || fbConn?.handle || '@page'}</span>
                 </div>
                 <p className="text-xs text-zinc-300 mt-1 line-clamp-2">{selectedCommentPost.body}</p>
@@ -6682,7 +6682,7 @@ function GrowthPageContent() {
                 <span className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
                   <MessageCircle className="w-3.5 h-3.5 text-emerald-400" /> Active Comments ({postComments.length})
                 </span>
-                <span className="text-[10px] text-emerald-400 font-semibold">● Facebook Page Live Feed</span>
+                <span className="text-[10px] text-emerald-400 font-semibold">● {selectedPlatformLabel} Feed</span>
               </div>
 
               {isLoadingComments ? (
