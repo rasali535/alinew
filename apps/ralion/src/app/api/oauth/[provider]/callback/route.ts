@@ -142,7 +142,7 @@ export async function GET(
           avatar: igProfile.avatar,
           followersCount: igProfile.followersCount,
         };
-        grantedScopes = [...instagramBusinessAdapter.scopes];
+        grantedScopes = instagramBusinessAdapter.resolvedScopes();
         extraMeta = {
           graphVersion: instagramBusinessAdapter.graphVersion(),
           oauthMode: 'instagram_login',
