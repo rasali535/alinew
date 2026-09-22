@@ -3742,7 +3742,7 @@ function GrowthPageContent() {
                             setNewPost({
                               title: `${pageDisplayName} Strategic Growth Update`,
                               body: `Delivering dependable solutions and strategic value for ${pageDisplayName}. Discover how our dedicated operational standards empower customer success...`,
-                              platform: targetPlatform as ContentPost['platform'],
+                              platform: (activeAcc?.provider as ContentPost['platform']) || 'facebook',
                               hashtags: `#${pageDisplayName.replace(/\s+/g, '')} #EnterpriseOS #Innovation #Growth`,
                               scheduledAt: '',
                             });
