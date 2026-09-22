@@ -198,6 +198,7 @@ const initialGeneratedContent: GeneratedContentItem[] = [];
 
 const platformConfig: Record<string, { label: string; color: string; bg: string; iconChar: string; providerKey: string }> = {
   facebook: { label: 'Facebook Page', color: '#1877f2', bg: 'bg-indigo-600/10 border-indigo-500/30 text-indigo-400', iconChar: 'fb', providerKey: 'facebook' },
+  instagram: { label: 'Instagram Business', color: '#E4405F', bg: 'bg-pink-600/10 border-pink-500/30 text-pink-300', iconChar: 'ig', providerKey: 'instagram' },
 };
 
 const splineChartDates = ['Day 1', 'Day 5', 'Day 10', 'Day 15', 'Day 20', 'Day 25', 'Today'];
@@ -6433,7 +6434,10 @@ function GrowthPageContent() {
             <label className="text-xs font-semibold text-zinc-300">Select Platform</label>
             <select 
               value={selectedConnectPlatform} 
-              onChange={e => setSelectedConnectPlatform(e.target.value)} 
+              onChange={e => {
+                setSelectedConnectPlatform(e.target.value);
+                if (e.target.value === 'instagram') setConnectTab('oauth');
+              }} 
               className="w-full mt-1 px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white focus:outline-none font-bold"
             >
               {Object.entries(platformConfig).map(([k, v]) => (
@@ -6449,12 +6453,14 @@ function GrowthPageContent() {
             >
               Official OAuth 2.0 Login
             </button>
-            <button 
-              onClick={() => setConnectTab('manual')} 
-              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${connectTab === 'manual' ? 'bg-blue-600 text-white' : 'text-zinc-400 hover:text-white'}`}
-            >
-              Manual API Access Token
-            </button>
+            {selectedConnectPlatform !== 'instagram' && (
+              <button 
+                onClick={() => setConnectTab('manual')} 
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${connectTab === 'manual' ? 'bg-blue-600 text-white' : 'text-zinc-400 hover:text-white'}`}
+              >
+                Manual API Access Token
+              </button>
+            )}
           </div>
 
           {connectTab === 'oauth' ? (
@@ -6504,6 +6510,36 @@ function GrowthPageContent() {
                       className="w-full justify-center text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white"
                     >
                       {isConnecting ? 'Connecting...' : <><Plus className="w-3.5 h-3.5 mr-2" /> Connect Facebook Page</>}
+                    </Button>
+                  </div>
+                </div>
+              ) : selectedConnectPlatform === 'instagram' ? (
+                <div className="flex flex-col gap-3 mt-1">
+                  <div className="p-3 rounded-lg bg-gradient-to-br from-pink-950/50 via-zinc-950 to-purple-950/40 border border-pink-500/30 flex flex-col gap-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <span className="text-xs font-bold text-white">Instagram Business Login</span>
+                        <p className="text-[10px] text-zinc-400 mt-0.5">Direct Instagram authentication for professional accounts.</p>
+                      </div>
+                      <Badge variant="primary" className="text-[10px] text-pink-300 border-pink-500/40">Official Meta OAuth</Badge>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-[10px] text-zinc-300">
+                      <span className="rounded-lg border border-zinc-800 bg-black/20 px-2 py-1.5">✓ Publish posts</span>
+                      <span className="rounded-lg border border-zinc-800 bg-black/20 px-2 py-1.5">✓ Insights</span>
+                      <span className="rounded-lg border border-zinc-800 bg-black/20 px-2 py-1.5">✓ Comments</span>
+                      <span className="rounded-lg border border-zinc-800 bg-black/20 px-2 py-1.5">✓ Messages</span>
+                    </div>
+                    <p className="text-[10px] leading-relaxed text-zinc-500">
+                      Sign in with the Instagram professional account you want Ralion to manage. Ralion never asks you to paste an Instagram password or access token.
+                    </p>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      disabled={isConnecting}
+                      onClick={() => handleConnectSocialAccount('instagram', 'login')}
+                      className="w-full justify-center bg-pink-600 hover:bg-pink-700 text-white font-bold py-2.5 text-xs"
+                    >
+                      {isConnecting ? 'Opening Instagram...' : <><Globe className="w-4 h-4 mr-2" /> Continue with Instagram</>}
                     </Button>
                   </div>
                 </div>
