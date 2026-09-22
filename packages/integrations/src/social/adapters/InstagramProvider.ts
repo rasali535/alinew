@@ -121,7 +121,21 @@ export class InstagramProvider extends SocialProvider {
 
   async refreshToken(refreshToken: string): Promise<{ accessToken: string; expiresIn?: number }> {
     const params = new URLSearchParams({
-      grant_type: 'ig_refr  async getProfile(accessToken: string): Promise<SocialProfile> {
+      grant_type: 'ig_refresh_token',
+      access_token: refreshToken
+    });
+    const res = await fetch(`https://graph.instagram.com/refresh_access_token?${params.toString()}`);
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      throw new Error(`[InstagramProvider] Token refresh failed: ${data.error?.message || 'provider error'}`);
+    }
+    return {
+      accessToken: data.access_token || refreshToken,
+      expiresIn: Number(data.expires_in || 5184000)
+    };
+  }
+
+  async getProfile(accessToken: string): Promise<SocialProfile> {
     const params = new URLSearchParams({
       fields: 'user_id,username,name,account_type,profile_picture_url,followers_count',
       access_token: accessToken
@@ -134,13 +148,16 @@ export class InstagramProvider extends SocialProvider {
       });
       res = await fetch(`${this.getGraphBase()}/me?${minimal.toString()}`);
     }
+
     const data = await res.json();
     if (!res.ok || data.error) {
       throw new Error(`[InstagramProvider] Profile fetch failed: ${data.error?.message || 'provider error'}`);
     }
 
     const accountId = String(data.user_id || data.id || '');
-    if (!accountId) throw new Error('[InstagramProvider] Instagram did not return a professional account ID');
+    if (!accountId) {
+      throw new Error('[InstagramProvider] Instagram did not return a professional account ID');
+    }
 
     return {
       provider: 'instagram',
