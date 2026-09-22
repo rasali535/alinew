@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { getPrivilegedSupabase as getServiceSupabase } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,13 +70,80 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Acknowledge quickly. Event-specific comments/messages/insights processing
-  // will be attached to this authenticated boundary without changing Meta config.
-  const entryCount = Array.isArray(payload?.entry) ? payload.entry.length : 0;
+  const entries = Array.isArray(payload?.entry) ? payload.entry : [];
   console.info('[Instagram Webhook] Verified event received', {
     object: payload?.object || 'instagram',
-    entryCount,
+    entryCount: entries.length,
   });
+
+  // Persist signed Instagram messaging events into the same tenant-scoped
+  // inbox store used by Growth & Social. The selected-account UI can then
+  // switch between Facebook and Instagram without cross-channel leakage.
+  try {
+    const supabase = getServiceSupabase();
+
+    for (const entry of entries) {
+      const igAccountId = String(entry?.id || '');
+      if (!igAccountId) continue;
+
+      const { data: connections } = await supabase
+        .from('social_connections')
+        .select('id,user_id,organization_id,workspace_id,provider_account_id,account_name')
+        .eq('provider', 'instagram')
+        .eq('provider_account_id', igAccountId)
+        .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected', 'active']);
+
+      if (!Array.isArray(connections) || connections.length === 0) continue;
+
+      const messagingEvents = Array.isArray(entry?.messaging) ? entry.messaging : [];
+      for (const event of messagingEvents) {
+        const text = event?.message?.text;
+        const senderId = String(event?.sender?.id || '');
+        const recipientId = String(event?.recipient?.id || '');
+        if (!text || !senderId || !recipientId) continue;
+
+        for (const conn of connections) {
+          const isOutbound = senderId === igAccountId;
+          const participantId = isOutbound ? recipientId : senderId;
+          const eventTimestamp = event?.timestamp
+            ? new Date(Number(event.timestamp)).toISOString()
+            : new Date().toISOString();
+
+          // Best-effort duplicate guard for webhook retries.
+          const { data: existing } = await supabase
+            .from('social_inbox_messages')
+            .select('id')
+            .eq('connection_id', conn.id)
+            .eq('provider', 'instagram')
+            .eq('conversation_id', participantId)
+            .eq('message_text', String(text))
+            .eq('timestamp', eventTimestamp)
+            .limit(1);
+
+          if (Array.isArray(existing) && existing.length > 0) continue;
+
+          await supabase.from('social_inbox_messages').insert({
+            connection_id: conn.id,
+            organization_id: conn.organization_id,
+            workspace_id: conn.workspace_id,
+            provider: 'instagram',
+            conversation_id: participantId,
+            sender_id: senderId,
+            sender_name: isOutbound ? (conn.account_name || 'Instagram') : 'Instagram User',
+            recipient_id: recipientId,
+            message_text: String(text),
+            direction: isOutbound ? 'OUTBOUND' : 'INBOUND',
+            status: 'DELIVERED',
+            timestamp: eventTimestamp,
+          });
+        }
+      }
+    }
+  } catch (eventError: any) {
+    // Meta webhook delivery should still receive a 200 after signature
+    // verification; persistence can be retried by a subsequent webhook event.
+    console.warn('[Instagram Webhook] Inbox persistence notice:', eventError?.message || eventError);
+  }
 
   return NextResponse.json({ success: true, received: true });
 }
