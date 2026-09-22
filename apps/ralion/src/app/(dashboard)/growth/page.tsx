@@ -4328,10 +4328,10 @@ function GrowthPageContent() {
                       <div>
                         <div className="flex items-center justify-between">
                           <p className="text-[11px] text-zinc-400 uppercase font-semibold">Total Audience</p>
-                          {renderSourceBadge(isFacebookPage ? 'META_LIVE' : 'UNAVAILABLE')}
+                          {renderSourceBadge(isFacebookPage ? 'META_LIVE' : activeAcc ? 'RALION_TRACKED' : 'UNAVAILABLE')}
                         </div>
                         <p className="text-2xl font-black text-white mt-1">
-                          {isFacebookPage ? (fbFollowersCount > 0 ? fbFollowersCount.toLocaleString() : '0') : isPersonalFacebookProfile ? 'Data Unavailable' : (activeAcc?.followers ? activeAcc.followers : 'Data Unavailable')}
+                          {isPersonalFacebookProfile ? 'Data Unavailable' : selectedFollowersCount > 0 ? selectedFollowersCount.toLocaleString() : activeAcc ? '0' : 'Data Unavailable'}
                         </p>
                       </div>
                       <p className="text-[10px] text-emerald-400 mt-2">
@@ -4345,11 +4345,11 @@ function GrowthPageContent() {
                           {renderSourceBadge(posts.length > 0 ? 'DERIVED' : 'UNAVAILABLE')}
                         </div>
                         <p className="text-2xl font-black text-emerald-400 mt-1">
-                          {posts.length > 0 ? `+${(posts.length * 1.5).toFixed(1)}%` : 'Data Unavailable'}
+                          {posts.length > 0 ? 'Tracked' : 'Data Unavailable'}
                         </p>
                       </div>
                       <p className="text-[10px] text-zinc-400 mt-2">
-                        {posts.length > 0 ? `+${posts.length} tracked posts` : 'No post velocity'}
+                        {posts.length > 0 ? `${posts.length} selected-account posts available; historical follower delta not yet verified` : 'No selected-account post history yet'}
                       </p>
                     </div>
                     <div className="p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800 flex flex-col justify-between">
@@ -4655,7 +4655,7 @@ function GrowthPageContent() {
                                   setNewPost({
                                     title: hook.split(':')[0] || 'Business Spotlight',
                                     body: hook,
-                                    platform: 'facebook',
+                                    platform: (activeAcc?.provider as ContentPost['platform']) || 'facebook',
                                     hashtags: '#RalionOS #Growth',
                                     scheduledAt: '',
                                   });
@@ -6731,7 +6731,8 @@ function GrowthPageContent() {
                     id: publishedPostId,
                     title: topic || 'Social Post',
                     body: contentBody,
-                    platform: 'facebook',
+                    platform: targetPlatform as ContentPost['platform'],
+                    platformPostId: publishedPostId,
                     hashtags: newPost.hashtags ? newPost.hashtags.split(' ').filter(Boolean) : [],
                     status: newPost.scheduledAt ? 'scheduled' : 'published',
                     publishedAt: newPost.scheduledAt ? undefined : new Date().toLocaleString(),
@@ -6818,7 +6819,7 @@ function GrowthPageContent() {
       </Modal>
 
       {/* ==================================== */}
-      {/* MODAL: FACEBOOK COMMENTS MANAGEMENT */}
+      {/* MODAL: SELECTED SOCIAL COMMENTS MANAGEMENT */}
       {/* ==================================== */}
       {isCommentsModalOpen && selectedCommentPost && (
         <Modal 
@@ -7106,16 +7107,16 @@ function GrowthPageContent() {
       </Modal>
 
       {/* ==================================== */}
-      {/* MODAL: FACEBOOK POST PREVIEW */}
+      {/* MODAL: SELECTED SOCIAL POST PREVIEW */}
       {/* ==================================== */}
       {previewPost && (
-        <Modal isOpen={isPreviewModalOpen} onClose={() => setIsPreviewModalOpen(false)} title="Facebook Page Feed Preview">
+        <Modal isOpen={isPreviewModalOpen} onClose={() => setIsPreviewModalOpen(false)} title={`${previewPost.platform === 'instagram' ? 'Instagram' : previewPost.platform === 'facebook' ? 'Facebook Page' : previewPost.platform} Feed Preview`}>
           <div className="flex flex-col gap-4">
             <div className="flex items-center justify-between px-2 py-1 text-xs text-zinc-400">
               <span className="font-semibold text-white flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400"></span> Live Meta Feed Simulator
+                <span className="w-2 h-2 rounded-full bg-emerald-400"></span> {previewPost.platform === 'facebook' ? 'Meta Feed Preview' : `${previewPost.platform === 'instagram' ? 'Instagram' : previewPost.platform} Feed Preview`}
               </span>
-              <span className="font-mono text-[11px] text-indigo-400">{activeFbPage?.username || fbConn?.handle || '@page'}</span>
+              <span className="font-mono text-[11px] text-indigo-400">{currentAccountHandle || '@account'}</span>
             </div>
 
             {/* Preview Card Shell */}
@@ -7123,11 +7124,11 @@ function GrowthPageContent() {
               {/* Profile Header */}
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center font-bold text-white text-xs">
-                  {(activeFbPage?.name || fbConn?.label || 'FB').slice(0, 2).toUpperCase()}
+                  {currentAccountName.slice(0, 2).toUpperCase()}
                 </div>
                 <div>
-                  <div className="font-bold text-white text-xs">{activeFbPage?.name || fbConn?.label || 'Facebook Page'}</div>
-                  <div className="text-[10px] text-zinc-500">Facebook Page • Just now</div>
+                  <div className="font-bold text-white text-xs">{currentAccountName}</div>
+                  <div className="text-[10px] text-zinc-500">{previewPost.platform === 'instagram' ? 'Instagram' : previewPost.platform === 'facebook' ? 'Facebook Page' : previewPost.platform} • Just now</div>
                 </div>
               </div>
 
