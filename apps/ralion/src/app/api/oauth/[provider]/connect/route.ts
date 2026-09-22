@@ -5,6 +5,7 @@ import {
   SUPPORTED_SOCIAL_PROVIDERS
 } from '@/lib/services/social.service';
 import { metaAdapterV26 } from '@/lib/services/metaAdapter.service';
+import { instagramBusinessAdapter } from '@/lib/services/instagramBusinessAdapter.service';
 import { generateOAuthState } from '@ralion/integrations/server';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 import { requireRalionContext } from '@/lib/auth/serverAuth';
@@ -62,11 +63,19 @@ export async function GET(
         authorizationUrl = linkedinAdapter.getAuthUrl(stateToken);
         break;
       case 'facebook':
-      case 'instagram':
         if (!metaAdapterV26.clientId()) {
-          return corsJsonResponse({ success: false, error: 'Meta (Facebook/Instagram) is not configured.' }, { status: 400 }, request);
+          return corsJsonResponse({ success: false, error: 'Meta Facebook is not configured.' }, { status: 400 }, request);
         }
         authorizationUrl = metaAdapterV26.getAuthUrl(stateToken, provider, intent);
+        break;
+      case 'instagram':
+        if (!instagramBusinessAdapter.clientId()) {
+          return corsJsonResponse({
+            success: false,
+            error: 'Instagram Login is not configured. Add INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET to the Ralion backend.',
+          }, { status: 400 }, request);
+        }
+        authorizationUrl = instagramBusinessAdapter.getAuthUrl(stateToken);
         break;
       case 'x':
       case 'twitter':
@@ -97,7 +106,11 @@ export async function GET(
       provider,
       authorizationUrl,
       stateToken,
-      ...(provider === 'facebook' || provider === 'instagram' ? { graphVersion: metaAdapterV26.graphVersion() } : {}),
+      ...(provider === 'facebook'
+        ? { graphVersion: metaAdapterV26.graphVersion(), oauthMode: 'facebook_login' }
+        : provider === 'instagram'
+          ? { graphVersion: instagramBusinessAdapter.graphVersion(), oauthMode: 'instagram_login' }
+          : {}),
     }, undefined, request);
     response.cookies.set(`oauth_verifier_${provider}`, codeVerifier, {
       httpOnly: true,
