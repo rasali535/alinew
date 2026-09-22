@@ -114,6 +114,10 @@ export async function POST(request: NextRequest) {
         attempts: result.errorDetails?.attempts,
         detectedBranding: result.errorDetails?.detectedBranding,
         missingRequiredObjects: result.errorDetails?.missingRequiredObjects,
+        copyAccuracyScore: result.errorDetails?.copyAccuracyScore,
+        requiredText: result.errorDetails?.requiredText,
+        missingRequiredText: result.errorDetails?.missingRequiredText,
+        detectedTextErrors: result.errorDetails?.detectedTextErrors,
         userFacingMessage: result.userFacingMessage,
         requestId,
       }, { status: httpStatus }, request);
