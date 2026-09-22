@@ -3682,7 +3682,7 @@ function GrowthPageContent() {
                             setNewPost({
                               title: `${pageDisplayName} Strategic Growth Update`,
                               body: `Delivering dependable solutions and strategic value for ${pageDisplayName}. Discover how our dedicated operational standards empower customer success...`,
-                              platform: 'facebook',
+                              platform: targetPlatform as ContentPost['platform'],
                               hashtags: `#${pageDisplayName.replace(/\s+/g, '')} #EnterpriseOS #Innovation #Growth`,
                               scheduledAt: '',
                             });
@@ -6509,8 +6509,17 @@ function GrowthPageContent() {
 
                 setIsConnecting(true);
 
-                const targetPlatform = newPost.platform || targetConn.provider || 'facebook';
+                const targetPlatform = targetConn.provider || newPost.platform || 'facebook';
                 const isFacebookTarget = targetPlatform === 'facebook';
+                const isInstagramTarget = targetPlatform === 'instagram';
+                if (isInstagramTarget && !newPost.mediaUrl) {
+                  setOauthAlert({
+                    type: 'error',
+                    message: 'Instagram publishing requires an image or video. Attach media before publishing.',
+                  });
+                  setIsConnecting(false);
+                  return;
+                }
                 const activeFbPage = isFacebookTarget
                   ? (availableFacebookPages.find(p => p.pageId === targetConn.providerAccountId || p.id === targetConn.id || p.pageId === targetConn.id)
                      || availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || null)
@@ -6525,7 +6534,9 @@ function GrowthPageContent() {
                   scheduledFor: newPost.scheduledAt || undefined,
                   authorName: targetConn.label || activeFbPage?.name || organization?.name || user?.displayName || 'Social Account',
                   socialConnectionId: targetConn.id,
-                  pageId: isFacebookTarget ? (activeFbPage?.pageId || targetConn.providerAccountId || undefined) : undefined,
+                  pageId: isFacebookTarget
+                    ? (activeFbPage?.pageId || targetConn.providerAccountId || undefined)
+                    : (isInstagramTarget ? (targetConn.providerAccountId || undefined) : undefined),
                 };
 
                 try {
@@ -6539,12 +6550,18 @@ function GrowthPageContent() {
 
                   if (!res.ok || data.success === false) {
                     const status = res.status;
+                    const platformResult = data.platformResults?.[targetPlatform] || {};
+                    const platformLabel = targetPlatform === 'instagram'
+                      ? 'Instagram'
+                      : targetPlatform === 'facebook'
+                        ? 'Facebook'
+                        : targetPlatform.charAt(0).toUpperCase() + targetPlatform.slice(1);
                     const primaryError =
                       data.error ||
                       data.errors?.[0] ||
-                      data.platformResults?.facebook?.error ||
-                      data.platformResults?.facebook?.details?.sanitizedMessage ||
-                      data.platformResults?.facebook?.details?.message ||
+                      platformResult?.error ||
+                      platformResult?.details?.sanitizedMessage ||
+                      platformResult?.details?.message ||
                       '';
 
                     let alertMessage: string;
@@ -6557,15 +6574,15 @@ function GrowthPageContent() {
                     } else if (status === 400) {
                       alertMessage = `✕ Validation error: ${primaryError || 'The publish request was invalid. Please check your post content.'}. Please correct the content and try again.`;
                     } else if (status === 401) {
-                      alertMessage = `✕ Authentication required: ${primaryError || 'Your Facebook session has expired. Please reconnect your account in the Accounts tab.'}`;
+                      alertMessage = `✕ Authentication required: ${primaryError || `Your ${platformLabel} session has expired. Please reconnect the selected account.`}`;
                     } else if (status === 403) {
-                      alertMessage = `✕ Authorization error: ${primaryError || 'Ralion does not have permission to publish to this Facebook Page. Please reconnect your account.'}`;
+                      alertMessage = `✕ Authorization error: ${primaryError || `Ralion does not have permission to publish to this ${platformLabel} account. Please reconnect it.`}`;
                     } else if (status === 422) {
-                      alertMessage = `✕ Platform error: ${primaryError || 'Facebook could not process this post.'}. Please check your media or content format.`;
+                      alertMessage = `✕ ${platformLabel} error: ${primaryError || `${platformLabel} could not process this post.`}. Please check your media or content format.`;
                     } else if (status === 500) {
                       alertMessage = `✕ Unexpected server error (${primaryError || 'please try again in a moment'}). (Request ID: ${data.requestId || 'N/A'})`;
                     } else {
-                      alertMessage = `✕ Facebook publishing failed (HTTP ${status}): ${primaryError || 'Unknown error'}.`;
+                      alertMessage = `✕ ${platformLabel} publishing failed (HTTP ${status}): ${primaryError || 'Unknown error'}.`;
                     }
 
                     setOauthAlert({
@@ -6576,10 +6593,10 @@ function GrowthPageContent() {
                     return;
                   }
 
-                  const publishedPostId = data.postId || data.result?.postId || `fb_post_${Date.now()}`;
+                  const publishedPostId = data.postId || data.result?.postId || `${targetPlatform}_post_${Date.now()}`;
                   const postUrl =
-                    data.result?.platformResults?.facebook?.postUrl ||
-                    data.platformResults?.facebook?.postUrl ||
+                    data.result?.platformResults?.[targetPlatform]?.postUrl ||
+                    data.platformResults?.[targetPlatform]?.postUrl ||
                     undefined;
 
                   const createdPost: ContentPost = {
@@ -6596,54 +6613,77 @@ function GrowthPageContent() {
                     engagement: { likes: 0, shares: 0, reach: 0, comments: 0 },
                   };
 
-                  const fbFeedItem = {
+                  const connectionFeedItem = {
                     id: publishedPostId,
                     title: topic || 'Social Post',
                     body: contentBody,
                     publishedAt: 'Just now',
                     status: newPost.scheduledAt ? 'scheduled' : 'published',
                     source: 'RALION',
+                    platform: targetPlatform,
                     permalink: postUrl,
                     engagement: { likes: 0, comments: 0, shares: 0, reach: 0 },
                   };
 
                   setPosts(prev => [createdPost, ...prev]);
-                  setFacebookPagePosts(prev => [fbFeedItem, ...prev]);
+                  setConnectionPosts(prev => ({
+                    ...prev,
+                    [targetConn.id]: [
+                      connectionFeedItem,
+                      ...(prev[targetConn.id] || []).filter((item: any) => item.id !== publishedPostId),
+                    ],
+                  }));
+                  if (targetPlatform === 'facebook') {
+                    setFacebookPagePosts(prev => [connectionFeedItem, ...prev]);
+                  }
                   setIsCreateOpen(false);
                   setIsConnecting(false);
                   setNewPost({
                     title: '',
                     body: '',
-                    platform: 'facebook',
-                    hashtags: '#RalionOS #EnterpriseAI',
+                    platform: targetPlatform as ContentPost['platform'],
+                    hashtags: '#RalionOS #Growth',
                     scheduledAt: '',
                     mediaUrl: undefined,
                     mediaType: undefined,
                     mediaFileName: undefined,
                   });
 
+                  const platformLabel = targetPlatform === 'instagram'
+                    ? 'Instagram'
+                    : targetPlatform === 'facebook'
+                      ? 'Facebook Page'
+                      : targetPlatform.charAt(0).toUpperCase() + targetPlatform.slice(1);
                   setOauthAlert({
                     type: 'success',
                     message: newPost.scheduledAt
-                      ? `🗓️ Post scheduled for Facebook Page (${activeFbPage?.username || fbConn?.handle || '@facebook'})!`
-                      : `✓ Published to Facebook Page — ${activeFbPage?.name || fbConn?.label || 'Connected Page'} (Published just now)`,
+                      ? `🗓️ Post scheduled for ${platformLabel} (${targetConn.handle || '@account'})!`
+                      : `✓ Published to ${platformLabel} — ${targetConn.label || 'Connected Account'} (Published just now)`,
                     actionUrl: postUrl,
-                    actionLabel: 'View on Facebook',
+                    actionLabel: postUrl ? `View on ${targetPlatform === 'facebook' ? 'Facebook' : platformLabel}` : undefined,
                   });
 
-                  // Revalidate real posts from server
-                  fetchLiveFacebookPosts();
+                  fetchPostsForConnection(targetConn.id).catch(error =>
+                    console.warn('[Growth] Post revalidation notice:', error)
+                  );
                 } catch (publishErr: any) {
+                  const failedLabel = targetConn.provider === 'instagram'
+                    ? 'Instagram'
+                    : targetConn.provider === 'facebook'
+                      ? 'Facebook'
+                      : targetConn.provider;
                   setOauthAlert({
                     type: 'error',
-                    message: `✕ Facebook publishing failed: ${publishErr.message}`,
+                    message: `✕ ${failedLabel} publishing failed: ${publishErr.message}`,
                   });
                   setIsConnecting(false);
                 }
               }}
               className="bg-indigo-600 hover:bg-indigo-700 font-bold text-xs"
             >
-              {isConnecting ? 'Publishing to Facebook...' : (newPost.scheduledAt ? 'Schedule Facebook Post' : 'Publish to Facebook Page')}
+              {isConnecting
+                ? `Publishing to ${selectedPlatformLabel}...`
+                : (newPost.scheduledAt ? `Schedule ${selectedPlatformLabel} Post` : `Publish to ${selectedAccountLabel}`)}
             </Button>
           </div>
         </div>
