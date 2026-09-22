@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { FacebookPageManagementService } from '@/lib/services/social/facebookPageManagement.service';
+import { SocialTokenManager } from '@/lib/services/social/socialTokenManager.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 import { getCurrentRalionContext, authRequiredResponse, getServiceSupabase } from '@/lib/auth/serverAuth';
 import { tenantCache, buildTenantCacheKey } from '@/lib/cache/tenantCache';
@@ -107,6 +108,93 @@ export async function GET(request: NextRequest) {
       };
       tenantCache.set(cacheKey, respPayload, 60);
 
+      return corsJsonResponse(respPayload, undefined, request);
+    }
+
+    // 3b. Instagram Professional: retrieve the selected account's real media
+    // directly through Instagram Login. Keep the connection boundary strict.
+    if (provider === 'instagram') {
+      const token = await SocialTokenManager.getValidToken(socialConnectionId, 'instagram');
+      if (!token) {
+        return corsJsonResponse(
+          {
+            success: false,
+            error: 'Instagram authentication expired. Please reconnect the selected account.',
+            socialConnectionId,
+            provider,
+          },
+          { status: 401 },
+          request
+        );
+      }
+
+      const version = (process.env.INSTAGRAM_GRAPH_VERSION || process.env.META_GRAPH_VERSION || 'v26.0')
+        .replace(/^\/+|\/+$/g, '');
+      const accountId = conn.provider_account_id || 'me';
+      const fields = 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,comments_count,like_count';
+      const params = new URLSearchParams({
+        fields,
+        limit: String(Math.min(Math.max(limit, 1), 100)),
+      });
+
+      const igRes = await fetch(
+        `https://graph.instagram.com/${version}/${encodeURIComponent(accountId)}/media?${params.toString()}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(10000),
+        }
+      );
+      const igPayload = await igRes.json().catch(() => ({}));
+
+      if (!igRes.ok || igPayload.error) {
+        console.warn('[PostsByConnection] Instagram media fetch notice:', igPayload.error?.message || igRes.status);
+        return corsJsonResponse(
+          {
+            success: false,
+            error: igPayload.error?.message || `Instagram media request failed (HTTP ${igRes.status}).`,
+            socialConnectionId,
+            provider,
+          },
+          { status: igRes.status || 502 },
+          request
+        );
+      }
+
+      const posts = (Array.isArray(igPayload.data) ? igPayload.data : []).map((media: any) => ({
+        id: String(media.id || ''),
+        platformPostId: String(media.id || ''),
+        title: media.caption
+          ? String(media.caption).split(/\r?\n/)[0].slice(0, 80)
+          : `Instagram ${String(media.media_type || 'Post').toLowerCase()}`,
+        body: String(media.caption || ''),
+        mediaUrls: [media.media_url || media.thumbnail_url].filter(Boolean),
+        mediaType: String(media.media_type || '').toUpperCase() === 'VIDEO' ||
+          String(media.media_type || '').toUpperCase() === 'REELS'
+          ? 'video'
+          : 'image',
+        publishedAt: media.timestamp || undefined,
+        status: 'published' as const,
+        source: 'INSTAGRAM_DIRECT' as const,
+        permalink: media.permalink || undefined,
+        engagement: {
+          likes: Number(media.like_count || 0),
+          comments: Number(media.comments_count || 0),
+          shares: 0,
+          reach: 0,
+        },
+      }));
+
+      const respPayload = {
+        success: true,
+        socialConnectionId,
+        provider,
+        posts,
+        total: posts.length,
+        dataAvailable: posts.length > 0,
+        source: 'INSTAGRAM_DIRECT',
+        lastSyncedAt: new Date().toISOString(),
+      };
+      tenantCache.set(cacheKey, respPayload, 60);
       return corsJsonResponse(respPayload, undefined, request);
     }
 
