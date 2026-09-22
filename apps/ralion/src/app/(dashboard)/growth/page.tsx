@@ -1556,37 +1556,28 @@ function GrowthPageContent() {
     let isMounted = true;
 
     const initializeGrowth = async () => {
-      // Step 1: Resolve authenticated accounts (cached/local available immediately)
       const accounts = await loadConnectedAccounts();
       if (!isMounted) return;
-
-      const hasFacebook = accounts.some(
-        (a) => a.provider === 'facebook' && a.status === 'connected'
-      );
 
       const initialAccount = accounts.find(a => a.id === selectedAccountId) || accounts[0];
 
       if (initialAccount?.id) {
-        // Step 2: Concurrently launch posts fetch, Facebook page discovery, and analytics without blocking
-        Promise.allSettled([
-          fetchPostsForConnection(initialAccount.id),
-          hasFacebook ? fetchFacebookPages() : Promise.resolve([]),
-          hasFacebook ? fetchPageAnalytics() : Promise.resolve(null),
-        ]);
+        const tasks: Promise<any>[] = [fetchPostsForConnection(initialAccount.id)];
+        if (initialAccount.provider === 'facebook') {
+          tasks.push(fetchFacebookPages(), fetchPageAnalytics());
+        }
+        Promise.allSettled(tasks);
       } else if (accounts.length === 0) {
-        // There may still be a valid Facebook OAuth authorization identity even
-        // when no operational Page connection exists. Probe Page discovery
-        // before presenting the generic empty state so users do not get sent
-        // through OAuth again unnecessarily.
+        // Facebook OAuth authorization may exist without an operational Page.
         const discoveredPages = await fetchFacebookPages().catch(() => []);
         if (!isMounted) return;
-        if (discoveredPages.length > 0) {
-          setIsPageSelectionModalOpen(true);
-        }
+        if (discoveredPages.length > 0) setIsPageSelectionModalOpen(true);
+
         setFacebookPagePosts([]);
         setConnectionPosts({});
         setPostComments([]);
         setInboxConversations([]);
+        setActiveConversationId(null);
         setPageAnalytics(null);
         setMarketResearchReport(null);
         setMariGrowthScore(null);
@@ -1598,16 +1589,12 @@ function GrowthPageContent() {
 
     initializeGrowth();
 
-    // Check if returning with OAuth tokens in URL hash or params
     if (typeof window !== 'undefined') {
       const hash = window.location.hash;
       const search = window.location.search;
       if (hash.includes('access_token=') || search.includes('code=') || search.includes('connected=') || search.includes('profile_connected=')) {
         setTimeout(() => {
-          if (isMounted) {
-            loadConnectedAccounts();
-            fetchFacebookPages();
-          }
+          if (isMounted) loadConnectedAccounts();
         }, 800);
       }
     }
@@ -1615,34 +1602,92 @@ function GrowthPageContent() {
     return () => {
       isMounted = false;
     };
-  }, [loadConnectedAccounts, fetchPostsForConnection, fetchFacebookPages, selectedAccountId]);
+  }, [loadConnectedAccounts, fetchPostsForConnection, fetchFacebookPages, fetchPageAnalytics, selectedAccountId]);
 
-  // ── Tab-Level Lazy Loading (Deffered Non-Critical Data) ───────────────────
+  // Account switching is an isolation boundary. Clear provider-specific state,
+  // load the selected connection's feed, and make every tab render that account.
   useEffect(() => {
-    // 1. Lazy load Inbox when INBOX tab is opened
-    if (activeTab === 'INBOX' && !loadedTabsRef.current.has('INBOX')) {
-      loadedTabsRef.current.add('INBOX');
+    const selectedConn = selectedAccountId
+      ? connectedAccounts.find(account => account.id === selectedAccountId)
+      : null;
+    if (!selectedConn) return;
+
+    try {
+      const supabaseUserId = growthUserId || 'user';
+      localStorage.setItem(`ralion_selected_social_account_${supabaseUserId}`, selectedConn.id);
+    } catch {}
+
+    setNewPost(prev => ({ ...prev, platform: selectedConn.provider as ContentPost['platform'] }));
+    setPreviewPlatform(selectedConn.provider);
+    setPostComments([]);
+    setSelectedCommentPost(null);
+    setIsCommentsModalOpen(false);
+    setInboxConversations([]);
+    setActiveConversationId(null);
+    setInboxReplyText('');
+    setPageAnalytics(null);
+    setMarketResearchReport(null);
+    setMariGrowthScore(null);
+    setMariInsights([]);
+    setBusinessKnowledge(null);
+    setMari7DayPlan(null);
+
+    loadedTabsRef.current.delete(`${selectedConn.id}:INBOX`);
+    loadedTabsRef.current.delete(`${selectedConn.id}:INTELLIGENCE`);
+    loadedTabsRef.current.delete(`${selectedConn.id}:COMMENTS`);
+
+    fetchPostsForConnection(selectedConn.id).catch(error =>
+      console.warn('[Growth] Selected account posts refresh notice:', error)
+    );
+
+    if (selectedConn.provider === 'facebook') {
+      Promise.allSettled([fetchFacebookPages(), fetchPageAnalytics()]);
+    }
+  }, [selectedAccountId, connectedAccounts, growthUserId, fetchPostsForConnection, fetchFacebookPages, fetchPageAnalytics]);
+
+  // ── Tab-Level Lazy Loading (selected-account scoped) ─────────────────────
+  useEffect(() => {
+    const selectedConn = selectedAccountId
+      ? connectedAccounts.find(account => account.id === selectedAccountId)
+      : null;
+    if (!selectedConn) return;
+
+    const inboxKey = `${selectedConn.id}:INBOX`;
+    if (activeTab === 'INBOX' && !loadedTabsRef.current.has(inboxKey)) {
+      loadedTabsRef.current.add(inboxKey);
       fetchInboxConversations();
     }
 
-    // 2. Lazy load Intelligence / Mari / Market Research when relevant tab is opened
-    if ((activeTab === 'ANALYTICS' || activeTab === 'AI_STUDIO') && !loadedTabsRef.current.has('INTELLIGENCE')) {
-      loadedTabsRef.current.add('INTELLIGENCE');
+    const intelligenceKey = `${selectedConn.id}:INTELLIGENCE`;
+    if (
+      selectedConn.provider === 'facebook' &&
+      (activeTab === 'ANALYTICS' || activeTab === 'AI_STUDIO') &&
+      !loadedTabsRef.current.has(intelligenceKey)
+    ) {
+      loadedTabsRef.current.add(intelligenceKey);
       Promise.allSettled([
         fetchMariGrowthData(),
         fetchMarketResearchData(),
         fetchBusinessLearningData(),
       ]);
     }
-  }, [activeTab, fetchInboxConversations, fetchMariGrowthData, fetchMarketResearchData, fetchBusinessLearningData]);
+  }, [
+    activeTab,
+    selectedAccountId,
+    connectedAccounts,
+    fetchInboxConversations,
+    fetchMariGrowthData,
+    fetchMarketResearchData,
+    fetchBusinessLearningData,
+  ]);
 
   useEffect(() => {
-    // 3. Lazy load comments when Comments modal or interaction is opened
-    if (isCommentsModalOpen && selectedCommentPost?.id && !loadedTabsRef.current.has('COMMENTS')) {
-      loadedTabsRef.current.add('COMMENTS');
+    const commentsKey = selectedAccountId ? `${selectedAccountId}:COMMENTS` : 'COMMENTS';
+    if (isCommentsModalOpen && selectedCommentPost?.id && !loadedTabsRef.current.has(commentsKey)) {
+      loadedTabsRef.current.add(commentsKey);
       fetchPostComments(selectedCommentPost.id);
     }
-  }, [isCommentsModalOpen, selectedCommentPost, fetchPostComments]);
+  }, [isCommentsModalOpen, selectedCommentPost, selectedAccountId, fetchPostComments]);
 
   // ── Handle redirect back from OAuth callback (?connected=provider or ?code=) ────────
   useEffect(() => {
