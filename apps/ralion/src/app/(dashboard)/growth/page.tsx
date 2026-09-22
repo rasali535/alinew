@@ -264,7 +264,7 @@ function GrowthPageContent() {
   const inFlightPostsPromiseRef = React.useRef<Record<string, Promise<any> | undefined>>({});
   const isMountedRef = React.useRef(true);
   const loadedTabsRef = React.useRef<Set<string>>(new Set());
-  const [isSyncing, setIsSyncing] = useState<string | null>(null); // provider being synced
+  const [isSyncing, setIsSyncing] = useState<string | null>(null); // exact social connection ID being synced
   const [oauthAlert, setOauthAlert] = useState<{
     type: 'success' | 'error' | 'info';
     message: string;
@@ -2116,7 +2116,7 @@ function GrowthPageContent() {
 
   // ── Sync analytics from real platform APIs ────────────────────────────────
   const handleSyncAccount = async (providerKey: string, connectionId?: string) => {
-    setIsSyncing(providerKey);
+    setIsSyncing(connectionId || providerKey);
     try {
       const targetConn = (connectionId && connectedAccounts.find(a => a.id === connectionId && a.provider === providerKey))
         || connectedAccounts.find(a => a.id === selectedAccountId && a.provider === providerKey)
@@ -4074,6 +4074,10 @@ function GrowthPageContent() {
                       key={acc.id}
                       onClick={() => {
                         setSelectedAccountId(acc.id);
+                        setPageWorkspaceTab('OVERVIEW');
+                        setPostComments([]);
+                        setInboxConversations([]);
+                        setActiveConversationId(null);
                         fetchPostsForConnection(acc.id);
                         try {
                           const supabase = createClient();
@@ -4118,6 +4122,7 @@ function GrowthPageContent() {
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedAccountId(acc.id);
+                              setPageWorkspaceTab('OVERVIEW');
                               setNewPost(prev => ({
                                 ...prev,
                                 platform: acc.provider as any,
@@ -4128,12 +4133,12 @@ function GrowthPageContent() {
                             }}
                             className="text-indigo-400 hover:text-indigo-300 font-semibold"
                           >
-                            Create ${acc.provider === "instagram" ? "Instagram" : acc.provider === "facebook" ? "Facebook" : acc.provider.charAt(0).toUpperCase() + acc.provider.slice(1)} Post
+                            Create {acc.provider === 'instagram' ? 'Instagram' : acc.provider === 'facebook' ? 'Facebook' : acc.provider.charAt(0).toUpperCase() + acc.provider.slice(1)} Post
                           </button>
                           <span>•</span>
                           <button
                             type="button"
-                            disabled={isSyncing === acc.provider}
+                            disabled={isSyncing === acc.id}
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedAccountId(acc.id);
@@ -4141,7 +4146,7 @@ function GrowthPageContent() {
                             }}
                             className="text-emerald-400 hover:text-emerald-300 disabled:opacity-50"
                           >
-                            {isSyncing === acc.provider ? 'Syncing…' : 'Sync'}
+                            {isSyncing === acc.id ? 'Syncing…' : 'Sync'}
                           </button>
                           <span>•</span>
                           <button
@@ -5072,7 +5077,7 @@ function GrowthPageContent() {
 
                 {inboxConversations.length === 0 && (
                   <div className="p-8 text-center text-xs text-zinc-500 italic">
-                    No active ${selectedPlatformLabel} conversations found for the selected account.
+                    No active {selectedPlatformLabel} conversations found for the selected account.
                   </div>
                 )}
               </div>
