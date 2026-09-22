@@ -51,10 +51,20 @@ if ($method === 'OPTIONS') {
     exit;
 }
 
-// 3. Rebuild query string excluding __proxy_path
-$queryParams = $_GET;
-unset($queryParams['__proxy_path']);
-$queryString = http_build_query($queryParams);
+// 3. Preserve the raw query string exactly (Meta webhook verification uses
+// dotted parameter names such as hub.mode and hub.verify_token). PHP normalizes
+// dots in $_GET keys to underscores, so rebuilding from $_GET would corrupt
+// Meta's callback query. Strip only our internal __proxy_path parameter.
+$rawQuery = parse_url($requestUri, PHP_URL_QUERY) ?: '';
+$queryParts = $rawQuery === '' ? [] : explode('&', $rawQuery);
+$forwardQueryParts = [];
+foreach ($queryParts as $part) {
+    if ($part === '') continue;
+    $key = explode('=', $part, 2)[0];
+    if (urldecode($key) === '__proxy_path') continue;
+    $forwardQueryParts[] = $part;
+}
+$queryString = implode('&', $forwardQueryParts);
 $targetUrl = rtrim($backendUrl, '/') . $path . ($queryString !== '' ? '?' . $queryString : '');
 
 // 4. Prepare headers to forward
