@@ -1877,6 +1877,9 @@ function GrowthPageContent() {
     if (connected) {
       if (connectionIdParam) {
         setSelectedAccountId(connectionIdParam);
+        if (typeof window !== 'undefined' && growthUserId) {
+          localStorage.setItem(`ralion_selected_social_account_${growthUserId}`, connectionIdParam);
+        }
       }
       if ((connected === 'facebook' || profileConnected === 'true') && (stage === '1' || facebookParam === 'account_connected' || profileConnected === 'true')) {
         setOauthAlert({
@@ -4103,6 +4106,7 @@ function GrowthPageContent() {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
+                              setSelectedAccountId(acc.id);
                               setNewPost(prev => ({
                                 ...prev,
                                 platform: acc.provider as any,
@@ -4114,6 +4118,19 @@ function GrowthPageContent() {
                             className="text-indigo-400 hover:text-indigo-300 font-semibold"
                           >
                             Create Post
+                          </button>
+                          <span>•</span>
+                          <button
+                            type="button"
+                            disabled={isSyncing === acc.provider}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedAccountId(acc.id);
+                              void handleSyncAccount(acc.provider);
+                            }}
+                            className="text-emerald-400 hover:text-emerald-300 disabled:opacity-50"
+                          >
+                            {isSyncing === acc.provider ? 'Syncing…' : 'Sync'}
                           </button>
                           <span>•</span>
                           <button
