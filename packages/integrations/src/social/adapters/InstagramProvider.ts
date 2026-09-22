@@ -182,49 +182,138 @@ export class InstagramProvider extends SocialProvider {
         return {
           success: false,
           error: 'Instagram requires at least one image or video attachment to publish.',
+          statusCode: 400,
           platform: 'instagram',
           publishedAt
         };
       }
 
-      // Step 1: Create media container
+      const mediaUrl = params.mediaUrls[0];
+      const declaredType = String(params.mediaTypes?.[0] || '').toLowerCase();
+      const isVideo = declaredType.startsWith('video/') || /\.(mp4|mov|m4v|webm)(?:\?|$)/i.test(mediaUrl);
+
+      const createPayload: Record<string, any> = {
+        caption: params.body,
+        access_token: accessToken,
+      };
+
+      if (isVideo) {
+        createPayload.media_type = 'REELS';
+        createPayload.video_url = mediaUrl;
+        createPayload.share_to_feed = true;
+      } else {
+        createPayload.image_url = mediaUrl;
+      }
+
+      // Step 1: Create the Instagram media container.
       const containerRes = await fetch(`${this.getGraphBase()}/${igUserId}/media`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          image_url: params.mediaUrls[0],
-          caption: params.body,
-          access_token: accessToken
-        })
+        body: JSON.stringify(createPayload)
       });
       const containerData = await containerRes.json();
-      if (containerData.error) {
-        return { success: false, error: containerData.error.message, platform: 'instagram', publishedAt };
+      if (!containerRes.ok || containerData.error || !containerData.id) {
+        return {
+          success: false,
+          error: containerData.error?.message || 'Instagram could not create a media container.',
+          statusCode: containerRes.status || 422,
+          details: containerData.error || containerData,
+          platform: 'instagram',
+          publishedAt
+        };
       }
 
-      // Step 2: Publish media container
+      const creationId = String(containerData.id);
+
+      // Instagram may accept the container before the media is ready. Publishing
+      // immediately can return "Media ID is not available". Poll the container
+      // until processing reaches FINISHED, and fail with the real provider state
+      // rather than turning a transient processing state into a permanent 422.
+      let containerStatus = '';
+      let containerStatusDetail: any = null;
+      const maxAttempts = isVideo ? 30 : 15;
+
+      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+        if (attempt > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+
+        const statusParams = new URLSearchParams({
+          fields: 'status_code,status',
+          access_token: accessToken,
+        });
+        const statusRes = await fetch(`${this.getGraphBase()}/${creationId}?${statusParams.toString()}`);
+        const statusData = await statusRes.json().catch(() => ({}));
+        containerStatusDetail = statusData;
+
+        if (statusData.error) {
+          return {
+            success: false,
+            error: statusData.error.message || 'Instagram media processing status could not be read.',
+            statusCode: statusRes.status || 422,
+            details: statusData.error,
+            platform: 'instagram',
+            publishedAt
+          };
+        }
+
+        containerStatus = String(statusData.status_code || '').toUpperCase();
+        if (containerStatus === 'FINISHED' || containerStatus === 'PUBLISHED') {
+          break;
+        }
+        if (containerStatus === 'ERROR' || containerStatus === 'EXPIRED') {
+          return {
+            success: false,
+            error: statusData.status || `Instagram media processing failed with status ${containerStatus}.`,
+            statusCode: 422,
+            details: statusData,
+            platform: 'instagram',
+            publishedAt
+          };
+        }
+      }
+
+      if (containerStatus !== 'FINISHED' && containerStatus !== 'PUBLISHED') {
+        return {
+          success: false,
+          error: 'Instagram is still processing the media. Please retry publishing in a moment.',
+          statusCode: 425,
+          details: containerStatusDetail,
+          platform: 'instagram',
+          publishedAt
+        };
+      }
+
+      // Step 2: Publish the ready media container.
       const publishRes = await fetch(`${this.getGraphBase()}/${igUserId}/media_publish`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          creation_id: containerData.id,
+          creation_id: creationId,
           access_token: accessToken
         })
       });
       const publishData = await publishRes.json();
-      if (publishData.error) {
-        return { success: false, error: publishData.error.message, platform: 'instagram', publishedAt };
+      if (!publishRes.ok || publishData.error || !publishData.id) {
+        return {
+          success: false,
+          error: publishData.error?.message || 'Instagram could not publish the media container.',
+          statusCode: publishRes.status || 422,
+          details: publishData.error || publishData,
+          platform: 'instagram',
+          publishedAt
+        };
       }
 
       return {
         success: true,
         postId: publishData.id,
-        postUrl: `https://instagram.com/p/${publishData.id}`,
+        postUrl: `https://www.instagram.com/`,
         platform: 'instagram',
         publishedAt
       };
     } catch (err: any) {
-      return { success: false, error: err.message, platform: 'instagram', publishedAt };
+      return { success: false, error: err.message, statusCode: 500, platform: 'instagram', publishedAt };
     }
   }
 
