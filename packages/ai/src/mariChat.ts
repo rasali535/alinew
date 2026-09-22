@@ -276,6 +276,9 @@ export function detectSemanticIntent(prompt: string): string {
   if (/\b(what\s+is\s+(my|our)\s+business|what\s+does\s+(my|our)\s+business\s+do|what\s+do\s+(we|i)\s+sell|what\s+services\s+do\s+we\s+provide|who\s+are\s+we|tell\s+me\s+about\s+(us|our\s+company|my\s+business|ras\s+ali\s+labs)|about\s+(the|my|our)\s+business|company\s+overview)\b/i.test(p)) {
     return 'BUSINESS_IDENTITY';
   }
+  if (/\b(instagram|ig\s+account|ig\s+profile)\b/i.test(p)) {
+    return 'INSTAGRAM_CHANNEL';
+  }
   if (/\b(who\s+are\s+(our|the)\s+target\s+customers|who\s+are\s+our\s+customers|target\s+(market|audience|customers)|who\s+do\s+we\s+serve|target\s+demographic)\b/i.test(p)) {
     return 'TARGET_CUSTOMERS';
   }
@@ -441,7 +444,11 @@ export async function callMariAiApi(
       if (activeContext.layer1?.companyName?.value) contextSourcesLoaded.push('Business Knowledge Profile');
       if (activeContext.layer1?.websiteKnowledge?.value) contextSourcesLoaded.push('Website Knowledge');
       if (activeContext.layer2?.crm?.isConnected) contextSourcesLoaded.push('CRM & Deals Ledger');
-      if (activeContext.layer2?.social?.isConnected) contextSourcesLoaded.push('Social & Facebook Channel');
+      if (activeContext.layer2?.social?.hasSelectedPage) contextSourcesLoaded.push('Facebook Page');
+      if (activeContext.layer2?.social?.instagram?.isConnected) contextSourcesLoaded.push('Instagram Professional Account');
+      if ((activeContext.layer2?.social?.connectedChannels || []).some((channel: any) => !['facebook', 'instagram'].includes(channel.provider))) {
+        contextSourcesLoaded.push('Connected Social Channels');
+      }
       if (activeContext.layer2?.operations) contextSourcesLoaded.push('Workspace Operations');
 
       try {
@@ -527,8 +534,14 @@ export function generateLocalStrategicResponse(
   const isRasAli = (orgId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf') || (orgId === 'ras-ali-labs');
   const orgName = context?.layer1?.companyName?.value || profile?.companyName?.value || wk?.title || context?.organizationName || (isRasAli ? 'Ras Ali Labs' : 'Your Business');
   const isPersonalProfile = Boolean(context?.isPersonalSocialProfile);
-  const isSocialConnected = Boolean(!isPersonalProfile && context?.layer2?.social?.isConnected);
-  const pageName = isSocialConnected ? (context?.layer2?.social?.connectedPageName?.value || 'Connected Facebook Page') : '';
+  const isFacebookConnected = Boolean(!isPersonalProfile && context?.layer2?.social?.hasSelectedPage);
+  const pageName = isFacebookConnected ? (context?.layer2?.social?.connectedPageName?.value || 'Connected Facebook Page') : '';
+  const instagramContext = context?.layer2?.social?.instagram;
+  const isInstagramConnected = Boolean(instagramContext?.isConnected);
+  const instagramName = isInstagramConnected ? (instagramContext?.accountName?.value || 'Instagram Professional') : '';
+  const instagramUsername = isInstagramConnected ? String(instagramContext?.username?.value || '').replace(/^@/, '') : '';
+  const instagramFollowers = isInstagramConnected ? Number(instagramContext?.followersCount?.value || 0) : 0;
+  const isSocialConnected = isFacebookConnected || isInstagramConnected;
 
   const productsList = context?.layer1?.productsAndServices?.value || profile?.products?.value || (isRasAli ? [
     { name: 'Film & Creative Production', category: 'Creative & Video Production' },
@@ -593,7 +606,7 @@ export function generateLocalStrategicResponse(
 
     const enterpriseAnalysis = `• **Enterprise Market Pivot**: Shifting primary focus entirely to enterprise clients would extend sales cycles (typically 60–120 days) but substantially increase Average Contract Value (ACV). For ${orgName}, our solutions (**${productsList.map(formatProductName).join(', ')}**) provide intelligent automation that appeals directly to enterprise decision-makers.`;
 
-    const facebookDiagnosis = isSocialConnected
+    const facebookDiagnosis = isFacebookConnected
       ? `• **Facebook / Channel Growth Analysis**: Your connected page (**${pageName}**) has ${followers.toLocaleString()} verified followers (+${reachGrowth}% velocity). The primary constraint on growth is publishing consistency—without regular multi-format visual posts and video reels, organic algorithmic discovery remains low.`
       : `• **Facebook / Channel Growth Analysis**: Social channels are not actively broadcasting. Growth is constrained because organic distribution channels require active Facebook Business Page connection and scheduled content dispatch.`;
 
@@ -622,6 +635,27 @@ export function generateLocalStrategicResponse(
     responseText = orgName
       ? `Hi ${greetingUser ? `${greetingUser} ` : ''}👋 I’m Mari, your AI Business Growth Partner for ${orgName}. I’m ready to help with strategy, marketing, clients, content or business operations. What would you like to work on?`
       : `Hi there 👋 I’m Mari, your AI Business Growth Partner. I’m ready to help with strategy, marketing, clients, content or business operations. What would you like to work on?`;
+  }
+
+  // 2.4. Instagram Channel Intelligence
+  else if (intent === 'INSTAGRAM_CHANNEL') {
+    if (isInstagramConnected) {
+      const capabilities = [
+        instagramContext?.canPublish ? 'publishing' : null,
+        instagramContext?.canReadInsights ? 'insights' : null,
+        instagramContext?.canManageComments ? 'comments' : null,
+        instagramContext?.canManageMessages ? 'messages' : null,
+      ].filter(Boolean).join(', ');
+
+      responseText = `### Instagram Channel\n\n` +
+        `**Account:** ${instagramName}${instagramUsername ? ` (@${instagramUsername})` : ''}\n` +
+        `**Followers:** ${instagramFollowers.toLocaleString()}\n` +
+        `**Connection:** Verified Instagram Professional account\n` +
+        `**Ralion access:** ${capabilities || 'Basic account access'}\n\n` +
+        `I can use this verified Instagram connection as part of your business and growth context. I will only describe post performance, audience insights, comments or messages when those records have actually been synced or received by Ralion; I will not invent unavailable Instagram metrics.`;
+    } else {
+      responseText = `### Instagram Channel\n\nI do not currently see a verified Instagram Professional connection in this Ralion workspace. Your other connected channels remain available independently. Connect Instagram from **Growth → Connected Accounts → Instagram Business** to add it to Mari's business context.`;
+    }
   }
 
   // 2.5. Website Knowledge
@@ -676,8 +710,8 @@ export function generateLocalStrategicResponse(
       : `• **CRM Pipeline:** No active deals logged yet in Ralion CRM.`;
 
     let socialStatus = '';
-    if (isSocialConnected) {
-      socialStatus = `• **Social Channel (${pageName}):** ${followers.toLocaleString()} verified followers | Reach Velocity: +${reachGrowth}%\n` +
+    if (isFacebookConnected) {
+      socialStatus = `• **Facebook Page (${pageName}):** ${followers.toLocaleString()} verified followers | Reach Velocity: +${reachGrowth}%\n` +
         `• **Engagement History:** I don't have enough verified post history yet to compute multi-format engagement multipliers or peak posting hours.`;
     } else if (isPersonalProfile) {
       socialStatus = `• **Social Channels:** Connected Facebook account is a personal profile. Facebook Page follower and reach analytics require an official Business Page.`;
@@ -705,9 +739,10 @@ export function generateLocalStrategicResponse(
       `2. **Sales & Pipeline Numbers**:\n` +
       `   • Source: **Ralion CRM Deals Ledger** ($${pipelineVal.toLocaleString()} active pipeline value, ${activeClients} clients).\n` +
       `   • Provenance: Internal database records.\n\n` +
-      `3. **Social Followers & Reach Velocity**:\n` +
-      `   • Source: **${isSocialConnected ? pageName : 'Connected Social Provider'}** (${followers} verified followers, +${reachGrowth}% velocity).\n` +
-      `   • Provenance: Real-time channel telemetry.\n\n` +
+      `3. **Social Channel Telemetry**:\n` +
+      `   • Facebook: ${isFacebookConnected ? `${pageName} (${followers} verified followers)` : 'not connected as an operational Page'}.\n` +
+      `   • Instagram: ${isInstagramConnected ? `${instagramName}${instagramUsername ? ` (@${instagramUsername})` : ''} (${instagramFollowers} verified followers)` : 'not connected'}.\n` +
+      `   • Provenance: Tenant-scoped social connection records; performance metrics are only stated when separately verified.\n\n` +
       `4. **No Fabricated Data Policy**:\n` +
       `   • Mari strictly adheres to zero-fabrication. Format performance multipliers and peak hours are marked unverified until sufficient historical post telemetry exists.`;
   }
@@ -722,8 +757,11 @@ export function generateLocalStrategicResponse(
       recentItems.push(`• **CRM**: Pipeline is ready for new prospective deal qualification.`);
     }
 
-    if (isSocialConnected) {
-      recentItems.push(`• **Growth Studio**: Channel connection active for **${pageName}** (${followers} verified followers).`);
+    if (isFacebookConnected) {
+      recentItems.push(`• **Growth Studio**: Facebook Page active for **${pageName}** (${followers} verified followers).`);
+    }
+    if (isInstagramConnected) {
+      recentItems.push(`• **Growth Studio**: Instagram Professional active for **${instagramName}**${instagramUsername ? ` (@${instagramUsername})` : ''} (${instagramFollowers} verified followers).`);
     } else {
       recentItems.push(`• **Growth Studio**: Social channels configured for scheduled dispatch.`);
     }
