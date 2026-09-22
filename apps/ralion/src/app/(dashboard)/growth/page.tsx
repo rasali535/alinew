@@ -192,6 +192,8 @@ export interface SocialAccount {
   avatarUrl?: string;
   followers?: string;
   providerAccountId?: string;
+  accountType?: string;
+  metadata?: Record<string, any>;
 }
 
 const initialGeneratedContent: GeneratedContentItem[] = [];
@@ -1369,44 +1371,81 @@ function GrowthPageContent() {
   };
 
   // ── Unified Inbox Handlers ───────────────────────────────────────────────
+  // Inbox state is always scoped to the account the user selected. Never let a
+  // Facebook thread remain visible after switching to Instagram (or vice versa).
   const fetchInboxConversations = useCallback(async () => {
+    const selectedConn = (selectedAccountId && connectedAccounts.find(a => a.id === selectedAccountId))
+      || (connectedAccounts.length === 1 ? connectedAccounts[0] : null);
+
+    if (!selectedConn) {
+      setInboxConversations([]);
+      setActiveConversationId(null);
+      return;
+    }
+
     setIsLoadingInbox(true);
     try {
-      const res = await authFetch('/api/social/inbox?provider=facebook');
+      const params = new URLSearchParams({
+        provider: selectedConn.provider,
+        connectionId: selectedConn.id,
+      });
+      const res = await authFetch(`/api/social/inbox?${params.toString()}`);
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
-        if (data.conversations && Array.isArray(data.conversations)) {
-          setInboxConversations(data.conversations);
-          if (data.conversations.length > 0 && !activeConversationId) {
-            setActiveConversationId(data.conversations[0].conversationId);
-          }
-        }
+        const conversations = Array.isArray(data.conversations)
+          ? data.conversations.filter((conversation: any) =>
+              !conversation?.provider || String(conversation.provider).toLowerCase() === selectedConn.provider
+            )
+          : [];
+
+        setInboxConversations(conversations);
+        setActiveConversationId(prev =>
+          conversations.some((conversation: any) => conversation.conversationId === prev)
+            ? prev
+            : conversations[0]?.conversationId || null
+        );
+      } else {
+        setInboxConversations([]);
+        setActiveConversationId(null);
       }
     } catch (err) {
-      console.warn('Inbox fetch notice:', err);
+      console.warn('[Growth] Inbox fetch notice:', err);
+      setInboxConversations([]);
+      setActiveConversationId(null);
     } finally {
       setIsLoadingInbox(false);
     }
-  }, [activeConversationId]);
+  }, [selectedAccountId, connectedAccounts]);
 
   const handleSendInboxReply = async () => {
     if (!inboxReplyText.trim() || !activeConversationId) return;
-    setIsSendingInboxReply(true);
 
+    const activeConn = (selectedAccountId && connectedAccounts.find(a => a.id === selectedAccountId))
+      || (connectedAccounts.length === 1 ? connectedAccounts[0] : null);
+
+    if (!activeConn) {
+      setOauthAlert({ type: 'error', message: 'Select a connected social account before replying.' });
+      return;
+    }
+
+    setIsSendingInboxReply(true);
     const activeConv = inboxConversations.find(c => c.conversationId === activeConversationId);
     const recipientId = activeConv?.participantId || '';
-    const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED');
-    const activeConn = connectedAccounts.find(a => a.provider === 'facebook');
+    const platformLabel = activeConn.provider === 'instagram'
+      ? 'Instagram'
+      : activeConn.provider === 'facebook'
+        ? 'Facebook Messenger'
+        : activeConn.provider.charAt(0).toUpperCase() + activeConn.provider.slice(1);
 
     try {
       const res = await authFetch('/api/social/inbox', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          connectionId: activeConn?.id || activeFbPage?.id || undefined,
-          provider: 'facebook',
+          connectionId: activeConn.id,
+          provider: activeConn.provider,
           conversationId: activeConversationId,
-          recipientId: recipientId,
+          recipientId,
           messageText: inboxReplyText.trim(),
         }),
       });
@@ -1419,7 +1458,7 @@ function GrowthPageContent() {
       const newMsg = {
         id: data.result?.messageId || `msg_${Date.now()}`,
         direction: 'OUTBOUND',
-        sender_name: activeFbPage?.name || organization?.name || user?.displayName || 'Support',
+        sender_name: activeConn.label || organization?.name || user?.displayName || 'Support',
         message_text: inboxReplyText.trim(),
         timestamp: 'Just now',
       };
@@ -1440,14 +1479,14 @@ function GrowthPageContent() {
       setInboxReplyText('');
       setOauthAlert({
         type: 'success',
-        message: '✓ Direct message reply sent via Facebook Messenger!',
+        message: `✓ Direct message reply sent via ${platformLabel}.`,
       });
       setTimeout(() => setOauthAlert(null), 5000);
     } catch (err: any) {
       const errMsg = err instanceof Error ? err.message : String(err);
       setOauthAlert({
         type: 'error',
-        message: `✕ Failed to send message: ${errMsg}`,
+        message: `✕ ${platformLabel} message failed: ${errMsg}`,
       });
     } finally {
       setIsSendingInboxReply(false);
