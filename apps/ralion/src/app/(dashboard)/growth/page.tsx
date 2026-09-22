@@ -2776,6 +2776,9 @@ function GrowthPageContent() {
   const fbFollowersCount = isFacebookPage 
     ? (Number(pageAnalytics?.followers) || Number(activeFbPage?.followersCount) || (activeAcc?.followers ? Number(String(activeAcc.followers).replace(/,/g, '')) : 0))
     : 0;
+  const selectedFollowersCount = isFacebookPage
+    ? fbFollowersCount
+    : (activeAcc?.followers ? Number(String(activeAcc.followers).replace(/,/g, '')) || 0 : 0);
 
   // Dynamic Spline Series & Timeframe Bucketed Computation
   const { splineChartSeries, dynamicDateLabels } = React.useMemo(() => {
@@ -2859,16 +2862,16 @@ function GrowthPageContent() {
         },
         audience: {
           title: `Audience Growth (${rangeLabel})`,
-          primaryLabel: 'Followers / Page Fans',
-          primaryValues: fbFollowersCount > 0 ? new Array(numBuckets).fill(fbFollowersCount) : likesBuckets,
+          primaryLabel: selectedPlatform === 'facebook' ? 'Page Followers' : 'Followers',
+          primaryValues: selectedFollowersCount > 0 ? new Array(numBuckets).fill(selectedFollowersCount) : likesBuckets,
           primaryColor: '#10b981',
-          secondaryLabel: 'Fans by Unlike',
+          secondaryLabel: selectedPlatform === 'facebook' ? 'Fans by Unlike' : 'Audience Change',
           secondaryValues: new Array(numBuckets).fill(0),
           secondaryColor: '#f43f5e',
         },
       }
     };
-  }, [dateFilteredPosts, dateRange, fbFollowersCount, posts.length]);
+  }, [dateFilteredPosts, dateRange, selectedFollowersCount, selectedPlatform, posts.length]);
 
   // Dynamic Sparklines computation from real synced posts filtered by date range
   const dynamicSparklines = React.useMemo(() => {
@@ -2877,12 +2880,12 @@ function GrowthPageContent() {
     return {
       reach: reachSeries.length >= 2 ? reachSeries : [0, reachSeries[0] || 0],
       engagement: engSeries.length >= 2 ? engSeries : [0, engSeries[0] || 0],
-      fans: fbFollowersCount > 0 ? [fbFollowersCount, fbFollowersCount] : [0, 0],
+      fans: selectedFollowersCount > 0 ? [selectedFollowersCount, selectedFollowersCount] : [0, 0],
       viral: engSeries.map(e => Math.min(100, e * 10)),
       views: reachSeries,
       video: reachSeries,
     };
-  }, [splineChartSeries, fbFollowersCount]);
+  }, [splineChartSeries, selectedFollowersCount]);
 
   // Dynamic Real Optimal Posting Slots calculated strictly from published post activity
   const optimalPostingSlots = React.useMemo(() => {
@@ -3184,7 +3187,7 @@ function GrowthPageContent() {
                   {totalReach > 0 ? totalReach.toLocaleString() : publishedCount > 0 ? '0' : 'Data Unavailable'}
                 </div>
                 <div className="flex items-center gap-1 text-[11px] font-semibold text-zinc-400 mt-0.5">
-                  <span>{publishedCount > 0 ? `${publishedCount} posts tracked (Ralion-tracked)` : 'Meta insights unavailable'}</span>
+                  <span>{publishedCount > 0 ? `${publishedCount} posts tracked (Ralion-tracked)` : `${selectedPlatformLabel} reach data unavailable`}</span>
                 </div>
               </div>
               <div className="mt-3 pt-2 border-t border-zinc-800/80">
@@ -3223,22 +3226,22 @@ function GrowthPageContent() {
             <Card className="p-4 border-zinc-800 bg-zinc-900/80 flex flex-col justify-between hover:border-zinc-700 transition-all">
               <div>
                 <div className="flex items-center justify-between text-zinc-400 text-xs mb-1">
-                  <span className="font-bold uppercase tracking-wider text-[10px] text-zinc-400">Page Followers</span>
+                  <span className="font-bold uppercase tracking-wider text-[10px] text-zinc-400">{selectedPlatform === 'facebook' ? 'Page Followers' : 'Followers'}</span>
                   <Users className="w-3.5 h-3.5 text-emerald-400" />
                 </div>
                 <div className="text-2xl font-black text-white tracking-tight">
-                  {isFacebookPage ? (fbFollowersCount > 0 ? fbFollowersCount.toLocaleString() : '0') : isPersonalFacebookProfile ? 'Data Unavailable' : (activeAcc?.followers ? activeAcc.followers : 'Data Unavailable')}
+                  {isPersonalFacebookProfile ? 'Data Unavailable' : selectedFollowersCount > 0 ? selectedFollowersCount.toLocaleString() : activeAcc ? '0' : 'Data Unavailable'}
                 </div>
                 <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400 mt-0.5">
                   <span className="text-zinc-500 font-normal">
-                    {isFacebookPage ? 'Live Meta Page Destination' : isPersonalFacebookProfile ? 'Personal Profile (No Page Fans)' : 'Connected Account'}
+                    {isFacebookPage ? 'Live Meta Page Destination' : isPersonalFacebookProfile ? 'Personal Profile (No Page Fans)' : activeAcc ? `${selectedPlatformLabel} Connected Account` : 'No Account Selected'}
                   </span>
                 </div>
               </div>
               <div className="mt-3 pt-2 border-t border-zinc-800/80">
                 {renderSparkline(dynamicSparklines.fans, '#10b981', '#10b981')}
                 <div className="flex justify-between items-center text-[10px] text-zinc-500 font-mono mt-1">
-                  <span>Page Audience</span>
+                  <span>{selectedPlatform === 'facebook' ? 'Page Audience' : `${selectedPlatformLabel} Audience`}</span>
                   {renderSourceBadge(isFacebookPage ? 'META_LIVE' : isPersonalFacebookProfile ? 'UNAVAILABLE' : activeAcc ? 'RALION_TRACKED' : 'UNAVAILABLE')}
                 </div>
               </div>
@@ -4792,7 +4795,7 @@ function GrowthPageContent() {
                       value={mariChatQuery}
                       onChange={e => setMariChatQuery(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && handleAskMariGrowth()}
-                      placeholder="Ask Mari: 'How is my Page performing?', 'What should I post next?'..."
+                      placeholder={`Ask Mari about ${selectedPlatformLabel}: "How is this account performing?"`}
                       className="flex-1 px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none"
                     />
                     <Button 
