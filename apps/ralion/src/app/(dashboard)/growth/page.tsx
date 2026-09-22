@@ -2333,7 +2333,9 @@ function GrowthPageContent() {
         mediaTypes: post.mediaType ? [post.mediaType] : undefined,
         authorName: targetConn.label || activeFbPage?.name || organization?.name || user?.displayName || 'Social Account',
         socialConnectionId: targetConn.id,
-        pageId: isFacebookTarget ? (activeFbPage?.pageId || targetConn.providerAccountId || undefined) : undefined,
+        pageId: isFacebookTarget
+          ? (activeFbPage?.pageId || targetConn.providerAccountId || undefined)
+          : (targetPlatform === 'instagram' ? (targetConn.providerAccountId || undefined) : undefined),
         idempotencyKey: publishIdempotencyKey,
       };
 
@@ -2347,12 +2349,18 @@ function GrowthPageContent() {
 
       if (!res.ok || data.success === false) {
         const status = res.status;
+        const platformResult = data.platformResults?.[targetPlatform] || {};
+        const platformLabel = targetPlatform === 'instagram'
+          ? 'Instagram'
+          : targetPlatform === 'facebook'
+            ? 'Facebook'
+            : targetPlatform.charAt(0).toUpperCase() + targetPlatform.slice(1);
         const primaryError =
           data.error ||
           data.errors?.[0] ||
-          data.platformResults?.facebook?.error ||
-          data.platformResults?.facebook?.details?.sanitizedMessage ||
-          data.platformResults?.facebook?.details?.message ||
+          platformResult?.error ||
+          platformResult?.details?.sanitizedMessage ||
+          platformResult?.details?.message ||
           '';
 
         let alertMessage: string;
@@ -2368,16 +2376,16 @@ function GrowthPageContent() {
           alertMessage = `✕ Validation error: ${primaryError || 'The publish request was invalid. Please check your post content.'}. Please correct the content and try again.`;
           allowRetry = false;
         } else if (status === 401) {
-          alertMessage = `✕ Authentication required: ${primaryError || 'Your Facebook session has expired. Please reconnect your account in the Accounts tab.'}`;
+          alertMessage = `✕ Authentication required: ${primaryError || `Your ${platformLabel} session has expired. Please reconnect the account in Connected Accounts.`}`;
         } else if (status === 403) {
-          alertMessage = `✕ Authorization error: ${primaryError || 'Ralion does not have permission to publish to this Facebook Page. Please reconnect your account.'}`;
+          alertMessage = `✕ Authorization error: ${primaryError || `Ralion does not have permission to publish to this ${platformLabel} account. Please reconnect it.`}`;
         } else if (status === 422) {
-          alertMessage = `✕ Platform error: ${primaryError || 'Facebook could not process this post. Please check your media or content.'}`;
+          alertMessage = `✕ ${platformLabel} error: ${primaryError || `${platformLabel} could not process this post. Please check the media and content.`}`;
         } else if (status === 500) {
           alertMessage = `✕ Unexpected server error (${primaryError || 'please try again in a moment'}). (Request ID: ${data.requestId || 'N/A'})`;
           allowRetry = true;
         } else {
-          alertMessage = `✕ Facebook publishing failed (HTTP ${status}): ${primaryError || 'Unknown error'}.`;
+          alertMessage = `✕ ${platformLabel} publishing failed (HTTP ${status}): ${primaryError || 'Unknown error'}.`;
           allowRetry = true;
         }
 
@@ -2390,8 +2398,8 @@ function GrowthPageContent() {
       }
 
       const postUrl =
-        data.result?.platformResults?.facebook?.postUrl ||
-        data.platformResults?.facebook?.postUrl ||
+        data.result?.platformResults?.[targetPlatform]?.postUrl ||
+        data.platformResults?.[targetPlatform]?.postUrl ||
         undefined;
 
       setPosts(prev =>
@@ -2402,33 +2410,57 @@ function GrowthPageContent() {
         )
       );
 
-      setFacebookPagePosts(prev => [
-        {
-          id: data.postId || postId,
-          title: post.title,
-          body: post.body,
-          publishedAt: 'Just now',
-          status: 'published',
-          source: 'RALION',
-          permalink: postUrl,
-          engagement: { likes: 0, comments: 0, shares: 0, reach: 0 },
-        },
-        ...prev.filter(p => p.id !== postId),
-      ]);
+      const publishedConnectionPost = {
+        id: data.postId || postId,
+        title: post.title,
+        body: post.body,
+        publishedAt: new Date().toISOString(),
+        status: 'published',
+        source: 'RALION',
+        permalink: postUrl,
+        platform: targetPlatform,
+        engagement: { likes: 0, comments: 0, shares: 0, reach: 0 },
+      };
+
+      setConnectionPosts(prev => ({
+        ...prev,
+        [targetConn.id]: [
+          publishedConnectionPost,
+          ...(prev[targetConn.id] || []).filter((existing: any) => existing.id !== postId),
+        ],
+      }));
+
+      if (targetPlatform === 'facebook') {
+        setFacebookPagePosts(prev => [
+          publishedConnectionPost,
+          ...prev.filter(p => p.id !== postId),
+        ]);
+      }
+
+      const platformLabel = targetPlatform === 'instagram'
+        ? 'Instagram'
+        : targetPlatform === 'facebook'
+          ? 'Facebook Page'
+          : targetPlatform.charAt(0).toUpperCase() + targetPlatform.slice(1);
 
       setOauthAlert({
         type: 'success',
-        message: `✓ Published to Facebook Page — ${payload.authorName} (Published just now)`,
+        message: `✓ Published to ${platformLabel} — ${payload.authorName} (Published just now)`,
         actionUrl: postUrl,
-        actionLabel: postUrl ? 'View on Facebook' : undefined,
+        actionLabel: postUrl ? `View on ${targetPlatform === 'facebook' ? 'Facebook' : platformLabel}` : undefined,
       });
 
-      // Revalidate real posts from server
-      fetchLiveFacebookPosts();
+      // Revalidate only the selected connection so channel state never bleeds.
+      fetchPostsForConnection(targetConn.id).catch(e => console.warn('[Growth] Post revalidation notice:', e));
     } catch (err: any) {
+      const failedPlatform = targetConn.provider === 'instagram'
+        ? 'Instagram'
+        : targetConn.provider === 'facebook'
+          ? 'Facebook'
+          : targetConn.provider;
       setOauthAlert({
         type: 'error',
-        message: `✕ Facebook publishing failed: ${err.message}`,
+        message: `✕ ${failedPlatform} publishing failed: ${err.message}`,
         onRetry: () => publishPostNow(postId),
       });
     } finally {
@@ -2549,6 +2581,17 @@ function GrowthPageContent() {
   const currentAccountName = activeAcc?.label || activeFbPage?.name || 'Social Account';
   const currentAccountHandle = activeAcc?.handle || activeFbPage?.username || '';
   const currentAccountId = activeAcc?.providerAccountId || activeFbPage?.pageId || activeAcc?.id || '';
+  const selectedPlatform = activeAcc?.provider || 'facebook';
+  const selectedPlatformLabel = selectedPlatform === 'instagram'
+    ? 'Instagram'
+    : selectedPlatform === 'facebook'
+      ? 'Facebook'
+      : selectedPlatform.charAt(0).toUpperCase() + selectedPlatform.slice(1);
+  const selectedAccountLabel = selectedPlatform === 'instagram'
+    ? 'Instagram Account'
+    : selectedPlatform === 'facebook'
+      ? 'Facebook Page'
+      : `${selectedPlatformLabel} Account`;
   const fbFollowersCount = isFacebookPage 
     ? (Number(pageAnalytics?.followers) || Number(activeFbPage?.followersCount) || (activeAcc?.followers ? Number(String(activeAcc.followers).replace(/,/g, '')) : 0))
     : 0;
@@ -2715,7 +2758,7 @@ function GrowthPageContent() {
                 rel="noreferrer"
                 className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all inline-flex items-center gap-1 shadow"
               >
-                {oauthAlert.actionLabel || 'View on Facebook'} →
+                {oauthAlert.actionLabel || `View on ${selectedPlatformLabel}`} →
               </a>
             )}
             {oauthAlert.onRetry && (
@@ -2730,7 +2773,7 @@ function GrowthPageContent() {
               onClick={() => setOauthAlert(null)}
               className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium transition-all"
             >
-              Continue without Facebook
+              Continue
             </button>
           </div>
         </div>
@@ -4019,7 +4062,7 @@ function GrowthPageContent() {
                     }}
                     className="flex-1 md:flex-initial gap-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 font-bold text-white shadow-lg shadow-indigo-600/30"
                   >
-                    <Plus className="w-3.5 h-3.5" /> Create Post
+                    <Plus className="w-3.5 h-3.5" /> Create {selectedPlatformLabel} Post
                   </Button>
                   <Button 
                     variant="outline" 
@@ -4041,9 +4084,9 @@ function GrowthPageContent() {
               <div className="flex gap-1.5 bg-zinc-950 p-1.5 rounded-2xl border border-zinc-800 w-full sm:w-fit overflow-x-auto">
                 {[
                   { id: 'OVERVIEW', label: 'Overview & Score', icon: BarChart2 },
-                  { id: 'POSTS', label: `Page Posts (${(connectionPosts[selectedAccountId ?? ''] ?? (activeAcc?.provider === 'facebook' ? facebookPagePosts : [])).length})`, icon: Share2 },
+                  { id: 'POSTS', label: `${selectedPlatformLabel} Posts (${(connectionPosts[selectedAccountId ?? ''] ?? (activeAcc?.provider === 'facebook' ? facebookPagePosts : [])).length})`, icon: Share2 },
                   { id: 'ANALYTICS', label: '30-Day Growth', icon: TrendingUp },
-                  { id: 'MARI_GROWTH', label: 'Mari AI Intelligence', icon: Sparkles },
+                  { id: 'MARI_GROWTH', label: `Mari AI · ${selectedPlatformLabel}`, icon: Sparkles },
                   { id: 'MARKET_INTEL', label: 'Market Research & Competition', icon: Globe },
                 ].map(t => {
                   const IconComp = t.icon;
