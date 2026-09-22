@@ -602,7 +602,7 @@ function GrowthPageContent() {
           id: draftId,
           title: item.title,
           body: item.prompt || 'Generated with Mari AI in Ralion OS.',
-          platform: 'facebook',
+          platform: ((connectedAccounts.find(a => a.id === selectedAccountId)?.provider || 'facebook') as ContentPost['platform']),
           hashtags: ['#Growth'],
           status: 'draft',
           mediaUrl: item.output,
@@ -2483,7 +2483,7 @@ function GrowthPageContent() {
       id: `post-${Date.now()}`,
       title: item.title,
       body: isMedia ? item.prompt : item.output,
-      platform: 'facebook',
+      platform: ((connectedAccounts.find(a => a.id === selectedAccountId)?.provider || 'facebook') as ContentPost['platform']),
       hashtags: ['#Growth'],
       status: 'draft',
       mediaUrl: isMedia ? item.output : undefined,
@@ -3042,7 +3042,7 @@ function GrowthPageContent() {
             {isLoadingAccounts ? 'Loading...' : `Connected Accounts (${connectedAccounts.length})`}
           </Button>
           <Button variant="primary" size="sm" onClick={() => setIsCreateOpen(true)} className="gap-1.5 text-xs font-bold bg-blue-600 hover:bg-blue-700">
-            <Plus className="w-4 h-4" /> Create Post
+            <Plus className="w-4 h-4" /> Create {selectedPlatformLabel} Post
           </Button>
         </div>
       </div>
@@ -4890,7 +4890,7 @@ function GrowthPageContent() {
             </div>
 
             <Button variant="primary" size="sm" onClick={() => setIsCreateOpen(true)} className="gap-1.5 text-xs bg-blue-600 hover:bg-blue-700">
-              <Plus className="w-3.5 h-3.5" /> Create New Post
+              <Plus className="w-3.5 h-3.5" /> Create {selectedPlatformLabel} Post
             </Button>
           </div>
 
@@ -4963,14 +4963,16 @@ function GrowthPageContent() {
                         <Eye className="w-3.5 h-3.5 text-blue-400" /> Visual Preview
                       </Button>
 
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => handleOpenCommentsModal(post)}
-                        className="text-xs gap-1 border-zinc-800 text-zinc-300 hover:text-white"
-                      >
-                        <MessageSquare className="w-3.5 h-3.5 text-emerald-400" /> Comments
-                      </Button>
+                      {(selectedPlatform === 'facebook' || selectedPlatform === 'instagram') && (
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => handleOpenCommentsModal(post)}
+                          className="text-xs gap-1 border-zinc-800 text-zinc-300 hover:text-white"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5 text-emerald-400" /> {selectedPlatformLabel} Comments
+                        </Button>
+                      )}
 
                       {post.status !== 'published' && (
                         <Button 
@@ -4979,7 +4981,7 @@ function GrowthPageContent() {
                           onClick={() => publishPostNow(post.id)}
                           className="text-xs font-bold gap-1 bg-emerald-600 hover:bg-emerald-700 text-white"
                         >
-                          <Send className="w-3.5 h-3.5" /> Publish Now
+                          <Send className="w-3.5 h-3.5" /> Publish to {selectedPlatformLabel}
                         </Button>
                       )}
 
@@ -5004,7 +5006,7 @@ function GrowthPageContent() {
 
             {filteredPosts.length === 0 && (
               <div className="p-12 text-center text-zinc-500 text-xs italic bg-zinc-900/40 rounded-2xl border border-zinc-800">
-                No posts found under "{postStatusFilter}". Click "Create New Post" to draft or schedule content.
+                No {selectedPlatformLabel} posts found under "{postStatusFilter}". Create a post to draft or schedule content for the selected account.
               </div>
             )}
           </div>
@@ -5358,7 +5360,7 @@ function GrowthPageContent() {
                     setNewPost({
                       title: aiPrompt.substring(0, 30) + '...',
                       body: aiResult,
-                      platform: 'linkedin',
+                      platform: ((connectedAccounts.find(a => a.id === selectedAccountId)?.provider || 'facebook') as ContentPost['platform']),
                       hashtags: '#Growth',
                       scheduledAt: ''
                     });
@@ -5366,7 +5368,7 @@ function GrowthPageContent() {
                   }}
                   className="bg-blue-600 hover:bg-blue-700 text-xs font-bold gap-1.5"
                 >
-                  <Send className="w-3.5 h-3.5" /> Create Post from Output
+                  <Send className="w-3.5 h-3.5" /> Create {selectedPlatformLabel} Post from Output
                 </Button>
               </div>
             </Card>
