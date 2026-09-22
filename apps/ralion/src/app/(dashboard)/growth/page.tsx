@@ -2129,36 +2129,49 @@ function GrowthPageContent() {
       if (res.ok && contentType.includes('application/json')) {
         const data = await res.json().catch(() => ({}));
         if (data.success && Array.isArray(data.posts) && data.posts.length > 0) {
-          // Merge real posts into the posts list (avoid duplicates)
-          setPosts(prev => {
-            const existingIds = new Set(prev.map(p => p.id));
-            const newPosts: ContentPost[] = data.posts
-              .filter((p: any) => !existingIds.has(p.id))
-              .map((p: any) => ({
-                id: p.id,
-                title: p.title,
-                body: p.body,
-                platform: providerKey as ContentPost['platform'],
-                hashtags: [],
-                status: 'published' as const,
-                publishedAt: p.publishedAt,
-                engagement: p.engagement || { likes: 0, shares: 0, reach: 0, comments: 0 },
-                mediaUrl: undefined,
-              }));
-            return [...newPosts, ...prev];
-          });
-          if (providerKey === 'facebook') {
-            await fetchPageAnalytics();
-            await loadConnectedAccounts();
+          if (!targetConn?.id) {
+            throw new Error('Could not resolve the exact social connection being synchronized.');
           }
-          setOauthAlert({ type: 'success', message: `✅ Synced ${data.posts.length} posts from ${providerKey}` });
+
+          const normalizedPosts: ContentPost[] = data.posts.map((p: any) => ({
+            id: p.id,
+            title: p.title || `${providerKey} Post`,
+            body: p.body || p.caption || '',
+            platform: providerKey as ContentPost['platform'],
+            hashtags: p.hashtags || [],
+            status: p.status === 'scheduled' ? 'scheduled' : 'published',
+            publishedAt: p.publishedAt,
+            rawPublishedAt: p.publishedAt || p.createdAt || p.timestamp,
+            scheduledAt: p.scheduledFor,
+            engagement: p.engagement || { likes: 0, shares: 0, reach: 0, comments: 0 },
+            mediaUrl: p.mediaUrl || p.mediaUrls?.[0],
+            mediaType: p.mediaType,
+          }));
+
+          // Exact-account replacement: never merge another account's posts into
+          // the selected feed.
+          setConnectionPosts(prev => ({ ...prev, [targetConn.id]: data.posts }));
+          if (targetConn.id === selectedAccountId) {
+            setPosts(normalizedPosts);
+          }
+
+          if (providerKey === 'facebook') {
+            setFacebookPagePosts(data.posts);
+            await fetchPageAnalytics();
+          }
+
+          await loadConnectedAccounts();
+          setOauthAlert({ type: 'success', message: `✅ Synced ${data.posts.length} posts from ${targetConn.label || providerKey}.` });
           setTimeout(() => setOauthAlert(null), 5000);
         } else {
+          if (targetConn?.id) {
+            await fetchPostsForConnection(targetConn.id).catch(() => []);
+          }
           if (providerKey === 'facebook') {
             await fetchPageAnalytics();
-            await loadConnectedAccounts();
           }
-          setOauthAlert({ type: 'info', message: data.error || `Synced latest state for ${providerKey}` });
+          await loadConnectedAccounts();
+          setOauthAlert({ type: 'info', message: data.error || `Synced latest state for ${targetConn?.label || providerKey}` });
           setTimeout(() => setOauthAlert(null), 5000);
         }
       } else {
