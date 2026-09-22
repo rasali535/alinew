@@ -39,7 +39,7 @@ export async function GET(
         } catch {}
       }
       console.warn(`[OAuth Callback Provider Error] provider=${provider} | intent=${intent} | error=${errorParam} | reason=${errorReason || ''} | desc=${errorDescription || ''}`);
-      if (intent === 'page_connection' || errorParam.includes('access_denied') || errorParam.includes('unavailable')) {
+      if (provider === 'facebook' && (intent === 'page_connection' || errorParam.includes('access_denied') || errorParam.includes('unavailable'))) {
         return NextResponse.redirect(`${growthRedirect}?facebook=page_permission_pending&oauth_error=meta_permission_unavailable&provider=facebook&stage=2`);
       }
       return NextResponse.redirect(`${growthRedirect}?oauth_error=${encodeURIComponent(errorParam)}&provider=${provider}`);
@@ -71,6 +71,7 @@ export async function GET(
     let accountLabel = provider.charAt(0).toUpperCase() + provider.slice(1);
     let pageId: string | undefined;
     let providerAccountId: string | undefined;
+    let grantedScopes: string[] = [];
     let extraMeta: Record<string, any> = {};
 
     switch (provider) {
@@ -141,6 +142,7 @@ export async function GET(
           avatar: igProfile.avatar,
           followersCount: igProfile.followersCount,
         };
+        grantedScopes = [...instagramBusinessAdapter.scopes];
         extraMeta = {
           graphVersion: instagramBusinessAdapter.graphVersion(),
           oauthMode: 'instagram_login',
@@ -209,7 +211,7 @@ export async function GET(
       followersCount: profile.followersCount,
       avatarUrl: profile.avatar,
       pageId,
-      scopes: [],
+      scopes: grantedScopes,
       extraMeta,
     });
 
