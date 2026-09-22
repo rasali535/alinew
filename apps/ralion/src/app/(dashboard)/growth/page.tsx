@@ -151,6 +151,7 @@ export interface ContentPost {
   scheduledAt?: string;
   publishedAt?: string;
   rawPublishedAt?: string;
+  platformPostId?: string;
   mediaUrl?: string;
   mediaType?: 'image' | 'video';
   engagement?: { likes: number; shares: number; reach: number; comments: number };
@@ -1186,6 +1187,7 @@ function GrowthPageContent() {
 
             const livePosts: ContentPost[] = data.posts.map((p: any) => ({
               id: p.id,
+              platformPostId: p.platformPostId || p.platform_post_id || p.id,
               title: p.title || `${provider} Post`,
               body: p.body || '',
               platform: provider as any,
@@ -1353,44 +1355,79 @@ function GrowthPageContent() {
 
   // ── Social Post Interactive Handlers (Comments & Direct Messaging) ───────
   const fetchPostComments = useCallback(async (postId: string) => {
+    const selectedConn = (selectedAccountId && connectedAccounts.find(a => a.id === selectedAccountId))
+      || (connectedAccounts.length === 1 ? connectedAccounts[0] : null);
+    if (!selectedConn) return;
+
     setIsLoadingComments(true);
     try {
-      const res = await authFetch(`/api/social/comments?postId=${postId}`);
-      if (res.ok) {
-        const data = await res.json().catch(() => ({}));
-        if (data.comments && Array.isArray(data.comments)) {
-          setPostComments(data.comments);
+      const params = new URLSearchParams({
+        postId,
+        provider: selectedConn.provider,
+        connectionId: selectedConn.id,
+      });
+      if (selectedConn.provider === 'facebook' && selectedConn.providerAccountId) {
+        params.set('pageId', selectedConn.providerAccountId);
+      }
+
+      const res = await authFetch(`/api/social/comments?${params.toString()}`);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && Array.isArray(data.comments)) {
+        setPostComments(data.comments);
+      } else {
+        setPostComments([]);
+        if (!res.ok) {
+          setOauthAlert({
+            type: 'error',
+            message: `Could not load ${selectedConn.provider} comments: ${data.error || `HTTP ${res.status}`}`,
+          });
         }
       }
     } catch (err) {
-      console.warn('Comments fetch notice:', err);
+      console.warn('[Growth] Comments fetch notice:', err);
+      setPostComments([]);
     } finally {
       setIsLoadingComments(false);
     }
-  }, []);
+  }, [selectedAccountId, connectedAccounts]);
 
   const handleOpenCommentsModal = (post: any) => {
-    setSelectedCommentPost(post);
-    fetchPostComments(post.id);
+    const targetPostId = post.platformPostId || post.id;
+    setSelectedCommentPost({ ...post, platformPostId: targetPostId });
+    fetchPostComments(targetPostId);
     setIsCommentsModalOpen(true);
   };
 
   const handleSendCommentReply = async (commentId: string, postId: string) => {
     if (!newCommentReplyText.trim()) return;
+
+    const selectedConn = (selectedAccountId && connectedAccounts.find(a => a.id === selectedAccountId))
+      || (connectedAccounts.length === 1 ? connectedAccounts[0] : null);
+    if (!selectedConn) return;
+
     setIsSubmittingReply(true);
-    const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED');
-    const targetPostId = postId || selectedCommentPost?.platformPostId || selectedCommentPost?.id || commentId.split('_')[0];
+    const activeFbPage = selectedConn.provider === 'facebook'
+      ? availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED')
+      : null;
+    const targetPostId = selectedCommentPost?.platformPostId || postId || selectedCommentPost?.id || commentId.split('_')[0];
+    const platformLabel = selectedConn.provider === 'instagram'
+      ? 'Instagram'
+      : selectedConn.provider === 'facebook'
+        ? 'Facebook'
+        : selectedConn.provider;
 
     try {
       const res = await authFetch('/api/social/comments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          provider: selectedConn.provider,
+          connectionId: selectedConn.id,
           commentId,
           postId: targetPostId,
           replyText: newCommentReplyText.trim(),
-          authorName: activeFbPage?.name || organization?.name || user?.displayName || 'Support',
-          pageId: activeFbPage?.pageId || undefined,
+          authorName: selectedConn.label || organization?.name || user?.displayName || 'Support',
+          pageId: activeFbPage?.pageId || selectedConn.providerAccountId || undefined,
         }),
       });
 
@@ -1416,14 +1453,14 @@ function GrowthPageContent() {
       setNewCommentReplyText('');
       setOauthAlert({
         type: 'success',
-        message: '✓ Reply successfully published to Facebook Page post!',
+        message: `✓ Reply successfully published to ${platformLabel}.`,
       });
       setTimeout(() => setOauthAlert(null), 5000);
     } catch (err: any) {
       const errMsg = err instanceof Error ? err.message : String(err);
       setOauthAlert({
         type: 'error',
-        message: `✕ Failed to reply: ${errMsg}`,
+        message: `✕ ${platformLabel} comment reply failed: ${errMsg}`,
       });
     } finally {
       setIsSubmittingReply(false);
@@ -3504,7 +3541,7 @@ function GrowthPageContent() {
                             <td className="py-3.5 text-right whitespace-nowrap">
                               <div className="flex items-center justify-end gap-1.5">
                                 <button
-                                  onClick={() => handleOpenCommentsModal({ id: post.id, body: post.body })}
+                                  onClick={() => handleOpenCommentsModal({ ...post, platformPostId: post.platformPostId || post.id })}
                                   className="p-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/40 transition-all flex items-center gap-1 text-[11px]"
                                   title={selectedPlatform === 'facebook' ? 'Read & Reply to Facebook Comments' : `${selectedPlatformLabel} comments`}
                                 >
