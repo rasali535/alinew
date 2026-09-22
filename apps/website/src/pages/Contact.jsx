@@ -55,7 +55,7 @@ const Contact = () => {
         error.response?.data?.message ||
         (error.code === 'ECONNABORTED' ? 'Request timed out after 10 seconds.' : error.message) ||
         'Unable to send message at this time.';
-      setErrorMessage(`${failureMsg} Please check your connection or contact us directly at contact@rasalilabs.com or +267 72 113 009.`);
+      setErrorMessage(`${failureMsg} Please check your connection or contact us directly at ali@rasalilabs.com or +267 72 113 009.`);
       setStatus('error');
     }
   };
@@ -131,10 +131,10 @@ const Contact = () => {
                 <div>
                   <h4 className="text-white font-bold text-xs uppercase tracking-wider mb-1">Official Email</h4>
                   <a
-                    href="mailto:contact@rasalilabs.com"
+                    href="mailto:ali@rasalilabs.com"
                     className="text-white/80 hover:text-brand-gold transition-colors text-xs font-mono"
                   >
-                    contact@rasalilabs.com
+                    ali@rasalilabs.com
                   </a>
                 </div>
               </div>
