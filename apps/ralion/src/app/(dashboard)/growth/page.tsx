@@ -945,18 +945,47 @@ function GrowthPageContent() {
   const handleGenerate7DayPlan = async () => {
     setIsGeneratingPlan(true);
     try {
-      const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED');
-      const pageId = activeFbPage?.pageId || selectedPageForConnect || 'default';
-      const res = await authFetch(`/api/social/facebook/pages/${pageId}/mari-growth`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'GET_PLAN' }),
-      });
-      if (res.ok) {
-        const data = await res.json().catch(() => ({}));
-        if (data.plan) {
-          setMari7DayPlan(data.plan);
+      const selectedConn = (selectedAccountId && connectedAccounts.find(a => a.id === selectedAccountId))
+        || (connectedAccounts.length === 1 ? connectedAccounts[0] : null);
+      if (!selectedConn) return;
+
+      if (selectedConn.provider === 'facebook') {
+        const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED');
+        const pageId = activeFbPage?.pageId || selectedPageForConnect || selectedConn.providerAccountId || 'default';
+        const res = await authFetch(`/api/social/facebook/pages/${pageId}/mari-growth`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'GET_PLAN' }),
+        });
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (data.plan) setMari7DayPlan(data.plan);
         }
+        return;
+      }
+
+      const res = await authFetch('/api/mari/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-organization-id': growthOrgId,
+          'x-workspace-id': growthWorkspaceId,
+        },
+        body: JSON.stringify({
+          query: `Create a practical 7-day ${selectedConn.provider} growth plan for the connected account ${selectedConn.label} (${selectedConn.handle}). Use only verified Ralion business and social context. Include a daily content idea, suggested format, CTA and posting objective. Do not invent unavailable analytics.`,
+          organizationId: growthOrgId,
+          workspaceId: growthWorkspaceId,
+          userId: growthUserId,
+          activeScreen: { route: '/growth', label: 'Growth & Social' },
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      const answer = data.answer || data.text;
+      if (res.ok && answer) {
+        setMariChatMessages(prev => [...prev, {
+          role: 'mari',
+          text: normalizeMarkdownText(String(answer)),
+        }]);
       }
     } catch (err) {
       console.warn('[Growth] Mari Plan generation notice:', err);
@@ -965,33 +994,64 @@ function GrowthPageContent() {
     }
   };
 
-  // Helper: Chat with Mari AI
+  // Helper: Chat with Mari AI about the currently selected social account.
   const handleAskMariGrowth = async () => {
     if (!mariChatQuery.trim()) return;
     const userMsg = mariChatQuery.trim();
+    const selectedConn = (selectedAccountId && connectedAccounts.find(a => a.id === selectedAccountId))
+      || (connectedAccounts.length === 1 ? connectedAccounts[0] : null);
+
     setMariChatQuery('');
     setMariChatMessages(prev => [...prev, { role: 'user', text: userMsg }]);
     setIsAskingMari(true);
 
     try {
-      const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED');
-      const pageId = activeFbPage?.pageId || selectedPageForConnect || 'default';
-      const res = await authFetch(`/api/social/facebook/pages/${pageId}/mari-growth`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'ASK_MARI', prompt: userMsg }),
-      });
+      let res: Response;
+
+      if (selectedConn?.provider === 'facebook') {
+        const activeFbPage = availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED');
+        const pageId = activeFbPage?.pageId || selectedPageForConnect || selectedConn.providerAccountId || 'default';
+        res = await authFetch(`/api/social/facebook/pages/${pageId}/mari-growth`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'ASK_MARI', prompt: userMsg }),
+        });
+      } else {
+        res = await authFetch('/api/mari/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-organization-id': growthOrgId,
+            'x-workspace-id': growthWorkspaceId,
+          },
+          body: JSON.stringify({
+            query: selectedConn
+              ? `For the currently selected ${selectedConn.provider} account ${selectedConn.label} (${selectedConn.handle}), ${userMsg}`
+              : userMsg,
+            organizationId: growthOrgId,
+            workspaceId: growthWorkspaceId,
+            userId: growthUserId,
+            activeScreen: { route: '/growth', label: 'Growth & Social' },
+          }),
+        });
+      }
+
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        const data = await res.json().catch(() => ({}));
-        if (data.chat) {
+        const answer = data.chat?.answer || data.answer || data.text;
+        if (answer) {
           setMariChatMessages(prev => [
             ...prev,
-            { role: 'mari', text: normalizeMarkdownText(String(data.chat.answer || '')), action: data.chat.recommendedAction, prompt: data.chat.suggestedPrompt },
+            {
+              role: 'mari',
+              text: normalizeMarkdownText(String(answer)),
+              action: data.chat?.recommendedAction,
+              prompt: data.chat?.suggestedPrompt,
+            },
           ]);
         }
       } else {
-        const errorPayload = await res.json().catch(() => ({}));
-        console.warn('[Growth] Mari request failed', { status: res.status, error: errorPayload?.error });
+        console.warn('[Growth] Mari request failed', { status: res.status, error: data?.error });
         setMariChatMessages(prev => [
           ...prev,
           { role: 'mari', text: res.status === 502
@@ -1002,7 +1062,7 @@ function GrowthPageContent() {
     } catch (err) {
       setMariChatMessages(prev => [
         ...prev,
-        { role: 'mari', text: 'Analyzing your Page: Mari needs more data to provide a reliable recommendation.' },
+        { role: 'mari', text: 'Mari needs more verified channel data to provide a reliable recommendation for the selected account.' },
       ]);
     } finally {
       setIsAskingMari(false);
@@ -4578,7 +4638,7 @@ function GrowthPageContent() {
                               setNewPost({
                                 title: ins.title,
                                 body: ins.suggestedPrompt || ins.summary,
-                                platform: 'facebook',
+                                platform: (activeAcc?.provider as ContentPost['platform']) || 'facebook',
                                 hashtags: '#RalionOS #Growth',
                                 scheduledAt: '',
                               });
