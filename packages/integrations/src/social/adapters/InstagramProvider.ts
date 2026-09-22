@@ -22,27 +22,31 @@ export class InstagramProvider extends SocialProvider {
   readonly platform: SocialPlatformType = 'instagram';
   readonly displayName = 'Instagram';
   readonly defaultScopes = [
-    'instagram_basic',
-    'instagram_content_publish',
-    'instagram_manage_insights',
-    'instagram_manage_comments',
-    'instagram_manage_messages',
-    'pages_show_list',
-    'pages_read_engagement'
+    'instagram_business_basic',
+    'instagram_business_content_publish',
+    'instagram_business_manage_insights'
   ];
 
   private getAppId(): string {
-    return process.env.FACEBOOK_APP_ID || '';
+    return process.env.INSTAGRAM_APP_ID || process.env.META_INSTAGRAM_APP_ID || '';
   }
 
   private getAppSecret(): string {
-    return process.env.FACEBOOK_APP_SECRET || '';
+    return process.env.INSTAGRAM_APP_SECRET || process.env.META_INSTAGRAM_APP_SECRET || '';
+  }
+
+  private getGraphVersion(): string {
+    return (process.env.INSTAGRAM_GRAPH_VERSION || process.env.META_GRAPH_VERSION || 'v26.0').replace(/^\/+|\/+$/g, '');
+  }
+
+  private getGraphBase(): string {
+    return `https://graph.instagram.com/${this.getGraphVersion()}`;
   }
 
   getCapabilities(scopes: string[] = []): SocialCapabilities {
-    const hasPublish = scopes.includes('instagram_content_publish') || scopes.length === 0;
-    const hasInsights = scopes.includes('instagram_manage_insights') || scopes.length === 0;
-    const hasMsg = scopes.includes('instagram_manage_messages');
+    const hasPublish = scopes.includes('instagram_business_content_publish') || scopes.length === 0;
+    const hasInsights = scopes.includes('instagram_business_manage_insights') || scopes.length === 0;
+    const hasMsg = scopes.includes('instagram_business_manage_messages');
 
     return {
       canPublish: hasPublish,
@@ -69,75 +73,83 @@ export class InstagramProvider extends SocialProvider {
       redirect_uri: redirectUri,
       state,
       scope: scopes,
-      response_type: 'code'
+      response_type: 'code',
+      enable_fb_login: '0',
+      force_authentication: '1'
     });
-    return `https://www.facebook.com/v19.0/dialog/oauth?${params.toString()}`;
+    return `https://www.instagram.com/oauth/authorize?${params.toString()}`;
   }
 
   async handleCallback(code: string, redirectUri: string): Promise<SocialAuthResult> {
-    const tokenUrl = `https://graph.facebook.com/v19.0/oauth/access_token?` + new URLSearchParams({
-      client_id: this.getAppId(),
-      client_secret: this.getAppSecret(),
-      redirect_uri: redirectUri,
-      code
-    }).toString();
-
-    const res = await fetch(tokenUrl);
-    const data = await res.json();
-    if (data.error) {
-      throw new Error(`[InstagramProvider] Token exchange failed: ${data.error.message}`);
+    const shortRes = await fetch('https://api.instagram.com/oauth/access_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: this.getAppId(),
+        client_secret: this.getAppSecret(),
+        grant_type: 'authorization_code',
+        redirect_uri: redirectUri,
+        code
+      })
+    });
+    const shortData = await shortRes.json();
+    if (!shortRes.ok || shortData.error || !shortData.access_token) {
+      throw new Error(`[InstagramProvider] Token exchange failed: ${shortData.error_message || shortData.error?.message || 'provider error'}`);
     }
 
-    const accessToken = data.access_token;
+    const longParams = new URLSearchParams({
+      grant_type: 'ig_exchange_token',
+      client_secret: this.getAppSecret(),
+      access_token: shortData.access_token
+    });
+    const longRes = await fetch(`https://graph.instagram.com/access_token?${longParams.toString()}`);
+    const longData = await longRes.json();
+    if (!longRes.ok || longData.error) {
+      throw new Error(`[InstagramProvider] Long-lived token exchange failed: ${longData.error?.message || 'provider error'}`);
+    }
+
+    const accessToken = longData.access_token || shortData.access_token;
     const profile = await this.getProfile(accessToken);
 
     return {
       accessToken,
-      expiresIn: data.expires_in || 5184000,
+      expiresIn: Number(longData.expires_in || shortData.expires_in || 5184000),
       scopes: this.defaultScopes,
       profile
     };
   }
 
   async refreshToken(refreshToken: string): Promise<{ accessToken: string; expiresIn?: number }> {
-    return { accessToken: refreshToken, expiresIn: 5184000 };
-  }
-
-  async getProfile(accessToken: string): Promise<SocialProfile> {
-    // 1. Discover connected Instagram Business Account via Facebook Pages
-    const pagesRes = await fetch(`https://graph.facebook.com/v19.0/me/accounts?fields=instagram_business_account{id,username,name,profile_picture_url,followers_count}&access_token=${encodeURIComponent(accessToken)}`);
-    const pagesData = await pagesRes.json();
-
-    let igAccount: any = null;
-    if (pagesData.data && Array.isArray(pagesData.data)) {
-      for (const page of pagesData.data) {
-        if (page.instagram_business_account) {
-          igAccount = page.instagram_business_account;
-          break;
-        }
-      }
+    const params = new URLSearchParams({
+      grant_type: 'ig_refr  async getProfile(accessToken: string): Promise<SocialProfile> {
+    const params = new URLSearchParams({
+      fields: 'user_id,username,name,account_type,profile_picture_url,followers_count',
+      access_token: accessToken
+    });
+    let res = await fetch(`${this.getGraphBase()}/me?${params.toString()}`);
+    if (!res.ok) {
+      const minimal = new URLSearchParams({
+        fields: 'user_id,username,name,account_type',
+        access_token: accessToken
+      });
+      res = await fetch(`${this.getGraphBase()}/me?${minimal.toString()}`);
+    }
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      throw new Error(`[InstagramProvider] Profile fetch failed: ${data.error?.message || 'provider error'}`);
     }
 
-    if (igAccount) {
-      return {
-        provider: 'instagram',
-        providerAccountId: igAccount.id,
-        accountName: igAccount.name || igAccount.username,
-        username: igAccount.username ? `@${igAccount.username}` : undefined,
-        avatarUrl: igAccount.profile_picture_url,
-        accountType: 'BUSINESS',
-        followersCount: igAccount.followers_count,
-        scopes: this.defaultScopes
-      };
-    }
+    const accountId = String(data.user_id || data.id || '');
+    if (!accountId) throw new Error('[InstagramProvider] Instagram did not return a professional account ID');
 
-    // Fallback if direct Instagram Basic Display
     return {
       provider: 'instagram',
-      providerAccountId: 'ig_account_pro',
-      accountName: 'Instagram Professional',
-      username: '@ralion_official',
-      accountType: 'CREATOR',
+      providerAccountId: accountId,
+      accountName: data.name || data.username || 'Instagram Professional',
+      username: data.username ? `@${data.username}` : undefined,
+      avatarUrl: data.profile_picture_url,
+      accountType: String(data.account_type || '').toUpperCase().includes('CREATOR') ? 'CREATOR' : 'BUSINESS',
+      followersCount: Number(data.followers_count || 0),
       scopes: this.defaultScopes
     };
   }
@@ -157,7 +169,7 @@ export class InstagramProvider extends SocialProvider {
       }
 
       // Step 1: Create media container
-      const containerRes = await fetch(`https://graph.facebook.com/v19.0/${igUserId}/media`, {
+      const containerRes = await fetch(`${this.getGraphBase()}/${igUserId}/media`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -172,7 +184,7 @@ export class InstagramProvider extends SocialProvider {
       }
 
       // Step 2: Publish media container
-      const publishRes = await fetch(`https://graph.facebook.com/v19.0/${igUserId}/media_publish`, {
+      const publishRes = await fetch(`${this.getGraphBase()}/${igUserId}/media_publish`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -206,7 +218,7 @@ export class InstagramProvider extends SocialProvider {
     const lastUpdated = new Date().toISOString();
     try {
       const res = await fetch(
-        `https://graph.facebook.com/v19.0/${accountId}/insights?metric=impressions,reach,profile_views&period=day&access_token=${encodeURIComponent(accessToken)}`
+        `${this.getGraphBase()}/${accountId}/insights?metric=reach,profile_views&period=day&access_token=${encodeURIComponent(accessToken)}`
       );
       const data = await res.json();
       let impressions = 0;
@@ -255,7 +267,7 @@ export class InstagramProvider extends SocialProvider {
 
   async revokeAccess(accessToken: string): Promise<boolean> {
     try {
-      const res = await fetch(`https://graph.facebook.com/v19.0/me/permissions?access_token=${encodeURIComponent(accessToken)}`, {
+      const res = await fetch(`${this.getGraphBase()}/me/permissions?access_token=${encodeURIComponent(accessToken)}`, {
         method: 'DELETE'
       });
       const data = await res.json();
@@ -268,7 +280,7 @@ export class InstagramProvider extends SocialProvider {
   async healthCheck(accessToken: string): Promise<ConnectionHealthResult> {
     const checkedAt = new Date().toISOString();
     try {
-      const res = await fetch(`https://graph.facebook.com/v19.0/me?fields=id&access_token=${encodeURIComponent(accessToken)}`);
+      const res = await fetch(`${this.getGraphBase()}/me?fields=user_id,username&access_token=${encodeURIComponent(accessToken)}`);
       const data = await res.json();
       if (data.error) {
         return {
