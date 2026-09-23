@@ -10,6 +10,7 @@ interface MariVoiceControlProps {
   organizationId: string;
   workspaceId: string;
   disabled?: boolean;
+  activationSignal?: number;
   recentConversation?: Array<{ sender: 'USER' | 'MARI'; text: string }>;
   onUserTranscript?: (transcript: string) => void;
   onMariTranscript?: (transcript: string) => void;
@@ -36,6 +37,7 @@ export function MariVoiceControl({
   organizationId,
   workspaceId,
   disabled = false,
+  activationSignal = 0,
   recentConversation = [],
   onUserTranscript,
   onMariTranscript,
@@ -265,6 +267,17 @@ export function MariVoiceControl({
       setVoiceState('error');
     }
   }, [disabled, onMariTranscript, onUserTranscript, organizationId, recentConversation, stop, workspaceId]);
+
+  const lastActivationSignalRef = useRef(activationSignal);
+  useEffect(() => {
+    if (!activationSignal || activationSignal === lastActivationSignalRef.current) return;
+    lastActivationSignalRef.current = activationSignal;
+    if (voiceState !== 'idle' && voiceState !== 'error') {
+      stop();
+    } else {
+      void start();
+    }
+  }, [activationSignal, start, stop, voiceState]);
 
   const active = voiceState !== 'idle' && voiceState !== 'error';
   const label =
