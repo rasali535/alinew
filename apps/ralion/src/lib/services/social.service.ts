@@ -138,6 +138,7 @@ export async function storeOAuthTokens(params: {
       const metaUserId = params.pageId || resolvedAccountId || params.userId;
       await supabase.from('meta_connections').upsert({
         user_id: params.userId,
+        workspace_id: params.workspaceId || null,
         meta_user_id: metaUserId,
         provider: params.provider.toLowerCase() as any,
         account_handle: params.accountHandle,
@@ -151,7 +152,7 @@ export async function storeOAuthTokens(params: {
         token_expires_at: tokenExpiresAt,
         last_sync_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id,provider,meta_user_id' });
+      }, { onConflict: 'workspace_id,user_id,provider,meta_user_id' });
     } catch (metaErr) {
       console.warn('[SocialService] meta_connections sync notice:', (metaErr as Error).message);
     }

@@ -70,7 +70,7 @@ export class MetaCredentialService {
         token_expires_at: tokenExpiresAt,
         last_sync_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id,provider,meta_user_id' });
+      }, { onConflict: 'workspace_id,user_id,provider,meta_user_id' });
 
       if (connError) {
         throw new Error(`[MetaCredentialService] Connection upsert error: ${connError.message}`);
@@ -193,6 +193,46 @@ export class MetaCredentialService {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Retrieve a Meta OAuth credential only when it belongs to the exact
+   * authenticated user + workspace pair. Page discovery and selection must use
+   * this path and must never fall back to a user-global credential row.
+   */
+  static async getValidTokenForWorkspace(
+    userId: string,
+    workspaceId: string,
+    provider: 'facebook' | 'instagram' | 'meta' | 'whatsapp' = 'facebook'
+  ) {
+    if (!userId || !workspaceId) return null;
+
+    const supabase = getServiceSupabase();
+    const { data, error } = await supabase
+      .from('meta_connections')
+      .select('encrypted_access_token,meta_user_id,scopes,page_id,token_expires_at,account_name,workspace_id')
+      .eq('workspace_id', workspaceId)
+      .eq('user_id', userId)
+      .eq('provider', provider)
+      .eq('connection_status', 'connected')
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error || !data?.encrypted_access_token || data.workspace_id !== workspaceId) return null;
+
+    const decryptedToken = decryptToken(data.encrypted_access_token);
+    if (!decryptedToken) return null;
+
+    return {
+      accessToken: decryptedToken,
+      metaUserId: data.meta_user_id,
+      scopes: data.scopes || [],
+      isExpired: data.token_expires_at ? new Date(data.token_expires_at) < new Date() : false,
+      pageId: data.page_id,
+      expiresAt: data.token_expires_at ? new Date(data.token_expires_at) : undefined,
+      extraMeta: {} as Record<string, any>,
+    };
   }
 
   /**

@@ -432,7 +432,7 @@ export class FacebookPageManagementService {
     // social connection. Resolve its OAuth credential from the dedicated Meta
     // credential store, exchange it for the selected Page token, and persist
     // only that Page token on the operational Page connection below.
-    const oauthCredential = await MetaCredentialService.getValidToken(userId, 'facebook');
+    const oauthCredential = await MetaCredentialService.getValidTokenForWorkspace(userId, workspaceId, 'facebook');
     if (!oauthCredential?.accessToken || oauthCredential.isExpired) {
       const err = new Error('Facebook authorization is missing or expired. Reconnect Facebook before selecting a Page.');
       (err as any).statusCode = 401;

@@ -150,17 +150,13 @@ export class FacebookConnectionStateService {
         .eq('provider', 'facebook')
         .not('connection_status', 'in', '("DISCONNECTED","REVOKED","REMOVED","disconnected")');
 
-      if (workspaceId && workspaceId !== 'default' && workspaceId !== 'unconfigured-workspace') {
-        if (userId) {
-          connQuery = connQuery.or(`workspace_id.eq.${workspaceId},user_id.eq.${userId}`);
-        } else {
-          connQuery = connQuery.eq('workspace_id', workspaceId);
-        }
-      } else if (userId) {
-        connQuery = connQuery.eq('user_id', userId);
-      } else {
+      if (!workspaceId || workspaceId === 'default' || workspaceId === 'unconfigured-workspace' || !userId) {
         return defaultDisconnectedResult;
       }
+
+      connQuery = connQuery
+        .eq('workspace_id', workspaceId)
+        .eq('user_id', userId);
 
       const { data: rawConns } = await connQuery.order('updated_at', { ascending: false });
       const activeConnections = (rawConns || []).filter(
@@ -181,7 +177,7 @@ export class FacebookConnectionStateService {
       let accessToken: string | null = null;
       let storedDiscoveredPages: any[] = [];
       if (userId) {
-        const credential = await MetaCredentialService.getValidToken(userId, 'facebook');
+        const credential = await MetaCredentialService.getValidTokenForWorkspace(userId, workspaceId, 'facebook');
         if (credential?.accessToken && !credential.isExpired) {
           accessToken = credential.accessToken;
           facebookUserId = credential.metaUserId || undefined;
