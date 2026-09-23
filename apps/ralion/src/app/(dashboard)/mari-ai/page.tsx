@@ -142,14 +142,17 @@ export default function MariAiPage() {
   const hasCanonicalWorkspace = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(activeWorkspaceId);
 
 
-  const handleVoiceUserTurn = () => {
+  const handleVoiceUserTranscript = (transcript: string) => {
+    const cleanTranscript = transcript.trim();
+    if (!cleanTranscript) return;
     setMessages(prev => [
       ...prev,
       {
         id: `voice-u-${Date.now()}`,
         sender: 'USER',
-        text: '🎙️ Voice message',
+        text: cleanTranscript,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        modelUsed: 'Mari Voice Input',
       },
     ]);
   };
@@ -1153,7 +1156,11 @@ export default function MariAiPage() {
                       organizationId={activeOrgId}
                       workspaceId={activeWorkspaceId}
                       disabled={!hasCanonicalTenant || !hasCanonicalWorkspace || isProcessing}
-                      onUserTurn={handleVoiceUserTurn}
+                      recentConversation={messages.slice(-12).map((message) => ({
+                        sender: message.sender,
+                        text: message.text,
+                      }))}
+                      onUserTranscript={handleVoiceUserTranscript}
                       onMariTranscript={handleVoiceMariTranscript}
                     />
                     <button
