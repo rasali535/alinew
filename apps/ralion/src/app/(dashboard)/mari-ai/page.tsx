@@ -50,6 +50,7 @@ import {
 import { authFetch, getRalionApiUrl, MARI_BUILD_VERSION } from '@/lib/api-config';
 import { useOrganization } from '@ralion/auth';
 import { MariMarkdownMessage } from '@/components/MariMarkdownMessage';
+import { MariVoiceControl } from '@/components/MariVoiceControl';
 import type {
   MariActionPayload,
   BusinessContext,
@@ -139,6 +140,34 @@ export default function MariAiPage() {
   const activeUserId = user?.uid || (user as any)?.id || '';
   const hasCanonicalTenant = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(activeOrgId);
   const hasCanonicalWorkspace = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(activeWorkspaceId);
+
+
+  const handleVoiceUserTurn = () => {
+    setMessages(prev => [
+      ...prev,
+      {
+        id: `voice-u-${Date.now()}`,
+        sender: 'USER',
+        text: '🎙️ Voice message',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      },
+    ]);
+  };
+
+  const handleVoiceMariTranscript = (transcript: string) => {
+    const cleanTranscript = transcript.trim();
+    if (!cleanTranscript) return;
+    setMessages(prev => [
+      ...prev,
+      {
+        id: `voice-m-${Date.now()}`,
+        sender: 'MARI',
+        text: cleanTranscript,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        modelUsed: 'Mari Voice',
+      },
+    ]);
+  };
 
   // Load Business Context, Growth Profile, and Briefing on Mount
   const loadGrowthIntelligence = async (forceRefresh = false) => {
@@ -1117,15 +1146,25 @@ export default function MariAiPage() {
                     value={inputQuery}
                     onChange={(e) => setInputQuery(e.target.value)}
                     placeholder="What should we focus on today to grow the business?"
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-4 pr-12 py-3 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500 shadow-inner"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-4 pr-24 py-3 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500 shadow-inner"
                   />
-                  <button
-                    type="submit"
-                    disabled={!inputQuery.trim() || isProcessing}
-                    className="absolute right-2 p-2 rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white transition-all shadow-md"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="absolute right-2 flex items-center gap-1.5">
+                    <MariVoiceControl
+                      organizationId={activeOrgId}
+                      workspaceId={activeWorkspaceId}
+                      disabled={!hasCanonicalTenant || !hasCanonicalWorkspace || isProcessing}
+                      onUserTurn={handleVoiceUserTurn}
+                      onMariTranscript={handleVoiceMariTranscript}
+                    />
+                    <button
+                      type="submit"
+                      disabled={!inputQuery.trim() || isProcessing}
+                      title="Send to Mari"
+                      className="p-2 rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white transition-all shadow-md"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </form>
               </div>
             </Card>
