@@ -16,6 +16,7 @@ export interface AdminConnectedUserConnection {
   connectionStatus: string;
   status?: string;
   tokenStatus?: string;
+  lastSyncAt?: string | null;
   connectedAt?: string;
 }
 
@@ -49,6 +50,7 @@ export interface AdminConnectionRegistryItem {
   workspaceId?: string;
   userId?: string;
   infrastructureProvider: string;
+  lastSyncAt?: string | null;
   connectedAt: string;
   capabilities?: Record<string, boolean>;
   metadata?: any;
@@ -72,8 +74,22 @@ export interface AdminMetricsData {
   connectedUsersCount: number;
   activeConnectionCount: number;
   activeSocialConnections: number;
+  connectedFacebookAccounts: number;
+  connectedInstagramAccounts: number;
   connectedMetaAccounts: number;
   connectedZernioProfiles: number;
+  socialProviderCounts: Record<string, number>;
+  socialAttentionCount: number;
+  socialAlerts: Array<{
+    id: string;
+    provider: string;
+    accountName: string;
+    organizationId?: string | null;
+    workspaceId?: string | null;
+    connectionStatus: string;
+    tokenStatus: string;
+    lastSyncAt?: string | null;
+  }>;
   adminFacebook?: {
     id: string;
     pageId: string;

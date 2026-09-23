@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
       supabase.from('subscriptions').select('id,organization_id,status,billing_cycle,current_period_end,subscription_plans(name,slug,price,currency)').order('created_at', { ascending: false }),
       supabase.from('tenant_credit_wallets').select('organization_id,monthly_quota,remaining_plan_credits,remaining_bonus_credits,reserved_credits,lifetime_credits_granted,lifetime_credits_consumed'),
       supabase.from('tenant_credit_reservations').select('organization_id,status,source_feature,amount,created_at,finalized_at').gte('created_at', thirtyDaysAgo),
-      supabase.from('social_connections').select('id,organization_id,workspace_id,user_id,provider,provider_account_id,account_name,username,account_type,connection_status,token_status,followers_count,infrastructure_provider,connected_at,created_at,metadata'),
+      supabase.from('social_connections').select('id,organization_id,workspace_id,user_id,provider,provider_account_id,account_name,username,account_type,connection_status,token_status,followers_count,infrastructure_provider,last_sync_at,disconnected_at,connected_at,created_at,metadata'),
       supabase.from('social_provider_profiles').select('id,organization_id,workspace_id,user_id,provider,provider_profile_id,account_id,profile_name,status,updated_at'),
       supabase.from('audit_logs').select('id,organization_id,user_id,action,module,metadata,created_at').gte('created_at', thirtyDaysAgo).order('created_at', { ascending: false }).limit(1000),
     ]);
@@ -73,6 +73,20 @@ export async function GET(request: NextRequest) {
     const socialConnections = socialRes.data || [];
     const activeConns = socialConnections.filter(isActiveSocialConnection);
     const activeFacebook = activeConns.filter((c: any) => String(c.provider || '').toLowerCase() === 'facebook');
+    const activeInstagram = activeConns.filter((c: any) => String(c.provider || '').toLowerCase() === 'instagram');
+    const providerCounts = activeConns.reduce((counts: Record<string, number>, connection: any) => {
+      const provider = String(connection.provider || 'unknown').toLowerCase();
+      counts[provider] = (counts[provider] || 0) + 1;
+      return counts;
+    }, {});
+    const attentionConnections = socialConnections.filter((connection: any) => {
+      const status = String(connection.connection_status || '').toUpperCase();
+      const tokenStatus = String(connection.token_status || '').toUpperCase();
+      return !connection.disconnected_at && (
+        ['NEEDS_ATTENTION', 'RECONNECT_REQUIRED', 'REVOKED'].includes(status) ||
+        ['TOKEN_EXPIRED', 'TOKEN_REVOKED', 'REAUTH_REQUIRED'].includes(tokenStatus)
+      );
+    });
     const providerProfiles = providerProfilesRes.data || [];
     const activeZernio = providerProfiles.filter((p: any) => String(p.provider || '').toLowerCase() === 'zernio' && ['ACTIVE', 'CONNECTED'].includes(String(p.status || '').toUpperCase()));
 
@@ -106,6 +120,7 @@ export async function GET(request: NextRequest) {
         isBusinessPage: caps.isBusinessPage,
         connectionStatus: connection.connection_status,
         tokenStatus: connection.token_status,
+        lastSyncAt: connection.last_sync_at || null,
         connectedAt: connection.connected_at || connection.created_at,
       });
       entry.connectionCount = entry.connections.length;
@@ -132,6 +147,7 @@ export async function GET(request: NextRequest) {
         workspaceId: connection.workspace_id,
         userId: connection.user_id,
         infrastructureProvider: connection.infrastructure_provider || 'native',
+        lastSyncAt: connection.last_sync_at || null,
         connectedAt: connection.connected_at || connection.created_at,
         capabilities: caps,
         metadata: connection.metadata || {},
@@ -185,8 +201,22 @@ export async function GET(request: NextRequest) {
         connectedUserCount: connectedUsers.length,
         activeConnectionCount: activeConns.length,
         activeSocialConnections: activeConns.length,
-        connectedMetaAccounts: activeFacebook.length,
+        connectedFacebookAccounts: activeFacebook.length,
+        connectedInstagramAccounts: activeInstagram.length,
+        connectedMetaAccounts: activeFacebook.length + activeInstagram.length,
         connectedZernioProfiles: activeZernio.length,
+        socialProviderCounts: providerCounts,
+        socialAttentionCount: attentionConnections.length,
+        socialAlerts: attentionConnections.map((connection: any) => ({
+          id: connection.id,
+          provider: String(connection.provider || 'unknown').toLowerCase(),
+          accountName: connection.account_name || connection.username || 'Social Account',
+          organizationId: connection.organization_id,
+          workspaceId: connection.workspace_id,
+          connectionStatus: connection.connection_status,
+          tokenStatus: connection.token_status,
+          lastSyncAt: connection.last_sync_at || null,
+        })),
         adminFacebook,
         adminZernio,
         allConnections,

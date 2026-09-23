@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyPlatformAdminRequest } from '../../../../../lib/auth/adminAuth';
 import { getPrivilegedSupabase } from '@/lib/supabase/server';
 import { getSocialConnectionCapabilities } from '@ralion/integrations';
-import { isActiveFacebookConnection } from '@/lib/services/social/socialConnectionStatus';
+import { isActiveFacebookConnection, isActiveSocialConnection } from '@/lib/services/social/socialConnectionStatus';
 
 function toMs(value?: string | null): number {
   const parsed = value ? Date.parse(value) : NaN;
@@ -75,7 +75,14 @@ export async function GET(
     const businessProfiles = businessRes.data || [];
     const profile = businessProfiles[0] || null;
     const socialRows = socialRes.data || [];
+    const activeSocialConnections = socialRows.filter(isActiveSocialConnection);
     const activeFacebookConnections = socialRows.filter(isActiveFacebookConnection);
+    const activeInstagramConnections = activeSocialConnections.filter((connection: any) => String(connection.provider || '').toLowerCase() === 'instagram');
+    const socialProviderCounts = activeSocialConnections.reduce((counts: Record<string, number>, connection: any) => {
+      const provider = String(connection.provider || 'unknown').toLowerCase();
+      counts[provider] = (counts[provider] || 0) + 1;
+      return counts;
+    }, {});
     const preferredPage: any = activeFacebookConnections.find((c: any) => getSocialConnectionCapabilities(c).isBusinessPage) || activeFacebookConnections[0];
 
     const socialConnections = socialRows.map((connection: any) => {
@@ -222,8 +229,11 @@ export async function GET(
         },
         operationalData: { tasks: tasksRes.data || [], deals: dealsRes.data || [], documents: docsRes.data || [], workflows: workflowsRes.data || [] },
         socialConnections,
+        socialProviderCounts,
+        activeSocialConnectionCount: activeSocialConnections.length,
         metaStatus: activeFacebookConnections.length ? 'CONNECTED' : 'DISCONNECTED',
         facebookStatus: activeFacebookConnections.length ? 'CONNECTED' : 'DISCONNECTED',
+        instagramStatus: activeInstagramConnections.length ? 'CONNECTED' : 'DISCONNECTED',
         facebookPage: preferredPage?.account_name || preferredPage?.metadata?.pageName || undefined,
         facebookFollowers: preferredPage ? Number(preferredPage.followers_count || preferredPage.metadata?.followers_count || 0) : undefined,
         auditHistory,
