@@ -7,6 +7,7 @@ import { Sidebar, Header } from '@ralion/ui';
 import { useOrganization } from '@ralion/auth';
 import { ProductAccessGuard } from '../../components/ProductAccessGuard';
 import { DesktopWorkspaceHome } from '../../components/DesktopWorkspaceHome';
+import { MariVoiceControl } from '../../components/MariVoiceControl';
 
 const MariAiDrawer = dynamic(
   () => import('../../components/MariAiDrawer').then((mod) => mod.MariAiDrawer),
@@ -25,11 +26,13 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, organization, activeBranch } = useOrganization();
+  const { user, organization, workspace, activeBranch } = useOrganization();
   const [isMariDrawerOpen, setIsMariDrawerOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isDesktopRuntime, setIsDesktopRuntime] = useState(false);
+  const [mariVoiceSignal, setMariVoiceSignal] = useState(0);
+  const [mariVoiceConversation, setMariVoiceConversation] = useState<Array<{ sender: 'USER' | 'MARI'; text: string }>>([]);
 
   useEffect(() => {
     setIsMobileSidebarOpen(false);
@@ -42,24 +45,7 @@ export default function DashboardLayout({
 
     const openMari = () => setIsMariDrawerOpen(true);
     const openMariVoice = () => {
-      try {
-        sessionStorage.setItem('ralion:mari:voice-activate', String(Date.now()));
-      } catch {}
-      if (window.location.pathname.includes('/mari-ai')) {
-        window.dispatchEvent(new Event('ralion:mari-voice-toggle'));
-        return;
-      }
-      const isDesktop = Boolean(
-        desktopApi?.isDesktop ||
-        (window as any).__RALION_DESKTOP__ ||
-        window.location.protocol === 'file:' ||
-        window.location.protocol === 'app:'
-      );
-      if (isDesktop) {
-        window.location.href = '/mari-ai';
-      } else {
-        router.push('/mari-ai');
-      }
+      setMariVoiceSignal(Date.now());
     };
     const handleKeyboard = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'm') {
@@ -68,6 +54,12 @@ export default function DashboardLayout({
       }
     };
     const handleOpenMariEvent = () => openMari();
+    const handleVoiceConversation = (event: Event) => {
+      const conversation = (event as CustomEvent<{ messages?: Array<{ sender: 'USER' | 'MARI'; text: string }> }>).detail?.messages;
+      if (Array.isArray(conversation)) {
+        setMariVoiceConversation(conversation.slice(-12));
+      }
+    };
     const handleMariNavigation = (event: Event) => {
       const route = String((event as CustomEvent<{ route?: string }>).detail?.route || '');
       const approvedRoutes = new Set([
@@ -83,16 +75,16 @@ export default function DashboardLayout({
         window.location.protocol === 'file:' ||
         window.location.protocol === 'app:'
       );
-      if (isDesktop) {
-        window.location.href = `/ralion${route}`;
-      } else {
-        router.push(route);
-      }
+      // Keep Mari Voice alive by navigating inside the persistent dashboard
+      // layout instead of forcing a full renderer reload on desktop.
+      router.push(route);
     };
 
     window.addEventListener('keydown', handleKeyboard);
     window.addEventListener('ralion:open-mari', handleOpenMariEvent as EventListener);
     window.addEventListener('ralion:mari-navigate', handleMariNavigation as EventListener);
+    window.addEventListener('ralion:mari-voice-conversation', handleVoiceConversation as EventListener);
+    window.addEventListener('ralion:mari-voice-toggle', openMariVoice as EventListener);
     const removeNativeListener = desktopApi?.onMariToggle?.(openMari);
     const removeNativeVoiceListener = desktopApi?.onMariVoiceToggle?.(openMariVoice);
 
@@ -100,6 +92,8 @@ export default function DashboardLayout({
       window.removeEventListener('keydown', handleKeyboard);
       window.removeEventListener('ralion:open-mari', handleOpenMariEvent as EventListener);
       window.removeEventListener('ralion:mari-navigate', handleMariNavigation as EventListener);
+      window.removeEventListener('ralion:mari-voice-conversation', handleVoiceConversation as EventListener);
+      window.removeEventListener('ralion:mari-voice-toggle', openMariVoice as EventListener);
       if (typeof removeNativeListener === 'function') removeNativeListener();
       if (typeof removeNativeVoiceListener === 'function') removeNativeVoiceListener();
     };
@@ -221,6 +215,23 @@ export default function DashboardLayout({
             onClose={() => setIsMariDrawerOpen(false)}
             onNavigate={handleNavigate}
           />
+        )}
+
+        {organization?.id && workspace?.id && (
+          <div className="fixed bottom-20 right-5 z-[70] rounded-xl border border-purple-500/30 bg-zinc-950/95 p-1.5 shadow-2xl backdrop-blur">
+            <MariVoiceControl
+              organizationId={organization.id}
+              workspaceId={workspace.id}
+              activationSignal={mariVoiceSignal}
+              recentConversation={mariVoiceConversation}
+              onUserTranscript={(transcript) => {
+                window.dispatchEvent(new CustomEvent('ralion:mari-voice-user-transcript', { detail: { transcript } }));
+              }}
+              onMariTranscript={(transcript) => {
+                window.dispatchEvent(new CustomEvent('ralion:mari-voice-mari-transcript', { detail: { transcript } }));
+              }}
+            />
+          </div>
         )}
 
         <FloatingMariAi />
