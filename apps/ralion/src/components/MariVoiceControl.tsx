@@ -50,6 +50,7 @@ export function MariVoiceControl({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const userTurnOpenRef = useRef(false);
   const inputTranscriptByItemRef = useRef<Map<string, string>>(new Map());
+  const sessionConversationRef = useRef<Array<{ sender: 'USER' | 'MARI'; text: string }>>([]);
   const sessionIdRef = useRef('');
   const sessionStartedAtRef = useRef(0);
   const sessionReportedRef = useRef(false);
@@ -103,6 +104,7 @@ export function MariVoiceControl({
     }
     userTurnOpenRef.current = false;
     inputTranscriptByItemRef.current.clear();
+    sessionConversationRef.current = [];
     sessionStartedAtRef.current = 0;
     setVoiceState('idle');
   }, [organizationId, workspaceId]);
@@ -124,6 +126,7 @@ export function MariVoiceControl({
         ? crypto.randomUUID()
         : `mari-voice-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     sessionReportedRef.current = false;
+    sessionConversationRef.current = [];
     usageRef.current = {
       userTurns: 0,
       assistantTurns: 0,
@@ -173,7 +176,90 @@ export function MariVoiceControl({
         sessionStartedAtRef.current = Date.now();
         setVoiceState('listening');
       };
-      dc.onmessage = (event) => {
+      const runCanonicalMariTool = async (functionCall: any) => {
+        const callId = String(functionCall?.call_id || '').trim();
+        if (!callId || functionCall?.name !== 'ask_mari') return;
+
+        let query = '';
+        try {
+          const args = JSON.parse(String(functionCall?.arguments || '{}'));
+          query = String(args?.query || '').trim();
+        } catch {}
+
+        if (!query) {
+          dc.send(JSON.stringify({
+            type: 'conversation.item.create',
+            item: {
+              type: 'function_call_output',
+              call_id: callId,
+              output: JSON.stringify({ success: false, error: 'Mari did not receive a usable question.' }),
+            },
+          }));
+          dc.send(JSON.stringify({ type: 'response.create' }));
+          return;
+        }
+
+        setVoiceState('thinking');
+
+        try {
+          const history = [
+            ...recentConversation,
+            ...sessionConversationRef.current,
+          ].slice(-12);
+
+          const mariResponse = await authFetch('/api/mari/chat', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-organization-id': organizationId,
+              'x-workspace-id': workspaceId,
+            },
+            body: JSON.stringify({
+              query,
+              organizationId,
+              workspaceId,
+              messages: history,
+              activeScreen: { route: '/mari-ai', label: 'Mari Voice' },
+              requestId: `voice-brain-${sessionIdRef.current}-${callId}`,
+            }),
+          });
+
+          const payload = await mariResponse.json().catch(() => null);
+          const answer = String(payload?.answer || '').trim();
+
+          dc.send(JSON.stringify({
+            type: 'conversation.item.create',
+            item: {
+              type: 'function_call_output',
+              call_id: callId,
+              output: JSON.stringify(
+                mariResponse.ok && answer
+                  ? { success: true, answer }
+                  : {
+                      success: false,
+                      error: payload?.error || payload?.message || 'Canonical Mari could not complete that request.',
+                    }
+              ),
+            },
+          }));
+          dc.send(JSON.stringify({ type: 'response.create' }));
+        } catch (toolError: any) {
+          dc.send(JSON.stringify({
+            type: 'conversation.item.create',
+            item: {
+              type: 'function_call_output',
+              call_id: callId,
+              output: JSON.stringify({
+                success: false,
+                error: toolError?.message || 'Canonical Mari is temporarily unavailable.',
+              }),
+            },
+          }));
+          dc.send(JSON.stringify({ type: 'response.create' }));
+        }
+      };
+
+      dc.onmessage = async (event) => {
         try {
           const data = JSON.parse(event.data);
 
@@ -198,6 +284,7 @@ export function MariVoiceControl({
             inputTranscriptByItemRef.current.delete(itemId);
             if (transcript) {
               usageRef.current.userTurns += 1;
+              sessionConversationRef.current.push({ sender: 'USER', text: transcript });
               onUserTranscript?.(transcript);
             }
           } else if (data.type === 'response.created') {
@@ -211,6 +298,7 @@ export function MariVoiceControl({
             const transcript = String(data.transcript || '').trim();
             if (transcript) {
               usageRef.current.assistantTurns += 1;
+              sessionConversationRef.current.push({ sender: 'MARI', text: transcript });
               onMariTranscript?.(transcript);
             }
           } else if (data.type === 'response.done') {
@@ -219,7 +307,19 @@ export function MariVoiceControl({
             usageRef.current.outputTokens += Number(usage.output_tokens || 0);
             usageRef.current.inputAudioTokens += Number(usage.input_token_details?.audio_tokens || 0);
             usageRef.current.outputAudioTokens += Number(usage.output_token_details?.audio_tokens || 0);
-            setVoiceState('listening');
+
+            const functionCalls = Array.isArray(data.response?.output)
+              ? data.response.output.filter((item: any) => item?.type === 'function_call')
+              : [];
+
+            if (functionCalls.length > 0) {
+              setVoiceState('thinking');
+              for (const functionCall of functionCalls) {
+                await runCanonicalMariTool(functionCall);
+              }
+            } else {
+              setVoiceState('listening');
+            }
           } else if (data.type === 'error') {
             setErrorMessage(data.error?.message || 'Mari Voice encountered an error.');
             setVoiceState('error');
