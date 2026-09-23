@@ -134,6 +134,7 @@ export default function MariAiPage() {
   const [isSyncingWebsite, setIsSyncingWebsite] = useState(false);
   const [websiteSyncSuccess, setWebsiteSyncSuccess] = useState<string | null>(null);
   const [websiteInputUrl, setWebsiteInputUrl] = useState('');
+  const [desktopVoiceSignal, setDesktopVoiceSignal] = useState(0);
 
   const activeOrgId = organization?.id || '';
   const activeWorkspaceId = workspace?.id || '';
@@ -141,6 +142,23 @@ export default function MariAiPage() {
   const hasCanonicalTenant = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(activeOrgId);
   const hasCanonicalWorkspace = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(activeWorkspaceId);
 
+
+  useEffect(() => {
+    const triggerVoice = () => setDesktopVoiceSignal(Date.now());
+
+    let queuedActivation = false;
+    try {
+      queuedActivation = Boolean(sessionStorage.getItem('ralion:mari:voice-activate'));
+      if (queuedActivation) sessionStorage.removeItem('ralion:mari:voice-activate');
+    } catch {}
+
+    if (queuedActivation) {
+      window.setTimeout(triggerVoice, 250);
+    }
+
+    window.addEventListener('ralion:mari-voice-toggle', triggerVoice as EventListener);
+    return () => window.removeEventListener('ralion:mari-voice-toggle', triggerVoice as EventListener);
+  }, []);
 
   const handleVoiceUserTranscript = (transcript: string) => {
     const cleanTranscript = transcript.trim();
@@ -1156,6 +1174,7 @@ export default function MariAiPage() {
                       organizationId={activeOrgId}
                       workspaceId={activeWorkspaceId}
                       disabled={!hasCanonicalTenant || !hasCanonicalWorkspace || isProcessing}
+                      activationSignal={desktopVoiceSignal}
                       recentConversation={messages.slice(-12).map((message) => ({
                         sender: message.sender,
                         text: message.text,
