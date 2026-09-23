@@ -69,12 +69,6 @@ export default function DashboardLayout({
       ]);
       if (!approvedRoutes.has(route)) return;
 
-      const isDesktop = Boolean(
-        desktopApi?.isDesktop ||
-        (window as any).__RALION_DESKTOP__ ||
-        window.location.protocol === 'file:' ||
-        window.location.protocol === 'app:'
-      );
       // Keep Mari Voice alive by navigating inside the persistent dashboard
       // layout instead of forcing a full renderer reload on desktop.
       router.push(route);
@@ -98,6 +92,24 @@ export default function DashboardLayout({
       if (typeof removeNativeVoiceListener === 'function') removeNativeVoiceListener();
     };
   }, [router]);
+
+  useEffect(() => {
+    if (!organization?.id || !workspace?.id) return;
+    try {
+      const userId = user?.uid || (user as any)?.id || 'user';
+      const key = `ralion:${organization.id}:${workspace.id}:${userId}:mari:last_conversation`;
+      const raw = localStorage.getItem(key);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return;
+      setMariVoiceConversation(
+        parsed
+          .filter((item: any) => item && (item.sender === 'USER' || item.sender === 'MARI') && typeof item.text === 'string')
+          .slice(-12)
+          .map((item: any) => ({ sender: item.sender, text: item.text }))
+      );
+    } catch {}
+  }, [organization?.id, workspace?.id, user?.uid]);
 
   const isPlatformAdmin = user?.role === 'PLATFORM_ADMIN' || user?.email === 'ali@rasalilabs.com';
   const organizationName =
@@ -223,6 +235,7 @@ export default function DashboardLayout({
               organizationId={organization.id}
               workspaceId={workspace.id}
               activationSignal={mariVoiceSignal}
+              currentRoute={pathname || '/dashboard'}
               recentConversation={mariVoiceConversation}
               onUserTranscript={(transcript) => {
                 window.dispatchEvent(new CustomEvent('ralion:mari-voice-user-transcript', { detail: { transcript } }));
