@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyPlatformAdminRequest } from '../../../../lib/auth/adminAuth';
 import { getPrivilegedSupabase } from '@/lib/supabase/server';
-import { isActiveFacebookConnection } from '@/lib/services/social/socialConnectionStatus';
+import { isActiveFacebookConnection, isActiveSocialConnection } from '@/lib/services/social/socialConnectionStatus';
 
 const PLACEHOLDER_ORG_ID = '00000000-0000-0000-0000-000000000000';
 
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
       supabase.from('tenant_admin_state').select('organization_id,status,suspension_reason,suspended_at,updated_at'),
       supabase.from('subscriptions').select('id,organization_id,status,current_period_end,created_at,subscription_plans(name,slug,price,currency)').order('created_at', { ascending: false }),
       supabase.from('tenant_credit_wallets').select('organization_id,plan_id,monthly_quota,remaining_plan_credits,remaining_bonus_credits,reserved_credits,lifetime_credits_consumed'),
-      supabase.from('social_connections').select('id,organization_id,workspace_id,provider,account_name,followers_count,connection_status,token_status,disconnected_at,metadata'),
+      supabase.from('social_connections').select('id,organization_id,workspace_id,provider,provider_account_id,account_name,username,account_type,followers_count,connection_status,token_status,last_sync_at,disconnected_at,metadata'),
       supabase.from('social_provider_profiles').select('organization_id,workspace_id,provider,status'),
       supabase.from('tenant_credit_reservations').select('organization_id,status,source_feature,created_at'),
       supabase.from('social_posts').select('id,organization_id,workspace_id,status,created_at'),
@@ -66,7 +66,22 @@ export async function GET(request: NextRequest) {
       const allowance = Number(wallet?.monthly_quota || 0);
 
       const orgSocial = socials.filter((c: any) => c.organization_id === org.id || orgWorkspaces.some((w: any) => w.id === c.workspace_id));
-      const facebook = orgSocial.find((c: any) => isActiveFacebookConnection(c));
+      const activeSocial = orgSocial.filter((c: any) => isActiveSocialConnection(c));
+      const facebook = activeSocial.find((c: any) => isActiveFacebookConnection(c));
+      const instagram = activeSocial.find((c: any) => String(c.provider || '').toLowerCase() === 'instagram');
+      const socialProviderCounts = activeSocial.reduce((counts: Record<string, number>, connection: any) => {
+        const provider = String(connection.provider || 'unknown').toLowerCase();
+        counts[provider] = (counts[provider] || 0) + 1;
+        return counts;
+      }, {});
+      const socialAttentionCount = orgSocial.filter((connection: any) => {
+        const status = String(connection.connection_status || '').toUpperCase();
+        const tokenStatus = String(connection.token_status || '').toUpperCase();
+        return !connection.disconnected_at && (
+          ['NEEDS_ATTENTION', 'RECONNECT_REQUIRED', 'REVOKED'].includes(status) ||
+          ['TOKEN_EXPIRED', 'TOKEN_REVOKED', 'REAUTH_REQUIRED'].includes(tokenStatus)
+        );
+      }).length;
       const zernioConnected = providerProfiles.some((p: any) => (p.organization_id === org.id || orgWorkspaces.some((w: any) => w.id === p.workspace_id)) && String(p.provider || '').toLowerCase() === 'zernio' && ['ACTIVE', 'CONNECTED'].includes(String(p.status || '').toUpperCase()));
       const creativeReservations = reservations.filter((r: any) => r.organization_id === org.id && /creative|image|video|flux|cogvideo/i.test(String(r.source_feature || '')) && ['COMMITTED', 'CHARGED', 'CONSUMED', 'FINALIZED'].includes(String(r.status || '').toUpperCase()));
       const socialPostCount = posts.filter((p: any) => p.organization_id === org.id || orgWorkspaces.some((w: any) => w.id === p.workspace_id)).length;
@@ -98,10 +113,23 @@ export async function GET(request: NextRequest) {
         websiteIngestionStatus: business?.website_url ? 'VERIFIED' : 'NONE',
         websiteUrl: business?.website_url || null,
         metaStatus: facebook ? 'CONNECTED' : 'DISCONNECTED',
+        instagramStatus: instagram ? 'CONNECTED' : 'DISCONNECTED',
         zernioStatus: zernioConnected ? 'CONNECTED' : 'DISCONNECTED',
         facebookStatus: facebook ? 'CONNECTED' : 'DISCONNECTED',
         facebookPage: facebook?.account_name || facebook?.metadata?.pageName || undefined,
         facebookFollowers: facebook ? Number(facebook.followers_count || facebook.metadata?.followers_count || 0) : undefined,
+        socialConnectionCount: activeSocial.length,
+        socialAttentionCount,
+        socialProviderCounts,
+        socialConnections: activeSocial.map((connection: any) => ({
+          id: connection.id,
+          provider: String(connection.provider || 'unknown').toLowerCase(),
+          providerAccountId: connection.provider_account_id,
+          accountName: connection.account_name || connection.username || 'Social Account',
+          connectionStatus: connection.connection_status,
+          tokenStatus: connection.token_status,
+          lastSyncAt: connection.last_sync_at || null,
+        })),
         mariStatus: primaryWorkspace ? 'ACTIVE' : 'UNCONFIGURED',
         creativeCount: creativeReservations.length,
         socialPostCount,
