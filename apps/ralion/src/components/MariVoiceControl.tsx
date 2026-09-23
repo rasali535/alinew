@@ -10,7 +10,8 @@ interface MariVoiceControlProps {
   organizationId: string;
   workspaceId: string;
   disabled?: boolean;
-  onUserTurn?: () => void;
+  recentConversation?: Array<{ sender: 'USER' | 'MARI'; text: string }>;
+  onUserTranscript?: (transcript: string) => void;
   onMariTranscript?: (transcript: string) => void;
 }
 
@@ -35,7 +36,8 @@ export function MariVoiceControl({
   organizationId,
   workspaceId,
   disabled = false,
-  onUserTurn,
+  recentConversation = [],
+  onUserTranscript,
   onMariTranscript,
 }: MariVoiceControlProps) {
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
@@ -45,6 +47,7 @@ export function MariVoiceControl({
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const userTurnOpenRef = useRef(false);
+  const inputTranscriptByItemRef = useRef<Map<string, string>>(new Map());
 
   const stop = useCallback(() => {
     dataChannelRef.current?.close();
@@ -62,6 +65,7 @@ export function MariVoiceControl({
       audioRef.current = null;
     }
     userTurnOpenRef.current = false;
+    inputTranscriptByItemRef.current.clear();
     setVoiceState('idle');
   }, []);
 
@@ -120,14 +124,25 @@ export function MariVoiceControl({
           const data = JSON.parse(event.data);
 
           if (data.type === 'input_audio_buffer.speech_started') {
-            if (!userTurnOpenRef.current) {
-              userTurnOpenRef.current = true;
-              onUserTurn?.();
-            }
+            userTurnOpenRef.current = true;
             setVoiceState('listening');
           } else if (data.type === 'input_audio_buffer.speech_stopped') {
             userTurnOpenRef.current = false;
             setVoiceState('thinking');
+          } else if (
+            data.type === 'conversation.item.input_audio_transcription.delta' ||
+            data.type === 'session.input_transcript.delta'
+          ) {
+            const itemId = String(data.item_id || 'live-turn');
+            const current = inputTranscriptByItemRef.current.get(itemId) || '';
+            inputTranscriptByItemRef.current.set(itemId, current + String(data.delta || ''));
+          } else if (data.type === 'conversation.item.input_audio_transcription.completed') {
+            const itemId = String(data.item_id || 'live-turn');
+            const transcript = String(
+              data.transcript || inputTranscriptByItemRef.current.get(itemId) || ''
+            ).trim();
+            inputTranscriptByItemRef.current.delete(itemId);
+            if (transcript) onUserTranscript?.(transcript);
           } else if (data.type === 'response.created') {
             setVoiceState('thinking');
           } else if (
@@ -159,11 +174,14 @@ export function MariVoiceControl({
       const response = await authFetch('/api/mari/voice/session', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/sdp',
+          'Content-Type': 'application/json',
           'x-organization-id': organizationId,
           'x-workspace-id': workspaceId,
         },
-        body: localSdp,
+        body: JSON.stringify({
+          sdp: localSdp,
+          recentConversation: recentConversation.slice(-12),
+        }),
       });
 
       if (!response.ok) {
@@ -183,7 +201,7 @@ export function MariVoiceControl({
       setErrorMessage(error?.message || 'Unable to start Mari Voice.');
       setVoiceState('error');
     }
-  }, [disabled, onMariTranscript, onUserTurn, organizationId, stop, workspaceId]);
+  }, [disabled, onMariTranscript, onUserTranscript, organizationId, recentConversation, stop, workspaceId]);
 
   const active = voiceState !== 'idle' && voiceState !== 'error';
   const label =
