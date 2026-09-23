@@ -163,6 +163,7 @@ async function fetchAuthoritativeContext(accessToken: string, method: 'GET' | 'P
     method,
     headers: {
       Authorization: `Bearer ${accessToken}`,
+      'x-ralion-auth-token': accessToken,
       Accept: 'application/json',
       ...(method === 'POST' ? { 'Content-Type': 'application/json' } : {}),
     },
