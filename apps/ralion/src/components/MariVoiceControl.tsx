@@ -176,9 +176,60 @@ export function MariVoiceControl({
         sessionStartedAtRef.current = Date.now();
         setVoiceState('listening');
       };
-      const runCanonicalMariTool = async (functionCall: any) => {
+      const approvedNavigationRoutes: Record<string, string> = {
+        dashboard: '/dashboard',
+        crm: '/crm',
+        customers: '/customers',
+        leads: '/leads',
+        growth: '/growth',
+        creatives: '/creatives',
+        calendar: '/calendar',
+        tasks: '/tasks',
+        documents: '/documents',
+        workflows: '/workflows',
+        reports: '/reports',
+        billing: '/billing',
+        marketplace: '/marketplace',
+        settings: '/settings',
+        workspace: '/workspace',
+        'mari-ai': '/mari-ai',
+      };
+
+      const runVoiceTool = async (functionCall: any): Promise<'navigation' | 'reasoning' | 'ignored'> => {
         const callId = String(functionCall?.call_id || '').trim();
-        if (!callId || functionCall?.name !== 'ask_mari') return;
+        const toolName = String(functionCall?.name || '').trim();
+        if (!callId) return 'ignored';
+
+        if (toolName === 'navigate_ralion') {
+          let destination = '';
+          try {
+            const args = JSON.parse(String(functionCall?.arguments || '{}'));
+            destination = String(args?.destination || '').trim().toLowerCase();
+          } catch {}
+
+          const route = approvedNavigationRoutes[destination];
+          const output = route
+            ? { success: true, destination, route, message: `Opening ${destination} in Ralion OS.` }
+            : { success: false, error: 'That destination is not an approved Ralion navigation target.' };
+
+          dc.send(JSON.stringify({
+            type: 'conversation.item.create',
+            item: {
+              type: 'function_call_output',
+              call_id: callId,
+              output: JSON.stringify(output),
+            },
+          }));
+
+          if (route) {
+            window.setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('ralion:mari-navigate', { detail: { route } }));
+            }, 150);
+          }
+          return 'navigation';
+        }
+
+        if (toolName !== 'ask_mari') return 'ignored';
 
         let query = '';
         try {
@@ -195,7 +246,7 @@ export function MariVoiceControl({
               output: JSON.stringify({ success: false, error: 'Mari did not receive a usable question.' }),
             },
           }));
-          return;
+          return 'reasoning';
         }
 
         setVoiceState('thinking');
@@ -254,6 +305,7 @@ export function MariVoiceControl({
             },
           }));
         }
+        return 'reasoning';
       };
 
       dc.onmessage = async (event) => {
@@ -311,10 +363,14 @@ export function MariVoiceControl({
 
             if (functionCalls.length > 0) {
               setVoiceState('thinking');
+              let shouldContinueResponse = false;
               for (const functionCall of functionCalls) {
-                await runCanonicalMariTool(functionCall);
+                const outcome = await runVoiceTool(functionCall);
+                if (outcome === 'reasoning') shouldContinueResponse = true;
               }
-              dc.send(JSON.stringify({ type: 'response.create' }));
+              if (shouldContinueResponse) {
+                dc.send(JSON.stringify({ type: 'response.create' }));
+              }
             } else {
               setVoiceState('listening');
             }
