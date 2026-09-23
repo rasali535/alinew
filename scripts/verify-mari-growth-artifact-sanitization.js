@@ -9,7 +9,7 @@ const markdown = fs.readFileSync(path.join(root, 'apps/ralion/src/components/Mar
 const route = fs.readFileSync(path.join(root, 'apps/ralion/src/app/api/social/facebook/pages/[pageId]/mari-growth/route.ts'), 'utf8');
 
 assert(growth.includes("import { MariMarkdownMessage, normalizeMarkdownText } from '@/components/MariMarkdownMessage';"), 'Growth chat must import the client normalizer');
-assert(growth.includes("text: normalizeMarkdownText(String(data.chat.answer || ''))"), 'Mari answer must be normalized before entering chat state');
+assert(growth.includes("text: normalizeMarkdownText(String(answer))"), 'Mari answer must be normalized before entering chat state');
 assert(core.includes(".replace(/[\\u200B-\\u200D\\u2060\\uFEFF]/g, '')"), 'Universal sanitizer must remove invisible format characters');
 assert(core.includes(".replace(/^(\\s*#{1,6}\\s+)svg(?=[A-Za-z0-9])/i, '$1')"), 'Universal sanitizer must strip svg heading prefixes line-by-line');
 assert(markdown.includes("text = text.replace(/[\\u200B-\\u200D\\u2060\\uFEFF]/g, '');"), 'Client normalizer must remove invisible format characters');
