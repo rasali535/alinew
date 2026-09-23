@@ -147,8 +147,11 @@ export async function POST(request: NextRequest) {
       'You are currently in Mari Voice v1 READ-ONLY mode.',
       '- Speak naturally, warmly, confidently, and concisely.',
       '- Keep most spoken answers under about 45 seconds unless the user asks for more detail.',
-      '- Use the server-verified business snapshot below when the user asks about their business.',
-      '- Never invent business facts that are absent from the snapshot.',
+      '- For any business-specific, Ralion-specific, tenant-specific, performance, CRM, social, growth, strategy, website, document, customer, lead, or operational question, you MUST call the ask_mari function before answering.',
+      '- Use ask_mari as the authoritative reasoning path so voice and text Mari share the same brain, business intelligence, knowledge retrieval, and credit rules.',
+      '- Do not answer those substantive business questions from the lightweight snapshot alone.',
+      '- The server-verified snapshot below may be used for greetings, conversational continuity, and deciding whether ask_mari is needed.',
+      '- Never invent business facts that are absent from verified context.',
       '- Never claim that you published, edited, deleted, purchased, sent, scheduled, or changed anything.',
       '- You have no write tools in this voice session.',
       '- If asked to perform a write action, explain briefly that voice actions are read-only in this version and provide guidance without executing it.',
@@ -168,6 +171,24 @@ export async function POST(request: NextRequest) {
       model: process.env.MARI_VOICE_MODEL || 'gpt-realtime-2.1',
       output_modalities: ['audio'],
       instructions,
+      tools: [
+        {
+          type: 'function',
+          name: 'ask_mari',
+          description: 'Ask the canonical Ralion Mari intelligence engine a read-only question. Use this for any substantive business, Ralion, CRM, social, growth, website, customer, operational, document, or tenant-specific question before answering the user.',
+          parameters: {
+            type: 'object',
+            properties: {
+              query: {
+                type: 'string',
+                description: 'The user question to send to canonical Mari, preserving the user intent and important context.',
+              },
+            },
+            required: ['query'],
+          },
+        },
+      ],
+      tool_choice: 'auto',
       audio: {
         input: {
           transcription: {
