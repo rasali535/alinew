@@ -11,6 +11,7 @@ interface MariVoiceControlProps {
   workspaceId: string;
   disabled?: boolean;
   activationSignal?: number;
+  currentRoute?: string;
   recentConversation?: Array<{ sender: 'USER' | 'MARI'; text: string }>;
   onUserTranscript?: (transcript: string) => void;
   onMariTranscript?: (transcript: string) => void;
@@ -38,12 +39,15 @@ export function MariVoiceControl({
   workspaceId,
   disabled = false,
   activationSignal = 0,
+  currentRoute = '/mari-ai',
   recentConversation = [],
   onUserTranscript,
   onMariTranscript,
 }: MariVoiceControlProps) {
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
   const [errorMessage, setErrorMessage] = useState('');
+  const [wakeEnabled, setWakeEnabled] = useState(false);
+  const [wakeSupported, setWakeSupported] = useState(true);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
@@ -51,6 +55,12 @@ export function MariVoiceControl({
   const userTurnOpenRef = useRef(false);
   const inputTranscriptByItemRef = useRef<Map<string, string>>(new Map());
   const sessionConversationRef = useRef<Array<{ sender: 'USER' | 'MARI'; text: string }>>([]);
+  const currentRouteRef = useRef(currentRoute);
+  const voiceStateRef = useRef<VoiceState>('idle');
+  const wakeEnabledRef = useRef(false);
+  const wakeRecognitionRef = useRef<any>(null);
+  const wakeRestartTimerRef = useRef<number | null>(null);
+  const shutdownAfterResponseRef = useRef(false);
   const sessionIdRef = useRef('');
   const sessionStartedAtRef = useRef(0);
   const sessionReportedRef = useRef(false);
@@ -106,10 +116,23 @@ export function MariVoiceControl({
     inputTranscriptByItemRef.current.clear();
     sessionConversationRef.current = [];
     sessionStartedAtRef.current = 0;
+    shutdownAfterResponseRef.current = false;
     setVoiceState('idle');
   }, [organizationId, workspaceId]);
 
   useEffect(() => stop, [stop]);
+
+  useEffect(() => {
+    voiceStateRef.current = voiceState;
+  }, [voiceState]);
+
+  useEffect(() => {
+    wakeEnabledRef.current = wakeEnabled;
+  }, [wakeEnabled]);
+
+  useEffect(() => {
+    currentRouteRef.current = currentRoute || '/dashboard';
+  }, [currentRoute]);
 
   const start = useCallback(async () => {
     if (disabled || !organizationId || !workspaceId) return;
@@ -195,10 +218,26 @@ export function MariVoiceControl({
         'mari-ai': '/mari-ai',
       };
 
-      const runVoiceTool = async (functionCall: any): Promise<'navigation' | 'reasoning' | 'ignored'> => {
+      const runVoiceTool = async (functionCall: any): Promise<'navigation' | 'reasoning' | 'shutdown' | 'ignored'> => {
         const callId = String(functionCall?.call_id || '').trim();
         const toolName = String(functionCall?.name || '').trim();
         if (!callId) return 'ignored';
+
+        if (toolName === 'end_voice_session') {
+          shutdownAfterResponseRef.current = true;
+          dc.send(JSON.stringify({
+            type: 'conversation.item.create',
+            item: {
+              type: 'function_call_output',
+              call_id: callId,
+              output: JSON.stringify({
+                success: true,
+                message: 'Voice session will end after a brief acknowledgement.',
+              }),
+            },
+          }));
+          return 'shutdown';
+        }
 
         if (toolName === 'navigate_ralion') {
           let destination = '';
@@ -269,7 +308,7 @@ export function MariVoiceControl({
               organizationId,
               workspaceId,
               messages: history,
-              activeScreen: { route: '/mari-ai', label: 'Mari Voice' },
+              activeScreen: { route: currentRouteRef.current, label: 'Mari Voice' },
               requestId: `voice-brain-${sessionIdRef.current}-${callId}`,
             }),
           });
@@ -366,11 +405,14 @@ export function MariVoiceControl({
               let shouldContinueResponse = false;
               for (const functionCall of functionCalls) {
                 const outcome = await runVoiceTool(functionCall);
-                if (outcome === 'reasoning') shouldContinueResponse = true;
+                if (outcome === 'reasoning' || outcome === 'navigation' || outcome === 'shutdown') shouldContinueResponse = true;
               }
               if (shouldContinueResponse) {
                 dc.send(JSON.stringify({ type: 'response.create' }));
               }
+            } else if (shutdownAfterResponseRef.current) {
+              shutdownAfterResponseRef.current = false;
+              window.setTimeout(() => stop(), 250);
             } else {
               setVoiceState('listening');
             }
@@ -422,6 +464,101 @@ export function MariVoiceControl({
     }
   }, [disabled, onMariTranscript, onUserTranscript, organizationId, recentConversation, stop, workspaceId]);
 
+  useEffect(() => {
+    try {
+      setWakeEnabled(localStorage.getItem('ralion:mari:wake-enabled') === 'true');
+    } catch {}
+  }, []);
+
+  const stopWakeListener = useCallback(() => {
+    if (wakeRestartTimerRef.current) {
+      window.clearTimeout(wakeRestartTimerRef.current);
+      wakeRestartTimerRef.current = null;
+    }
+    const recognition = wakeRecognitionRef.current;
+    wakeRecognitionRef.current = null;
+    if (recognition) {
+      try {
+        recognition.onend = null;
+        recognition.onerror = null;
+        recognition.onresult = null;
+        recognition.stop();
+      } catch {}
+    }
+  }, []);
+
+  const startWakeListener = useCallback(() => {
+    if (!wakeEnabledRef.current || disabled || voiceStateRef.current !== 'idle') return;
+    const SpeechRecognitionCtor =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognitionCtor) {
+      setWakeSupported(false);
+      return;
+    }
+
+    setWakeSupported(true);
+    stopWakeListener();
+
+    try {
+      const recognition = new SpeechRecognitionCtor();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onresult = (event: any) => {
+        let heard = '';
+        for (let i = event.resultIndex || 0; i < event.results.length; i += 1) {
+          heard += ' ' + String(event.results[i]?.[0]?.transcript || '');
+        }
+        const normalized = heard.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+        if (/\b(?:hey|okay|ok) mari\b|\bmari wake up\b/.test(normalized)) {
+          try { recognition.stop(); } catch {}
+          wakeRecognitionRef.current = null;
+          void start();
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        if (event?.error === 'not-allowed' || event?.error === 'service-not-allowed') {
+          setWakeSupported(false);
+          return;
+        }
+      };
+
+      recognition.onend = () => {
+        wakeRecognitionRef.current = null;
+        if (wakeEnabledRef.current && voiceStateRef.current === 'idle') {
+          wakeRestartTimerRef.current = window.setTimeout(() => startWakeListener(), 900);
+        }
+      };
+
+      wakeRecognitionRef.current = recognition;
+      recognition.start();
+    } catch {
+      setWakeSupported(false);
+    }
+  }, [disabled, start, stopWakeListener]);
+
+  useEffect(() => {
+    if (wakeEnabled && voiceState === 'idle') {
+      startWakeListener();
+    } else {
+      stopWakeListener();
+    }
+    return () => stopWakeListener();
+  }, [startWakeListener, stopWakeListener, voiceState, wakeEnabled]);
+
+  const toggleWakeMode = () => {
+    const next = !wakeEnabled;
+    setWakeEnabled(next);
+    wakeEnabledRef.current = next;
+    try {
+      localStorage.setItem('ralion:mari:wake-enabled', String(next));
+    } catch {}
+    if (!next) stopWakeListener();
+  };
+
   const lastActivationSignalRef = useRef(activationSignal);
   useEffect(() => {
     if (!activationSignal || activationSignal === lastActivationSignalRef.current) return;
@@ -449,7 +586,28 @@ export function MariVoiceControl({
   else if (voiceState === 'error') buttonClass = 'bg-red-600/20 border-red-500/50 text-red-300';
 
   return (
-    <div className="relative flex items-center">
+    <div className="relative flex items-center gap-1">
+      <button
+        type="button"
+        onClick={toggleWakeMode}
+        disabled={disabled}
+        title={
+          wakeEnabled
+            ? 'Disable "Hey Mari" wake mode'
+            : wakeSupported
+              ? 'Enable "Hey Mari" wake mode'
+              : 'Wake phrase is unavailable in this runtime'
+        }
+        aria-pressed={wakeEnabled}
+        className={
+          'px-2 py-1.5 rounded-lg border text-[10px] font-semibold transition-all disabled:opacity-40 ' +
+          (wakeEnabled
+            ? 'bg-emerald-600/20 border-emerald-500/50 text-emerald-300'
+            : 'bg-zinc-900 border-zinc-700 text-zinc-400 hover:text-white hover:border-purple-500')
+        }
+      >
+        {wakeEnabled ? 'Hey Mari ✓' : 'Hey Mari'}
+      </button>
       <button
         type="button"
         onClick={active ? stop : start}
