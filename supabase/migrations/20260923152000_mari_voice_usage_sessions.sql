@@ -5,7 +5,7 @@ create table if not exists public.mari_voice_usage_sessions (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null,
   workspace_id uuid,
-  user_id uuid,
+  user_id text,
   session_id text not null,
   started_at timestamptz not null,
   ended_at timestamptz not null,
