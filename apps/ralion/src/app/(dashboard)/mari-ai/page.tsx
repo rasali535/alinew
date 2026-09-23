@@ -134,6 +134,7 @@ export default function MariAiPage() {
   const [isSyncingWebsite, setIsSyncingWebsite] = useState(false);
   const [websiteSyncSuccess, setWebsiteSyncSuccess] = useState<string | null>(null);
   const [websiteInputUrl, setWebsiteInputUrl] = useState('');
+  const [desktopVoiceSignal, setDesktopVoiceSignal] = useState(0);
 
   const activeOrgId = organization?.id || '';
   const activeWorkspaceId = workspace?.id || '';
@@ -142,14 +143,34 @@ export default function MariAiPage() {
   const hasCanonicalWorkspace = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(activeWorkspaceId);
 
 
-  const handleVoiceUserTurn = () => {
+  useEffect(() => {
+    const triggerVoice = () => setDesktopVoiceSignal(Date.now());
+
+    let queuedActivation = false;
+    try {
+      queuedActivation = Boolean(sessionStorage.getItem('ralion:mari:voice-activate'));
+      if (queuedActivation) sessionStorage.removeItem('ralion:mari:voice-activate');
+    } catch {}
+
+    if (queuedActivation) {
+      window.setTimeout(triggerVoice, 250);
+    }
+
+    window.addEventListener('ralion:mari-voice-toggle', triggerVoice as EventListener);
+    return () => window.removeEventListener('ralion:mari-voice-toggle', triggerVoice as EventListener);
+  }, []);
+
+  const handleVoiceUserTranscript = (transcript: string) => {
+    const cleanTranscript = transcript.trim();
+    if (!cleanTranscript) return;
     setMessages(prev => [
       ...prev,
       {
         id: `voice-u-${Date.now()}`,
         sender: 'USER',
-        text: '🎙️ Voice message',
+        text: cleanTranscript,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        modelUsed: 'Mari Voice Input',
       },
     ]);
   };
@@ -1153,7 +1174,12 @@ export default function MariAiPage() {
                       organizationId={activeOrgId}
                       workspaceId={activeWorkspaceId}
                       disabled={!hasCanonicalTenant || !hasCanonicalWorkspace || isProcessing}
-                      onUserTurn={handleVoiceUserTurn}
+                      activationSignal={desktopVoiceSignal}
+                      recentConversation={messages.slice(-12).map((message) => ({
+                        sender: message.sender,
+                        text: message.text,
+                      }))}
+                      onUserTranscript={handleVoiceUserTranscript}
                       onMariTranscript={handleVoiceMariTranscript}
                     />
                     <button

@@ -9,7 +9,8 @@ import {
   shell,
   dialog,
   protocol,
-  net
+  net,
+  globalShortcut
 } from 'electron';
 import * as path from 'path';
 import * as os from 'os';
@@ -275,6 +276,14 @@ function createWindow() {
   }
 }
 
+function triggerMariVoice() {
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+  mainWindow.webContents.send('mari:voice-toggle');
+}
+
 // ─── System Tray ───────────────────────────────────────────────────────────────
 function createTray() {
   try {
@@ -300,6 +309,7 @@ function createTray() {
       { label: 'Ralion — Empowered to Prosper', enabled: false },
       { type: 'separator' },
       { label: 'Open Ralion', click: () => { mainWindow?.show(); mainWindow?.focus(); } },
+      { label: 'Talk to Mari', click: () => triggerMariVoice() },
       { label: 'Check for Updates', click: () => { if (autoUpdater) autoUpdater.checkForUpdatesAndNotify(); } },
       { type: 'separator' },
       { label: 'Quit', click: () => app.quit() },
@@ -822,9 +832,20 @@ if (!gotLock) {
       console.log('[BOOT LOG 6 Error]', e);
     }
 
+    try {
+      const registered = globalShortcut.register('CommandOrControl+Shift+Space', () => triggerMariVoice());
+      if (!registered) log.warn('[Mari Voice] Desktop shortcut could not be registered.');
+    } catch (e) {
+      log.warn('[Mari Voice] Desktop shortcut registration failed:', e);
+    }
+
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });
+  });
+
+  app.on('will-quit', () => {
+    globalShortcut.unregisterAll();
   });
 
   app.on('window-all-closed', () => {

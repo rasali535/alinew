@@ -10,7 +10,9 @@ interface MariVoiceControlProps {
   organizationId: string;
   workspaceId: string;
   disabled?: boolean;
-  onUserTurn?: () => void;
+  activationSignal?: number;
+  recentConversation?: Array<{ sender: 'USER' | 'MARI'; text: string }>;
+  onUserTranscript?: (transcript: string) => void;
   onMariTranscript?: (transcript: string) => void;
 }
 
@@ -35,7 +37,9 @@ export function MariVoiceControl({
   organizationId,
   workspaceId,
   disabled = false,
-  onUserTurn,
+  activationSignal = 0,
+  recentConversation = [],
+  onUserTranscript,
   onMariTranscript,
 }: MariVoiceControlProps) {
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
@@ -45,8 +49,44 @@ export function MariVoiceControl({
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const userTurnOpenRef = useRef(false);
+  const inputTranscriptByItemRef = useRef<Map<string, string>>(new Map());
+  const sessionIdRef = useRef('');
+  const sessionStartedAtRef = useRef(0);
+  const sessionReportedRef = useRef(false);
+  const usageRef = useRef({
+    userTurns: 0,
+    assistantTurns: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    inputAudioTokens: 0,
+    outputAudioTokens: 0,
+  });
 
   const stop = useCallback(() => {
+    const endedAtMs = Date.now();
+    if (sessionStartedAtRef.current > 0 && sessionIdRef.current && !sessionReportedRef.current) {
+      sessionReportedRef.current = true;
+      const usage = usageRef.current;
+      void authFetch('/api/mari/voice/usage', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-organization-id': organizationId,
+          'x-workspace-id': workspaceId,
+        },
+        body: JSON.stringify({
+          sessionId: sessionIdRef.current,
+          startedAtMs: sessionStartedAtRef.current,
+          endedAtMs,
+          durationMs: Math.max(0, endedAtMs - sessionStartedAtRef.current),
+          ...usage,
+          model: 'gpt-realtime-2.1',
+        }),
+      }).catch(() => {
+        // Usage telemetry is best-effort and must never block voice shutdown.
+      });
+    }
+
     dataChannelRef.current?.close();
     dataChannelRef.current = null;
     pcRef.current?.getSenders().forEach((sender) => {
@@ -62,8 +102,10 @@ export function MariVoiceControl({
       audioRef.current = null;
     }
     userTurnOpenRef.current = false;
+    inputTranscriptByItemRef.current.clear();
+    sessionStartedAtRef.current = 0;
     setVoiceState('idle');
-  }, []);
+  }, [organizationId, workspaceId]);
 
   useEffect(() => stop, [stop]);
 
@@ -77,6 +119,19 @@ export function MariVoiceControl({
 
     setErrorMessage('');
     setVoiceState('connecting');
+    sessionIdRef.current =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `mari-voice-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    sessionReportedRef.current = false;
+    usageRef.current = {
+      userTurns: 0,
+      assistantTurns: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      inputAudioTokens: 0,
+      outputAudioTokens: 0,
+    };
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -114,20 +169,37 @@ export function MariVoiceControl({
       const dc = pc.createDataChannel('oai-events');
       dataChannelRef.current = dc;
 
-      dc.onopen = () => setVoiceState('listening');
+      dc.onopen = () => {
+        sessionStartedAtRef.current = Date.now();
+        setVoiceState('listening');
+      };
       dc.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
 
           if (data.type === 'input_audio_buffer.speech_started') {
-            if (!userTurnOpenRef.current) {
-              userTurnOpenRef.current = true;
-              onUserTurn?.();
-            }
+            userTurnOpenRef.current = true;
             setVoiceState('listening');
           } else if (data.type === 'input_audio_buffer.speech_stopped') {
             userTurnOpenRef.current = false;
             setVoiceState('thinking');
+          } else if (
+            data.type === 'conversation.item.input_audio_transcription.delta' ||
+            data.type === 'session.input_transcript.delta'
+          ) {
+            const itemId = String(data.item_id || 'live-turn');
+            const current = inputTranscriptByItemRef.current.get(itemId) || '';
+            inputTranscriptByItemRef.current.set(itemId, current + String(data.delta || ''));
+          } else if (data.type === 'conversation.item.input_audio_transcription.completed') {
+            const itemId = String(data.item_id || 'live-turn');
+            const transcript = String(
+              data.transcript || inputTranscriptByItemRef.current.get(itemId) || ''
+            ).trim();
+            inputTranscriptByItemRef.current.delete(itemId);
+            if (transcript) {
+              usageRef.current.userTurns += 1;
+              onUserTranscript?.(transcript);
+            }
           } else if (data.type === 'response.created') {
             setVoiceState('thinking');
           } else if (
@@ -137,8 +209,16 @@ export function MariVoiceControl({
             setVoiceState('speaking');
           } else if (data.type === 'response.output_audio_transcript.done') {
             const transcript = String(data.transcript || '').trim();
-            if (transcript) onMariTranscript?.(transcript);
+            if (transcript) {
+              usageRef.current.assistantTurns += 1;
+              onMariTranscript?.(transcript);
+            }
           } else if (data.type === 'response.done') {
+            const usage = data.response?.usage || {};
+            usageRef.current.inputTokens += Number(usage.input_tokens || 0);
+            usageRef.current.outputTokens += Number(usage.output_tokens || 0);
+            usageRef.current.inputAudioTokens += Number(usage.input_token_details?.audio_tokens || 0);
+            usageRef.current.outputAudioTokens += Number(usage.output_token_details?.audio_tokens || 0);
             setVoiceState('listening');
           } else if (data.type === 'error') {
             setErrorMessage(data.error?.message || 'Mari Voice encountered an error.');
@@ -159,11 +239,14 @@ export function MariVoiceControl({
       const response = await authFetch('/api/mari/voice/session', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/sdp',
+          'Content-Type': 'application/json',
           'x-organization-id': organizationId,
           'x-workspace-id': workspaceId,
         },
-        body: localSdp,
+        body: JSON.stringify({
+          sdp: localSdp,
+          recentConversation: recentConversation.slice(-12),
+        }),
       });
 
       if (!response.ok) {
@@ -183,7 +266,18 @@ export function MariVoiceControl({
       setErrorMessage(error?.message || 'Unable to start Mari Voice.');
       setVoiceState('error');
     }
-  }, [disabled, onMariTranscript, onUserTurn, organizationId, stop, workspaceId]);
+  }, [disabled, onMariTranscript, onUserTranscript, organizationId, recentConversation, stop, workspaceId]);
+
+  const lastActivationSignalRef = useRef(activationSignal);
+  useEffect(() => {
+    if (!activationSignal || activationSignal === lastActivationSignalRef.current) return;
+    lastActivationSignalRef.current = activationSignal;
+    if (voiceState !== 'idle' && voiceState !== 'error') {
+      stop();
+    } else {
+      void start();
+    }
+  }, [activationSignal, start, stop, voiceState]);
 
   const active = voiceState !== 'idle' && voiceState !== 'error';
   const label =

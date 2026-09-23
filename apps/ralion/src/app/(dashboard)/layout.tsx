@@ -41,6 +41,26 @@ export default function DashboardLayout({
     setIsDesktopRuntime(desktop);
 
     const openMari = () => setIsMariDrawerOpen(true);
+    const openMariVoice = () => {
+      try {
+        sessionStorage.setItem('ralion:mari:voice-activate', String(Date.now()));
+      } catch {}
+      if (window.location.pathname.includes('/mari-ai')) {
+        window.dispatchEvent(new Event('ralion:mari-voice-toggle'));
+        return;
+      }
+      const isDesktop = Boolean(
+        desktopApi?.isDesktop ||
+        (window as any).__RALION_DESKTOP__ ||
+        window.location.protocol === 'file:' ||
+        window.location.protocol === 'app:'
+      );
+      if (isDesktop) {
+        window.location.href = '/mari-ai';
+      } else {
+        router.push('/mari-ai');
+      }
+    };
     const handleKeyboard = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'm') {
         event.preventDefault();
@@ -52,13 +72,15 @@ export default function DashboardLayout({
     window.addEventListener('keydown', handleKeyboard);
     window.addEventListener('ralion:open-mari', handleOpenMariEvent as EventListener);
     const removeNativeListener = desktopApi?.onMariToggle?.(openMari);
+    const removeNativeVoiceListener = desktopApi?.onMariVoiceToggle?.(openMariVoice);
 
     return () => {
       window.removeEventListener('keydown', handleKeyboard);
       window.removeEventListener('ralion:open-mari', handleOpenMariEvent as EventListener);
       if (typeof removeNativeListener === 'function') removeNativeListener();
+      if (typeof removeNativeVoiceListener === 'function') removeNativeVoiceListener();
     };
-  }, []);
+  }, [router]);
 
   const isPlatformAdmin = user?.role === 'PLATFORM_ADMIN' || user?.email === 'ali@rasalilabs.com';
   const organizationName =
