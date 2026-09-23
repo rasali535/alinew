@@ -217,6 +217,11 @@ contextBridge.exposeInMainWorld('ralionDesktop', {
     ipcRenderer.on('mari:toggle', listener);
     return () => ipcRenderer.removeListener('mari:toggle', listener);
   },
+  onMariVoiceToggle: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on('mari:voice-toggle', listener);
+    return () => ipcRenderer.removeListener('mari:voice-toggle', listener);
+  },
 
   // Window Controls
   windowMinimize: () => ipcRenderer.invoke('window-minimize'),
