@@ -50,7 +50,6 @@ import {
 import { authFetch, getRalionApiUrl, MARI_BUILD_VERSION } from '@/lib/api-config';
 import { useOrganization } from '@ralion/auth';
 import { MariMarkdownMessage } from '@/components/MariMarkdownMessage';
-import { MariVoiceControl } from '@/components/MariVoiceControl';
 import type {
   MariActionPayload,
   BusinessContext,
@@ -134,7 +133,6 @@ export default function MariAiPage() {
   const [isSyncingWebsite, setIsSyncingWebsite] = useState(false);
   const [websiteSyncSuccess, setWebsiteSyncSuccess] = useState<string | null>(null);
   const [websiteInputUrl, setWebsiteInputUrl] = useState('');
-  const [desktopVoiceSignal, setDesktopVoiceSignal] = useState(0);
 
   const activeOrgId = organization?.id || '';
   const activeWorkspaceId = workspace?.id || '';
@@ -142,23 +140,6 @@ export default function MariAiPage() {
   const hasCanonicalTenant = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(activeOrgId);
   const hasCanonicalWorkspace = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(activeWorkspaceId);
 
-
-  useEffect(() => {
-    const triggerVoice = () => setDesktopVoiceSignal(Date.now());
-
-    let queuedActivation = false;
-    try {
-      queuedActivation = Boolean(sessionStorage.getItem('ralion:mari:voice-activate'));
-      if (queuedActivation) sessionStorage.removeItem('ralion:mari:voice-activate');
-    } catch {}
-
-    if (queuedActivation) {
-      window.setTimeout(triggerVoice, 250);
-    }
-
-    window.addEventListener('ralion:mari-voice-toggle', triggerVoice as EventListener);
-    return () => window.removeEventListener('ralion:mari-voice-toggle', triggerVoice as EventListener);
-  }, []);
 
   const handleVoiceUserTranscript = (transcript: string) => {
     const cleanTranscript = transcript.trim();
@@ -189,6 +170,31 @@ export default function MariAiPage() {
       },
     ]);
   };
+
+  useEffect(() => {
+    const onUserVoiceTranscript = (event: Event) => {
+      const transcript = String((event as CustomEvent<{ transcript?: string }>).detail?.transcript || '');
+      handleVoiceUserTranscript(transcript);
+    };
+    const onMariVoiceTranscript = (event: Event) => {
+      const transcript = String((event as CustomEvent<{ transcript?: string }>).detail?.transcript || '');
+      handleVoiceMariTranscript(transcript);
+    };
+    window.addEventListener('ralion:mari-voice-user-transcript', onUserVoiceTranscript as EventListener);
+    window.addEventListener('ralion:mari-voice-mari-transcript', onMariVoiceTranscript as EventListener);
+    return () => {
+      window.removeEventListener('ralion:mari-voice-user-transcript', onUserVoiceTranscript as EventListener);
+      window.removeEventListener('ralion:mari-voice-mari-transcript', onMariVoiceTranscript as EventListener);
+    };
+  }, []);
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('ralion:mari-voice-conversation', {
+      detail: {
+        messages: messages.slice(-12).map((message) => ({ sender: message.sender, text: message.text })),
+      },
+    }));
+  }, [messages]);
 
   // Load Business Context, Growth Profile, and Briefing on Mount
   const loadGrowthIntelligence = async (forceRefresh = false) => {
@@ -1170,18 +1176,16 @@ export default function MariAiPage() {
                     className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-4 pr-24 py-3 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500 shadow-inner"
                   />
                   <div className="absolute right-2 flex items-center gap-1.5">
-                    <MariVoiceControl
-                      organizationId={activeOrgId}
-                      workspaceId={activeWorkspaceId}
+                    <button
+                      type="button"
+                      onClick={() => window.dispatchEvent(new Event('ralion:mari-voice-toggle'))}
                       disabled={!hasCanonicalTenant || !hasCanonicalWorkspace || isProcessing}
-                      activationSignal={desktopVoiceSignal}
-                      recentConversation={messages.slice(-12).map((message) => ({
-                        sender: message.sender,
-                        text: message.text,
-                      }))}
-                      onUserTranscript={handleVoiceUserTranscript}
-                      onMariTranscript={handleVoiceMariTranscript}
-                    />
+                      title="Talk to Mari"
+                      aria-label="Talk to Mari"
+                      className="p-2 rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-300 hover:text-white hover:border-purple-500 disabled:opacity-40 transition-all"
+                    >
+                      <Smartphone className="w-3.5 h-3.5" />
+                    </button>
                     <button
                       type="submit"
                       disabled={!inputQuery.trim() || isProcessing}
