@@ -281,7 +281,7 @@ function triggerMariVoice() {
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
   mainWindow.focus();
-  mainWindow.webContents.send('mari:toggle');
+  mainWindow.webContents.send('mari:voice-toggle');
 }
 
 // ─── System Tray ───────────────────────────────────────────────────────────────
