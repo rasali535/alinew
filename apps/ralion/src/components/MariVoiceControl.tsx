@@ -195,7 +195,6 @@ export function MariVoiceControl({
               output: JSON.stringify({ success: false, error: 'Mari did not receive a usable question.' }),
             },
           }));
-          dc.send(JSON.stringify({ type: 'response.create' }));
           return;
         }
 
@@ -242,7 +241,6 @@ export function MariVoiceControl({
               ),
             },
           }));
-          dc.send(JSON.stringify({ type: 'response.create' }));
         } catch (toolError: any) {
           dc.send(JSON.stringify({
             type: 'conversation.item.create',
@@ -255,7 +253,6 @@ export function MariVoiceControl({
               }),
             },
           }));
-          dc.send(JSON.stringify({ type: 'response.create' }));
         }
       };
 
@@ -317,6 +314,7 @@ export function MariVoiceControl({
               for (const functionCall of functionCalls) {
                 await runCanonicalMariTool(functionCall);
               }
+              dc.send(JSON.stringify({ type: 'response.create' }));
             } else {
               setVoiceState('listening');
             }
