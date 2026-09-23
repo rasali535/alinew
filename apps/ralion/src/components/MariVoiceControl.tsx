@@ -11,6 +11,7 @@ interface MariVoiceControlProps {
   workspaceId: string;
   disabled?: boolean;
   activationSignal?: number;
+  currentRoute?: string;
   recentConversation?: Array<{ sender: 'USER' | 'MARI'; text: string }>;
   onUserTranscript?: (transcript: string) => void;
   onMariTranscript?: (transcript: string) => void;
@@ -38,6 +39,7 @@ export function MariVoiceControl({
   workspaceId,
   disabled = false,
   activationSignal = 0,
+  currentRoute = '/mari-ai',
   recentConversation = [],
   onUserTranscript,
   onMariTranscript,
@@ -51,6 +53,7 @@ export function MariVoiceControl({
   const userTurnOpenRef = useRef(false);
   const inputTranscriptByItemRef = useRef<Map<string, string>>(new Map());
   const sessionConversationRef = useRef<Array<{ sender: 'USER' | 'MARI'; text: string }>>([]);
+  const currentRouteRef = useRef(currentRoute);
   const sessionIdRef = useRef('');
   const sessionStartedAtRef = useRef(0);
   const sessionReportedRef = useRef(false);
@@ -110,6 +113,10 @@ export function MariVoiceControl({
   }, [organizationId, workspaceId]);
 
   useEffect(() => stop, [stop]);
+
+  useEffect(() => {
+    currentRouteRef.current = currentRoute || '/dashboard';
+  }, [currentRoute]);
 
   const start = useCallback(async () => {
     if (disabled || !organizationId || !workspaceId) return;
@@ -269,7 +276,7 @@ export function MariVoiceControl({
               organizationId,
               workspaceId,
               messages: history,
-              activeScreen: { route: '/mari-ai', label: 'Mari Voice' },
+              activeScreen: { route: currentRouteRef.current, label: 'Mari Voice' },
               requestId: `voice-brain-${sessionIdRef.current}-${callId}`,
             }),
           });
@@ -366,7 +373,7 @@ export function MariVoiceControl({
               let shouldContinueResponse = false;
               for (const functionCall of functionCalls) {
                 const outcome = await runVoiceTool(functionCall);
-                if (outcome === 'reasoning') shouldContinueResponse = true;
+                if (outcome === 'reasoning' || outcome === 'navigation') shouldContinueResponse = true;
               }
               if (shouldContinueResponse) {
                 dc.send(JSON.stringify({ type: 'response.create' }));
