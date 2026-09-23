@@ -50,7 +50,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $pkgPath = "apps/desktop/package.json"
           $pkg = Get-Content $pkgPath -Raw | ConvertFrom-Json
-          $parts = [string]$pkg.version -split '\\.'
+          $parts = [string]$pkg.version -split '\.'
           if ($parts.Count -lt 2) { throw "Invalid desktop base version: $($pkg.version)" }
           $major = [int]$parts[0]
           $minor = [int]$parts[1]
@@ -121,7 +121,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $pkg = Get-Content "apps/desktop/package.json" -Raw | ConvertFrom-Json
-          $parts = [string]$pkg.version -split '\\.'
+          $parts = [string]$pkg.version -split '\.'
           if ($parts.Count -lt 2) { throw "Invalid desktop base version: $($pkg.version)" }
           $releaseVersion = "$([int]$parts[0]).$([int]$parts[1]).$([int]$env:GITHUB_RUN_NUMBER)"
           "RALION_VERSION=$releaseVersion" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
