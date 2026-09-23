@@ -211,7 +211,7 @@ function mergeAuthHeaders(initHeaders: HeadersInit | undefined, authHeaders: Rec
     // Hostinger may remove the standard Authorization header while proxying
     // /ralion/api requests. Mirror the JWT in an app-specific header; the
     // backend still validates it with Supabase before granting any access.
-    headers.set('x-ralion-auth-token', authHeaders.Authorization.replace(/^Bearer\\s+/i, ''));
+    headers.set('x-ralion-auth-token', authHeaders.Authorization.replace(/^Bearer\s+/i, ''));
   }
   if (!headers.has('x-user-id') && authHeaders['x-user-id']) headers.set('x-user-id', authHeaders['x-user-id']);
   if (!headers.has('x-workspace-id') && authHeaders['x-workspace-id']) headers.set('x-workspace-id', authHeaders['x-workspace-id']);
