@@ -35,7 +35,7 @@ if (preg_match('/^https:\/\/(?:[a-zA-Z0-9-]+\.)*rasalilabs\.com$/', $origin) ||
     $allowedOrigin = $origin;
 }
 
-$allowedHeaders = "Content-Type, Authorization, Accept, X-Requested-With, apikey, x-api-key, x-client-info, Idempotency-Key, Origin, Cache-Control, Pragma, x-user-id, x-workspace-id, x-organization-id, x-tenant-id, x-tenant, x-workspace, x-org-id, x-admin-key, x-session-id, x-request-id, baggage, sentry-trace, cookie";
+$allowedHeaders = "Content-Type, Authorization, Accept, X-Requested-With, apikey, x-api-key, x-client-info, Idempotency-Key, Origin, Cache-Control, Pragma, x-user-id, x-workspace-id, x-organization-id, x-tenant-id, x-tenant, x-workspace, x-org-id, x-admin-key, x-session-id, x-request-id, x-ralion-auth-token, baggage, sentry-trace, cookie";
 if (!empty($_SERVER['HTTP_ACCESS_CONTROL_REQUEST_HEADERS'])) {
     $allowedHeaders .= ", " . $_SERVER['HTTP_ACCESS_CONTROL_REQUEST_HEADERS'];
 }
