@@ -20,7 +20,8 @@ reject(htaccess, 'RewriteRule ^api/(.*)$ /api_proxy.php?__proxy_path=api/$1 [QSA
 expect(proxy, "https://ralion-dynamic-backend.onrender.com", 'proxy targets the Ralion dynamic backend');
 expect(proxy, "HTTP_AUTHORIZATION", 'proxy preserves Authorization under FastCGI');
 expect(proxy, "REDIRECT_HTTP_AUTHORIZATION", 'proxy preserves redirected Authorization under FastCGI');
-expect(proxy, "unset($queryParams['__proxy_path']);", 'internal proxy routing parameter is not forwarded upstream');
+expect(proxy, "if (urldecode($key) === '__proxy_path') continue;", 'internal proxy routing parameter is not forwarded upstream');
+expect(proxy, 'x-ralion-auth-token', 'proxy permits the mirrored Ralion auth token header');
 expect(proxy, 'header("Access-Control-Allow-Origin: $allowedOrigin")', 'proxy returns only validated CORS origin');
 expect(mergeBuilds, "const ralionProxySrc = path.join(rootDir, 'apps', 'ralion', 'public', 'api_proxy.php');", 'build packaging identifies the Ralion-specific proxy');
 expect(mergeBuilds, "fs.copyFileSync(ralionProxySrc, path.join(ralionDir, 'api_proxy.php'));", 'build packaging preserves the Ralion-specific proxy');
