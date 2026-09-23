@@ -68,15 +68,38 @@ export default function DashboardLayout({
       }
     };
     const handleOpenMariEvent = () => openMari();
+    const handleMariNavigation = (event: Event) => {
+      const route = String((event as CustomEvent<{ route?: string }>).detail?.route || '');
+      const approvedRoutes = new Set([
+        '/dashboard', '/crm', '/customers', '/leads', '/growth', '/creatives',
+        '/calendar', '/tasks', '/documents', '/workflows', '/reports', '/billing',
+        '/marketplace', '/settings', '/workspace', '/mari-ai',
+      ]);
+      if (!approvedRoutes.has(route)) return;
+
+      const isDesktop = Boolean(
+        desktopApi?.isDesktop ||
+        (window as any).__RALION_DESKTOP__ ||
+        window.location.protocol === 'file:' ||
+        window.location.protocol === 'app:'
+      );
+      if (isDesktop) {
+        window.location.href = `/ralion${route}`;
+      } else {
+        router.push(route);
+      }
+    };
 
     window.addEventListener('keydown', handleKeyboard);
     window.addEventListener('ralion:open-mari', handleOpenMariEvent as EventListener);
+    window.addEventListener('ralion:mari-navigate', handleMariNavigation as EventListener);
     const removeNativeListener = desktopApi?.onMariToggle?.(openMari);
     const removeNativeVoiceListener = desktopApi?.onMariVoiceToggle?.(openMariVoice);
 
     return () => {
       window.removeEventListener('keydown', handleKeyboard);
       window.removeEventListener('ralion:open-mari', handleOpenMariEvent as EventListener);
+      window.removeEventListener('ralion:mari-navigate', handleMariNavigation as EventListener);
       if (typeof removeNativeListener === 'function') removeNativeListener();
       if (typeof removeNativeVoiceListener === 'function') removeNativeVoiceListener();
     };
