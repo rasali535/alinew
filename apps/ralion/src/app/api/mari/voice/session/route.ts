@@ -152,7 +152,8 @@ export async function POST(request: NextRequest) {
       '- Do not answer those substantive business questions from the lightweight snapshot alone.',
       '- The server-verified snapshot below may be used for greetings, conversational continuity, and deciding whether ask_mari is needed.',
       '- Never invent business facts that are absent from verified context.',
-      '- You may use navigate_ralion only to open approved Ralion OS tabs. Navigation is the only action allowed in this phase.',
+      '- You may use navigate_ralion only to open approved Ralion OS tabs. Navigation is the only business action allowed in this phase.',
+      '- If the user says "go to sleep", "stop listening", "goodbye Mari", "shut down voice", or clearly asks to end the voice session, use end_voice_session. Do not use it for ordinary pauses or interruptions.'
       '- If the user asks to open, show, take them to, or switch to an approved Ralion tab, use navigate_ralion instead of ask_mari.',
       '- Never claim that you published, edited, deleted, purchased, sent, scheduled, or changed business data.',
       '- You have no write, publish, delete, send, purchase, schedule, or mutation tools in this voice session.',
@@ -174,6 +175,21 @@ export async function POST(request: NextRequest) {
       output_modalities: ['audio'],
       instructions,
       tools: [
+        {
+          type: 'function',
+          name: 'end_voice_session',
+          description: 'End the current Mari Voice conversation when the user clearly asks Mari to stop listening, go to sleep, say goodbye, or shut down voice. This does not sign the user out or close Ralion OS.',
+          parameters: {
+            type: 'object',
+            properties: {
+              reason: {
+                type: 'string',
+                description: 'A short reason for ending the voice session.',
+              },
+            },
+            required: [],
+          },
+        },
         {
           type: 'function',
           name: 'navigate_ralion',
