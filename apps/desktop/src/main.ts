@@ -387,13 +387,17 @@ function setupAutoUpdater() {
       }
     });
 
-    setTimeout(() => {
+    const checkForUpdatesSafely = () => {
       try {
         autoUpdater.checkForUpdatesAndNotify();
       } catch (e: any) {
         log.warn('[AutoUpdater Check Warning]', e?.message || e);
       }
-    }, 5000);
+    };
+
+    // Check shortly after startup, then keep long-running desktop sessions current.
+    setTimeout(checkForUpdatesSafely, 5000);
+    setInterval(checkForUpdatesSafely, 4 * 60 * 60 * 1000);
   } catch (e: any) {
     log.warn('[AutoUpdater Setup Warning]', e?.message || e);
   }
