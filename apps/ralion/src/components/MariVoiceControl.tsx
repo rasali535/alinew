@@ -46,7 +46,7 @@ export function MariVoiceControl({
 }: MariVoiceControlProps) {
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
   const [errorMessage, setErrorMessage] = useState('');
-  const [wakeEnabled, setWakeEnabled] = useState(false);
+  const [wakeEnabled, setWakeEnabled] = useState(true);
   const [wakeSupported, setWakeSupported] = useState(true);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -57,7 +57,7 @@ export function MariVoiceControl({
   const sessionConversationRef = useRef<Array<{ sender: 'USER' | 'MARI'; text: string }>>([]);
   const currentRouteRef = useRef(currentRoute);
   const voiceStateRef = useRef<VoiceState>('idle');
-  const wakeEnabledRef = useRef(false);
+  const wakeEnabledRef = useRef(true);
   const wakeRecognitionRef = useRef<any>(null);
   const wakeRestartTimerRef = useRef<number | null>(null);
   const shutdownAfterResponseRef = useRef(false);
@@ -465,9 +465,30 @@ export function MariVoiceControl({
   }, [disabled, onMariTranscript, onUserTranscript, organizationId, recentConversation, stop, workspaceId]);
 
   useEffect(() => {
+    let enabled = true;
     try {
-      setWakeEnabled(localStorage.getItem('ralion:mari:wake-enabled') === 'true');
+      const stored = localStorage.getItem('ralion:mari:wake-enabled');
+      enabled = stored === null ? true : stored === 'true';
+      if (stored === null) {
+        localStorage.setItem('ralion:mari:wake-enabled', 'true');
+      }
     } catch {}
+
+    wakeEnabledRef.current = enabled;
+    setWakeEnabled(enabled);
+
+    if (!enabled || !navigator.mediaDevices?.getUserMedia) return;
+
+    // Prime microphone permission once so "Hey Mari" can arm immediately
+    // after app/page launch without requiring the user to click the mic button.
+    // Browsers/OS may still show their own permission prompt the first time.
+    void navigator.mediaDevices.getUserMedia({ audio: true })
+      .then((stream) => {
+        stream.getTracks().forEach((track) => track.stop());
+      })
+      .catch(() => {
+        // SpeechRecognition will surface unsupported/permission state below.
+      });
   }, []);
 
   const stopWakeListener = useCallback(() => {
