@@ -278,7 +278,11 @@ export class FacebookPageManagementService {
         (c.token_status !== 'TOKEN_VALID' || !['CONNECTED', 'ACTIVE', 'connected'].includes(String(c.connection_status || '')))
       );
       if (obsolete.length > 0) {
-        void supabase.from('social_connections').delete().in('id', obsolete.map(c => c.id)).then(() => {}).catch(() => {});
+        void (async () => {
+          try {
+            await supabase.from('social_connections').delete().in('id', obsolete.map(c => c.id));
+          } catch {}
+        })();
       }
     }
 

@@ -86,16 +86,14 @@ export async function GET(request: NextRequest) {
     // Deduplicate old Page bindings from storage if superseded by a newer valid binding
     const obsoleteIds = getObsoleteDuplicateConnectionIds(socialConnections);
     if (obsoleteIds.length > 0) {
-      void supabase
-        .from('social_connections')
-        .delete()
-        .in('id', obsoleteIds)
-        .then(() => {
+      void (async () => {
+        try {
+          await supabase.from('social_connections').delete().in('id', obsoleteIds);
           console.log(`[Admin Metrics] Pruned ${obsoleteIds.length} obsolete duplicate social connection(s).`);
-        })
-        .catch(err => {
+        } catch (err: any) {
           console.warn('[Admin Metrics] Warning during obsolete connection cleanup:', err?.message || err);
-        });
+        }
+      })();
     }
 
     // Command Centre aggregation: "Needs Attention" represents unresolved current bindings,

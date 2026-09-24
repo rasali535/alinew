@@ -100,16 +100,14 @@ export async function resolveFacebookPageRouteConnection(params: {
     );
     if (obsoleteConns.length > 0) {
       const obsoleteIds = obsoleteConns.map(c => c.id);
-      void supabase
-        .from('social_connections')
-        .delete()
-        .in('id', obsoleteIds)
-        .then(() => {
+      void (async () => {
+        try {
+          await supabase.from('social_connections').delete().in('id', obsoleteIds);
           console.log(`[FacebookPageRouteAccess] Pruned ${obsoleteIds.length} obsolete duplicate binding(s) for Page ${targetPageId}`);
-        })
-        .catch(err => {
+        } catch (err: any) {
           console.warn('[FacebookPageRouteAccess] Obsolete binding prune warning:', err?.message || err);
-        });
+        }
+      })();
     }
   }
 
