@@ -30,6 +30,19 @@ function resolveSafeImageUrl(src?: string, fallbackTitle: string = 'Ralion Creat
   const trimmed = src.trim();
   if (trimmed.startsWith('data:image') || trimmed.startsWith('blob:')) return trimmed;
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+
+  // If the path refers to creative files, attach runtime token if present or rewrite to static uploads fallback
+  if (trimmed.includes('api/creatives/file/')) {
+    const filename = trimmed.split('api/creatives/file/')[1]?.split('?')[0];
+    if (typeof window !== 'undefined') {
+      const token = (window as any).__ralion_access_token__;
+      if (token) {
+        return `/api/creatives/file/${filename}?token=${encodeURIComponent(token)}`;
+      }
+    }
+    return `/uploads/creatives/${filename}`;
+  }
+
   if (trimmed.startsWith('/')) return trimmed;
   if (trimmed.startsWith('asset-') || trimmed.endsWith('.jpg') || trimmed.endsWith('.png') || trimmed.endsWith('.svg') || trimmed.endsWith('.webp')) {
     return `/uploads/creatives/${trimmed}`;
@@ -3982,13 +3995,11 @@ function GrowthPageContent() {
                 <CardContent className="p-4 flex-1 flex flex-col gap-3">
                   {item.type === 'POSTER_IMAGE' && (
                     <div className="relative group rounded-xl overflow-hidden border border-zinc-800 max-h-72 bg-zinc-950 flex items-center justify-center">
-                      <img
+                      <SecureImage
                         src={resolveSafeImageUrl(item.output, item.title)}
                         alt={item.title}
                         className="w-full h-auto object-cover max-h-72 rounded-lg"
-                        onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).src = resolveSafeImageUrl('', item.title);
-                        }}
+                        fallbackPrompt={item.title}
                       />
                     </div>
                   )}

@@ -214,7 +214,11 @@ async function terminateInvalidSession(): Promise<void> {
   } catch {}
 
   // Redirect once. The packaged renderer lives under app://localhost/ralion.
-  window.location.href = isDesktopRuntime() ? 'app://localhost/ralion/login' : '/login';
+  if (isDesktopRuntime()) {
+    window.location.href = 'app://localhost/ralion/login';
+  } else {
+    window.location.href = '/login';
+  }
 }
 
 export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {

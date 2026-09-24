@@ -85,21 +85,6 @@ let _sessionPromise: Promise<any> | null = null;
 async function getBrowserSession(forceRefresh = false): Promise<{ access_token: string; user?: any; refresh_token?: string } | null> {
   if (typeof window === 'undefined') return null;
 
-  // OrganizationContext has already server-verified this session in many cases.
-  // Reuse that canonical token before asking another webpack chunk/client instance
-  // to rehydrate Supabase storage independently.
-  // Prefer the canonical runtime token published by OrganizationContext.
-  // Do this for both ordinary requests and recovery attempts: the context route
-  // has already verified this JWT with Supabase, so dropping it during a
-  // separate refresh attempt would turn a healthy session into AUTH_TOKEN_MISSING.
-  const sharedToken = (window as any).__ralion_access_token__;
-  if (typeof sharedToken === 'string' && sharedToken.length > 20) {
-    return {
-      access_token: sharedToken,
-      user: (window as any).__ralion_access_token_user__ || undefined,
-    };
-  }
-
   if (forceRefresh) {
     try {
       // Prefer the globally registered deduplicated refresh function (set by client.ts)
@@ -107,20 +92,37 @@ async function getBrowserSession(forceRefresh = false): Promise<{ access_token: 
       if (typeof window !== 'undefined' && typeof (window as any).__ralion_refresh_session__ === 'function') {
         const refreshed = await (window as any).__ralion_refresh_session__();
         if (!refreshed.error && refreshed.data.session) {
+          (window as any).__ralion_access_token__ = refreshed.data.session.access_token;
+          (window as any).__ralion_access_token_user__ = refreshed.data.session.user || undefined;
           return refreshed.data.session;
         }
+        delete (window as any).__ralion_access_token__;
+        delete (window as any).__ralion_access_token_user__;
         return null;
       }
       const { createClient } = await import('@/lib/supabase/client');
       const supabase = createClient();
       const refreshed = await deduplicatedRefreshSession(supabase);
       if (!refreshed.error && refreshed.data.session) {
+        (window as any).__ralion_access_token__ = refreshed.data.session.access_token;
+        (window as any).__ralion_access_token_user__ = refreshed.data.session.user || undefined;
         return refreshed.data.session;
       }
+      delete (window as any).__ralion_access_token__;
+      delete (window as any).__ralion_access_token_user__;
       return null;
     } catch {
       return null;
     }
+  }
+
+  // Reuse canonical runtime token published by OrganizationContext or client.ts
+  const sharedToken = (window as any).__ralion_access_token__;
+  if (typeof sharedToken === 'string' && sharedToken.length > 20) {
+    return {
+      access_token: sharedToken,
+      user: (window as any).__ralion_access_token_user__ || undefined,
+    };
   }
 
   if (_sessionPromise) return _sessionPromise;
@@ -158,7 +160,11 @@ async function getBrowserSession(forceRefresh = false): Promise<{ access_token: 
         const parsed = JSON.parse(directSession);
         const token = parsed?.access_token || parsed?.currentSession?.access_token;
         const user = parsed?.user || parsed?.currentSession?.user;
-        if (token) return { access_token: token, user } as any;
+        if (token) {
+          (window as any).__ralion_access_token__ = token;
+          (window as any).__ralion_access_token_user__ = user;
+          return { access_token: token, user } as any;
+        }
       }
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
@@ -168,7 +174,11 @@ async function getBrowserSession(forceRefresh = false): Promise<{ access_token: 
         const parsed = JSON.parse(raw);
         const token = parsed?.access_token || parsed?.currentSession?.access_token;
         const user = parsed?.user || parsed?.currentSession?.user;
-        if (token) return { access_token: token, user } as any;
+        if (token) {
+          (window as any).__ralion_access_token__ = token;
+          (window as any).__ralion_access_token_user__ = user;
+          return { access_token: token, user } as any;
+        }
       }
     } catch {}
 
@@ -269,22 +279,17 @@ export async function authFetch(pathOrUrl: string, init?: RequestInit): Promise<
       credentials: init?.credentials || 'include',
     });
 
-    // Recover once from either an invalid token or a session-hydration race.
-    // A protected request can fire before Supabase has rehydrated local storage,
-    // which previously sent no Authorization header and made OAuth/billing fail
-    // with AUTH_TOKEN_MISSING even though the browser still had a valid session.
+    // Recover once from an invalid token.
     // Never retry unrelated 401s, 403s, 409s, or server errors.
     if (res.status === 401 && typeof window !== 'undefined') {
-      let authCode = '';
+      let shouldRefresh = false;
       try {
         const cloned = res.clone();
         const body = await cloned.json();
-        authCode = String(body?.code || '');
+        if (body?.code === 'AUTH_TOKEN_INVALID') {
+          shouldRefresh = true;
+        }
       } catch {}
-
-      const shouldRefresh =
-        authCode === 'AUTH_TOKEN_INVALID' ||
-        authCode === 'AUTH_TOKEN_MISSING';
 
       if (shouldRefresh) {
         const refreshedAuth = await getRalionAuthHeaders({ refresh: true });

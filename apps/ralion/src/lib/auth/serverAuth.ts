@@ -150,6 +150,12 @@ export function extractAuthToken(request: NextRequest): string | null {
   // cryptographically with Supabase auth.getUser() below.
   const forwardedToken = request.headers.get('x-ralion-auth-token');
   if (forwardedToken?.trim()) return forwardedToken.trim();
+
+  // Also support query param token for direct media loads (<img>, <video>, audio, download links)
+  try {
+    const queryToken = request.nextUrl?.searchParams?.get('token') || request.nextUrl?.searchParams?.get('access_token');
+    if (queryToken?.trim()) return queryToken.trim();
+  } catch {}
   const cookieNames = ['sb-yidsfihagwttlmhfynmf-auth-token', 'ralion-app-auth-token', 'sb-access-token', 'supabase-auth-token', 'sb:token'];
   for (const name of cookieNames) {
     const cookie = request.cookies.get(name);
