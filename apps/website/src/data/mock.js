@@ -30,6 +30,7 @@ export const navLinks = [
     ]
   },
   { name: 'Ralion OS', href: '/products/ralion-os' },
+  { name: 'Mari AI', href: '/mari-ai' },
   { name: 'Our Work', href: '/work' },
   { name: 'About', href: '/about' },
   { name: 'Contact', href: '/contact' }
@@ -53,7 +54,7 @@ export const companyInfo = {
   flagship: 'Ralion OS',
   flagshipTagline: 'Empowered to Prosper',
   flagshipPositioning: 'Your AI Business Operating System',
-  mariPositioning: 'Mari — Your AI Business Growth Partner',
+  mariPositioning: 'Mari — The Intelligence Inside Ralion OS',
   email: 'contact@rasalilabs.com',
   phone: '+267 72 113 009',
   address: 'Plot 18680 Khuhurutse Drive, Phase 2, Gaborone, Botswana',
@@ -165,8 +166,8 @@ export const ralionOSOverview = {
   tagline: 'Empowered to Prosper',
   headline: 'Your AI Business Operating System',
   description: 'Ralion OS brings business intelligence, Mari AI, growth, social media, customer management and operational tools into one connected platform.',
-  mariTagline: 'Mari — Your AI Business Growth Partner',
-  mariDescription: 'Embedded executive AI that provides strategic growth recommendations, automates creative workflows, and orchestrates multi-channel publishing.',
+  mariTagline: 'Mari — The Intelligence Inside Ralion OS',
+  mariDescription: 'Understands your verified business context, speaks with you naturally, navigates across Ralion workspaces, and turns business data into useful decisions.',
   launchHref: '/ralion',
   exploreHref: '/products/ralion-os',
   demoHref: '/request-demo'
@@ -176,9 +177,9 @@ export const ralionModules = [
   {
     id: 'mari-ai',
     name: 'Mari AI',
-    tagline: 'Your AI Business Growth Partner',
-    description: 'Embedded executive AI partner that analyzes business context, provides strategic growth recommendations, and directs automated creative workflows.',
-    href: '/products/ralion-mari-ai',
+    tagline: 'The Intelligence Inside Ralion OS',
+    description: 'Understands verified business context, speaks with you naturally, navigates across Ralion workspaces, and turns business data into useful decisions.',
+    href: '/mari-ai',
     badge: 'Flagship AI'
   },
   {

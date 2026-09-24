@@ -96,8 +96,8 @@ const Footer = () => {
               <Link to="/products/ralion-os" className="text-white font-medium hover:text-brand-gold transition-colors">
                 Ralion OS Overview
               </Link>
-              <Link to="/products/ralion-mari-ai" className="text-white/70 hover:text-brand-gold transition-colors">
-                Mari AI Growth Partner
+              <Link to="/mari-ai" className="text-white/70 hover:text-brand-gold transition-colors">
+                Mari AI Intelligence
               </Link>
               <Link to="/products/ralion-crm" className="text-white/70 hover:text-brand-gold transition-colors">
                 Ralion CRM & Pipelines

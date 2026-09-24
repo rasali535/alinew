@@ -25,7 +25,14 @@ import {
   ShieldCheck,
   TrendingUp,
   Flame,
-  Film
+  Film,
+  Mic,
+  Volume2,
+  Radio,
+  Users,
+  Share2,
+  Database,
+  BarChart3
 } from 'lucide-react';
 
 const iconMap = {
@@ -224,6 +231,180 @@ const Home = () => {
                 <p className="text-white/60 text-xs leading-relaxed">{mod.description}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 3.5 MEET MARI AI HOMEPAGE SECTION */}
+      <section className="py-24 px-6 lg:px-12 bg-gradient-to-b from-[#121212] via-[#0b0f19] to-[#121212] text-white border-b border-white/10 relative overflow-hidden">
+        {/* Ambient atmospheric glows */}
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[700px] h-[500px] bg-purple-600/15 rounded-full blur-[170px] pointer-events-none"></div>
+        <div className="absolute bottom-10 right-10 w-[450px] h-[450px] bg-brand-gold/10 rounded-full blur-[160px] pointer-events-none"></div>
+
+        <div className="max-w-7xl mx-auto relative z-10">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+            {/* Left Content Column */}
+            <div className="lg:col-span-6 space-y-6">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-purple-500/10 border border-purple-400/25 text-purple-300 text-xs font-bold uppercase tracking-wider">
+                <Bot size={14} className="text-purple-300" /> Meet Mari AI
+              </div>
+
+              <h2 className="text-3xl md:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-tight">
+                Meet Mari AI
+              </h2>
+
+              <div className="text-xl md:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-200 via-white to-brand-gold leading-snug">
+                Your business already has data. Mari helps you use it.
+              </div>
+
+              <p className="text-white/75 text-base md:text-lg leading-relaxed max-w-xl">
+                Mari is the intelligence inside Ralion OS. Ask questions, understand your business, plan growth, work with customer and operational information, and move through Ralion using text or voice.
+              </p>
+
+              {/* Core Pillars */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-start gap-3 text-sm text-white/80">
+                  <CheckCircle2 size={18} className="text-purple-400 shrink-0 mt-0.5" />
+                  <span><strong>One conversation. One business brain:</strong> Works with the same understanding whether you type or speak.</span>
+                </div>
+                <div className="flex items-start gap-3 text-sm text-white/80">
+                  <CheckCircle2 size={18} className="text-purple-400 shrink-0 mt-0.5" />
+                  <span><strong>Talk to your business:</strong> Natural voice conversation with hands-free wake and fluid interruption.</span>
+                </div>
+                <div className="flex items-start gap-3 text-sm text-white/80">
+                  <CheckCircle2 size={18} className="text-purple-400 shrink-0 mt-0.5" />
+                  <span><strong>Persistent voice navigation:</strong> Move across Growth, CRM, and Reports without dropping the session.</span>
+                </div>
+                <div className="flex items-start gap-3 text-sm text-white/80">
+                  <CheckCircle2 size={18} className="text-purple-400 shrink-0 mt-0.5" />
+                  <span><strong>Human-controlled actions:</strong> Mari helps you decide and navigate. You stay in control of important business actions.</span>
+                </div>
+              </div>
+
+              {/* CTAs */}
+              <div className="flex flex-wrap items-center gap-4 pt-4">
+                <Link
+                  to="/mari-ai"
+                  className="px-6 py-3.5 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-extrabold text-xs hover:scale-105 transition-all shadow-lg shadow-purple-900/30 flex items-center gap-2"
+                >
+                  Meet Mari <ArrowRight size={16} />
+                </Link>
+
+                <a
+                  href="/ralion"
+                  className="px-6 py-3.5 rounded-xl bg-gradient-to-r from-brand-gold to-amber-500 text-black font-extrabold text-xs hover:scale-105 transition-all shadow-lg shadow-brand-gold/20 flex items-center gap-2"
+                >
+                  <Sparkles size={14} /> Start with Ralion OS
+                </a>
+              </div>
+
+              <div className="text-white/45 text-xs flex items-center gap-2 pt-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                <span>Use Mari across Ralion on web and desktop.</span>
+              </div>
+            </div>
+
+            {/* Right Living Visual Column */}
+            <div className="lg:col-span-6">
+              <div className="relative rounded-3xl border border-white/15 bg-[#141824]/85 backdrop-blur-xl p-6 md:p-8 shadow-2xl shadow-purple-950/40 overflow-hidden">
+                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-purple-400/50 to-transparent"></div>
+
+                {/* Top Status Header */}
+                <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-400/30 flex items-center justify-center">
+                      <Bot size={16} className="text-purple-300" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-white tracking-wide">MARI INTELLIGENCE CORE</div>
+                      <div className="text-[10px] text-purple-300/80 font-medium">Unified Business Brain</div>
+                    </div>
+                  </div>
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-400/20 text-emerald-400 text-[10px] font-bold">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>Voice & Text Synced</span>
+                  </div>
+                </div>
+
+                {/* Central Living Architecture Diagram */}
+                <div className="relative py-4 flex flex-col items-center justify-center">
+                  {/* Central Orb */}
+                  <div className="relative z-20 flex flex-col items-center my-3">
+                    <div className="relative w-28 h-28 md:w-32 md:h-32 rounded-full border-2 border-purple-400/40 bg-gradient-to-b from-purple-500/30 via-indigo-600/25 to-black/80 flex flex-col items-center justify-center shadow-[0_0_50px_rgba(168,85,247,0.35)]">
+                      <div className="absolute inset-1 rounded-full border border-white/20 animate-pulse"></div>
+                      <Bot size={34} className="text-white relative z-10" />
+                      <span className="text-[11px] font-black tracking-wider text-purple-200 mt-1 uppercase">Mari</span>
+                    </div>
+
+                    {/* Waveform Visualization */}
+                    <div className="mt-3 flex items-center gap-1 px-3 py-1 rounded-full bg-black/60 border border-purple-400/30">
+                      <Volume2 size={12} className="text-purple-300" />
+                      <div className="flex items-center gap-0.5 h-3 px-1">
+                        <span className="w-0.5 h-2 bg-purple-400 animate-pulse"></span>
+                        <span className="w-0.5 h-3.5 bg-purple-300 animate-pulse [animation-delay:150ms]"></span>
+                        <span className="w-0.5 h-1.5 bg-purple-400 animate-pulse [animation-delay:300ms]"></span>
+                        <span className="w-0.5 h-3 bg-purple-200 animate-pulse [animation-delay:75ms]"></span>
+                        <span className="w-0.5 h-2 bg-purple-300 animate-pulse [animation-delay:200ms]"></span>
+                      </div>
+                      <span className="text-[9px] uppercase tracking-wider font-bold text-purple-200">Voice Active</span>
+                    </div>
+                  </div>
+
+                  {/* Connected Context Nodes */}
+                  <div className="w-full grid grid-cols-2 sm:grid-cols-3 gap-2.5 mt-4 relative z-10">
+                    {[
+                      { name: 'CRM & Customers', desc: 'Customer context & history', icon: Users, color: 'text-blue-400' },
+                      { name: 'Growth Studio', desc: 'Campaigns & positioning', icon: TrendingUp, color: 'text-amber-400' },
+                      { name: 'Connected Social', desc: 'Performance & content direction', icon: Share2, color: 'text-pink-400' },
+                      { name: 'Business Knowledge', desc: 'Verified profile & SOPs', icon: Database, color: 'text-emerald-400' },
+                      { name: 'Reports & Analytics', desc: 'Decision intelligence', icon: BarChart3, color: 'text-purple-400' },
+                      { name: 'Human-in-Control', desc: 'Approved actions only', icon: ShieldCheck, color: 'text-teal-400' },
+                    ].map((node) => {
+                      const NodeIcon = node.icon;
+                      return (
+                        <div
+                          key={node.name}
+                          className="p-2.5 rounded-xl bg-black/40 border border-white/10 hover:border-purple-400/30 transition-colors"
+                        >
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <NodeIcon size={13} className={node.color} />
+                            <span className="text-[11px] font-bold text-white truncate">{node.name}</span>
+                          </div>
+                          <p className="text-[9px] text-white/50 leading-tight truncate">{node.desc}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Voice Navigation & Hands-Free Interaction Card */}
+                <div className="mt-5 pt-4 border-t border-white/10 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-purple-400 animate-ping"></div>
+                      <span className="text-[11px] font-bold text-white">Voice Navigation Flow</span>
+                    </div>
+                    <span className="text-[10px] text-white/40">Persistent session</span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-400/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Mic size={14} className="text-purple-300 shrink-0" />
+                      <span className="text-xs font-semibold text-purple-100">“Hey Mari, open Growth.”</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[10px] text-emerald-300 font-medium">
+                      <span>→</span>
+                      <span>Navigating to Growth Studio</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[10px] text-white/45 px-1">
+                    <span>Hands-free access when enabled</span>
+                    <span>Microphone permission required</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
