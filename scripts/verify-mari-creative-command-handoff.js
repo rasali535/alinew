@@ -20,8 +20,7 @@ const checks = [
   ['Growth focuses exact durable asset', growth.includes('creative-output-${focusedAssetId}')],
   ['Growth creates safe Social draft from Mari asset', growth.includes('mari-creative-${item.id}')],
   ['Current Pollinations generation route is attempted', provider.includes('https://gen.pollinations.ai/image/')],
-  ['Provider supports backend Pollinations auth', provider.includes('process.env.POLLINATIONS_API_KEY')],
-  ['Legacy Pollinations route remains fallback only', provider.includes('https://image.pollinations.ai/prompt/')],
+  ['Provider requires authenticated Pollinations candidates', provider.includes('pollinationsToken ? [')],
 ];
 
 let failed = 0;

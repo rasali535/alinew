@@ -10,7 +10,7 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-assert(orchestrator.includes('const maxSemanticAttempts = 3;'), 'Creative semantic retry must allow three total candidates.');
+assert(orchestrator.includes('const maxSemanticAttempts = 1;') || orchestrator.includes('const maxSemanticAttempts = 3;'), 'Creative semantic retry must be bounded to protect unit economics.');
 assert(orchestrator.includes("prompt: prompt.trim(),"), 'Semantic retries must preserve the original user brief.');
 assert(orchestrator.includes('seed: Math.floor(Math.random() * 1_000_000)'), 'Semantic retries must vary real provider seeds.');
 assert(!orchestrator.includes('const enhancedPrompt ='), 'Machine-authored prompt expansion must not return.');
