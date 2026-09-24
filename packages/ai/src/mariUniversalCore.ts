@@ -37,14 +37,14 @@ import { CreativeOrchestrator } from './creativeOrchestrator.service';
 import { CreativeAssetService } from './creativeAsset.service';
 import { MariCreativeIntelligenceService } from './mariCreativeIntelligence.service';
 
-const MARI_CLASSIFIER_MODEL = process.env.MARI_GEMINI_CLASSIFIER_MODEL || 'gemini-3.5-flash-lite';
-const MARI_RESPONSE_MODEL = process.env.MARI_GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-3.5-flash';
-const MARI_CLASSIFIER_PROVIDER_BUDGET_MS = Math.max(1000, Number(process.env.MARI_CLASSIFIER_PROVIDER_BUDGET_MS || 3000));
+const MARI_CLASSIFIER_MODEL = process.env.MARI_GEMINI_CLASSIFIER_MODEL || 'gemini-3.6-flash';
+const MARI_RESPONSE_MODEL = process.env.MARI_GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-3.6-flash';
+const MARI_CLASSIFIER_PROVIDER_BUDGET_MS = Math.max(1000, Number(process.env.MARI_CLASSIFIER_PROVIDER_BUDGET_MS || 6000));
 const MARI_RESPONSE_PROVIDER_BUDGET_MS = Math.max(8000, Number(process.env.MARI_RESPONSE_PROVIDER_BUDGET_MS || 18000));
 const MARI_RESPONSE_PRIMARY_ATTEMPT_BUDGET_MS = Math.max(4000, Number(process.env.MARI_RESPONSE_PRIMARY_ATTEMPT_BUDGET_MS || 9000));
 
 function modelsWithStableFallback(configuredModel: string): string[] {
-  return Array.from(new Set([configuredModel.trim(), 'gemini-3.5-flash', 'gemini-3.5-flash-lite'].filter(Boolean))).slice(0, 3);
+  return Array.from(new Set([configuredModel.trim(), 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite'].filter(Boolean))).slice(0, 3);
 }
 
 export function getMariBuildVersion(): string {

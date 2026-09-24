@@ -105,7 +105,7 @@ if (!globalState.__ralionMariDurableCreditsPatched) {
       amount,
       sourceFeature: 'MARI_CHAT',
       provider: 'google',
-      model: process.env.MARI_GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-3.5-flash',
+      model: process.env.MARI_GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-3.6-flash',
       reason: `Mari AI reasoning reservation: ${prompt.slice(0, 64)}`,
       metadata: { workspaceId: request.workspaceId || null },
     });
