@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyPlatformAdminRequest } from '../../../../lib/auth/adminAuth';
 import { getPrivilegedSupabase } from '@/lib/supabase/server';
-import { isActiveFacebookConnection, isActiveSocialConnection } from '@/lib/services/social/socialConnectionStatus';
+import {
+  isActiveFacebookConnection,
+  isActiveSocialConnection,
+  getUnresolvedAttentionConnections,
+} from '@/lib/services/social/socialConnectionStatus';
 
 const PLACEHOLDER_ORG_ID = '00000000-0000-0000-0000-000000000000';
 
@@ -74,14 +78,7 @@ export async function GET(request: NextRequest) {
         counts[provider] = (counts[provider] || 0) + 1;
         return counts;
       }, {});
-      const socialAttentionCount = orgSocial.filter((connection: any) => {
-        const status = String(connection.connection_status || '').toUpperCase();
-        const tokenStatus = String(connection.token_status || '').toUpperCase();
-        return !connection.disconnected_at && (
-          ['NEEDS_ATTENTION', 'RECONNECT_REQUIRED', 'REVOKED'].includes(status) ||
-          ['TOKEN_EXPIRED', 'TOKEN_REVOKED', 'REAUTH_REQUIRED'].includes(tokenStatus)
-        );
-      }).length;
+      const socialAttentionCount = getUnresolvedAttentionConnections(orgSocial).length;
       const zernioConnected = providerProfiles.some((p: any) => (p.organization_id === org.id || orgWorkspaces.some((w: any) => w.id === p.workspace_id)) && String(p.provider || '').toLowerCase() === 'zernio' && ['ACTIVE', 'CONNECTED'].includes(String(p.status || '').toUpperCase()));
       const creativeReservations = reservations.filter((r: any) => r.organization_id === org.id && /creative|image|video|flux|cogvideo/i.test(String(r.source_feature || '')) && ['COMMITTED', 'CHARGED', 'CONSUMED', 'FINALIZED'].includes(String(r.status || '').toUpperCase()));
       const socialPostCount = posts.filter((p: any) => p.organization_id === org.id || orgWorkspaces.some((w: any) => w.id === p.workspace_id)).length;

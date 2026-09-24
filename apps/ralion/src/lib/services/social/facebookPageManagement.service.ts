@@ -247,7 +247,19 @@ export class FacebookPageManagementService {
 
     if (!conns?.length) return null;
 
-    const conn = conns.find((c) =>
+    // Canonical Page resolution: prefer newest connection with connection_status=CONNECTED
+    // and token_status=TOKEN_VALID. A stale REAUTH_REQUIRED row must never override a valid Page.
+    const sortedConns = [...conns].sort((a, b) => {
+      const aValid = a.token_status === 'TOKEN_VALID' ? 1 : 0;
+      const bValid = b.token_status === 'TOKEN_VALID' ? 1 : 0;
+      if (aValid !== bValid) return bValid - aValid;
+      const aBiz = (a.account_type === 'BUSINESS' || a.metadata?.is_page === true || a.metadata?.provider_account_type === 'FACEBOOK_PAGE') ? 1 : 0;
+      const bBiz = (b.account_type === 'BUSINESS' || b.metadata?.is_page === true || b.metadata?.provider_account_type === 'FACEBOOK_PAGE') ? 1 : 0;
+      if (aBiz !== bBiz) return bBiz - aBiz;
+      return new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime();
+    });
+
+    const conn = sortedConns.find((c) =>
       c.account_type === 'BUSINESS' ||
       c.metadata?.is_page === true ||
       c.metadata?.provider_account_type === 'FACEBOOK_PAGE'
@@ -257,6 +269,18 @@ export class FacebookPageManagementService {
     const followers = Number(conn.followers_count) || Number(conn.metadata?.followers_count) || Number(conn.metadata?.followers) || 0;
     const pageId = conn.provider_account_id || conn.metadata?.pageId;
     if (!pageId) return null;
+
+    // Deduplicate old Page bindings: prune obsolete records superseded by this valid connection
+    if (conn.token_status === 'TOKEN_VALID') {
+      const obsolete = conns.filter(c =>
+        c.id !== conn.id &&
+        (c.provider_account_id === pageId || c.metadata?.pageId === pageId) &&
+        (c.token_status !== 'TOKEN_VALID' || !['CONNECTED', 'ACTIVE', 'connected'].includes(String(c.connection_status || '')))
+      );
+      if (obsolete.length > 0) {
+        void supabase.from('social_connections').delete().in('id', obsolete.map(c => c.id)).then(() => {}).catch(() => {});
+      }
+    }
 
     return {
       id: conn.id,
@@ -538,6 +562,28 @@ export class FacebookPageManagementService {
       userId,
       provider: 'facebook',
     });
+
+    // Deduplicate old Page bindings: archive/delete obsolete records for this tenant/page
+    try {
+      const { data: duplicateConns } = await supabase
+        .from('social_connections')
+        .select('id, token_status, connection_status')
+        .eq('provider', 'facebook')
+        .eq('organization_id', tenantId)
+        .eq('provider_account_id', params.pageId)
+        .neq('id', connectionId);
+
+      const obsoleteIds = (duplicateConns || [])
+        .filter(c => c.token_status !== 'TOKEN_VALID' || c.connection_status !== 'CONNECTED')
+        .map(c => c.id);
+
+      if (obsoleteIds.length > 0) {
+        await supabase.from('social_connections').delete().in('id', obsoleteIds);
+        console.log(`[FacebookPageManagement] Pruned ${obsoleteIds.length} obsolete duplicate binding(s) for Page ${params.pageId}`);
+      }
+    } catch (cleanErr: any) {
+      console.warn('[FacebookPageManagement] Notice during post-connect deduplication:', cleanErr?.message || cleanErr);
+    }
 
     await AuditLoggerService.log({
       eventType: 'FACEBOOK_PAGE_CONNECTED' as any,

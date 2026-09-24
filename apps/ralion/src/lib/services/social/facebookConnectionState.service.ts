@@ -163,12 +163,24 @@ export class FacebookConnectionStateService {
         c => c.connection_status === 'CONNECTED' || c.connection_status === 'ACTIVE'
       );
 
+      // Canonical Page resolution: prefer newest connection with token_status=TOKEN_VALID
+      // so a stale REAUTH_REQUIRED row never overrides a valid Page.
+      const sortedActiveConnections = [...activeConnections].sort((a, b) => {
+        const aValid = a.token_status === 'TOKEN_VALID' ? 1 : 0;
+        const bValid = b.token_status === 'TOKEN_VALID' ? 1 : 0;
+        if (aValid !== bValid) return bValid - aValid;
+        const aBiz = (a.account_type === 'BUSINESS' || a.metadata?.is_page === true || a.metadata?.provider_account_type === 'FACEBOOK_PAGE') ? 1 : 0;
+        const bBiz = (b.account_type === 'BUSINESS' || b.metadata?.is_page === true || b.metadata?.provider_account_type === 'FACEBOOK_PAGE') ? 1 : 0;
+        if (aBiz !== bBiz) return bBiz - aBiz;
+        return new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime();
+      });
+
       // Resolve the selected operational Page independently from the OAuth
       // authorization identity. Page discovery must always use the dedicated
       // Facebook user credential, never a Page token stored on social_connections.
       let facebookUserId: string | undefined = undefined;
       let facebookUserName: string | undefined = undefined;
-      const activeConnRecord = activeConnections.find(c =>
+      const activeConnRecord = sortedActiveConnections.find(c =>
         c.account_type === 'BUSINESS' ||
         c.metadata?.is_page === true ||
         c.metadata?.provider_account_type === 'FACEBOOK_PAGE'

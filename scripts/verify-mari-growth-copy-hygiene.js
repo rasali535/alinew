@@ -1,8 +1,9 @@
 const fs = require('fs');
 
-const core = fs.readFileSync('packages/ai/src/mariUniversalCore.ts', 'utf8');
-const component = fs.readFileSync('apps/ralion/src/components/MariMarkdownMessage.tsx', 'utf8');
-const route = fs.readFileSync('apps/ralion/src/app/api/social/facebook/pages/[pageId]/mari-growth/route.ts', 'utf8');
+const read = (p) => fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
+const core = read('packages/ai/src/mariUniversalCore.ts');
+const component = read('apps/ralion/src/components/MariMarkdownMessage.tsx');
+const route = read('apps/ralion/src/app/api/social/facebook/pages/[pageId]/mari-growth/route.ts');
 
 function assert(condition, message) {
   if (!condition) {

@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyPlatformAdminRequest } from '../../../../lib/auth/adminAuth';
 import { getSocialConnectionCapabilities } from '@ralion/integrations';
 import { getPrivilegedSupabase } from '@/lib/supabase/server';
-import { isActiveSocialConnection } from '@/lib/services/social/socialConnectionStatus';
+import {
+  isActiveSocialConnection,
+  getUnresolvedAttentionConnections,
+  getObsoleteDuplicateConnectionIds,
+} from '@/lib/services/social/socialConnectionStatus';
 
 const PLATFORM_ORG_ID = '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf';
 const INTERNAL_ORG_IDS = new Set(['00000000-0000-0000-0000-000000000000', PLATFORM_ORG_ID]);
@@ -79,14 +83,25 @@ export async function GET(request: NextRequest) {
       counts[provider] = (counts[provider] || 0) + 1;
       return counts;
     }, {});
-    const attentionConnections = socialConnections.filter((connection: any) => {
-      const status = String(connection.connection_status || '').toUpperCase();
-      const tokenStatus = String(connection.token_status || '').toUpperCase();
-      return !connection.disconnected_at && (
-        ['NEEDS_ATTENTION', 'RECONNECT_REQUIRED', 'REVOKED'].includes(status) ||
-        ['TOKEN_EXPIRED', 'TOKEN_REVOKED', 'REAUTH_REQUIRED'].includes(tokenStatus)
-      );
-    });
+    // Deduplicate old Page bindings from storage if superseded by a newer valid binding
+    const obsoleteIds = getObsoleteDuplicateConnectionIds(socialConnections);
+    if (obsoleteIds.length > 0) {
+      void supabase
+        .from('social_connections')
+        .delete()
+        .in('id', obsoleteIds)
+        .then(() => {
+          console.log(`[Admin Metrics] Pruned ${obsoleteIds.length} obsolete duplicate social connection(s).`);
+        })
+        .catch(err => {
+          console.warn('[Admin Metrics] Warning during obsolete connection cleanup:', err?.message || err);
+        });
+    }
+
+    // Command Centre aggregation: "Needs Attention" represents unresolved current bindings,
+    // not every historical disconnected record. If Page X has a newer TOKEN_VALID canonical connection,
+    // its superseded REAUTH_REQUIRED rows do not count as separate incidents.
+    const attentionConnections = getUnresolvedAttentionConnections(socialConnections);
     const providerProfiles = providerProfilesRes.data || [];
     const activeZernio = providerProfiles.filter((p: any) => String(p.provider || '').toLowerCase() === 'zernio' && ['ACTIVE', 'CONNECTED'].includes(String(p.status || '').toUpperCase()));
 

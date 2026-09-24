@@ -377,11 +377,21 @@ export class BusinessContextService {
           const res = await query.order('updated_at', { ascending: false });
 
           if (res.data && res.data.length > 0) {
-            const conn = res.data.find((c: any) => 
+            const sortedConns = [...res.data].sort((a: any, b: any) => {
+              const aValid = a.token_status === 'TOKEN_VALID' ? 1 : 0;
+              const bValid = b.token_status === 'TOKEN_VALID' ? 1 : 0;
+              if (aValid !== bValid) return bValid - aValid;
+              const aBiz = (a.account_type === 'BUSINESS' || a.metadata?.is_page === true || a.metadata?.provider_account_type === 'FACEBOOK_PAGE') ? 1 : 0;
+              const bBiz = (b.account_type === 'BUSINESS' || b.metadata?.is_page === true || b.metadata?.provider_account_type === 'FACEBOOK_PAGE') ? 1 : 0;
+              if (aBiz !== bBiz) return bBiz - aBiz;
+              return new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime();
+            });
+
+            const conn = sortedConns.find((c: any) => 
               c.account_type === 'BUSINESS' || 
               c.metadata?.is_page === true || 
               c.metadata?.provider_account_type === 'FACEBOOK_PAGE'
-            );
+            ) || sortedConns[0];
 
             if (conn) {
               const isP = Boolean(conn.metadata?.is_page === true || conn.account_type === 'BUSINESS' || conn.metadata?.provider_account_type === 'FACEBOOK_PAGE');

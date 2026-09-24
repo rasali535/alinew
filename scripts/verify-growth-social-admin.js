@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.resolve(__dirname, '..');
-const read = relativePath => fs.readFileSync(path.join(root, relativePath), 'utf8');
+const read = relativePath => fs.readFileSync(path.join(root, relativePath), 'utf8').replace(/\r\n/g, '\n');
 
 function expect(source, needle, label) {
   if (!source.includes(needle)) throw new Error(`[Growth/Social/Admin] Missing invariant: ${label}`);
