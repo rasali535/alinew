@@ -48,6 +48,7 @@ export function MariVoiceControl({
   const [errorMessage, setErrorMessage] = useState('');
   const [wakeEnabled, setWakeEnabled] = useState(true);
   const [wakeSupported, setWakeSupported] = useState(true);
+  const [wakePermissionReady, setWakePermissionReady] = useState(false);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
@@ -466,6 +467,8 @@ export function MariVoiceControl({
 
   useEffect(() => {
     let enabled = true;
+    let cancelled = false;
+
     try {
       const stored = localStorage.getItem('ralion:mari:wake-enabled');
       enabled = stored === null ? true : stored === 'true';
@@ -477,18 +480,41 @@ export function MariVoiceControl({
     wakeEnabledRef.current = enabled;
     setWakeEnabled(enabled);
 
-    if (!enabled || !navigator.mediaDevices?.getUserMedia) return;
+    if (!enabled) {
+      setWakePermissionReady(false);
+      return;
+    }
 
-    // Prime microphone permission once so "Hey Mari" can arm immediately
-    // after app/page launch without requiring the user to click the mic button.
-    // Browsers/OS may still show their own permission prompt the first time.
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setWakeSupported(false);
+      setWakePermissionReady(false);
+      return;
+    }
+
+    // IMPORTANT: do not start SpeechRecognition until microphone permission has
+    // actually resolved. Starting recognition in parallel with getUserMedia can
+    // produce a permanent "not-allowed" race on Chromium/Electron until the user
+    // clicks the mic button. The temporary stream is released immediately.
     void navigator.mediaDevices.getUserMedia({ audio: true })
       .then((stream) => {
         stream.getTracks().forEach((track) => track.stop());
+        if (!cancelled) {
+          setWakeSupported(true);
+          setWakePermissionReady(true);
+        }
       })
-      .catch(() => {
-        // SpeechRecognition will surface unsupported/permission state below.
+      .catch((error: any) => {
+        if (!cancelled) {
+          setWakePermissionReady(false);
+          if (error?.name === 'NotAllowedError' || error?.name === 'SecurityError') {
+            setErrorMessage('Microphone permission is required for hands-free "Hey Mari".');
+          }
+        }
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const stopWakeListener = useCallback(() => {
@@ -541,9 +567,17 @@ export function MariVoiceControl({
       };
 
       recognition.onerror = (event: any) => {
-        if (event?.error === 'not-allowed' || event?.error === 'service-not-allowed') {
-          setWakeSupported(false);
+        const code = String(event?.error || '');
+        if (code === 'not-allowed' || code === 'service-not-allowed') {
+          setWakePermissionReady(false);
+          setErrorMessage('Hands-free "Hey Mari" is waiting for microphone/speech permission.');
           return;
+        }
+
+        // Transient recognition failures should not permanently disable wake mode.
+        // onend will re-arm the listener while wake mode remains enabled.
+        if (code && code !== 'no-speech' && code !== 'aborted') {
+          console.warn('[Mari Wake] Speech recognition notice:', code);
         }
       };
 
@@ -562,13 +596,13 @@ export function MariVoiceControl({
   }, [disabled, start, stopWakeListener]);
 
   useEffect(() => {
-    if (wakeEnabled && voiceState === 'idle') {
+    if (wakeEnabled && wakePermissionReady && voiceState === 'idle') {
       startWakeListener();
     } else {
       stopWakeListener();
     }
     return () => stopWakeListener();
-  }, [startWakeListener, stopWakeListener, voiceState, wakeEnabled]);
+  }, [startWakeListener, stopWakeListener, voiceState, wakeEnabled, wakePermissionReady]);
 
   const toggleWakeMode = () => {
     const next = !wakeEnabled;
@@ -577,7 +611,21 @@ export function MariVoiceControl({
     try {
       localStorage.setItem('ralion:mari:wake-enabled', String(next));
     } catch {}
-    if (!next) stopWakeListener();
+    if (!next) {
+      setWakePermissionReady(false);
+      stopWakeListener();
+      return;
+    }
+
+    if (navigator.mediaDevices?.getUserMedia) {
+      void navigator.mediaDevices.getUserMedia({ audio: true })
+        .then((stream) => {
+          stream.getTracks().forEach((track) => track.stop());
+          setWakeSupported(true);
+          setWakePermissionReady(true);
+        })
+        .catch(() => setWakePermissionReady(false));
+    }
   };
 
   const lastActivationSignalRef = useRef(activationSignal);
