@@ -51,6 +51,7 @@ forbid(connectionState, /\.or\(`workspace_id\.eq\.\$\{workspaceId\},user_id\.eq\
 requirePattern(connectionState, /MetaCredentialService\.getValidTokenForWorkspace\(userId,\s*workspaceId,\s*'facebook'\)/, 'Facebook state resolution must use the workspace-bound OAuth credential.');
 requirePattern(metaCredential, /\.eq\('workspace_id',\s*workspaceId\)/, 'Workspace credential lookup must filter by workspace_id.');
 requirePattern(metaCredential, /\.eq\('user_id',\s*userId\)/, 'Workspace credential lookup must filter by authenticated user_id.');
+requirePattern(metaCredential, /satRow\.extra_meta\?\.workspaceId\s*!==\s*workspaceId/, 'Legacy Meta credential fallback must fail closed unless extra_meta.workspaceId exactly matches the requested workspace.');
 requirePattern(socialService, /workspace_id:\s*params\.workspaceId\s*\|\|\s*null/, 'Meta OAuth persistence must retain the signed workspace context.');
 
 forbid(serverAuth, /https:\/\/yidsfihagwttlmhfynmf\.supabase\.co/, 'Server auth must not hardcode a production Supabase project URL.');
