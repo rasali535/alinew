@@ -6,6 +6,8 @@ import {
 } from '@/lib/services/social.service';
 import { metaAdapterV26 } from '@/lib/services/metaAdapter.service';
 import { instagramBusinessAdapter } from '@/lib/services/instagramBusinessAdapter.service';
+import { tenantCache, buildTenantCacheKey } from '@/lib/cache/tenantCache';
+import { FacebookConnectionStateService } from '@/lib/services/social/facebookConnectionState.service';
 
 export const dynamic = 'force-dynamic';
 
@@ -214,6 +216,12 @@ export async function GET(
       scopes: grantedScopes,
       extraMeta,
     });
+
+    if (provider === 'facebook') {
+      const pageCacheKey = buildTenantCacheKey(userId, workspaceId, 'facebook_pages', 'list');
+      tenantCache.invalidate(pageCacheKey);
+      FacebookConnectionStateService.invalidateCache(workspaceId);
+    }
 
     // Facebook OAuth only establishes the user/profile token and discovers
     // manageable Pages. A Page is not connected until the user explicitly

@@ -290,34 +290,35 @@ export class FacebookConnectionStateService {
       const hasPagesShowList = grantedPermissions.includes('pages_show_list') || (debugData?.scopes && debugData.scopes.includes('pages_show_list'));
 
       // 4. Query /me/accounts to discover manageable Pages
+      // Attempt live Graph API discovery directly with the user token. Meta allows App Roles
+      // (Admins, Developers, Testers) to access /me/accounts under Standard Access even when
+      // pages_show_list is pending App Review or omitted from /me/permissions.
       const availablePages: DiscoveredPageSummary[] = [];
 
-      if (hasPagesShowList) {
-        try {
-          let nextPageUrl: string | null = `https://graph.facebook.com/${META_GRAPH_API_VERSION}/me/accounts?fields=id,name,username,category,tasks,picture,followers_count,fan_count,about,website,phone,single_line_address&limit=100&access_token=${encodeURIComponent(accessToken)}`;
+      try {
+        let nextPageUrl: string | null = `https://graph.facebook.com/${META_GRAPH_API_VERSION}/me/accounts?fields=id,name,username,category,tasks,picture,followers_count,fan_count,about,website,phone,single_line_address&limit=100&access_token=${encodeURIComponent(accessToken)}`;
 
-          while (nextPageUrl) {
-            const pageRes: Response = await fetch(nextPageUrl);
-            if (!pageRes.ok) break;
-            const pData: any = await pageRes.json();
-            const graphPages = pData.data || [];
+        while (nextPageUrl) {
+          const pageRes: Response = await fetch(nextPageUrl);
+          if (!pageRes.ok) break;
+          const pData: any = await pageRes.json();
+          const graphPages = pData.data || [];
 
-            for (const p of graphPages) {
-              availablePages.push({
-                pageId: String(p.id),
-                name: p.name,
-                username: p.username || `@${p.name.toLowerCase().replace(/\s+/g, '_')}`,
-                category: p.category || 'Business',
-                followersCount: Number(p.followers_count ?? p.fan_count ?? 0),
-                avatarUrl: p.picture?.data?.url || null,
-                tasks: p.tasks || [],
-              });
-            }
-            nextPageUrl = pData.paging?.next || null;
+          for (const p of graphPages) {
+            availablePages.push({
+              pageId: String(p.id),
+              name: p.name,
+              username: p.username || `@${p.name.toLowerCase().replace(/\s+/g, '_')}`,
+              category: p.category || 'Business',
+              followersCount: Number(p.followers_count ?? p.fan_count ?? 0),
+              avatarUrl: p.picture?.data?.url || null,
+              tasks: p.tasks || [],
+            });
           }
-        } catch (pageErr: any) {
-          console.warn('[FacebookStateService] /me/accounts discovery note:', pageErr.message);
+          nextPageUrl = pData.paging?.next || null;
         }
+      } catch (pageErr: any) {
+        console.warn('[FacebookStateService] /me/accounts discovery note:', pageErr.message);
       }
 
       // If Meta already returned managed Pages during the OAuth callback, retain
@@ -352,15 +353,15 @@ export class FacebookConnectionStateService {
 
       // 5. Determine State & Bound Selected Page
       // Check for active selected page in active connection metadata or social_destinations
-      const boundPageId = activeConnRecord?.metadata?.pageId || (activeConnRecord?.account_type === 'BUSINESS' ? activeConnRecord?.provider_account_id : undefined);
+      const boundPageId = activeConnRecord?.metadata?.pageId || (activeConnRecord?.account_type === 'BUSINESS' || activeConnRecord?.account_type === 'PAGE' ? activeConnRecord?.provider_account_id : undefined);
       
       let selectedPage: DiscoveredPageSummary | undefined = undefined;
       if (boundPageId && availablePages.length > 0) {
         selectedPage = availablePages.find(p => p.pageId === boundPageId);
       }
 
-      // If activeConnRecord is already an active Business Page connection, resolve selectedPage from it
-      if (!selectedPage && boundPageId && (activeConnRecord?.account_type === 'BUSINESS' || activeConnRecord?.metadata?.is_page)) {
+      // If activeConnRecord is already an active Business/Page connection, resolve selectedPage from it
+      if (!selectedPage && boundPageId && (activeConnRecord?.account_type === 'BUSINESS' || activeConnRecord?.account_type === 'PAGE' || activeConnRecord?.metadata?.is_page === true || activeConnRecord?.metadata?.provider_account_type === 'FACEBOOK_PAGE')) {
         selectedPage = {
           pageId: boundPageId,
           name: activeConnRecord.account_name || activeConnRecord.metadata?.pageName || 'Facebook Page',

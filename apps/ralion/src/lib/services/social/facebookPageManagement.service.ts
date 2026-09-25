@@ -253,14 +253,15 @@ export class FacebookPageManagementService {
       const aValid = a.token_status === 'TOKEN_VALID' ? 1 : 0;
       const bValid = b.token_status === 'TOKEN_VALID' ? 1 : 0;
       if (aValid !== bValid) return bValid - aValid;
-      const aBiz = (a.account_type === 'BUSINESS' || a.metadata?.is_page === true || a.metadata?.provider_account_type === 'FACEBOOK_PAGE') ? 1 : 0;
-      const bBiz = (b.account_type === 'BUSINESS' || b.metadata?.is_page === true || b.metadata?.provider_account_type === 'FACEBOOK_PAGE') ? 1 : 0;
+      const aBiz = (a.account_type === 'BUSINESS' || a.account_type === 'PAGE' || a.metadata?.is_page === true || a.metadata?.provider_account_type === 'FACEBOOK_PAGE') ? 1 : 0;
+      const bBiz = (b.account_type === 'BUSINESS' || b.account_type === 'PAGE' || b.metadata?.is_page === true || b.metadata?.provider_account_type === 'FACEBOOK_PAGE') ? 1 : 0;
       if (aBiz !== bBiz) return bBiz - aBiz;
       return new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime();
     });
 
     const conn = sortedConns.find((c) =>
       c.account_type === 'BUSINESS' ||
+      c.account_type === 'PAGE' ||
       c.metadata?.is_page === true ||
       c.metadata?.provider_account_type === 'FACEBOOK_PAGE'
     );

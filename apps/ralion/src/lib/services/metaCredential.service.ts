@@ -224,6 +224,21 @@ export class MetaCredentialService {
     const decryptedToken = decryptToken(data.encrypted_access_token);
     if (!decryptedToken) return null;
 
+    // Retrieve discovered_pages and extra metadata from social_account_tokens if available
+    let extraMeta: Record<string, any> = {};
+    try {
+      const { data: satRow } = await supabase
+        .from('social_account_tokens')
+        .select('extra_meta')
+        .eq('user_id', userId)
+        .eq('provider', provider)
+        .eq('status', 'connected')
+        .maybeSingle();
+      if (satRow?.extra_meta) {
+        extraMeta = satRow.extra_meta;
+      }
+    } catch {}
+
     return {
       accessToken: decryptedToken,
       metaUserId: data.meta_user_id,
@@ -231,7 +246,7 @@ export class MetaCredentialService {
       isExpired: data.token_expires_at ? new Date(data.token_expires_at) < new Date() : false,
       pageId: data.page_id,
       expiresAt: data.token_expires_at ? new Date(data.token_expires_at) : undefined,
-      extraMeta: {} as Record<string, any>,
+      extraMeta,
     };
   }
 

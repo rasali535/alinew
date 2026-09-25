@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { FacebookPageManagementService } from '@/lib/services/social/facebookPageManagement.service';
+import { FacebookConnectionStateService } from '@/lib/services/social/facebookConnectionState.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 import { requireRalionContext } from '@/lib/auth/serverAuth';
 import { tenantCache, buildTenantCacheKey } from '@/lib/cache/tenantCache';
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
 
     const cacheKey = buildTenantCacheKey(context.user.id, context.workspace.id, 'facebook_pages', 'list');
     const cached = tenantCache.get<any>(cacheKey);
-    if (cached) {
+    if (cached && Array.isArray(cached.pages) && cached.pages.length > 0) {
       return corsJsonResponse(cached, undefined, request);
     }
 
@@ -35,7 +36,9 @@ export async function GET(request: NextRequest) {
       hasConnectedProfile: result.hasConnectedProfile,
       profileName: result.profileName,
     };
-    tenantCache.set(cacheKey, payload, 60);
+    if (Array.isArray(payload.pages) && payload.pages.length > 0) {
+      tenantCache.set(cacheKey, payload, 60);
+    }
 
     return corsJsonResponse(payload, undefined, request);
   } catch (err: any) {
@@ -62,6 +65,7 @@ export async function POST(request: NextRequest) {
     const cacheKey = buildTenantCacheKey(context.user.id, context.workspace.id, 'facebook_pages', 'list');
     tenantCache.invalidate(cacheKey);
     tenantCache.invalidate(buildTenantCacheKey(context.user.id, context.workspace.id, 'mari_growth', 'plan'));
+    FacebookConnectionStateService.invalidateCache(context.workspace.id);
 
     const result = await FacebookPageManagementService.connectPage({
       organizationId: context.organization.id,
