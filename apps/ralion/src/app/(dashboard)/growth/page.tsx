@@ -931,13 +931,32 @@ function GrowthPageContent() {
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
         if (data.success) {
-          setOauthAlert({ type: 'success', message: `✅ Facebook Page connected: ${targetPage?.name || data.selectedPage?.pageName || pageId}!` });
+          const selectedPageName = targetPage?.name || data.selectedPage?.pageName || pageId;
+          setSelectedPageForConnect(pageId);
+          setFacebookPageStatus('CONNECTED');
+          setPageWorkspaceTab('POSTS');
+          setOauthAlert({
+            type: 'success',
+            message: `✅ Selected Facebook Page: ${selectedPageName} • ID: ${pageId}. Opening Page Posts for this Page.`,
+          });
+
           const accounts = await loadConnectedAccounts().catch(() => []);
-          const fbAccount = accounts.find(a => a.provider === 'facebook');
+          const fbAccount = accounts.find(a =>
+            a.provider === 'facebook' &&
+            (
+              a.providerAccountId === pageId ||
+              a.metadata?.pageId === pageId ||
+              a.metadata?.provider_account_id === pageId
+            )
+          );
+
           if (fbAccount?.id) {
             setSelectedAccountId(fbAccount.id);
-            fetchPostsForConnection(fbAccount.id).catch(e => console.warn('[Growth] fetchPosts notice:', e));
+            await fetchPostsForConnection(fbAccount.id).catch(e => console.warn('[Growth] fetchPosts notice:', e));
+          } else {
+            console.warn('[Growth] Connected Facebook Page row not yet visible after selection:', pageId);
           }
+
           await fetchFacebookPages().catch(e => console.warn('[Growth] fetchPages notice:', e));
           setIsPageSelectionModalOpen(false);
         } else {
@@ -4296,6 +4315,11 @@ function GrowthPageContent() {
                     <p className="text-xs text-indigo-300/80 font-mono mt-0.5">
                       {activeAcc?.handle || (activeAcc?.provider === 'facebook' ? activeFbPage?.username : null) || '@account'} • {activeAcc?.provider?.toUpperCase() || 'Facebook'}
                     </p>
+                    {activeAcc?.provider === 'facebook' && (
+                      <p className="text-[11px] text-zinc-400 font-mono mt-1">
+                        Selected Facebook Page ID: {activeAcc?.providerAccountId || activeFbPage?.pageId || 'Unavailable'}
+                      </p>
+                    )}
                     <div className="flex items-center gap-3 text-xs text-zinc-400 mt-2">
                       <span className="font-semibold text-white">{activeAcc?.followers || fbFollowersCount || '0'} followers</span>
                       <span>•</span>
@@ -4476,7 +4500,9 @@ function GrowthPageContent() {
                     {activeAcc?.provider === 'facebook' ? 'Published & Synced Facebook Posts' : `Published & Synced ${activeAcc?.provider?.toUpperCase() || 'Channel'} Posts`}
                   </span>
                   <span className="text-[11px] text-zinc-500 font-mono">
-                    {activeAcc?.provider === 'facebook' ? 'Real Graph API Feed' : `${activeAcc?.label || 'Social'} Feed`}
+                    {activeAcc?.provider === 'facebook'
+                      ? `Page-scoped feed • ID: ${activeAcc?.providerAccountId || activeFbPage?.pageId || 'Unavailable'}`
+                      : `${activeAcc?.label || 'Social'} Feed`}
                   </span>
                 </div>
 
@@ -7437,6 +7463,7 @@ function GrowthPageContent() {
                           {isLocked && <Badge variant="default" className="text-[10px]">🔒 UPGRADE</Badge>}
                         </div>
                         <p className="text-xs text-zinc-400 font-mono mt-0.5">{page.username || '@facebook_page'}</p>
+                        <p className="text-[11px] text-zinc-400 font-mono mt-0.5">Page ID: {page.pageId}</p>
                         <p className="text-[11px] text-zinc-500 mt-0.5">{page.followersCount || 0} followers • {page.category || 'Business'}</p>
                       </div>
                     </div>
