@@ -8,7 +8,14 @@ const requiredVoice = [
   'setWakePermissionReady(true)',
   "wakeEnabled && wakePermissionReady && voiceState === 'idle'",
   'do not start SpeechRecognition until microphone permission has',
+  'pendingNavigationRef',
+  'Let Mari finish the acknowledgement generated',
+  "window.dispatchEvent(new CustomEvent('ralion:mari-navigate'",
 ];
+
+if (voice.includes("window.setTimeout(() => {\n              window.dispatchEvent(new CustomEvent('ralion:mari-navigate', { detail: { route } }));\n            }, 150);")) {
+  throw new Error('Navigation must not fire immediately from the navigate_ralion tool handler.');
+}
 
 const requiredDesktop = [
   'setPermissionCheckHandler',
