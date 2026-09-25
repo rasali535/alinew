@@ -61,7 +61,12 @@ export function MariVoiceControl({
   const wakeEnabledRef = useRef(true);
   const wakeRecognitionRef = useRef<any>(null);
   const wakeRestartTimerRef = useRef<number | null>(null);
+  const wakeFallbackRecorderRef = useRef<MediaRecorder | null>(null);
+  const wakeFallbackStreamRef = useRef<MediaStream | null>(null);
+  const wakeFallbackActiveRef = useRef(false);
+  const wakeFallbackRequestInFlightRef = useRef(false);
   const shutdownAfterResponseRef = useRef(false);
+  const pendingNavigationRef = useRef<{ route: string; destination: string } | null>(null);
   const sessionIdRef = useRef('');
   const sessionStartedAtRef = useRef(0);
   const sessionReportedRef = useRef(false);
@@ -118,6 +123,7 @@ export function MariVoiceControl({
     sessionConversationRef.current = [];
     sessionStartedAtRef.current = 0;
     shutdownAfterResponseRef.current = false;
+    pendingNavigationRef.current = null;
     setVoiceState('idle');
   }, [organizationId, workspaceId]);
 
@@ -262,9 +268,10 @@ export function MariVoiceControl({
           }));
 
           if (route) {
-            window.setTimeout(() => {
-              window.dispatchEvent(new CustomEvent('ralion:mari-navigate', { detail: { route } }));
-            }, 150);
+            // Queue navigation and let Mari finish the spoken acknowledgement
+            // first. The persistent dashboard layout keeps the WebRTC session
+            // mounted while router.push changes the child route.
+            pendingNavigationRef.current = { route, destination };
           }
           return 'navigation';
         }
@@ -413,7 +420,24 @@ export function MariVoiceControl({
               }
             } else if (shutdownAfterResponseRef.current) {
               shutdownAfterResponseRef.current = false;
+              pendingNavigationRef.current = null;
               window.setTimeout(() => stop(), 250);
+            } else if (pendingNavigationRef.current) {
+              const pendingNavigation = pendingNavigationRef.current;
+              pendingNavigationRef.current = null;
+              setVoiceState('listening');
+
+              // response.done means the acknowledgement has finished. Give the
+              // audio track a short drain window, then navigate inside the same
+              // persistent dashboard layout without ending this WebRTC session.
+              window.setTimeout(() => {
+                window.dispatchEvent(new CustomEvent('ralion:mari-navigate', {
+                  detail: {
+                    route: pendingNavigation.route,
+                    destination: pendingNavigation.destination,
+                  },
+                }));
+              }, 450);
             } else {
               setVoiceState('listening');
             }
@@ -532,7 +556,109 @@ export function MariVoiceControl({
         recognition.stop();
       } catch {}
     }
+
+    wakeFallbackActiveRef.current = false;
+    const recorder = wakeFallbackRecorderRef.current;
+    wakeFallbackRecorderRef.current = null;
+    if (recorder && recorder.state !== 'inactive') {
+      try { recorder.stop(); } catch {}
+    }
+    wakeFallbackStreamRef.current?.getTracks().forEach((track) => {
+      try { track.stop(); } catch {}
+    });
+    wakeFallbackStreamRef.current = null;
   }, []);
+
+  const startServerWakeFallback = useCallback(async () => {
+    if (
+      !wakeEnabledRef.current ||
+      disabled ||
+      voiceStateRef.current !== 'idle' ||
+      wakeFallbackActiveRef.current ||
+      !navigator.mediaDevices?.getUserMedia ||
+      typeof MediaRecorder === 'undefined'
+    ) return;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+
+      if (!wakeEnabledRef.current || voiceStateRef.current !== 'idle') {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+
+      wakeFallbackStreamRef.current = stream;
+      wakeFallbackActiveRef.current = true;
+
+      const preferredTypes = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+      ];
+      const mimeType = preferredTypes.find((type) => MediaRecorder.isTypeSupported(type)) || '';
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+      wakeFallbackRecorderRef.current = recorder;
+
+      recorder.ondataavailable = async (event: BlobEvent) => {
+        if (
+          !wakeFallbackActiveRef.current ||
+          !wakeEnabledRef.current ||
+          voiceStateRef.current !== 'idle' ||
+          wakeFallbackRequestInFlightRef.current ||
+          !event.data ||
+          event.data.size < 256
+        ) return;
+
+        wakeFallbackRequestInFlightRef.current = true;
+        try {
+          const form = new FormData();
+          const extension = recorder.mimeType.includes('ogg') ? 'ogg' : 'webm';
+          form.append('audio', event.data, `wake.${extension}`);
+
+          const response = await authFetch('/api/mari/voice/wake', {
+            method: 'POST',
+            headers: {
+              'x-organization-id': organizationId,
+              'x-workspace-id': workspaceId,
+            },
+            body: form,
+          });
+
+          const payload = await response.json().catch(() => ({}));
+          if (response.ok && payload?.wake === true && voiceStateRef.current === 'idle') {
+            stopWakeListener();
+            void start();
+          }
+        } catch (error) {
+          console.warn('[Mari Wake] Server wake fallback notice:', error);
+        } finally {
+          wakeFallbackRequestInFlightRef.current = false;
+        }
+      };
+
+      recorder.onerror = () => {
+        wakeFallbackActiveRef.current = false;
+      };
+
+      recorder.onstop = () => {
+        wakeFallbackActiveRef.current = false;
+      };
+
+      // Small, continuous chunks keep standby cheap and responsive while
+      // avoiding a full OpenAI Realtime session before the wake phrase.
+      recorder.start(3000);
+    } catch (error) {
+      console.warn('[Mari Wake] Unable to start server wake fallback:', error);
+    }
+  }, [disabled, organizationId, start, stopWakeListener, workspaceId]);
 
   const startWakeListener = useCallback(() => {
     if (!wakeEnabledRef.current || disabled || voiceStateRef.current !== 'idle') return;
@@ -540,7 +666,8 @@ export function MariVoiceControl({
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognitionCtor) {
-      setWakeSupported(false);
+      setWakeSupported(true);
+      void startServerWakeFallback();
       return;
     }
 
@@ -568,9 +695,13 @@ export function MariVoiceControl({
 
       recognition.onerror = (event: any) => {
         const code = String(event?.error || '');
-        if (code === 'not-allowed' || code === 'service-not-allowed') {
-          setWakePermissionReady(false);
-          setErrorMessage('Hands-free "Hey Mari" is waiting for microphone/speech permission.');
+        if (code === 'not-allowed' || code === 'service-not-allowed' || code === 'network') {
+          // Chromium/Electron Web Speech may be unavailable even when microphone
+          // access is granted. Fall back to lightweight server transcription
+          // instead of requiring the user to click the mic button.
+          try { recognition.stop(); } catch {}
+          wakeRecognitionRef.current = null;
+          void startServerWakeFallback();
           return;
         }
 
@@ -593,7 +724,7 @@ export function MariVoiceControl({
     } catch {
       setWakeSupported(false);
     }
-  }, [disabled, start, stopWakeListener]);
+  }, [disabled, start, startServerWakeFallback, stopWakeListener]);
 
   useEffect(() => {
     if (wakeEnabled && wakePermissionReady && voiceState === 'idle') {
