@@ -219,35 +219,72 @@ export class MetaCredentialService {
       .limit(1)
       .maybeSingle();
 
-    if (error || !data?.encrypted_access_token || data.workspace_id !== workspaceId) return null;
+    if (!error && data?.encrypted_access_token && data.workspace_id === workspaceId) {
+      const decryptedToken = decryptToken(data.encrypted_access_token);
+      if (!decryptedToken) return null;
 
-    const decryptedToken = decryptToken(data.encrypted_access_token);
-    if (!decryptedToken) return null;
+      // Retrieve discovered_pages and extra metadata from social_account_tokens if available.
+      // This enrichment is accepted only when the token row itself declares the same workspace.
+      let extraMeta: Record<string, any> = {};
+      try {
+        const { data: satRow } = await supabase
+          .from('social_account_tokens')
+          .select('extra_meta')
+          .eq('user_id', userId)
+          .eq('provider', provider)
+          .eq('status', 'connected')
+          .maybeSingle();
+        if (satRow?.extra_meta?.workspaceId === workspaceId) {
+          extraMeta = satRow.extra_meta;
+        }
+      } catch {}
 
-    // Retrieve discovered_pages and extra metadata from social_account_tokens if available
-    let extraMeta: Record<string, any> = {};
+      return {
+        accessToken: decryptedToken,
+        metaUserId: data.meta_user_id,
+        scopes: data.scopes || [],
+        isExpired: data.token_expires_at ? new Date(data.token_expires_at) < new Date() : false,
+        pageId: data.page_id,
+        expiresAt: data.token_expires_at ? new Date(data.token_expires_at) : undefined,
+        extraMeta,
+      };
+    }
+
+    // Compatibility repair for older Facebook OAuth sessions that were persisted in
+    // social_account_tokens before the workspace-scoped meta_connections row existed.
+    // This is NOT a user-global fallback: the signed OAuth callback stores workspaceId
+    // in extra_meta, and we fail closed unless it exactly matches the requested workspace.
     try {
       const { data: satRow } = await supabase
         .from('social_account_tokens')
-        .select('extra_meta')
+        .select('encrypted_access_token,scopes,page_id,expires_at,extra_meta,status')
         .eq('user_id', userId)
         .eq('provider', provider)
         .eq('status', 'connected')
         .maybeSingle();
-      if (satRow?.extra_meta) {
-        extraMeta = satRow.extra_meta;
-      }
-    } catch {}
 
-    return {
-      accessToken: decryptedToken,
-      metaUserId: data.meta_user_id,
-      scopes: data.scopes || [],
-      isExpired: data.token_expires_at ? new Date(data.token_expires_at) < new Date() : false,
-      pageId: data.page_id,
-      expiresAt: data.token_expires_at ? new Date(data.token_expires_at) : undefined,
-      extraMeta,
-    };
+      if (
+        !satRow?.encrypted_access_token ||
+        satRow.extra_meta?.workspaceId !== workspaceId
+      ) {
+        return null;
+      }
+
+      const decryptedToken = decryptToken(satRow.encrypted_access_token);
+      if (!decryptedToken) return null;
+
+      return {
+        accessToken: decryptedToken,
+        metaUserId: satRow.extra_meta?.facebookUserId || satRow.extra_meta?.metaUserId || undefined,
+        scopes: satRow.scopes || [],
+        isExpired: satRow.expires_at ? new Date(satRow.expires_at) < new Date() : false,
+        pageId: satRow.page_id,
+        expiresAt: satRow.expires_at ? new Date(satRow.expires_at) : undefined,
+        extraMeta: satRow.extra_meta || {},
+      };
+    } catch {
+      return null;
+    }
   }
 
   /**
