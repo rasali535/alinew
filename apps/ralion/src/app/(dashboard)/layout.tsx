@@ -33,6 +33,7 @@ export default function DashboardLayout({
   const [isDesktopRuntime, setIsDesktopRuntime] = useState(false);
   const [mariVoiceSignal, setMariVoiceSignal] = useState(0);
   const [mariVoiceConversation, setMariVoiceConversation] = useState<Array<{ sender: 'USER' | 'MARI'; text: string }>>([]);
+  const [stableMariVoiceContext, setStableMariVoiceContext] = useState<{ organizationId: string; workspaceId: string } | null>(null);
 
   useEffect(() => {
     setIsMobileSidebarOpen(false);
@@ -92,6 +93,14 @@ export default function DashboardLayout({
       if (typeof removeNativeVoiceListener === 'function') removeNativeVoiceListener();
     };
   }, [router]);
+
+  useEffect(() => {
+    if (!organization?.id || !workspace?.id) return;
+    setStableMariVoiceContext({
+      organizationId: organization.id,
+      workspaceId: workspace.id,
+    });
+  }, [organization?.id, workspace?.id]);
 
   useEffect(() => {
     if (!organization?.id || !workspace?.id) return;
@@ -229,11 +238,11 @@ export default function DashboardLayout({
           />
         )}
 
-        {organization?.id && workspace?.id && (
+        {stableMariVoiceContext && (
           <div className="fixed bottom-20 right-5 z-[70] rounded-xl border border-purple-500/30 bg-zinc-950/95 p-1.5 shadow-2xl backdrop-blur">
             <MariVoiceControl
-              organizationId={organization.id}
-              workspaceId={workspace.id}
+              organizationId={stableMariVoiceContext.organizationId}
+              workspaceId={stableMariVoiceContext.workspaceId}
               activationSignal={mariVoiceSignal}
               currentRoute={pathname || '/dashboard'}
               recentConversation={mariVoiceConversation}
