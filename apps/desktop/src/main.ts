@@ -10,7 +10,8 @@ import {
   dialog,
   protocol,
   net,
-  globalShortcut
+  globalShortcut,
+  session
 } from 'electron';
 import * as path from 'path';
 import * as os from 'os';
@@ -716,6 +717,51 @@ if (!gotLock) {
 
   app.whenReady().then(async () => {
     console.log('[BOOT LOG 0] App ready callback started');
+
+    // Mari hands-free wake requires persistent microphone permission in the
+    // packaged Electron renderer. Explicitly handle both permission checks and
+    // requests for trusted Ralion origins only; deny everything else.
+    try {
+      const isTrustedRalionOrigin = (rawUrl: string) => {
+        try {
+          const parsed = new URL(rawUrl);
+          return (
+            (parsed.protocol === 'app:' && parsed.hostname === 'localhost') ||
+            (parsed.protocol === 'http:' && parsed.hostname === 'localhost' && parsed.port === '6509')
+          );
+        } catch {
+          return false;
+        }
+      };
+
+      session.defaultSession.setPermissionCheckHandler((_webContents, permission, requestingOrigin) => {
+        if (permission !== 'media') return false;
+        return isTrustedRalionOrigin(requestingOrigin);
+      });
+
+      session.defaultSession.setPermissionRequestHandler((webContents, permission, callback, details: any) => {
+        if (permission !== 'media') {
+          callback(false);
+          return;
+        }
+
+        const requestingUrl =
+          details?.requestingUrl ||
+          details?.securityOrigin ||
+          webContents.getURL();
+
+        const audioRequested =
+          !Array.isArray(details?.mediaTypes) ||
+          details.mediaTypes.length === 0 ||
+          details.mediaTypes.includes('audio');
+
+        callback(Boolean(audioRequested && isTrustedRalionOrigin(requestingUrl)));
+      });
+
+      log.info('[Mari Wake] Trusted microphone permission handlers registered.');
+    } catch (permissionError) {
+      log.warn('[Mari Wake] Failed to register microphone permission handlers:', permissionError);
+    }
     
     // Register 'app' protocol handler to serve Next.js static renderer
     try {
