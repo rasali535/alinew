@@ -62,6 +62,7 @@ export function MariVoiceControl({
   const wakeRecognitionRef = useRef<any>(null);
   const wakeRestartTimerRef = useRef<number | null>(null);
   const shutdownAfterResponseRef = useRef(false);
+  const pendingNavigationRef = useRef<{ route: string; destination: string } | null>(null);
   const sessionIdRef = useRef('');
   const sessionStartedAtRef = useRef(0);
   const sessionReportedRef = useRef(false);
@@ -118,6 +119,7 @@ export function MariVoiceControl({
     sessionConversationRef.current = [];
     sessionStartedAtRef.current = 0;
     shutdownAfterResponseRef.current = false;
+    pendingNavigationRef.current = null;
     setVoiceState('idle');
   }, [organizationId, workspaceId]);
 
@@ -262,9 +264,11 @@ export function MariVoiceControl({
           }));
 
           if (route) {
-            window.setTimeout(() => {
-              window.dispatchEvent(new CustomEvent('ralion:mari-navigate', { detail: { route } }));
-            }, 150);
+            // Do not navigate yet. Let Mari finish the acknowledgement generated
+            // by response.create first, then change tabs after response.done.
+            // This keeps the spoken sentence intact and makes navigation feel
+            // deliberate instead of cutting across her response.
+            pendingNavigationRef.current = { route, destination };
           }
           return 'navigation';
         }
@@ -413,7 +417,24 @@ export function MariVoiceControl({
               }
             } else if (shutdownAfterResponseRef.current) {
               shutdownAfterResponseRef.current = false;
+              pendingNavigationRef.current = null;
               window.setTimeout(() => stop(), 250);
+            } else if (pendingNavigationRef.current) {
+              const pendingNavigation = pendingNavigationRef.current;
+              pendingNavigationRef.current = null;
+
+              // response.done means Mari has completed the acknowledgement.
+              // Give the WebRTC audio track a short drain window before the UI
+              // route changes so the user hears the full sentence first.
+              window.setTimeout(() => {
+                window.dispatchEvent(new CustomEvent('ralion:mari-navigate', {
+                  detail: {
+                    route: pendingNavigation.route,
+                    destination: pendingNavigation.destination,
+                  },
+                }));
+              }, 450);
+              setVoiceState('listening');
             } else {
               setVoiceState('listening');
             }
