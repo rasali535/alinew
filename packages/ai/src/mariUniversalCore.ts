@@ -77,6 +77,7 @@ export function getMariFacebookPageService(): any {
 export type MariCapabilityMode = 'GENERAL' | 'BUSINESS' | 'ACTION';
 export type RequestedContextSource =
   | 'FACEBOOK'
+  | 'INSTAGRAM'
   | 'WEBSITE'
   | 'CRM'
   | 'OPERATIONS'
@@ -650,6 +651,37 @@ export function decideSemanticIntentHeuristic(
     };
   }
 
+  // 11.5 Instagram Connection Inquiries (Natural language & spelling variations)
+  if (
+    /\b(is\s+(my|our|the)?\s*(ig|instagram)\s*(account\s+|connection\s+)?(connected|linked|working|active|live)|do\s+(i|we)\s+have\s+(ig|instagram)\s*(connected|linked)|are\s+we\s+connected\s+to\s+(ig|instagram)|can\s+mari\s+(ai\s+)?(command\s+)?(still\s+)?(see|check)\s+(my|our|the)?\s*(connected\s+)?(ig|instagram)|check\s+(my|our)?\s*(ig|instagram)\s*(connection|status)|(which|what)\s+(ig|instagram)\s*(account|handle|profile|channel)\s*(is|do\s+(i|we)\s+have|have\s+(i|we))\s*(connected|linked)?|connected\s+instagram\s*(account|handle|profile)|did\s+(ig|instagram)\s*disconnect|instagram\s*status)\b/i.test(pLower) ||
+    pLower.includes('is my instagram connected') ||
+    pLower.includes('is instagram connected') ||
+    pLower.includes('do i have instagram connected') ||
+    pLower.includes('check instagram') ||
+    pLower.includes('instagram status') ||
+    pLower.includes('which instagram account is connected') ||
+    pLower.includes('what instagram account do i have connected') ||
+    pLower.includes('see connected instagram') ||
+    pLower.includes('see the connected instagram') ||
+    pLower.includes('mari ai command still waiting to see the connected instagram') ||
+    pLower.includes('is our instagram connected') ||
+    pLower.includes('is ig connected') ||
+    pLower.includes('check my instagram connection') ||
+    pLower.includes('check instagram connection') ||
+    (/\b(ig|instagram|insta)\b/i.test(pLower) && /\b(connect|connected|connection|link|linked|working|status|active|disconnect|see|waiting|wailing)\b/i.test(pLower))
+  ) {
+    return {
+      mode: 'BUSINESS',
+      intent: 'INSTAGRAM_CONNECTION_STATUS',
+      requestedSources: ['INSTAGRAM'],
+      requestedAction: 'NONE',
+      entities: { channel: 'instagram' },
+      missingInformation: [],
+      confidence: 0.98,
+      isMultiTurnFollowup: false,
+    };
+  }
+
   // 12. Facebook Audits, Improvements, and Missing Information
   if (/\b(fb|facebook|meta)\b/i.test(pLower)) {
     if (/\b(improve|improve\s+our|optimize|enhancement|better|positioning)\b/i.test(pLower)) {
@@ -889,6 +921,26 @@ function composeSelectiveSystemPrompt(
 - Recent Posts: ${postsSummary}`);
   }
 
+  // Selective Context: Instagram Social Channel
+  if (hasAll || requestedSources.includes('INSTAGRAM') || requestedSources.includes('CROSS_SOURCE')) {
+    const ig = context?.layer2?.social?.instagram;
+    const isIgConnected = Boolean(ig?.isConnected);
+    const igAccountName = ig?.accountName?.value || '';
+    const igUsername = ig?.username?.value || '';
+    const igFollowers = Number(ig?.followersCount?.value || 0);
+    const igType = ig?.accountType?.value || 'BUSINESS';
+    const canPublish = ig?.canPublish ?? isIgConnected;
+    const canInsights = ig?.canReadInsights ?? isIgConnected;
+
+    sections.push(`GROUNDED INSTAGRAM CHANNEL STATUS:
+- Connected: ${isIgConnected ? 'Yes' : 'No'}
+- Account Name: ${igAccountName || 'None'}
+- Username: ${igUsername ? `@${igUsername}` : (igAccountName ? `@${igAccountName}` : 'None')}
+- Account Type: ${igType}
+- Followers: ${igFollowers.toLocaleString()}
+- Capabilities: ${isIgConnected ? `Publish: ${canPublish ? 'Enabled' : 'Disabled'}, Insights: ${canInsights ? 'Enabled' : 'Disabled'}` : 'None'}`);
+  }
+
   // Selective Context: CRM Pipeline
   if (hasAll || requestedSources.includes('CRM') || requestedSources.includes('OPERATIONS')) {
     const pipelineVal = context?.layer2?.crm?.totalPipelineValue?.value || 0;
@@ -901,6 +953,7 @@ function composeSelectiveSystemPrompt(
   // Instruction & Grounding Rules
   sections.push(`INSTRUCTION & GROUNDING RULES:
 - When asked "Is my Facebook connected?" or about Facebook status: Check verified Facebook Channel Status above. If connected to an active Page, confirm **${context?.layer2?.social?.connectedPageName?.value || 'the connected Page'}** and state followers. If not connected, state clearly that Facebook is not connected.
+- When asked "Is my Instagram connected?" or about Instagram status: Check verified Instagram Channel Status above. If connected to an active Instagram account, confirm the connected username (@${context?.layer2?.social?.instagram?.username?.value || context?.layer2?.social?.instagram?.accountName?.value || 'Instagram'}) and state followers count (${context?.layer2?.social?.instagram?.followersCount?.value || 0}). If not connected, state clearly that Instagram is not connected.
 - When asked about business facts, website knowledge, or CRM performance: Ground your response directly in the verified facts above.
 - For general reasoning, coding, writing, or conceptual explanations: Answer directly and comprehensively without forcing extraneous company facts.
 - Multi-turn understanding: If the user asks a follow-up like "Why?", "Do it.", "Make it shorter.", "Use the second option.", or "Turn that into an email.", maintain strict context continuity with previous conversation turns.
@@ -1193,6 +1246,31 @@ function generateLocalStrategicFallback(
     // State A: Disconnected / Not Authenticated
     responseText = `### Facebook Channel Status${parentCompany}\n\n${orgName ? `**Canonical Business**: ${orgName}  \n` : ''}**Status**: Facebook isn't currently connected for ${orgName || 'your business'}.\n\nConnect your Facebook Page in **Growth Studio → Channels** to allow Mari to track audience reach, publish content, and analyze social positioning.`;
     actions.push({ id: 'CONNECT_FACEBOOK', type: 'NAVIGATE', label: 'Connect Facebook', payload: { route: '/growth?tab=channels' } });
+    return { text: responseText, suggestedActions: actions };
+  }
+
+  // A2. INSTAGRAM CONNECTION STATUS
+  if (decision.intent === 'INSTAGRAM_CONNECTION_STATUS') {
+    const parentCompany = orgName ? ` for **${orgName}**` : '';
+    const ig = context?.layer2?.social?.instagram;
+    const isIgConnected = Boolean(ig?.isConnected);
+    const igAccountName = ig?.accountName?.value || '';
+    const igUsername = ig?.username?.value || '';
+    const igHandle = igUsername ? `@${igUsername}` : (igAccountName ? `@${igAccountName}` : '');
+    const igFollowers = Number(ig?.followersCount?.value || 0);
+    const igType = ig?.accountType?.value || 'Professional';
+    const canPublish = ig?.canPublish ?? isIgConnected;
+    const canInsights = ig?.canReadInsights ?? isIgConnected;
+
+    if (isIgConnected && (igUsername || igAccountName)) {
+      responseText = `### Instagram Connection Status${parentCompany}\n\n${orgName ? `**Canonical Business**: ${orgName}\n\n` : ''}**Status**: Connected & Active\n**Connected Account**: **${igHandle || igAccountName}**\n**Account Type**: ${igType}\n**Audience Reach**: ${igFollowers.toLocaleString()} verified followers\n**Capabilities**: Content Publishing (${canPublish ? 'Enabled' : 'Disabled'}), Insights Tracking (${canInsights ? 'Enabled' : 'Disabled'})\n**Integration**: Instagram Graph API (Live)\n\n*Note: Your connected Instagram account is an attached social channel under ${orgName || 'your business'}.*`;
+      actions.push({ id: 'OPEN_GROWTH_STUDIO', type: 'NAVIGATE', label: 'Open Growth Studio', payload: { route: '/growth?tab=channels' } });
+      return { text: responseText, suggestedActions: actions };
+    }
+
+    // Disconnected
+    responseText = `### Instagram Channel Status${parentCompany}\n\n${orgName ? `**Canonical Business**: ${orgName}  \n` : ''}**Status**: Instagram isn't currently connected for ${orgName || 'your business'}.\n\nConnect your Instagram Professional account in **Growth Studio → Channels** to allow Mari to track Instagram audience reach, publish content, and analyze social positioning.`;
+    actions.push({ id: 'CONNECT_INSTAGRAM', type: 'NAVIGATE', label: 'Connect Instagram', payload: { route: '/growth?tab=channels' } });
     return { text: responseText, suggestedActions: actions };
   }
 
@@ -1865,6 +1943,70 @@ export class MariUniversalCore {
       }
     }
 
+    // 2.95 Track & resolve Instagram live status execution
+    if (detectedIntent === 'INSTAGRAM_CONNECTION_STATUS' || semanticDecision.requestedAction === 'inspect_instagram_status') {
+      semanticDecision.requestedAction = 'inspect_instagram_status' as any;
+      semanticDecision.requestedSources = ['layer2.social.instagram', 'InstagramGraphAPI'] as any;
+
+      const statusResponse = generateLocalStrategicFallback(cleanOriginalPrompt, context, semanticDecision, resolvedCompanyName);
+
+      console.log(JSON.stringify({
+        level: 'INFO',
+        type: 'MARI_DIAGNOSTIC_TRACE',
+        requestId,
+        detectedIntent,
+        semanticDecisionSource,
+        requestedAction: 'inspect_instagram_status',
+        requestedSources: semanticDecision.requestedSources,
+        toolsActuallyExecuted,
+        modelAttempted: null,
+        modelSucceeded: false,
+        classificationModelAttempted,
+        classificationModelSucceeded,
+        responseModelAttempted: null,
+        responseModelSucceeded: false,
+        actualModelUsed: null,
+        modelsAttempted: allModelsAttempted,
+        modelFailureCodes,
+        responseSource: 'local_grounded',
+        fallbackUsed: false,
+        fallbackReason: null,
+        buildVersion: MARI_BUILD_VERSION,
+      }));
+
+      return {
+        answer: statusResponse.text,
+        capabilityMode: 'BUSINESS',
+        detectedIntent: 'INSTAGRAM_CONNECTION_STATUS',
+        semanticDecisionSource,
+        requestedAction: 'inspect_instagram_status',
+        requestedSources: semanticDecision.requestedSources,
+        toolsActuallyExecuted,
+        modelAttempted: null,
+        modelSucceeded: false,
+        modelUsed: 'Mari Grounded Live Tools (InstagramConnectionStatus)',
+        classificationModelAttempted,
+        classificationModelSucceeded,
+        responseModelAttempted: null,
+        responseModelSucceeded: false,
+        actualModelUsed: null,
+        modelsAttempted: allModelsAttempted,
+        modelFailureCodes,
+        responseSource: 'local_grounded',
+        fallbackUsed: false,
+        fallbackReason: null,
+        buildVersion: MARI_BUILD_VERSION,
+        suggestedActions: statusResponse.suggestedActions,
+        ragContext: null,
+        contextSources: ['InstagramConnectionStatus', 'BusinessIdentityResolver'],
+        tenantId: orgId,
+        companyName: resolvedCompanyName,
+        isBusinessContextVerified: isVerified,
+        usage: classificationTokens,
+        requestId,
+      };
+    }
+
     if (context) {
       if (context.layer1?.companyName?.value) {
         resolvedCompanyName = context.layer1.companyName.value;
@@ -1873,6 +2015,7 @@ export class MariUniversalCore {
       if (context.layer1?.websiteKnowledge?.value) contextSourcesLoaded.push('WebsiteKnowledge');
       if (context.layer2?.crm?.isConnected) contextSourcesLoaded.push('CRM_Deals');
       if (context.layer2?.social?.isConnected) contextSourcesLoaded.push('Facebook_Social');
+      if (context.layer2?.social?.instagram?.isConnected) contextSourcesLoaded.push('Instagram_Social');
       if (context.layer2?.operations) contextSourcesLoaded.push('Workspace_Operations');
       isVerified = Boolean(context.layer1?.companyName?.provenance === 'VERIFIED');
     } else if (capabilityMode === 'BUSINESS' || capabilityMode === 'ACTION') {
@@ -1893,6 +2036,7 @@ export class MariUniversalCore {
         if (context.layer1?.websiteKnowledge?.value) contextSourcesLoaded.push('WebsiteKnowledge');
         if (context.layer2?.crm?.isConnected) contextSourcesLoaded.push('CRM_Deals');
         if (context.layer2?.social?.isConnected) contextSourcesLoaded.push('Facebook_Social');
+        if (context.layer2?.social?.instagram?.isConnected) contextSourcesLoaded.push('Instagram_Social');
         if (context.layer2?.operations) contextSourcesLoaded.push('Workspace_Operations');
 
         isVerified = Boolean(context.layer1?.companyName?.provenance === 'VERIFIED');
@@ -1962,6 +2106,8 @@ export class MariUniversalCore {
             suggestedActions.push({ type: 'NAVIGATE', label: 'Sync Website', payload: { route: '/settings' } });
           } else if (detectedIntent === 'FACEBOOK_CONNECTION_STATUS') {
             suggestedActions.push({ type: 'NAVIGATE', label: 'Open Growth Studio', payload: { route: '/growth' } });
+          } else if (detectedIntent === 'INSTAGRAM_CONNECTION_STATUS') {
+            suggestedActions.push({ type: 'NAVIGATE', label: 'Open Growth Studio', payload: { route: '/growth?tab=channels' } });
           } else if (detectedIntent === 'CREATIVE_STUDIO' || detectedIntent === 'CREATE_FLYER') {
             suggestedActions.push(
               { type: 'NAVIGATE', label: 'Open Creative Studio', payload: { route: '/growth?tab=creatives' } },

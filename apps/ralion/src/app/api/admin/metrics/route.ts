@@ -167,7 +167,9 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    const platformFacebook: any = activeFacebook.find((connection: any) => connection.organization_id === PLATFORM_ORG_ID && getSocialConnectionCapabilities(connection).isBusinessPage) || activeFacebook.find((connection: any) => connection.organization_id === PLATFORM_ORG_ID);
+    const activeFacebookConns = activeFacebook;
+    const RAS_ALI_LABS_ORGANIZATION_ID = PLATFORM_ORG_ID;
+    const platformFacebook: any = activeFacebookConns.find((c: any) => c.organization_id === RAS_ALI_LABS_ORGANIZATION_ID && getSocialConnectionCapabilities(c).isBusinessPage) || activeFacebookConns.find((c: any) => c.organization_id === RAS_ALI_LABS_ORGANIZATION_ID);
     const adminFacebook = platformFacebook ? {
       id: platformFacebook.id,
       pageId: platformFacebook.provider_account_id,

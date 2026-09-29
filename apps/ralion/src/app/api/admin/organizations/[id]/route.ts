@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyPlatformAdminRequest } from '../../../../../lib/auth/adminAuth';
 import { getPrivilegedSupabase } from '@/lib/supabase/server';
 import { getSocialConnectionCapabilities } from '@ralion/integrations';
-import { isActiveFacebookConnection, isActiveSocialConnection } from '@/lib/services/social/socialConnectionStatus';
+import { isActiveFacebookConnection, isActiveInstagramConnection, isActiveSocialConnection } from '@/lib/services/social/socialConnectionStatus';
 
 function toMs(value?: string | null): number {
   const parsed = value ? Date.parse(value) : NaN;
@@ -77,13 +77,22 @@ export async function GET(
     const socialRows = socialRes.data || [];
     const activeSocialConnections = socialRows.filter(isActiveSocialConnection);
     const activeFacebookConnections = socialRows.filter(isActiveFacebookConnection);
-    const activeInstagramConnections = activeSocialConnections.filter((connection: any) => String(connection.provider || '').toLowerCase() === 'instagram');
+    const activeInstagramConnections = socialRows.filter(isActiveInstagramConnection);
     const socialProviderCounts = activeSocialConnections.reduce((counts: Record<string, number>, connection: any) => {
       const provider = String(connection.provider || 'unknown').toLowerCase();
       counts[provider] = (counts[provider] || 0) + 1;
       return counts;
     }, {});
     const preferredPage: any = activeFacebookConnections.find((c: any) => getSocialConnectionCapabilities(c).isBusinessPage) || activeFacebookConnections[0];
+    const preferredInstagram: any = activeInstagramConnections[0] || null;
+
+    let metaStatus: 'CONNECTED' | 'DISCONNECTED' = 'DISCONNECTED';
+    let facebookStatus: 'CONNECTED' | 'DISCONNECTED' = 'DISCONNECTED';
+    if (activeFacebookConnections.length > 0) {
+      metaStatus = 'CONNECTED';
+      facebookStatus = 'CONNECTED';
+    }
+    const instagramStatus: 'CONNECTED' | 'DISCONNECTED' = activeInstagramConnections.length > 0 ? 'CONNECTED' : 'DISCONNECTED';
 
     const socialConnections = socialRows.map((connection: any) => {
       const caps = getSocialConnectionCapabilities(connection);
@@ -191,6 +200,11 @@ export async function GET(
       };
     });
 
+    const facebookPage = preferredPage?.account_name || preferredPage?.metadata?.pageName || undefined;
+    const facebookFollowers = preferredPage ? Number(preferredPage.followers_count || preferredPage.metadata?.followers_count || 0) : undefined;
+    const instagramAccount = preferredInstagram?.account_name || preferredInstagram?.username || undefined;
+    const instagramFollowers = preferredInstagram ? Number(preferredInstagram.followers_count || preferredInstagram.metadata?.followers_count || 0) : undefined;
+
     return NextResponse.json({
       success: true,
       data: {
@@ -231,11 +245,13 @@ export async function GET(
         socialConnections,
         socialProviderCounts,
         activeSocialConnectionCount: activeSocialConnections.length,
-        metaStatus: activeFacebookConnections.length ? 'CONNECTED' : 'DISCONNECTED',
-        facebookStatus: activeFacebookConnections.length ? 'CONNECTED' : 'DISCONNECTED',
-        instagramStatus: activeInstagramConnections.length ? 'CONNECTED' : 'DISCONNECTED',
-        facebookPage: preferredPage?.account_name || preferredPage?.metadata?.pageName || undefined,
-        facebookFollowers: preferredPage ? Number(preferredPage.followers_count || preferredPage.metadata?.followers_count || 0) : undefined,
+        metaStatus,
+        facebookStatus,
+        instagramStatus,
+        facebookPage,
+        facebookFollowers,
+        instagramAccount,
+        instagramFollowers,
         auditHistory,
       },
     });

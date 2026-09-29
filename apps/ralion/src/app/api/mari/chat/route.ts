@@ -44,11 +44,14 @@ function shouldLoadBusinessIntelligence(query: string, intent: string, mode: str
     'TARGET_CUSTOMERS',
     'FACEBOOK_ANALYTICS',
     'FACEBOOK_INSIGHTS',
+    'INSTAGRAM_ANALYTICS',
+    'INSTAGRAM_INSIGHTS',
+    'INSTAGRAM_CONNECTION_STATUS',
     'SOCIAL_ANALYTICS',
     'SOCIAL_INSIGHTS',
   ]);
   if (intelligenceIntents.has(normalizedIntent)) return true;
-  return /\b(grow|growth|performance|performing|doing|engagement|reach|followers?|facebook|social media|posts?|comments?|audience|customers?|leads?|marketing|content performance)\b/i.test(query);
+  return /\b(grow|growth|performance|performing|doing|engagement|reach|followers?|facebook|instagram|ig|social media|posts?|comments?|audience|customers?|leads?|marketing|content performance)\b/i.test(query);
 }
 
 function buildPartnerPrompt(
@@ -78,6 +81,12 @@ function buildPartnerPrompt(
         .join(' | ')
     : '';
 
+  const instagram = social?.instagram;
+  const isIgConnected = Boolean(instagram?.isConnected);
+  const igAccount = cleanContextValue(instagram?.accountName?.value || instagram?.username?.value || '', 200);
+  const igUsername = cleanContextValue(instagram?.username?.value || '', 100);
+  const igFollowers = Number(instagram?.followersCount?.value || 0);
+
   const snapshot = [
     `Canonical company: ${cleanContextValue(companyName || layer1?.companyName?.value || '', 180) || 'Not yet verified'}`,
     `Industry: ${cleanContextValue(layer1?.industry?.value || '', 180) || 'Not verified'}`,
@@ -89,6 +98,9 @@ function buildPartnerPrompt(
     `Facebook About: ${cleanContextValue(social?.pageAbout?.value || '', 700) || 'Not available'}`,
     `Facebook followers: ${Number(social?.followersCount?.value || 0) || 0}`,
     `Recent Facebook posts: ${recentPosts || 'Not available'}`,
+    `Instagram Professional: ${isIgConnected ? (igUsername ? `@${igUsername}` : (igAccount || 'Connected')) : 'Not connected'}`,
+    `Instagram followers: ${isIgConnected ? igFollowers : 0}`,
+    `Instagram Status: ${isIgConnected ? 'CONNECTED' : 'DISCONNECTED'}`,
     `CRM pipeline value: ${Number(crm?.totalPipelineValue?.value || 0) || 0}`,
     `Active customers: ${Number(crm?.activeCustomersCount?.value || 0) || 0}`,
   ].join('\n');

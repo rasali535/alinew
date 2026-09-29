@@ -39,6 +39,11 @@ export function isActiveFacebookConnection(connection: SocialConnectionStatusRec
     isActiveSocialConnection(connection);
 }
 
+export function isActiveInstagramConnection(connection: SocialConnectionStatusRecord): boolean {
+  return String(connection.provider || '').toLowerCase() === 'instagram' &&
+    isActiveSocialConnection(connection);
+}
+
 /**
  * Resolves unique channel key for a social connection record.
  * Scoped by tenant (org or workspace) and provider account id.

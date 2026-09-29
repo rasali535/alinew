@@ -260,6 +260,8 @@ export class BusinessContextService {
         documents?: any[];
         fbPage?: any;
         facebookState?: any;
+        instagram?: any;
+        instagramConnection?: any;
         websiteKnowledge?: any;
         tier?: string;
         customKnowledge?: Partial<Layer1BusinessKnowledge>;
@@ -300,124 +302,139 @@ export class BusinessContextService {
       WebsiteIngestionService.getWebsiteKnowledge(cleanOrgId);
     let fbPage = options?.localOverrides?.fbPage;
     let connectedSocialChannels: any[] = [];
-    let instagramConnection: any = null;
+    let instagramConnection: any = options?.localOverrides?.instagram || options?.localOverrides?.instagramConnection || null;
 
     // Tenant-isolated localStorage validation. Never read a global Facebook-page key.
     // For workspace-scoped context, require exact canonical organization, workspace, and user match.
     // Do not accept legacy organization-only Facebook records inside a workspace context.
-    if (!fbPage && typeof window !== 'undefined' && window.localStorage) {
+    if (typeof window !== 'undefined' && window.localStorage) {
       try {
         const wsId = options?.workspaceId;
         const userId = options?.userId;
 
-        if (wsId) {
-          const wsStorageKey = `ralion:${cleanOrgId}:${wsId}:selected_fb_page`;
-          const rawP = window.localStorage.getItem(wsStorageKey);
-          if (rawP) {
-            const parsedP = JSON.parse(rawP);
-            const orgMatches = parsedP?.organizationId === cleanOrgId;
-            const wsMatches = parsedP?.workspaceId === wsId;
-            const userMatches = !userId || parsedP?.userId === userId;
+        if (!fbPage) {
+          if (wsId) {
+            const wsStorageKey = `ralion:${cleanOrgId}:${wsId}:selected_fb_page`;
+            const rawP = window.localStorage.getItem(wsStorageKey);
+            if (rawP) {
+              const parsedP = JSON.parse(rawP);
+              const orgMatches = parsedP?.organizationId === cleanOrgId;
+              const wsMatches = parsedP?.workspaceId === wsId;
+              const userMatches = !userId || parsedP?.userId === userId;
 
-            if (parsedP && orgMatches && wsMatches && userMatches) {
-              fbPage = parsedP;
+              if (parsedP && orgMatches && wsMatches && userMatches) {
+                fbPage = parsedP;
+              }
+            }
+          } else {
+            const orgStorageKey = `ralion:${cleanOrgId}:selected_fb_page`;
+            const rawP = window.localStorage.getItem(orgStorageKey);
+            if (rawP) {
+              const parsedP = JSON.parse(rawP);
+              const orgMatches = parsedP?.organizationId === cleanOrgId;
+              const userMatches = !userId || !parsedP?.userId || parsedP?.userId === userId;
+
+              if (parsedP && orgMatches && userMatches) {
+                fbPage = parsedP;
+              }
             }
           }
-        } else {
-          const orgStorageKey = `ralion:${cleanOrgId}:selected_fb_page`;
-          const rawP = window.localStorage.getItem(orgStorageKey);
-          if (rawP) {
-            const parsedP = JSON.parse(rawP);
-            const orgMatches = parsedP?.organizationId === cleanOrgId;
-            const userMatches = !userId || !parsedP?.userId || parsedP?.userId === userId;
+        }
 
-            if (parsedP && orgMatches && userMatches) {
-              fbPage = parsedP;
+        if (!instagramConnection) {
+          const igStorageKey = wsId
+            ? `ralion:${cleanOrgId}:${wsId}:selected_instagram_account`
+            : `ralion:${cleanOrgId}:selected_instagram_account`;
+          const rawIg = window.localStorage.getItem(igStorageKey);
+          if (rawIg) {
+            const parsedIg = JSON.parse(rawIg);
+            if (parsedIg && (parsedIg.organizationId === cleanOrgId || !parsedIg.organizationId)) {
+              instagramConnection = parsedIg;
             }
           }
         }
       } catch {}
-    } else if (!fbPage && typeof window === 'undefined') {
-      try {
-        const { createClient } = require('@supabase/supabase-js');
-        const sUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const sKey =
-          process.env.SUPABASE_SECRET_KEY ||
-          process.env.SUPABASE_SERVICE_ROLE_KEY ||
-          process.env.SUPABASE_SERVICE_KEY;
-        if (!sUrl || !sKey) {
-          throw new Error('Supabase server credentials are not configured for Mari business context resolution.');
-        }
-        const sClient = createClient(sUrl, sKey, { auth: { persistSession: false } });
+    } else if (typeof window === 'undefined') {
+      // 1. Resolve Facebook page from Supabase if not provided in overrides
+      if (!fbPage) {
+        try {
+          const { createClient } = require('@supabase/supabase-js');
+          const sUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+          const sKey =
+            process.env.SUPABASE_SECRET_KEY ||
+            process.env.SUPABASE_SERVICE_ROLE_KEY ||
+            process.env.SUPABASE_SERVICE_KEY;
+          if (sUrl && sKey && cleanOrgId !== 'unconfigured-tenant' && cleanOrgId !== 'public-visitor') {
+            const sClient = createClient(sUrl, sKey, { auth: { persistSession: false } });
 
-        const targetOrgId = options?.organizationId || cleanOrgId;
-        const targetWorkspaceId = options?.workspaceId;
-        const targetUserId = options?.userId;
+            const targetOrgId = options?.organizationId || cleanOrgId;
+            const targetWorkspaceId = options?.workspaceId;
+            const targetUserId = options?.userId;
 
-        // Query strictly for this tenant UUID or canonical slug
-        if (cleanOrgId !== 'unconfigured-tenant' && cleanOrgId !== 'public-visitor') {
-          let query = sClient
-            .from('social_connections')
-            .select('*')
-            .eq('provider', 'facebook')
-            .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected']);
+            let query = sClient
+              .from('social_connections')
+              .select('*')
+              .eq('provider', 'facebook')
+              .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected']);
 
-          if (targetWorkspaceId && targetOrgId) {
-            query = query.eq('organization_id', targetOrgId).eq('workspace_id', targetWorkspaceId);
-          } else if (targetWorkspaceId) {
-            query = query.eq('workspace_id', targetWorkspaceId);
-          } else if (targetOrgId) {
-            query = query.eq('organization_id', targetOrgId);
-          }
+            if (targetWorkspaceId && targetOrgId) {
+              query = query.or(`organization_id.eq.${targetOrgId},workspace_id.eq.${targetWorkspaceId}`);
+            } else if (targetWorkspaceId) {
+              query = query.eq('workspace_id', targetWorkspaceId);
+            } else if (targetOrgId) {
+              query = query.eq('organization_id', targetOrgId);
+            }
 
-          if (targetUserId) {
-            query = query.eq('user_id', targetUserId);
-          }
+            if (targetUserId) {
+              query = query.eq('user_id', targetUserId);
+            }
 
-          const res = await query.order('updated_at', { ascending: false });
+            const res = await query.order('updated_at', { ascending: false });
 
-          if (res.data && res.data.length > 0) {
-            const sortedConns = [...res.data].sort((a: any, b: any) => {
-              const aValid = a.token_status === 'TOKEN_VALID' ? 1 : 0;
-              const bValid = b.token_status === 'TOKEN_VALID' ? 1 : 0;
-              if (aValid !== bValid) return bValid - aValid;
-              const aBiz = (a.account_type === 'BUSINESS' || a.metadata?.is_page === true || a.metadata?.provider_account_type === 'FACEBOOK_PAGE') ? 1 : 0;
-              const bBiz = (b.account_type === 'BUSINESS' || b.metadata?.is_page === true || b.metadata?.provider_account_type === 'FACEBOOK_PAGE') ? 1 : 0;
-              if (aBiz !== bBiz) return bBiz - aBiz;
-              return new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime();
-            });
+            if (res.data && res.data.length > 0) {
+              const sortedConns = [...res.data].sort((a: any, b: any) => {
+                const aValid = a.token_status === 'TOKEN_VALID' ? 1 : 0;
+                const bValid = b.token_status === 'TOKEN_VALID' ? 1 : 0;
+                if (aValid !== bValid) return bValid - aValid;
+                const aBiz = (a.account_type === 'BUSINESS' || a.metadata?.is_page === true || a.metadata?.provider_account_type === 'FACEBOOK_PAGE') ? 1 : 0;
+                const bBiz = (b.account_type === 'BUSINESS' || b.metadata?.is_page === true || b.metadata?.provider_account_type === 'FACEBOOK_PAGE') ? 1 : 0;
+                if (aBiz !== bBiz) return bBiz - aBiz;
+                return new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime();
+              });
 
-            const conn = sortedConns.find((c: any) => 
-              c.account_type === 'BUSINESS' || 
-              c.metadata?.is_page === true || 
-              c.metadata?.provider_account_type === 'FACEBOOK_PAGE'
-            ) || sortedConns[0];
+              const conn = sortedConns.find((c: any) => 
+                c.account_type === 'BUSINESS' || 
+                c.metadata?.is_page === true || 
+                c.metadata?.provider_account_type === 'FACEBOOK_PAGE'
+              ) || sortedConns[0];
 
-            if (conn) {
-              const isP = Boolean(conn.metadata?.is_page === true || conn.account_type === 'BUSINESS' || conn.metadata?.provider_account_type === 'FACEBOOK_PAGE');
-              fbPage = {
-                id: conn.id,
-                pageId: conn.metadata?.pageId || conn.provider_account_id || conn.id,
-                name: conn.account_name || conn.metadata?.pageName || (isP ? 'Facebook Page' : 'Personal Profile'),
-                username: conn.username || conn.metadata?.pageUsername || `@${(conn.account_name || 'page').toLowerCase().replace(/\s+/g, '_')}`,
-                category: conn.metadata?.category || 'Business',
-                fanCount: Number(conn.followers_count) || Number(conn.metadata?.followers_count) || 0,
-                about: conn.metadata?.about || conn.metadata?.description || undefined,
-                description: conn.metadata?.description || conn.metadata?.about || undefined,
-                website: conn.metadata?.website || conn.metadata?.websiteUrl || undefined,
-                contactInfo: conn.metadata?.contactInfo || conn.metadata?.phone || undefined,
-                status: conn.connection_status,
-                accountType: conn.account_type,
-                metadata: conn.metadata,
-                isPersonalProfile: !isP,
-              };
+              if (conn) {
+                const isP = Boolean(conn.metadata?.is_page === true || conn.account_type === 'BUSINESS' || conn.metadata?.provider_account_type === 'FACEBOOK_PAGE');
+                fbPage = {
+                  id: conn.id,
+                  pageId: conn.metadata?.pageId || conn.provider_account_id || conn.id,
+                  name: conn.account_name || conn.metadata?.pageName || (isP ? 'Facebook Page' : 'Personal Profile'),
+                  username: conn.username || conn.metadata?.pageUsername || `@${(conn.account_name || 'page').toLowerCase().replace(/\s+/g, '_')}`,
+                  category: conn.metadata?.category || 'Business',
+                  fanCount: Number(conn.followers_count) || Number(conn.metadata?.followers_count) || 0,
+                  about: conn.metadata?.about || conn.metadata?.description || undefined,
+                  description: conn.metadata?.description || conn.metadata?.about || undefined,
+                  website: conn.metadata?.website || conn.metadata?.websiteUrl || undefined,
+                  contactInfo: conn.metadata?.contactInfo || conn.metadata?.phone || undefined,
+                  status: conn.connection_status,
+                  accountType: conn.account_type,
+                  metadata: conn.metadata,
+                  isPersonalProfile: !isP,
+                };
+              }
             }
           }
+        } catch (srvErr: any) {
+          console.warn('[BusinessContext] Server-side Facebook connection query notice:', srvErr?.message);
         }
-      } catch (srvErr: any) {
-        console.warn('[BusinessContext] Server-side Facebook connection query notice:', srvErr?.message);
       }
 
+      // 2. Query all multi-channel social connections (runs independently of fbPage!)
       try {
         const { createClient } = require('@supabase/supabase-js');
         const sUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -435,11 +452,14 @@ export class BusinessContextService {
 
           const targetOrgId = options?.organizationId || cleanOrgId;
           const targetWorkspaceId = options?.workspaceId;
-          const targetUserId = options?.userId;
 
-          if (targetOrgId) channelQuery = channelQuery.eq('organization_id', targetOrgId);
-          if (targetWorkspaceId) channelQuery = channelQuery.eq('workspace_id', targetWorkspaceId);
-          if (targetUserId) channelQuery = channelQuery.eq('user_id', targetUserId);
+          if (targetOrgId && targetWorkspaceId) {
+            channelQuery = channelQuery.or(`organization_id.eq.${targetOrgId},workspace_id.eq.${targetWorkspaceId}`);
+          } else if (targetOrgId) {
+            channelQuery = channelQuery.eq('organization_id', targetOrgId);
+          } else if (targetWorkspaceId) {
+            channelQuery = channelQuery.eq('workspace_id', targetWorkspaceId);
+          }
 
           const channelRes = await channelQuery.order('updated_at', { ascending: false });
           connectedSocialChannels = (channelRes.data || []).filter((row: any) => {
@@ -450,13 +470,33 @@ export class BusinessContextService {
               row.metadata?.provider_account_type === 'FACEBOOK_PAGE';
           });
 
-          instagramConnection = connectedSocialChannels.find(
-            (row: any) => String(row.provider || '').toLowerCase() === 'instagram'
-          ) || null;
+          if (!instagramConnection) {
+            instagramConnection = connectedSocialChannels.find(
+              (row: any) => String(row.provider || '').toLowerCase() === 'instagram'
+            ) || null;
+          }
         }
       } catch (channelErr: any) {
         console.warn('[BusinessContext] Multi-channel social connection query notice:', channelErr?.message);
       }
+    }
+
+    if (instagramConnection && !connectedSocialChannels.some((c: any) => String(c.provider || '').toLowerCase() === 'instagram')) {
+      connectedSocialChannels.push({
+        id: instagramConnection.id || instagramConnection.connectionId || 'ig-conn',
+        provider: 'instagram',
+        provider_account_id: instagramConnection.provider_account_id || instagramConnection.accountId || instagramConnection.id,
+        account_name: instagramConnection.account_name || instagramConnection.name || instagramConnection.username || 'Instagram Business Account',
+        username: instagramConnection.username,
+        account_type: instagramConnection.account_type || instagramConnection.accountType || 'BUSINESS',
+        connection_status: instagramConnection.connection_status || instagramConnection.status || 'CONNECTED',
+        token_status: instagramConnection.token_status || 'TOKEN_VALID',
+        scopes: instagramConnection.scopes || [],
+        capabilities: instagramConnection.capabilities || {},
+        metadata: instagramConnection.metadata || {},
+        followers_count: instagramConnection.followers_count ?? instagramConnection.followersCount ?? 0,
+        last_sync_at: instagramConnection.last_sync_at || instagramConnection.lastSyncedAt || timestamp,
+      });
     }
 
     const isPersonalFb = Boolean(
@@ -644,6 +684,7 @@ export class BusinessContextService {
         ...(isIdentityVerified ? [{ id: 'k-identity', title: `Business Identity (${orgName})`, category: 'IDENTITY', updatedAt: timestamp, status: 'VERIFIED' as const }] : []),
         ...(isWkValid ? [{ id: 'k-web', title: `Website Knowledge (${websiteKnowledge?.websiteUrl})`, category: 'WEBSITE', updatedAt: websiteKnowledge?.lastSuccessfulSync || timestamp, status: 'VERIFIED' as const }] : []),
         ...(isSocialPageConnected ? [{ id: 'k-soc', title: `Facebook Page (${fbPage?.name})`, category: 'SOCIAL', updatedAt: timestamp, status: 'CONNECTED' as const }] : []),
+        ...(isInstagramConnected ? [{ id: 'k-soc-ig', title: `Instagram Account (@${instagramConnection?.username || instagramConnection?.account_name || 'Instagram'})`, category: 'SOCIAL', updatedAt: instagramConnection?.last_sync_at || timestamp, status: 'CONNECTED' as const }] : []),
         ...(isPersonalFb ? [{ id: 'k-soc-personal', title: `Facebook Personal Profile (${fbPage?.name || 'Personal Profile'}) — Business Page Not Connected`, category: 'SOCIAL', updatedAt: timestamp, status: 'PENDING' as const }] : []),
         ...(hasRealContacts ? [{ id: 'k-crm', title: 'Live CRM Ledger', category: 'CRM', updatedAt: timestamp, status: 'CONNECTED' as const }] : []),
         ...(hasRealTasks ? [{ id: 'k-tasks', title: 'Operational Tasks', category: 'OPERATIONS', updatedAt: timestamp, status: 'CONNECTED' as const }] : []),
@@ -831,10 +872,26 @@ export class BusinessContextService {
             lastVerifiedAt: timestamp,
           },
           scopes: Array.isArray(instagramConnection?.scopes) ? instagramConnection.scopes : [],
-          canPublish: Boolean(instagramConnection?.scopes?.includes('instagram_business_content_publish')),
-          canReadInsights: Boolean(instagramConnection?.scopes?.includes('instagram_business_manage_insights')),
-          canManageComments: Boolean(instagramConnection?.scopes?.includes('instagram_business_manage_comments')),
-          canManageMessages: Boolean(instagramConnection?.scopes?.includes('instagram_business_manage_messages')),
+          canPublish: Boolean(
+            instagramConnection?.capabilities?.publish ??
+            (Array.isArray(instagramConnection?.scopes) && instagramConnection.scopes.some((s: string) => /publish/i.test(s))) ??
+            isInstagramConnected
+          ),
+          canReadInsights: Boolean(
+            instagramConnection?.capabilities?.insights ??
+            (Array.isArray(instagramConnection?.scopes) && instagramConnection.scopes.some((s: string) => /insight/i.test(s))) ??
+            isInstagramConnected
+          ),
+          canManageComments: Boolean(
+            instagramConnection?.capabilities?.comments ??
+            (Array.isArray(instagramConnection?.scopes) && instagramConnection.scopes.some((s: string) => /comment/i.test(s))) ??
+            isInstagramConnected
+          ),
+          canManageMessages: Boolean(
+            instagramConnection?.capabilities?.messages ??
+            (Array.isArray(instagramConnection?.scopes) && instagramConnection.scopes.some((s: string) => /message/i.test(s))) ??
+            isInstagramConnected
+          ),
           lastSyncedAt: instagramConnection?.last_sync_at || undefined,
         },
       },
