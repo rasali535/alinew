@@ -121,7 +121,7 @@ export interface SemanticDecision {
   mode: MariCapabilityMode;
   intent: string;
   requestedSources: RequestedContextSource[];
-  requestedAction: 'NONE' | 'GENERATE_CREATIVE_JOB' | 'NAVIGATE' | 'REFRESH_CONNECTION' | 'CONFIRM_ACTION' | 'inspect_facebook_status';
+  requestedAction: 'NONE' | 'GENERATE_CREATIVE_JOB' | 'NAVIGATE' | 'REFRESH_CONNECTION' | 'CONFIRM_ACTION' | 'inspect_facebook_status' | 'inspect_instagram_status';
   entities: SemanticEntities;
   missingInformation: string[];
   confidence: number;
