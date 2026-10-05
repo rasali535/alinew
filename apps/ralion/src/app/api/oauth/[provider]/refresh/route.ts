@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { getConnectorForProvider, IntegrationProvider } from '@ralion/integrations/server';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
+import { requireRalionContext } from '@/lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +25,11 @@ export async function POST(
   { params }: { params: Promise<{ provider: string }> }
 ) {
   try {
+    const required = await requireRalionContext(request);
+    if (required.response || !required.context) {
+      return required.response || corsJsonResponse({ success: false, code: 'AUTHENTICATION_REQUIRED', error: 'Authentication required.' }, { status: 401 }, request);
+    }
+
     const { provider } = await params;
     const body = await request.json();
     const { refreshToken } = body;
