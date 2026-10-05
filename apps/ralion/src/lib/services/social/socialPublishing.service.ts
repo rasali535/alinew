@@ -184,15 +184,33 @@ function validateMediaInputs(mediaUrls?: unknown, mediaTypes?: unknown): {
     return parsed.toString();
   });
 
+  const inferMimeFromUrl = (candidate: unknown): string | null => {
+    if (typeof candidate !== 'string' || candidate.startsWith('data:')) return null;
+    try {
+      const pathname = new URL(candidate).pathname.toLowerCase();
+      if (/\.jpe?g$/.test(pathname)) return 'image/jpeg';
+      if (/\.png$/.test(pathname)) return 'image/png';
+      if (/\.gif$/.test(pathname)) return 'image/gif';
+      if (/\.webp$/.test(pathname)) return 'image/webp';
+      if (/\.mp4$/.test(pathname)) return 'video/mp4';
+      if (/\.mov$/.test(pathname)) return 'video/quicktime';
+      if (/\.webm$/.test(pathname)) return 'video/webm';
+    } catch {
+      return null;
+    }
+    return null;
+  };
+
   const safeTypes = types.map((candidate, index) => {
     if (typeof candidate !== 'string') {
       throw publishingInputError('INVALID_MEDIA_TYPE', 'Every media type must be a valid image or video MIME type.');
     }
     const normalized = candidate.trim().toLowerCase();
+    const urlInferredType = inferMimeFromUrl(urls[index]);
     const resolved = normalized === 'image'
-      ? inferredTypes[index] || 'image/jpeg'
+      ? inferredTypes[index] || (urlInferredType?.startsWith('image/') ? urlInferredType : null) || 'image/jpeg'
       : normalized === 'video'
-        ? inferredTypes[index] || 'video/mp4'
+        ? inferredTypes[index] || (urlInferredType?.startsWith('video/') ? urlInferredType : null) || 'video/mp4'
         : normalized;
     if (!/^(image|video)\/[a-z0-9.+-]+$/i.test(resolved) || resolved === 'image/svg+xml') {
       throw publishingInputError('INVALID_MEDIA_TYPE', 'Every media type must be a valid image or video MIME type.');
