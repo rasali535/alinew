@@ -2538,7 +2538,10 @@ function GrowthPageContent() {
 
     if (publishingPostId) return; // Prevent double-submission
 
-    const targetConn = (selectedAccountId && connectedAccounts.find(a => a.id === selectedAccountId))
+    const explicitlySelectedConn = selectedAccountId
+      ? connectedAccounts.find(a => a.id === selectedAccountId)
+      : null;
+    const targetConn = explicitlySelectedConn
       || (post.platform && connectedAccounts.find(a => a.provider === post.platform))
       || (connectedAccounts.length === 1 ? connectedAccounts[0] : null);
 
@@ -2552,7 +2555,10 @@ function GrowthPageContent() {
 
     setPublishingPostId(postId);
     try {
-      const targetPlatform = post.platform || targetConn.provider || 'facebook';
+      // The account the user has explicitly selected is the publishing authority.
+      // A draft's historical platform must not override a later Facebook/Instagram
+      // account switch. Preserve the draft platform only when no account was selected.
+      const targetPlatform = explicitlySelectedConn?.provider || post.platform || targetConn.provider || 'facebook';
       const isFacebookTarget = targetPlatform === 'facebook';
       const activeFbPage = isFacebookTarget
         ? (availableFacebookPages.find(p => p.pageId === targetConn.providerAccountId || p.id === targetConn.id || p.pageId === targetConn.id)
