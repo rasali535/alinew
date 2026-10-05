@@ -166,6 +166,7 @@ export interface ContentPost {
   rawPublishedAt?: string;
   platformPostId?: string;
   mediaUrl?: string;
+  mediaAssetId?: string;
   mediaType?: 'image' | 'video';
   engagement?: { likes: number; shares: number; reach: number; comments: number };
 }
@@ -619,6 +620,7 @@ function GrowthPageContent() {
           hashtags: ['#Growth'],
           status: 'draft',
           mediaUrl: item.output,
+          mediaAssetId: item.id,
           mediaType: item.type === 'VIDEO_REEL' ? 'video' : 'image',
           engagement: { likes: 0, shares: 0, reach: 0, comments: 0 },
         },
@@ -2565,12 +2567,21 @@ function GrowthPageContent() {
            || availableFacebookPages.find(p => p.isCurrentDestination || p.status === 'CONNECTED') || null)
         : null;
 
+      let publishMediaUrl = post.mediaUrl;
+      if (post.mediaAssetId) {
+        const resolvedMedia = await resolveSecureAssetUrl(post.mediaAssetId);
+        if (!resolvedMedia?.signedUrl) {
+          throw new Error('Generated media could not be prepared for external publishing. Please retry.');
+        }
+        publishMediaUrl = resolvedMedia.signedUrl;
+      }
+
       const publishIdempotencyKey = `pub_post_${postId}`;
       const payload = {
         title: post.title,
         body: `${post.body}\n\n${post.hashtags?.join(' ') || ''}`.trim(),
         platforms: [targetPlatform],
-        mediaUrls: post.mediaUrl ? [post.mediaUrl] : undefined,
+        mediaUrls: publishMediaUrl ? [publishMediaUrl] : undefined,
         mediaTypes: post.mediaType ? [post.mediaType] : undefined,
         authorName: targetConn.label || activeFbPage?.name || organization?.name || user?.displayName || 'Social Account',
         socialConnectionId: targetConn.id,
