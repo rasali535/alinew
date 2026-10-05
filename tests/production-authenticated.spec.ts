@@ -72,15 +72,21 @@ test.describe('Ralion authenticated production gauntlet', () => {
     await page.reload({ waitUntil: 'domcontentloaded' });
     expect(page.url()).toContain('/ralion/');
 
-    const before = await page.evaluate(() => Boolean(localStorage.getItem('ralion-app-auth-token')));
-    expect(before).toBe(true);
+    // Prove persistence through authenticated server access instead of coupling the
+    // test to a browser-storage implementation detail. Ralion may refresh/migrate
+    // Supabase storage during bootstrap while the session remains valid.
+    const before = await page.request.get(new URL('/api/auth/context', baseURL!).toString());
+    expect(before.status(), 'Authenticated session should survive reload').toBe(200);
 
     const logout = page.getByRole('button', { name: /logout|sign out/i }).first();
-    if (await logout.count()) {
-      await logout.click();
-      await page.waitForTimeout(1500);
-      const after = await page.evaluate(() => Boolean(localStorage.getItem('ralion-app-auth-token')));
-      expect(after).toBe(false);
-    }
+    await expect(logout, 'A visible logout control is required for this gauntlet').toBeVisible();
+    await logout.click();
+    await page.waitForURL(/\/ralion\/(login)?$|\/login/, { timeout: 15_000 }).catch(() => {});
+    await expect
+      .poll(async () => {
+        const response = await page.request.get(new URL('/api/auth/context', baseURL!).toString());
+        return response.status();
+      }, { timeout: 10_000 })
+      .not.toBe(200);
   });
 });
