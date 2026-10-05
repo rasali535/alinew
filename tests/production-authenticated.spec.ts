@@ -72,15 +72,32 @@ test.describe('Ralion authenticated production gauntlet', () => {
     await page.reload({ waitUntil: 'domcontentloaded' });
     expect(page.url()).toContain('/ralion/');
 
-    const before = await page.evaluate(() => Boolean(localStorage.getItem('ralion-app-auth-token')));
-    expect(before).toBe(true);
+    // The app authenticates API calls with a Supabase bearer token, not browser
+    // cookies. Read the persisted canonical session after reload and prove that
+    // the token still authorizes the server-side canonical context.
+    const token = await page.evaluate(() => {
+      const raw = localStorage.getItem('ralion-app-auth-token');
+      if (!raw) return null;
+      try {
+        const value = JSON.parse(raw);
+        return value?.access_token || value?.currentSession?.access_token || null;
+      } catch {
+        return null;
+      }
+    });
+    expect(token, 'Persisted Ralion access token should survive reload').toBeTruthy();
+
+    const before = await page.request.get(new URL('/api/auth/context', baseURL!).toString(), {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(before.status(), 'Persisted token should authorize canonical context after reload').toBe(200);
 
     const logout = page.getByRole('button', { name: /logout|sign out/i }).first();
-    if (await logout.count()) {
-      await logout.click();
-      await page.waitForTimeout(1500);
-      const after = await page.evaluate(() => Boolean(localStorage.getItem('ralion-app-auth-token')));
-      expect(after).toBe(false);
-    }
+    await expect(logout, 'A visible logout control is required for this gauntlet').toBeVisible();
+    await logout.click();
+
+    await expect
+      .poll(async () => page.evaluate(() => Boolean(localStorage.getItem('ralion-app-auth-token'))), { timeout: 10_000 })
+      .toBe(false);
   });
 });
