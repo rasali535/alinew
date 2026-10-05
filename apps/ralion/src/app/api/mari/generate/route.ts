@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../lib/cors';
 import { CreativeOrchestrator } from '@ralion/ai/server';
+import { requireRalionContext } from '../../../../lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,10 @@ export async function OPTIONS(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    const required = await requireRalionContext(request);
+    if (required.response) return required.response;
+    const serverCtx = required.context;
+
     const body = await request.json().catch(() => ({}));
     const {
       type = 'image',
@@ -27,23 +32,10 @@ export async function POST(request: NextRequest) {
       title,
     } = body;
 
-    const organizationId =
-      body.organizationId ||
-      request.headers.get('x-organization-id') ||
-      request.headers.get('x-workspace-id') ||
-      request.headers.get('x-user-id');
-
-    if (!organizationId || organizationId === 'default-org') {
-      return corsJsonResponse(
-        {
-          success: false,
-          error: 'Unauthorized: A valid authenticated organizationId is required. Defaulting to default-org is forbidden.',
-          errorCode: 'TENANT_UNAUTHORIZED',
-        },
-        { status: 401 },
-        request
-      );
-    }
+    // Tenant identity is authoritative from the verified session/workspace.
+    // Client-supplied organization/workspace IDs are routing hints only and
+    // must never choose which tenant is billed or owns the generated asset.
+    const organizationId = serverCtx.organization.id;
 
     if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
       return corsJsonResponse({ success: false, error: 'prompt is required' }, { status: 400 }, request);

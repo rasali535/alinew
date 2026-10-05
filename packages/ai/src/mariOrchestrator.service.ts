@@ -153,33 +153,8 @@ export class MariOrchestrationService {
       }
     }
 
-    // Default verified recommendation fallback
-    return {
-      organizationId: 'ras-ali-labs',
-      recommendationId: 'rec-default-growth',
-      type: 'CAMPAIGN_CREATE',
-      objective: 'Capitalize on 2.3× video engagement with a Commercial Spotlight Reel',
-      reasoning: 'Short-form video is generating 62% of your audience engagement over the last 30 days.',
-      priority: 'HIGH',
-      expectedImpact: '+500 impressions, 15-20 inbound B2B inquiries',
-      confidence: 0.94,
-      targetModule: 'growth',
-      action: 'Create Commercial Solar Growth Reel',
-      parameters: {
-        campaignName: 'Commercial Solar Authority Spotlight',
-        topic: 'Industrial Substation Grid Independence & Tariffs',
-        targetAudience: 'Commercial & Mining Decision-Makers',
-        recommendedFormat: 'Short-Form Reel (60s)',
-        suggestedPostTimes: ['Wednesday 14:00', 'Friday 10:00'],
-        platform: 'facebook',
-      },
-      sourceContext: {
-        followersCount: 0,
-        reachGrowthPct: 0,
-        videoMultiplier: '1.0x',
-      },
-      createdAt: new Date().toISOString(),
-    };
+    // No durable recommendation exists for this tenant. Never invent one.
+    return null;
   }
 
   /**
