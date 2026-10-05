@@ -96,6 +96,7 @@ export class FacebookCommentsService {
   static async getComments(params: {
     postId?: string;
     pageId?: string;
+    connectionId?: string;
     userId?: string;
     workspaceId?: string;
     organizationId?: string;
@@ -119,6 +120,7 @@ export class FacebookCommentsService {
     } else if (!hasOrganizationScope && hasWorkspaceScope) {
       connQuery = connQuery.eq('workspace_id', params.workspaceId!);
     }
+    if (params.connectionId) connQuery = connQuery.eq('id', params.connectionId);
     if (params.pageId) connQuery = connQuery.eq('provider_account_id', params.pageId);
 
     if (!hasOrganizationScope && !hasWorkspaceScope && !hasUserScope) {
@@ -297,6 +299,7 @@ export class FacebookCommentsService {
     workspaceId?: string;
     authorName?: string;
     pageId?: string;
+    connectionId?: string;
     organizationId?: string;
   }): Promise<{
     id: string;
@@ -325,7 +328,7 @@ export class FacebookCommentsService {
     // 1. Resolve connected tenant's Zernio profile and account mapping strictly for this workspace / user
     let connQuery = supabase
       .from('social_connections')
-      .select('zernio_account_id, account_name, workspace_id, organization_id, user_id')
+      .select('id, zernio_account_id, account_name, provider_account_id, workspace_id, organization_id, user_id')
       .eq('provider', 'facebook')
       .eq('connection_status', 'CONNECTED');
 
@@ -339,6 +342,8 @@ export class FacebookCommentsService {
     } else if (!hasOrganizationScope && hasWorkspaceScope) {
       connQuery = connQuery.eq('workspace_id', params.workspaceId!);
     }
+    if (params.connectionId) connQuery = connQuery.eq('id', params.connectionId);
+    if (params.pageId) connQuery = connQuery.eq('provider_account_id', params.pageId);
 
     if (!hasOrganizationScope && !hasWorkspaceScope && !hasUserScope) {
       throw new Error('Authentication/workspace context required to reply to comment.');
