@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { getConnectorForProvider, IntegrationProvider } from '@ralion/integrations/server';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
-import { getCurrentRalionContext } from '@/lib/auth/serverAuth';
+import { requireRalionContext } from '@/lib/auth/serverAuth';
 import { SocialDisconnectService } from '@/lib/services/social/socialDisconnect.service';
 
 export const dynamic = 'force-dynamic';
@@ -23,10 +23,18 @@ export async function OPTIONS(request: NextRequest) {
 
 async function handleDisconnect(request: NextRequest, provider: string) {
   try {
-    const context = await getCurrentRalionContext(request, { requireAuth: false });
-    const tenantId = context?.organization.id || context?.workspace.id || request.headers.get('x-organization-id') || request.headers.get('x-workspace-id') || undefined;
-    const workspaceId = context?.workspace.id || request.headers.get('x-workspace-id') || undefined;
-    const userId = context?.user.id || request.headers.get('x-user-id') || undefined;
+    const required = await requireRalionContext(request);
+    if (required.response || !required.context) {
+      return required.response || corsJsonResponse(
+        { success: false, code: 'AUTHENTICATION_REQUIRED', error: 'Authentication required to disconnect an integration.' },
+        { status: 401 },
+        request
+      );
+    }
+    const context = required.context;
+    const tenantId = context.organization.id;
+    const workspaceId = context.workspace.id;
+    const userId = context.user.id;
 
     const result = await SocialDisconnectService.disconnectSocialProvider({
       tenantId,
