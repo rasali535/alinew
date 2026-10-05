@@ -29,7 +29,12 @@ export async function GET(
   const token = searchParams.get('hub.verify_token');
   const challenge = searchParams.get('hub.challenge');
 
-  const expectedToken = process.env.WEBHOOK_VERIFY_TOKEN || 'ralion_webhook_verify_secret';
+  const expectedToken = process.env.WEBHOOK_VERIFY_TOKEN;
+
+  if (!expectedToken) {
+    console.error('[Webhook] WEBHOOK_VERIFY_TOKEN is not configured.');
+    return corsJsonResponse({ error: 'Webhook verification is not configured' }, { status: 503 }, request);
+  }
 
   if (mode === 'subscribe' && token === expectedToken) {
     console.log(`[Webhook] ${provider} webhook verification challenge PASSED`);
@@ -39,7 +44,11 @@ export async function GET(
   // X / Twitter CRC Challenge Handling
   const crcToken = searchParams.get('crc_token');
   if (provider === 'x' && crcToken) {
-    const secret = process.env.TWITTER_CONSUMER_SECRET || 'secret';
+    const secret = process.env.TWITTER_CONSUMER_SECRET;
+    if (!secret) {
+      console.error('[Webhook] TWITTER_CONSUMER_SECRET is not configured.');
+      return corsJsonResponse({ error: 'Webhook verification is not configured' }, { status: 503 }, request);
+    }
     const crypto = require('crypto');
     const hmac = crypto.createHmac('sha256', secret).update(crcToken).digest('base64');
     return corsJsonResponse({ response_token: `sha256=${hmac}` }, undefined, request);
@@ -71,12 +80,17 @@ export async function POST(
       signatureHeader: signature,
     });
 
+    if (!isValid) {
+      console.warn(`[Webhook] Rejected invalid signature for ${provider} webhook.`);
+      return corsJsonResponse({ success: false, error: 'Invalid webhook signature' }, { status: 401 }, request);
+    }
+
     const parsedPayload = rawBody ? JSON.parse(rawBody) : {};
 
     await SocialWebhookService.processWebhook(
       provider as SocialPlatformType,
       parsedPayload,
-      isValid
+      true
     );
 
     return corsJsonResponse({ success: true, received: true }, undefined, request);
