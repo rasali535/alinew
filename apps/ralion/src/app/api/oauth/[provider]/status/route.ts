@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { requireRalionContext } from '@/lib/auth/serverAuth';
 import { loadAllUserAccounts, loadOAuthTokens } from '@/lib/services/social.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 
@@ -28,19 +28,11 @@ export async function GET(
   try {
     const { provider } = await params;
 
-    // Get authenticated user
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-        global: { headers: { cookie: request.headers.get('cookie') || '' } },
-      }
-    );
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return corsJsonResponse({ success: false, connected: false, error: 'Not authenticated' }, { status: 401 }, request);
+    const required = await requireRalionContext(request);
+    if (required.response || !required.context) {
+      return required.response || corsJsonResponse({ success: false, connected: false, error: 'Authentication required' }, { status: 401 }, request);
     }
+    const user = required.context.user;
 
     // Special case: fetch ALL accounts for this user (provider='all')
     if (provider === 'all') {
