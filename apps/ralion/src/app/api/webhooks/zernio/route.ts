@@ -94,6 +94,21 @@ export async function POST(request: NextRequest) {
       return corsJsonResponse({ success: false, error: 'Invalid HMAC signature' }, { status: 401 }, request);
     }
 
+    // Mutating events must resolve to a canonical tenant mapping. Never allow a
+    // valid provider signature alone to become authority over an arbitrary ID.
+    const tenantScopedEvents = new Set([
+      'account.connected',
+      'account.disconnected',
+      'account.reauth_required',
+      'message.received',
+      'post.published',
+      'post.failed',
+    ]);
+    if (tenantScopedEvents.has(eventType) && (!organizationId || !workspaceId)) {
+      console.warn('[ZernioWebhook] Rejected event without canonical tenant mapping.', { eventType, profileId, accountId });
+      return corsJsonResponse({ success: false, error: 'Webhook tenant mapping not found' }, { status: 403 }, request);
+    }
+
     // 3. Process Specific Event Types
     switch (eventType) {
       case 'account.connected': {
@@ -150,6 +165,8 @@ export async function POST(request: NextRequest) {
                 last_sync_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
               })
+              .eq('organization_id', organizationId!)
+              .eq('workspace_id', workspaceId!)
               .or(`zernio_account_id.eq.${accountId},provider_account_id.eq.${accountId}`);
           }
         }
@@ -169,6 +186,8 @@ export async function POST(request: NextRequest) {
               health_error_message: payload.data?.reason || 'Account requires reauthorization at Zernio.',
               updated_at: new Date().toISOString(),
             })
+            .eq('organization_id', organizationId!)
+            .eq('workspace_id', workspaceId!)
             .or(`zernio_account_id.eq.${accountId},provider_account_id.eq.${accountId}`);
         }
         break;
@@ -179,6 +198,7 @@ export async function POST(request: NextRequest) {
         if (msg) {
           await supabase.from('social_inbox_messages').insert({
             connection_id: accountId || 'zernio_inbox',
+            organization_id: organizationId,
             workspace_id: workspaceId,
             provider: (msg.platform || 'facebook').toLowerCase(),
             conversation_id: msg.conversationId || msg.senderId || `conv_${Date.now()}`,
@@ -209,7 +229,9 @@ export async function POST(request: NextRequest) {
               published_at: eventType === 'post.published' ? new Date().toISOString() : null,
               updated_at: new Date().toISOString(),
             })
-            .eq('id', postId);
+            .eq('id', postId)
+            .eq('organization_id', organizationId!)
+            .eq('workspace_id', workspaceId!);
         }
         break;
       }
