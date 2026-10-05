@@ -15,17 +15,16 @@ test.describe('Ralion authenticated production gauntlet', () => {
     await page.waitForURL(/\/ralion\/(dashboard|mari-ai|growth|social)/, { timeout: 30_000 });
 
     const token = await page.evaluate(() => {
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (!key || !key.startsWith('sb-') || !key.endsWith('-auth-token')) continue;
-        try {
-          const value = JSON.parse(localStorage.getItem(key) || '{}');
-          return value?.access_token || value?.currentSession?.access_token || null;
-        } catch {}
+      const raw = localStorage.getItem('ralion-app-auth-token');
+      if (!raw) return null;
+      try {
+        const value = JSON.parse(raw);
+        return value?.access_token || value?.currentSession?.access_token || null;
+      } catch {
+        return null;
       }
-      return null;
     });
-    expect(token, 'Supabase access token should exist after login').toBeTruthy();
+    expect(token, 'Canonical Ralion Supabase access token should exist after login').toBeTruthy();
 
     const headers = { Authorization: `Bearer ${token}` };
     const ctx = await page.request.get(new URL('/api/auth/context', baseURL!).toString(), { headers });
@@ -73,14 +72,14 @@ test.describe('Ralion authenticated production gauntlet', () => {
     await page.reload({ waitUntil: 'domcontentloaded' });
     expect(page.url()).toContain('/ralion/');
 
-    const before = await page.evaluate(() => Object.keys(localStorage).some(k => k.startsWith('sb-') && k.endsWith('-auth-token')));
+    const before = await page.evaluate(() => Boolean(localStorage.getItem('ralion-app-auth-token')));
     expect(before).toBe(true);
 
     const logout = page.getByRole('button', { name: /logout|sign out/i }).first();
     if (await logout.count()) {
       await logout.click();
       await page.waitForTimeout(1500);
-      const after = await page.evaluate(() => Object.keys(localStorage).some(k => k.startsWith('sb-') && k.endsWith('-auth-token')));
+      const after = await page.evaluate(() => Boolean(localStorage.getItem('ralion-app-auth-token')));
       expect(after).toBe(false);
     }
   });
