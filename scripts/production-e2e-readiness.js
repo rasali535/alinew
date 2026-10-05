@@ -313,10 +313,24 @@ runStage('Social Disconnect & Token Vault Shredding', () => {
 
   const content = fs.readFileSync(tokenManagerFile, 'utf8');
   assert(content.includes('revokeAndDestroy'), 'Token shredding method revokeAndDestroy must be implemented');
-  assert(content.includes('.delete()') || content.includes('social_credentials'), 'Credentials must be purged from vault table');
+  // Current canonical storage keeps the social connection row for publication/audit
+  // provenance and cryptographically shreds credential material from metadata.
+  for (const field of [
+    'encrypted_access_token',
+    'encrypted_refresh_token',
+    'access_token',
+    'accessToken',
+    'pageAccessToken',
+    'refresh_token',
+    'refreshToken',
+  ]) {
+    assert(content.includes(`delete cleanedMeta.${field}`), `Credential field ${field} must be removed during disconnect`);
+  }
+  assert(content.includes("connection_status: 'DISCONNECTED'"), 'Disconnected connection must be marked DISCONNECTED');
+  assert(content.includes("token_status: 'TOKEN_REVOKED'"), 'Revoked connection must be marked TOKEN_REVOKED');
 
   console.log('    • Remote OAuth token revocation handshake verified.');
-  console.log('    • Server-side database token purge & META_TOKEN_REVOKED audit event confirmed.');
+  console.log('    • Credential material shredding with connection provenance preservation confirmed.');
 });
 
 // ============================================================================
