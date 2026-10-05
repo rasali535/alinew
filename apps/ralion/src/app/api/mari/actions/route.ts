@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { corsJsonResponse, handleCorsPreflight } from '../../../../lib/cors';
 import { executeMariAction, MariActionPayload } from '@ralion/ai/server';
+import { requireRalionContext } from '../../../../lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +15,15 @@ export async function OPTIONS(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    const required = await requireRalionContext(request);
+    if (required.response || !required.context) {
+      return required.response || corsJsonResponse(
+        { success: false, code: 'AUTHENTICATION_REQUIRED', error: 'Authentication required to execute Mari actions.' },
+        { status: 401 },
+        request
+      );
+    }
+
     const body = await request.json().catch(() => ({}));
     const action: MariActionPayload = body.action;
 
