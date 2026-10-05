@@ -642,81 +642,43 @@ function GrowthPageContent() {
   const handleMariBrainstorm = async () => {
     setIsBrainstorming(true);
     try {
-      let activeOrgId = organization?.id || user?.orgId || user?.uid || '';
-      const orgName = organization?.name || 'Your Business';
-      if (typeof window !== 'undefined') {
-        activeOrgId = activeOrgId || localStorage.getItem('ralion_org_id') || localStorage.getItem('ralion_workspace_id') || '';
+      const orgName = organization?.name || 'your business';
+      const res = await authFetch('/api/mari/chat', {
+        method: 'POST',
+        body: JSON.stringify({
+          prompt: 'Generate 3 distinct, highly vivid visual photography/3D scene prompts for social media marketing. Return ONLY a valid JSON array of 3 objects with keys: "title", "prompt", "style", "format".',
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.message || 'Mari could not generate creative concepts.');
       }
 
-      let parsed: any[] = [];
-      try {
-        const res = await authFetch('/api/mari/chat', {
-          method: 'POST',
-          body: JSON.stringify({
-            prompt: 'Generate 3 distinct, highly vivid visual photography/3D scene prompts for social media marketing. Return ONLY a valid JSON array of 3 objects with keys: "title", "prompt", "style", "format".',
-            organizationId: activeOrgId,
-          }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const text = data.answer || data.text || '';
-          const jsonMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/);
-          if (jsonMatch) {
-            parsed = JSON.parse(jsonMatch[0]);
-          }
-        }
-      } catch {}
+      const data = await res.json();
+      const text = data.answer || data.text || '';
+      const jsonMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/);
+      if (!jsonMatch) {
+        throw new Error('Mari returned an invalid creative-concept response.');
+      }
 
-      if (!parsed || parsed.length === 0) {
-        parsed = [
-          {
-            title: '🚀 Enterprise OS & Analytics',
-            prompt: 'A forward-thinking African corporate executive analyzing live business intelligence dashboards on an ultra-modern dual glass monitor setup, warm ambient lighting, elegant office overlooking Gaborone, photorealistic 8k commercial photography.',
-            style: 'Corporate Executive',
-            format: '1:1 Square'
-          },
-          {
-            title: '🎯 Regional Market Expansion',
-            prompt: 'Dynamic African technology team collaborating in a sunlit modern glass conference room with interactive strategy displays, vibrant professional energy, commercial photography 8k.',
-            style: 'Modern Minimalist',
-            format: '16:9 Landscape'
-          },
-          {
-            title: '💼 Executive Strategic Partnership',
-            prompt: 'Two enterprise leaders in sharp tailored suits shaking hands at a premier regional technology summit, high-end architectural lobby, cinematic lighting, ultra-detailed photorealistic.',
-            style: 'Corporate Executive',
-            format: '4:5 Portrait'
-          }
-        ];
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (!Array.isArray(parsed) || parsed.length === 0) {
+        throw new Error('Mari did not return any creative concepts.');
       }
 
       setMariBrainstormConcepts(parsed);
       setOauthAlert({
         type: 'success',
-        message: `💡 Mari AI generated 3 custom visual prompts tailored for ${orgName}!`,
+        message: `💡 Mari AI generated ${parsed.length} visual concepts tailored for ${orgName}.`,
       });
       setTimeout(() => setOauthAlert(null), 4000);
-    } catch (e) {
-      setMariBrainstormConcepts([
-        {
-          title: '🚀 Enterprise OS & Analytics',
-          prompt: 'A forward-thinking African corporate executive analyzing live business intelligence dashboards on an ultra-modern dual glass monitor setup, warm ambient lighting, elegant office overlooking Gaborone, photorealistic 8k commercial photography.',
-          style: 'Corporate Executive',
-          format: '1:1 Square'
-        },
-        {
-          title: '🎯 Regional Market Expansion',
-          prompt: 'Dynamic African technology team collaborating in a sunlit modern glass conference room with interactive strategy displays, vibrant professional energy, commercial photography 8k.',
-          style: 'Modern Minimalist',
-          format: '16:9 Landscape'
-        },
-        {
-          title: '💼 Executive Strategic Partnership',
-          prompt: 'Two enterprise leaders in sharp tailored suits shaking hands at a premier regional technology summit, high-end architectural lobby, cinematic lighting, ultra-detailed photorealistic.',
-          style: 'Corporate Executive',
-          format: '4:5 Portrait'
-        }
-      ]);
+    } catch (error: any) {
+      setMariBrainstormConcepts([]);
+      setOauthAlert({
+        type: 'error',
+        message: `Mari could not generate verified creative concepts: ${error?.message || 'Please try again.'}`,
+      });
     } finally {
       setIsBrainstorming(false);
     }
