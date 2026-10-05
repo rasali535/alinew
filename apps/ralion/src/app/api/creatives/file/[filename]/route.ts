@@ -70,25 +70,31 @@ export async function GET(
   const resolvedOrgId = authenticatedOrgId;
   const resolvedWorkspaceId = authenticatedWorkspaceId;
   const asset = await CreativeAssetService.getAssetByFilename(safeName, resolvedOrgId, resolvedWorkspaceId);
-  if (asset) {
-    if (asset.organizationId !== resolvedOrgId) {
-      return new NextResponse(
-        JSON.stringify({ error: 'FORBIDDEN', message: 'Access denied: Cross-tenant asset access prohibited.' }),
-        { status: 403, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-    if (asset.workspaceId && asset.workspaceId !== resolvedWorkspaceId) {
-      return new NextResponse(
-        JSON.stringify({ error: 'FORBIDDEN', message: 'Access denied: Cross-workspace asset access prohibited.' }),
-        { status: 403, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
+  if (!asset) {
+    return new NextResponse(
+      JSON.stringify({ error: 'ASSET_NOT_FOUND', message: 'The requested creative asset was not found.' }),
+      { status: 404, headers: { 'Content-Type': 'application/json' } }
+    );
   }
 
-  // 5. Download strictly from tenant-scoped storage path
+  if (asset.organizationId !== resolvedOrgId) {
+    return new NextResponse(
+      JSON.stringify({ error: 'FORBIDDEN', message: 'Access denied: Cross-tenant asset access prohibited.' }),
+      { status: 403, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+  if (asset.workspaceId && asset.workspaceId !== resolvedWorkspaceId) {
+    return new NextResponse(
+      JSON.stringify({ error: 'FORBIDDEN', message: 'Access denied: Cross-workspace asset access prohibited.' }),
+      { status: 403, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
+  // 5. Download only the storage object registered to this tenant-owned asset.
+  // A guessed filename is never sufficient authority to probe storage.
   const storage = getProductionStorageProvider();
-  const assetId = asset?.id || safeName.replace(/\.[^/.]+$/, '').replace(/-raw$/, '');
-  const canonicalStoragePath = asset?.storagePath || `organizations/${resolvedOrgId}/workspaces/${resolvedWorkspaceId}/assets/${assetId}/${safeName}`;
+  const canonicalStoragePath = asset.storagePath ||
+    `organizations/${resolvedOrgId}/workspaces/${resolvedWorkspaceId}/assets/${asset.id}/${safeName}`;
 
   let downloadResult = await storage.download(canonicalStoragePath);
 
