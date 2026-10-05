@@ -4979,8 +4979,11 @@ function GrowthPageContent() {
                         variant="outline" 
                         size="sm" 
                         onClick={() => {
+                          const activePreviewConnection = selectedAccountId
+                            ? connectedAccounts.find(account => account.id === selectedAccountId)
+                            : null;
                           setPreviewPost(post);
-                          setPreviewPlatform(post.platform);
+                          setPreviewPlatform(activePreviewConnection?.provider || post.platform);
                           setIsPreviewModalOpen(true);
                         }}
                         className="text-xs gap-1 border-zinc-800 text-zinc-300"
