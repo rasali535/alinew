@@ -2581,10 +2581,19 @@ function GrowthPageContent() {
         let allowRetry = false;
 
         if (status === 409 || data.conflict === true) {
-          // Duplicate content — do NOT show retry, user must change content
-          alertMessage = `⚠️ Publish conflict: ${primaryError || 'This content was already posted to this account within the last 24 hours. Please edit the post before publishing again.'}`;
-          if (data.conflictDetails?.existingPostId) {
-            alertMessage += ` (existing post ID: ${data.conflictDetails.existingPostId})`;
+          const conflictReason = String(data.conflictDetails?.reason || primaryError || '').toLowerCase();
+          const isInFlightConflict = conflictReason.includes('in flight') || conflictReason.includes('currently being processed');
+          const isRetryThrottle = conflictReason.includes('maximum retry') || conflictReason.includes('wait 15 minutes');
+
+          if (isInFlightConflict) {
+            alertMessage = '⏳ This publish is already being processed for the selected account. Wait a moment for it to finish before trying again.';
+          } else if (isRetryThrottle) {
+            alertMessage = `⚠️ Publish retry limit reached: ${data.conflictDetails?.reason || primaryError || 'Please wait before trying this post again.'}`;
+          } else {
+            alertMessage = `⚠️ Publish conflict: ${primaryError || 'This content was already posted to this account within the last 24 hours. Please edit the post before publishing again.'}`;
+            if (data.conflictDetails?.existingPostId) {
+              alertMessage += ` (existing post ID: ${data.conflictDetails.existingPostId})`;
+            }
           }
         } else if (status === 400) {
           alertMessage = `✕ Validation error: ${primaryError || 'The publish request was invalid. Please check your post content.'}. Please correct the content and try again.`;
