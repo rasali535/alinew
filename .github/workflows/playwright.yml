@@ -29,7 +29,9 @@ jobs:
     - name: Run Ralion Playwright tests
       env:
         RALION_E2E_BASE_URL: ${{ secrets.RALION_E2E_BASE_URL }}
-      run: npx playwright test tests/production-security.spec.ts
+        RALION_E2E_EMAIL: ${{ secrets.RALION_E2E_EMAIL }}
+        RALION_E2E_PASSWORD: ${{ secrets.RALION_E2E_PASSWORD }}
+      run: npx playwright test tests/production-security.spec.ts tests/production-authenticated.spec.ts
     - uses: actions/upload-artifact@v4
       if: ${{ !cancelled() }}
       with:
