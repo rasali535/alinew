@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
     const comments = await FacebookCommentsService.getComments({
       postId,
       pageId,
+      connectionId,
       organizationId: context.organization?.id || context.workspace.id,
       workspaceId: context.workspace.id,
       userId: context.user.id,
@@ -134,6 +135,7 @@ export async function POST(request: NextRequest) {
       workspaceId: context.workspace.id,
       authorName: effectiveAuthor,
       pageId,
+      connectionId,
       organizationId: context.organization?.id || context.workspace.id,
     });
 
