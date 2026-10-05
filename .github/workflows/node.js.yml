@@ -31,6 +31,10 @@ jobs:
       run: npm run security:facebook-isolation
     - name: Verify social database RLS invariants
       run: npm run security:social-rls
+    - name: Run repository security audit
+      run: npm run security:audit
+    - name: Run production readiness smoke
+      run: npm run test:e2e
     - name: Build all workspaces
       run: npm run build --if-present
     - name: Run test suite
