@@ -214,7 +214,12 @@ export interface SocialAccount {
 const initialGeneratedContent: GeneratedContentItem[] = [];
 
 const MAX_PERSISTED_GROWTH_MARI_MESSAGES = 60;
-const CREATIVE_RUN_MAX_AGE_MS = 30 * 60 * 1000;
+const POSTER_RUN_RECOVERY_WINDOW_MS = 2 * 60 * 1000;
+const VIDEO_RUN_RECOVERY_WINDOW_MS = 15 * 60 * 1000;
+
+function creativeRunRecoveryWindowMs(type: 'poster' | 'video'): number {
+  return type === 'poster' ? POSTER_RUN_RECOVERY_WINDOW_MS : VIDEO_RUN_RECOVERY_WINDOW_MS;
+}
 
 type PersistedCreativeRun = {
   status: 'RUNNING' | 'COMPLETED' | 'FAILED';
@@ -502,12 +507,16 @@ function GrowthPageContent() {
     if (saved.status !== 'RUNNING') return;
 
     const startedMs = Date.parse(saved.startedAt);
-    if (!Number.isFinite(startedMs) || Date.now() - startedMs > CREATIVE_RUN_MAX_AGE_MS) {
+    const recoveryWindowMs = creativeRunRecoveryWindowMs(saved.type);
+    if (!Number.isFinite(startedMs) || Date.now() - startedMs > recoveryWindowMs) {
       localStorage.setItem(key, JSON.stringify({
         ...saved,
         status: 'FAILED',
-        error: 'Generation did not complete within the recovery window.',
+        completedAt: new Date().toISOString(),
+        error: 'The previous generation was interrupted before Ralion could confirm a durable asset.',
       }));
+      setIsGeneratingPoster(false);
+      setIsGeneratingVideo(false);
       return;
     }
 
@@ -525,7 +534,29 @@ function GrowthPageContent() {
             'x-workspace-id': growthWorkspaceId,
           },
         });
-        if (!res.ok || cancelled) return;
+        if (cancelled) return;
+        if (!res.ok) {
+          // A page refresh can orphan the client-side RUNNING marker if the
+          // session changed while the original request was in flight. Do not
+          // resurrect an endless spinner in that case.
+          if (res.status === 401 || res.status === 403) {
+            const failed = {
+              ...saved,
+              status: 'FAILED' as const,
+              completedAt: new Date().toISOString(),
+              error: 'Generation recovery stopped because the authenticated session changed.',
+            };
+            localStorage.setItem(key, JSON.stringify(failed));
+            setIsGeneratingPoster(false);
+            setIsGeneratingVideo(false);
+            setOauthAlert({
+              type: 'error',
+              message: 'The previous creative run was interrupted by a session change. Sign in once, then retry the generation.',
+            });
+            if (timer) clearInterval(timer);
+          }
+          return;
+        }
         const data = await res.json().catch(() => ({}));
         const assets = Array.isArray(data.assets) ? data.assets : [];
         const normalizedPrompt = saved.prompt.trim().toLowerCase();
@@ -539,8 +570,13 @@ function GrowthPageContent() {
         });
 
         if (!match) {
-          if (Date.now() - startedMs > CREATIVE_RUN_MAX_AGE_MS) {
-            const failed = { ...saved, status: 'FAILED' as const, error: 'Generation did not complete within the recovery window.' };
+          if (Date.now() - startedMs > recoveryWindowMs) {
+            const failed = {
+              ...saved,
+              status: 'FAILED' as const,
+              completedAt: new Date().toISOString(),
+              error: 'The previous generation was interrupted before Ralion could confirm a durable asset.',
+            };
             localStorage.setItem(key, JSON.stringify(failed));
             setIsGeneratingPoster(false);
             setIsGeneratingVideo(false);
