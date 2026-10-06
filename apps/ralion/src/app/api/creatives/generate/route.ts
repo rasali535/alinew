@@ -6,12 +6,41 @@ import { requireRalionContext } from '../../../../lib/auth/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
+const CREATIVE_REQUEST_CACHE_TTL_MS = 10 * 60 * 1000;
+const creativeRequestState = globalThis as unknown as {
+  __ralionCreativeRequestPromises?: Map<string, { promise: Promise<any>; expiresAt: number }>;
+};
+if (!creativeRequestState.__ralionCreativeRequestPromises) {
+  creativeRequestState.__ralionCreativeRequestPromises = new Map();
+}
+const creativeRequestPromises = creativeRequestState.__ralionCreativeRequestPromises;
+
+function stableCreativeRequestId(input: {
+  organizationId: string;
+  workspaceId: string;
+  userId: string;
+  clientRequestId: string;
+}): string {
+  const digest = crypto
+    .createHash('sha256')
+    .update(`${input.organizationId}:${input.workspaceId}:${input.userId}:${input.clientRequestId}`)
+    .digest('hex')
+    .slice(0, 32);
+  return `req_gen_${digest}`;
+}
+
+function pruneCreativeRequestCache(now = Date.now()) {
+  for (const [key, entry] of creativeRequestPromises.entries()) {
+    if (entry.expiresAt <= now) creativeRequestPromises.delete(key);
+  }
+}
+
 export async function OPTIONS(request: NextRequest) {
   return handleCorsPreflight(request);
 }
 
 export async function POST(request: NextRequest) {
-  const requestId = `req_gen_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+  let requestId = `req_gen_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
 
   try {
     const authResult = await requireRalionContext(request);
@@ -33,6 +62,28 @@ export async function POST(request: NextRequest) {
     const authenticatedUserId = authResult.context.user.id;
 
     const body = await request.json().catch(() => ({}));
+    const rawClientRequestId = typeof body.clientRequestId === 'string' ? body.clientRequestId.trim() : '';
+    if (rawClientRequestId && !/^[A-Za-z0-9_-]{8,128}$/.test(rawClientRequestId)) {
+      return corsJsonResponse(
+        {
+          success: false,
+          error: 'INVALID_CLIENT_REQUEST_ID',
+          message: 'Creative request identifier is invalid.',
+          requestId,
+        },
+        { status: 400 },
+        request
+      );
+    }
+    if (rawClientRequestId) {
+      requestId = stableCreativeRequestId({
+        organizationId: authenticatedOrgId,
+        workspaceId: authenticatedWorkspaceId,
+        userId: authenticatedUserId,
+        clientRequestId: rawClientRequestId,
+      });
+    }
+
     const {
       type = 'POSTER_IMAGE',
       prompt,
@@ -77,23 +128,41 @@ export async function POST(request: NextRequest) {
         ? MariCreativeIntelligenceService.extractHardVisualRequirements(prompt)
         : [];
 
-    const result = await (CreativeOrchestrator.generate as any)({
-      organizationId: authenticatedOrgId,
-      workspaceId: authenticatedWorkspaceId,
-      userId: authenticatedUserId,
-      requestId,
-      type: type === 'video' ? 'VIDEO_REEL' : (type === 'image' ? 'POSTER_IMAGE' : type),
-      prompt,
-      title,
-      style,
-      format,
-      campaign,
-      platform,
-      cta,
-      mockFailure,
-      requiredVisualElements,
-      platformAdmin: authResult.context.isPlatformAdmin === true,
-    });
+    pruneCreativeRequestCache();
+
+    let cachedRequest = creativeRequestPromises.get(requestId);
+    if (!cachedRequest) {
+      const generationPromise = (CreativeOrchestrator.generate as any)({
+        organizationId: authenticatedOrgId,
+        workspaceId: authenticatedWorkspaceId,
+        userId: authenticatedUserId,
+        requestId,
+        type: type === 'video' ? 'VIDEO_REEL' : (type === 'image' ? 'POSTER_IMAGE' : type),
+        prompt,
+        title,
+        style,
+        format,
+        campaign,
+        platform,
+        cta,
+        mockFailure,
+        requiredVisualElements,
+        platformAdmin: authResult.context.isPlatformAdmin === true,
+      });
+
+      cachedRequest = {
+        promise: generationPromise,
+        expiresAt: Date.now() + CREATIVE_REQUEST_CACHE_TTL_MS,
+      };
+      creativeRequestPromises.set(requestId, cachedRequest);
+
+      generationPromise.catch(() => {
+        const active = creativeRequestPromises.get(requestId);
+        if (active?.promise === generationPromise) creativeRequestPromises.delete(requestId);
+      });
+    }
+
+    const result = await cachedRequest.promise;
 
     if (!result.success || !result.receipt) {
       const errorCode = result.errorDetails?.errorCode || 'GENERATION_FAILED';
