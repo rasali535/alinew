@@ -217,7 +217,8 @@ async function terminateInvalidSession(): Promise<void> {
   if (isDesktopRuntime()) {
     window.location.href = 'app://localhost/ralion/login';
   } else {
-    window.location.href = '/login';
+    const currentHref = window.location.href;
+    window.location.href = `${window.location.origin}/ralion/login?redirect=${encodeURIComponent(currentHref)}`;
   }
 }
 
