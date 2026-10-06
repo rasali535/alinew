@@ -33,6 +33,8 @@ jobs:
       run: npm run security:social-rls
     - name: Run repository security audit
       run: npm run security:audit
+    - name: Verify database function permissions and tenant isolation
+      run: node scripts/security/test-public-function-hardening.mjs
     - name: Run production readiness smoke
       run: npm run test:e2e
     - name: Build all workspaces
