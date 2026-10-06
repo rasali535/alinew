@@ -1,5 +1,6 @@
 import 'server-only';
 import crypto from 'crypto';
+import { AwsClient } from 'aws4fetch';
 import {
   AssetStorageProvider,
   AssetStorageUploadResult,
@@ -51,9 +52,8 @@ function xmlTag(block: string, tag: string): string | undefined {
 export class R2StorageProvider implements AssetStorageProvider {
   private readonly endpoint: URL;
   private readonly bucketName: string;
-  private readonly accessKeyId: string;
-  private readonly secretAccessKey: string;
   private readonly region: string;
+  private readonly client: AwsClient;
 
   constructor(config: R2Config) {
     if (!config.endpoint || !config.bucketName || !config.accessKeyId || !config.secretAccessKey) {
@@ -77,9 +77,14 @@ export class R2StorageProvider implements AssetStorageProvider {
 
     this.endpoint = endpoint;
     this.bucketName = config.bucketName.trim();
-    this.accessKeyId = accessKeyId;
-    this.secretAccessKey = config.secretAccessKey;
     this.region = config.region?.trim() || 'auto';
+    this.client = new AwsClient({
+      accessKeyId,
+      secretAccessKey: config.secretAccessKey,
+      service: 's3',
+      region: this.region,
+      retries: 0,
+    });
   }
 
   getProviderName(): 'R2' {
@@ -106,35 +111,13 @@ export class R2StorageProvider implements AssetStorageProvider {
     return crypto.createHash('sha256').update(value).digest('hex');
   }
 
-  private hmac(key: string | Buffer, value: string): Buffer {
-    return crypto.createHmac('sha256', key).update(value).digest();
-  }
-
-  private formatAmzDate(date: Date): { amzDate: string; dateStamp: string } {
-    const amzDate = date.toISOString().replace(/[:-]|\.\d{3}/g, '');
-    return { amzDate, dateStamp: amzDate.slice(0, 8) };
-  }
-
-  private canonicalQuery(query: Record<string, string>): string {
-    return Object.entries(query)
-      .sort(([aKey, aVal], [bKey, bVal]) =>
-        aKey === bKey ? aVal.localeCompare(bVal) : aKey.localeCompare(bKey)
-      )
-      .map(([key, value]) => `${rfc3986(key)}=${rfc3986(value)}`)
-      .join('&');
-  }
-
-  private signingKey(dateStamp: string): Buffer {
-    const dateKey = this.hmac(`AWS4${this.secretAccessKey}`, dateStamp);
-    const regionKey = this.hmac(dateKey, this.region);
-    const serviceKey = this.hmac(regionKey, 's3');
-    return this.hmac(serviceKey, 'aws4_request');
-  }
-
-  private canonicalUri(objectPath?: string): string {
+  private objectUrl(objectPath?: string): URL {
+    const url = new URL(this.endpoint.toString());
     const bucket = rfc3986(this.bucketName);
-    if (!objectPath) return `/${bucket}`;
-    return `/${bucket}/${encodePath(this.normalizeObjectPath(objectPath))}`;
+    url.pathname = objectPath
+      ? `/${bucket}/${encodePath(this.normalizeObjectPath(objectPath))}`
+      : `/${bucket}`;
+    return url;
   }
 
   private async signedRequest(
@@ -142,65 +125,15 @@ export class R2StorageProvider implements AssetStorageProvider {
     objectPath?: string,
     options: SignedRequestOptions = {}
   ): Promise<Response> {
-    const now = new Date();
-    const { amzDate, dateStamp } = this.formatAmzDate(now);
-    const payload = options.body || Buffer.alloc(0);
-    const payloadHash = this.sha256Hex(payload);
-    const canonicalUri = this.canonicalUri(objectPath);
-    const canonicalQueryString = this.canonicalQuery(options.query || {});
-
-    const requestHeaders: Record<string, string> = {
-      ...(options.headers || {}),
-      'x-amz-content-sha256': payloadHash,
-      'x-amz-date': amzDate,
-    };
-
-    const canonicalHeadersMap: Record<string, string> = {
-      host: this.endpoint.host,
-    };
-    for (const [key, value] of Object.entries(requestHeaders)) {
-      canonicalHeadersMap[key.toLowerCase()] = value.trim().replace(/\s+/g, ' ');
+    const url = this.objectUrl(objectPath);
+    for (const [key, value] of Object.entries(options.query || {})) {
+      url.searchParams.set(key, value);
     }
 
-    const signedHeaderNames = Object.keys(canonicalHeadersMap).sort();
-    const canonicalHeaders = signedHeaderNames
-      .map((key) => `${key}:${canonicalHeadersMap[key]}\n`)
-      .join('');
-    const signedHeaders = signedHeaderNames.join(';');
-
-    const canonicalRequest = [
+    return this.client.fetch(url.toString(), {
       method,
-      canonicalUri,
-      canonicalQueryString,
-      canonicalHeaders,
-      signedHeaders,
-      payloadHash,
-    ].join('\n');
-
-    const credentialScope = `${dateStamp}/${this.region}/s3/aws4_request`;
-    const stringToSign = [
-      'AWS4-HMAC-SHA256',
-      amzDate,
-      credentialScope,
-      this.sha256Hex(canonicalRequest),
-    ].join('\n');
-    const signature = crypto
-      .createHmac('sha256', this.signingKey(dateStamp))
-      .update(stringToSign)
-      .digest('hex');
-
-    requestHeaders.Authorization =
-      `AWS4-HMAC-SHA256 Credential=${this.accessKeyId}/${credentialScope}, ` +
-      `SignedHeaders=${signedHeaders}, Signature=${signature}`;
-
-    const url = new URL(this.endpoint.toString());
-    url.pathname = canonicalUri;
-    url.search = canonicalQueryString;
-
-    return fetch(url, {
-      method,
-      headers: requestHeaders,
-      body: method === 'PUT' ? new Uint8Array(payload) : undefined,
+      headers: options.headers,
+      body: method === 'PUT' ? new Uint8Array(options.body || Buffer.alloc(0)) : undefined,
       cache: 'no-store',
     });
   }
@@ -316,7 +249,10 @@ export class R2StorageProvider implements AssetStorageProvider {
     });
 
     if (!response.ok) {
-      throw new Error(`[R2StorageProvider] List failed (${response.status}) for prefix ${prefix}.`);
+      const detail = await response.text().catch(() => '');
+      throw new Error(
+        `[R2StorageProvider] List failed (${response.status}) for prefix ${prefix}: ${detail.slice(0, 300)}`
+      );
     }
 
     const xml = await response.text();
@@ -362,44 +298,15 @@ export class R2StorageProvider implements AssetStorageProvider {
     const cleanPath = this.normalizeObjectPath(objectPath);
     const expires = Math.min(Math.max(Math.floor(expiresInSeconds), 1), 604800);
     const now = new Date();
-    const { amzDate, dateStamp } = this.formatAmzDate(now);
-    const credentialScope = `${dateStamp}/${this.region}/s3/aws4_request`;
-    const canonicalUri = this.canonicalUri(cleanPath);
-    const query: Record<string, string> = {
-      'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
-      'X-Amz-Content-Sha256': 'UNSIGNED-PAYLOAD',
-      'X-Amz-Credential': `${this.accessKeyId}/${credentialScope}`,
-      'X-Amz-Date': amzDate,
-      'X-Amz-Expires': String(expires),
-      'X-Amz-SignedHeaders': 'host',
-    };
-    const canonicalQueryString = this.canonicalQuery(query);
-    const canonicalHeaders = `host:${this.endpoint.host}\n`;
-    const canonicalRequest = [
-      'GET',
-      canonicalUri,
-      canonicalQueryString,
-      canonicalHeaders,
-      'host',
-      'UNSIGNED-PAYLOAD',
-    ].join('\n');
-    const stringToSign = [
-      'AWS4-HMAC-SHA256',
-      amzDate,
-      credentialScope,
-      this.sha256Hex(canonicalRequest),
-    ].join('\n');
-    const signature = crypto
-      .createHmac('sha256', this.signingKey(dateStamp))
-      .update(stringToSign)
-      .digest('hex');
+    const url = this.objectUrl(cleanPath);
+    url.searchParams.set('X-Amz-Expires', String(expires));
 
-    const url = new URL(this.endpoint.toString());
-    url.pathname = canonicalUri;
-    url.search = `${canonicalQueryString}&X-Amz-Signature=${signature}`;
+    const signedRequest = await this.client.sign(new Request(url.toString()), {
+      aws: { signQuery: true },
+    });
 
     return {
-      signedUrl: url.toString(),
+      signedUrl: signedRequest.url,
       expiresAt: new Date(now.getTime() + expires * 1000).toISOString(),
     };
   }
