@@ -115,6 +115,30 @@ export async function GET(request: NextRequest) {
         region: process.env.R2_REGION || 'auto',
       });
       await r2.list(undefined, { limit: 1 });
+
+      // Exercise the real write path without touching creative generation or
+      // credits. The canary is tiny, private, verified, and deleted immediately.
+      let canaryPath: string | null = `_health/ralion-r2-${Date.now()}.txt`;
+      try {
+        const canary = Buffer.from('ralion-r2-health', 'utf8');
+        await r2.upload(canaryPath, canary, { contentType: 'text/plain' });
+
+        const roundTrip = await r2.download(canaryPath);
+        if (!roundTrip || !roundTrip.buffer.equals(canary)) {
+          throw new Error('R2 health canary round-trip verification failed.');
+        }
+
+        const deleted = await r2.delete(canaryPath);
+        if (!deleted) {
+          throw new Error('R2 health canary cleanup failed.');
+        }
+        canaryPath = null;
+      } finally {
+        if (canaryPath) {
+          await r2.delete(canaryPath).catch(() => false);
+        }
+      }
+
       metrics.push({
         service: 'Cloudflare R2 Media Storage',
         status: 'UP',
