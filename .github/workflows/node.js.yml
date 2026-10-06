@@ -35,6 +35,8 @@ jobs:
       run: npm run security:audit
     - name: Verify database function permissions and tenant isolation
       run: node scripts/security/test-public-function-hardening.mjs
+    - name: Replay all Supabase migrations into a clean PostgreSQL database
+      run: node scripts/security/test-preview-migration-replay.mjs
     - name: Run production readiness smoke
       run: npm run test:e2e
     - name: Build all workspaces
