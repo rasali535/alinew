@@ -60,7 +60,7 @@ function isPrivateOrLocalHostname(hostname: string): boolean {
     || octets[0] === 0;
 }
 
-function validatePublicHttpsUrls(value: unknown): string[] {
+function validateMediaReferences(value: unknown): string[] {
   if (value === undefined || value === null) return [];
   if (!Array.isArray(value) || value.length > 20) {
     throw Object.assign(new Error('Invalid media collection.'), {
@@ -70,16 +70,30 @@ function validatePublicHttpsUrls(value: unknown): string[] {
   }
 
   return value.map((candidate) => {
-    if (typeof candidate !== 'string') {
-      throw Object.assign(new Error('Invalid media URL.'), {
+    if (typeof candidate !== 'string' || !candidate.trim()) {
+      throw Object.assign(new Error('Invalid media reference.'), {
         statusCode: 400,
         publicCode: 'INVALID_MEDIA',
       });
     }
 
+    const trimmed = candidate.trim();
+
+    // Ralion creative references are intentionally authenticated/internal at
+    // the browser boundary. SocialPublishingService resolves them to
+    // tenant-scoped signed HTTPS URLs immediately before provider dispatch.
+    if (
+      /^asset-[A-Za-z0-9_-]+$/.test(trimmed) ||
+      trimmed.startsWith('/api/creatives/') ||
+      trimmed.startsWith('/ralion/api/creatives/') ||
+      trimmed.startsWith('data:')
+    ) {
+      return trimmed;
+    }
+
     let parsed: URL;
     try {
-      parsed = new URL(candidate);
+      parsed = new URL(trimmed);
     } catch {
       throw Object.assign(new Error('Invalid media URL.'), {
         statusCode: 400,
@@ -290,7 +304,7 @@ export async function POST(request: NextRequest) {
     }
 
     const mediaSource = body.mediaUrls ?? body.mediaItems;
-    const mediaUrls = validatePublicHttpsUrls(mediaSource);
+    const mediaUrls = validateMediaReferences(mediaSource);
     let mediaTypes: string[] | undefined;
     if (body.mediaTypes !== undefined) {
       if (
