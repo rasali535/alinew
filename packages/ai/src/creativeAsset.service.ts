@@ -482,8 +482,17 @@ export class CreativeAssetService {
         (params.prompt.length > 32 ? params.prompt.substring(0, 32) + '...' : params.prompt),
       mimeType: params.mimeType || (params.type === 'VIDEO_REEL' ? 'video/mp4' : 'image/jpeg'),
       storagePath: '',
-      storageProvider: 'SUPABASE',
-      bucket: 'creatives',
+      storageProvider: (
+        process.env.RALION_ASSET_STORAGE_PROVIDER ||
+        process.env.ASSET_STORAGE_PROVIDER ||
+        'SUPABASE'
+      ).trim().toUpperCase(),
+      bucket:
+        (process.env.RALION_ASSET_STORAGE_PROVIDER || process.env.ASSET_STORAGE_PROVIDER || 'SUPABASE')
+          .trim()
+          .toUpperCase() === 'R2'
+          ? process.env.R2_BUCKET_NAME || 'ralion-media-prod'
+          : process.env.SUPABASE_CREATIVE_BUCKET || 'creatives',
       publicUrl: params.publicUrl || '',
       previewUrl: params.previewUrl,
       createdAt: new Date().toISOString(),
