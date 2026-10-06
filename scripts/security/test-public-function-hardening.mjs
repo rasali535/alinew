@@ -6,7 +6,7 @@ import net from 'node:net';
 import EmbeddedPostgres from 'embedded-postgres';
 import pg from 'pg';
 
-const migration = fs.readFileSync(new URL('../../supabase/migrations/20261006042634_harden_public_function_execution.sql', import.meta.url), 'utf8');
+const migration = fs.readFileSync(new URL('../../supabase/migrations/20261006042825_harden_public_function_execution.sql', import.meta.url), 'utf8');
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ralion-function-hardening-'));
 const listener = net.createServer();
 await new Promise(resolve => listener.listen(0, '127.0.0.1', resolve));
