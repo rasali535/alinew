@@ -417,6 +417,37 @@ export class CreativeAssetService {
   }
 
   /**
+   * Remove a rejected raw provider asset without allowing cross-tenant paths.
+   * This is best-effort cleanup: failure to remove an orphan must never mask
+   * the original generation failure or prevent credit release.
+   */
+  static async deleteRawBinaryAsset(params: {
+    rawStoragePath?: string;
+    organizationId?: string;
+    workspaceId?: string;
+  }): Promise<boolean> {
+    const orgId = params.organizationId;
+    const rawStoragePath = params.rawStoragePath;
+    if (!orgId || orgId === 'default-org' || !rawStoragePath) return false;
+
+    const workspaceId = params.workspaceId || orgId;
+    const expectedPrefix = `organizations/${orgId}/workspaces/${workspaceId}/assets/`;
+    if (!rawStoragePath.startsWith(expectedPrefix) || !rawStoragePath.includes('/raw/')) {
+      console.warn('[CreativeAssetService] Refusing raw cleanup outside authenticated tenant namespace.');
+      return false;
+    }
+
+    try {
+      const storage = getProductionStorageProvider();
+      await storage.delete(rawStoragePath);
+      return true;
+    } catch (err) {
+      console.warn('[CreativeAssetService] Raw Supabase cleanup notice:', err);
+      return false;
+    }
+  }
+
+  /**
    * Create an initial asset record (e.g. for async video generation)
    */
   static createAssetRecord(params: {
