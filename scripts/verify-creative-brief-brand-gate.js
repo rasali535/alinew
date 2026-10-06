@@ -56,7 +56,7 @@ assert(
   'Visual QA requirement extraction must preserve the sample brief constraints.'
 );
 assert(
-  growth.includes("const effectiveCreativeLogo = creativeLogo || '/ralion-logo.png'"),
+  growth.includes("const effectiveCreativeLogo = creativeLogo || '/ralion/ralion-logo.png'"),
   'Growth preview/download must use Ralion OS fallback branding when tenant logo is absent.'
 );
 assert(
