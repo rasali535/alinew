@@ -16,28 +16,49 @@ export class PrimaryWithFallbackStorageProvider implements AssetStorageProvider 
     return `${this.primary.getProviderName()}+${this.fallback.getProviderName()}_FALLBACK`;
   }
 
+  private warnReadFallback(operation: string, objectPath: string, error: unknown): void {
+    const message = error instanceof Error ? error.message : String(error || 'unknown storage error');
+    console.warn(
+      `[Storage] Primary ${operation} failed for ${objectPath}; using fallback provider: ${message}`
+    );
+  }
+
   async upload(
     objectPath: string,
     buffer: Buffer,
     options: { contentType: string; metadata?: Record<string, any> }
   ): Promise<AssetStorageUploadResult> {
+    // New media must not silently fall back to legacy storage. If the R2 write
+    // fails, generation fails and the credit reservation can be refunded.
     return this.primary.upload(objectPath, buffer, options);
   }
 
   async download(objectPath: string): Promise<AssetStorageDownloadResult | null> {
-    const primary = await this.primary.download(objectPath);
-    if (primary) return primary;
+    try {
+      const primary = await this.primary.download(objectPath);
+      if (primary) return primary;
+    } catch (error) {
+      this.warnReadFallback('download', objectPath, error);
+    }
     return this.fallback.download(objectPath);
   }
 
   async exists(objectPath: string): Promise<boolean> {
-    if (await this.primary.exists(objectPath)) return true;
+    try {
+      if (await this.primary.exists(objectPath)) return true;
+    } catch (error) {
+      this.warnReadFallback('exists', objectPath, error);
+    }
     return this.fallback.exists(objectPath);
   }
 
   async metadata(objectPath: string): Promise<AssetStorageMetadata | null> {
-    const primary = await this.primary.metadata(objectPath);
-    if (primary) return primary;
+    try {
+      const primary = await this.primary.metadata(objectPath);
+      if (primary) return primary;
+    } catch (error) {
+      this.warnReadFallback('metadata', objectPath, error);
+    }
     return this.fallback.metadata(objectPath);
   }
 
@@ -81,10 +102,14 @@ export class PrimaryWithFallbackStorageProvider implements AssetStorageProvider 
     objectPath: string,
     expiresInSeconds: number = 900
   ): Promise<{ signedUrl: string; expiresAt: string } | null> {
-    if (await this.primary.exists(objectPath)) {
-      return this.primary.createSignedUrl
-        ? this.primary.createSignedUrl(objectPath, expiresInSeconds)
-        : null;
+    try {
+      if (await this.primary.exists(objectPath)) {
+        return this.primary.createSignedUrl
+          ? this.primary.createSignedUrl(objectPath, expiresInSeconds)
+          : null;
+      }
+    } catch (error) {
+      this.warnReadFallback('signed-url lookup', objectPath, error);
     }
     return this.fallback.createSignedUrl
       ? this.fallback.createSignedUrl(objectPath, expiresInSeconds)
