@@ -26,12 +26,21 @@ jobs:
           echo "::error::RALION_E2E_BASE_URL repository secret is required for production smoke tests."
           exit 1
         fi
+    - name: Require authenticated E2E credentials
+      env:
+        RALION_E2E_EMAIL: ${{ secrets.RALION_E2E_EMAIL }}
+        RALION_E2E_PASSWORD: ${{ secrets.RALION_E2E_PASSWORD }}
+      run: |
+        if [ -z "$RALION_E2E_EMAIL" ] || [ -z "$RALION_E2E_PASSWORD" ]; then
+          echo "::error::Authenticated E2E credentials are required; business-flow tests must not silently skip."
+          exit 1
+        fi
     - name: Run Ralion Playwright tests
       env:
         RALION_E2E_BASE_URL: ${{ secrets.RALION_E2E_BASE_URL }}
         RALION_E2E_EMAIL: ${{ secrets.RALION_E2E_EMAIL }}
         RALION_E2E_PASSWORD: ${{ secrets.RALION_E2E_PASSWORD }}
-      run: npx playwright test tests/production-security.spec.ts tests/production-authenticated.spec.ts
+      run: npx playwright test tests/production-security.spec.ts tests/production-authenticated.spec.ts tests/production-business-flows.spec.ts
     - uses: actions/upload-artifact@v4
       if: ${{ !cancelled() }}
       with:

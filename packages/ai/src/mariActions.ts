@@ -21,53 +21,28 @@ export interface MariActionResult {
   success: boolean;
   message: string;
   outputData?: any;
+  code?: string;
 }
 
 export async function executeMariAction(action: MariActionPayload): Promise<MariActionResult> {
   const actionData = action.data || action.payload || {};
-  const actionTitle = action.title || action.label || action.type;
-
-  console.log(`[Mari AI Action Driver] Executing action: ${action.type}`, actionData);
 
   switch (action.type) {
     case 'CREATE_TASK':
-      return {
-        success: true,
-        message: `Task '${actionData.title || actionTitle}' created and assigned to ${actionData.assignedTo || 'Operations Team'}.`,
-        outputData: { taskId: `task-ai-${Date.now()}` }
-      };
-
     case 'DRAFT_EMAIL':
-      return {
-        success: true,
-        message: `Email draft created for ${actionData.recipient || 'Client'}: "${actionData.subject || 'Follow-up'}"`,
-        outputData: { draftId: `draft-${Date.now()}` }
-      };
-
     case 'GENERATE_REPORT':
-      return {
-        success: true,
-        message: `Executive ${actionData.reportType || 'Sales Summary'} PDF report generated successfully.`,
-        outputData: { downloadUrl: `/docs/reports/${actionData.reportType || 'executive'}_2026.pdf` }
-      };
-
     case 'ADD_CONTACT':
-      return {
-        success: true,
-        message: `New Lead '${actionData.name || 'Prospect'}' added to CRM pipeline.`,
-        outputData: { contactId: `contact-${Date.now()}` }
-      };
-
     case 'TRIGGER_WORKFLOW':
+    case 'GENERATE_FLYER':
       return {
-        success: true,
-        message: `Automation workflow '${actionData.workflowName || 'Default Onboarding'}' executed.`,
-        outputData: { executionId: `exec-${Date.now()}` }
+        success: false,
+        code: 'ACTION_NOT_IMPLEMENTED',
+        message: 'This action is not available through Mari yet. Nothing was created or changed. Please use the corresponding Ralion module.',
       };
 
     case 'NAVIGATE': {
       let targetRoute = typeof actionData === 'string' ? actionData : (actionData.route || '/growth');
-      if (typeof targetRoute !== 'string' || !targetRoute.startsWith('/') || targetRoute.includes('\n') || targetRoute.length > 200) {
+      if (typeof targetRoute !== 'string' || !targetRoute.startsWith('/') || targetRoute.startsWith('//') || targetRoute.includes('\\') || targetRoute.includes('\n') || targetRoute.length > 200) {
         targetRoute = '/growth';
       }
       return {
@@ -80,6 +55,7 @@ export async function executeMariAction(action: MariActionPayload): Promise<Mari
     default:
       return {
         success: false,
+        code: 'INVALID_ACTION',
         message: `Unknown Mari AI action type: ${action.type}`
       };
   }

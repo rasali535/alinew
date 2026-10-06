@@ -11,32 +11,38 @@ import {
   SocialPlatformType,
   SocialProviderRegistry,
   ConnectionHealthResult,
-  ZernioSocialService,
 } from '@ralion/integrations/server';
 import { SocialTokenManager } from './socialTokenManager.service';
 import { getPrivilegedSupabase as getServiceSupabase } from '@/lib/supabase/server';
+
+export interface SocialConnectionHealthScope {
+  organizationId: string;
+  workspaceId: string;
+}
 
 export class SocialConnectionHealthService {
   /**
    * Run a live health check on a specific social connection (Native or Zernio)
    */
-  static async checkConnectionHealth(connectionId: string): Promise<ConnectionHealthResult> {
+  static async checkConnectionHealth(connectionId: string, scope: SocialConnectionHealthScope): Promise<ConnectionHealthResult> {
+    if (!scope?.organizationId || !scope?.workspaceId) {
+      throw Object.assign(new Error('Canonical tenant context is required.'), { statusCode: 403 });
+    }
     const supabase = getServiceSupabase();
 
     const { data: conn, error } = await supabase
       .from('social_connections')
       .select('id, provider, provider_account_id, infrastructure_provider, zernio_account_id, zernio_profile_id')
       .eq('id', connectionId)
-      .single();
+      .eq('organization_id', scope.organizationId)
+      .eq('workspace_id', scope.workspaceId)
+      .maybeSingle();
 
-    if (error || !conn) {
-      return {
-        healthy: false,
-        status: 'DISCONNECTED',
-        tokenStatus: 'TOKEN_REVOKED',
-        errorMessage: 'Connection not found in database',
-        checkedAt: new Date().toISOString(),
-      };
+    if (error) {
+      throw Object.assign(new Error('Unable to resolve social connection.'), { statusCode: 503 });
+    }
+    if (!conn) {
+      throw Object.assign(new Error('Social connection not found.'), { statusCode: 404 });
     }
 
     const provider = conn.provider as SocialPlatformType;
@@ -54,7 +60,9 @@ export class SocialConnectionHealthService {
           token_status: health.tokenStatus,
           last_health_check_at: health.checkedAt,
           health_error_message: health.errorMessage || null,
-        }).eq('id', connectionId);
+        }).eq('id', connectionId)
+          .eq('organization_id', scope.organizationId)
+          .eq('workspace_id', scope.workspaceId);
 
         return health;
       } catch (err: any) {
@@ -70,7 +78,9 @@ export class SocialConnectionHealthService {
           connection_status: 'NEEDS_ATTENTION',
           last_health_check_at: failResult.checkedAt,
           health_error_message: failResult.errorMessage,
-        }).eq('id', connectionId);
+        }).eq('id', connectionId)
+          .eq('organization_id', scope.organizationId)
+          .eq('workspace_id', scope.workspaceId);
 
         return failResult;
       }
@@ -93,7 +103,9 @@ export class SocialConnectionHealthService {
         token_status: 'TOKEN_EXPIRED',
         last_health_check_at: result.checkedAt,
         health_error_message: result.errorMessage,
-      }).eq('id', connectionId);
+      }).eq('id', connectionId)
+      .eq('organization_id', scope.organizationId)
+      .eq('workspace_id', scope.workspaceId);
 
       return result;
     }
@@ -107,7 +119,9 @@ export class SocialConnectionHealthService {
         token_status: health.tokenStatus,
         last_health_check_at: health.checkedAt,
         health_error_message: health.errorMessage || null,
-      }).eq('id', connectionId);
+      }).eq('id', connectionId)
+      .eq('organization_id', scope.organizationId)
+      .eq('workspace_id', scope.workspaceId);
 
       return health;
     } catch (err: any) {
@@ -123,7 +137,9 @@ export class SocialConnectionHealthService {
         connection_status: 'NEEDS_ATTENTION',
         last_health_check_at: failResult.checkedAt,
         health_error_message: failResult.errorMessage,
-      }).eq('id', connectionId);
+      }).eq('id', connectionId)
+      .eq('organization_id', scope.organizationId)
+      .eq('workspace_id', scope.workspaceId);
 
       return failResult;
     }
@@ -132,17 +148,22 @@ export class SocialConnectionHealthService {
   /**
    * Health check all active connections for a user or workspace
    */
-  static async checkAllConnections(userId: string): Promise<Record<string, ConnectionHealthResult>> {
+  static async checkAllConnections(userId: string, scope: SocialConnectionHealthScope): Promise<Record<string, ConnectionHealthResult>> {
+    if (!scope?.organizationId || !scope?.workspaceId) {
+      throw Object.assign(new Error('Canonical tenant context is required.'), { statusCode: 403 });
+    }
     const supabase = getServiceSupabase();
     const { data: conns } = await supabase
       .from('social_connections')
       .select('id')
       .eq('user_id', userId)
+      .eq('organization_id', scope.organizationId)
+      .eq('workspace_id', scope.workspaceId)
       .eq('connection_status', 'CONNECTED');
 
     const results: Record<string, ConnectionHealthResult> = {};
     for (const conn of conns || []) {
-      results[conn.id] = await this.checkConnectionHealth(conn.id);
+      results[conn.id] = await this.checkConnectionHealth(conn.id, scope);
     }
     return results;
   }

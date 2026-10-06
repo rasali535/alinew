@@ -431,7 +431,7 @@ export default function MariAiPage() {
   const handleActionExecute = async (action: MariActionPayload) => {
     const actionLabel = action.label || action.title || action.type;
     const rawRoute = (action.payload as any)?.route || (typeof action.payload === 'string' ? action.payload : getActionRouteForButton(actionLabel));
-    const targetRoute = (typeof rawRoute === 'string' && rawRoute.startsWith('/') && !rawRoute.includes('\n') && rawRoute.length < 200)
+    const targetRoute = (typeof rawRoute === 'string' && rawRoute.startsWith('/') && !rawRoute.startsWith('//') && !rawRoute.includes('\\') && !rawRoute.includes('\n') && rawRoute.length < 200)
       ? rawRoute
       : '/growth';
     const orgId = businessContext?.organizationId || activeOrgId || '';
@@ -449,13 +449,15 @@ export default function MariAiPage() {
       }
     }
 
-    // Display Mari response in chat thread
+    const res = await executeMariAction(action);
+
+    // Display the actual outcome; unavailable actions must not claim completion.
     setMessages(prev => [
       ...prev,
       {
         id: `m-action-${Date.now()}`,
         sender: 'MARI',
-        text: `I have prepared the action for ${actionLabel}.`,
+        text: res.success ? `I have prepared the action for ${actionLabel}.` : res.message,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         actionsSuggested: [
           { type: 'NAVIGATE', label: 'Open Workspace Module', payload: { route: targetRoute } },
@@ -465,7 +467,6 @@ export default function MariAiPage() {
     ]);
 
     // 5. Navigate if it's a direct transition
-    const res = await executeMariAction(action);
     if (res.success && action.type === 'NAVIGATE') {
       setTimeout(() => {
         router.push(targetRoute);
