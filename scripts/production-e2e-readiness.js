@@ -2,11 +2,14 @@
 
 /**
  * ============================================================================
- * RALION — COMPREHENSIVE PRODUCTION READINESS & FULL E2E CHAIN TEST
+ * RALION — STATIC PRODUCTION READINESS CONTRACT CHECKS
  * Ras Ali Labs (Pty) Ltd
  * ============================================================================
  * 
- * Validates the complete 12-stage enterprise chain:
+ * Checks source files and local cryptographic operations across 12 stages.
+ * Does not contact production, authenticate users, exercise RLS, install a
+ * desktop build, publish a post or verify remote token revocation. Passing this
+ * gate is not a live smoke-test or penetration-test sign-off.
  * 1.  rasalilabs.com (Marketing & Download Gateway)
  * 2.  Ralion download & packaging manifests
  * 3.  Installation & Application workspace bootstrap
@@ -30,8 +33,8 @@ const assert = require('assert');
 const ROOT_DIR = path.join(__dirname, '..');
 
 console.log('\n' + '='.repeat(78));
-console.log('  🌐  RALION PRODUCTION READINESS & FULL E2E CHAIN VERIFICATION');
-console.log('      Ras Ali Labs (Pty) Ltd — Enterprise System Validation');
+console.log('  RALION STATIC PRODUCTION READINESS CONTRACT CHECKS');
+console.log('  Source/local checks only; live smoke and penetration tests remain separate.');
 console.log('='.repeat(78) + '\n');
 
 let stageCount = 0;
@@ -373,9 +376,9 @@ runStage('Meta Platform Term 4.a User Data Deletion Callback', () => {
 // FINAL READINESS REPORT
 // ============================================================================
 console.log('='.repeat(78));
-console.log(`  📊 PRODUCTION READINESS RESULTS: ${passCount}/${stageCount} STAGES PASSED`);
+console.log(`  STATIC READINESS RESULTS: ${passCount}/${stageCount} STAGES PASSED`);
 if (failCount === 0) {
-  console.log('  🏆 ENTIRE E2E CHAIN VERIFIED: 100% PRODUCTION READINESS CONFIRMED!');
+  console.log('  Static contract checks passed. Live production clearance is not established by this suite.');
 } else {
   console.log('  ⚠️ SOME STAGES FAILED. Please review the output above.');
 }
