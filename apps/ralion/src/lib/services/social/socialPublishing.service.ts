@@ -198,8 +198,8 @@ async function resolveTenantCreativeMedia(params: {
 
     const delivery = await CreativeAssetService.createSignedDeliveryUrl({
       assetId,
-      organizationId: params.organizationId,
-      workspaceId: params.workspaceId,
+      organizationId: params.organizationId!,
+      workspaceId: params.workspaceId!,
       expiresInSeconds: 3600,
     });
 
