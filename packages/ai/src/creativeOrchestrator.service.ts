@@ -227,6 +227,16 @@ export class CreativeOrchestrator {
     const tempAssetId = `asset-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
     const resolvedWorkspaceId = (options as any).workspaceId || organizationId;
+    const cleanupRejectedRawAsset = async () => {
+      if (!rawStoragePath) return;
+      await CreativeAssetService.deleteRawBinaryAsset({
+        rawStoragePath,
+        organizationId,
+        workspaceId: resolvedWorkspaceId,
+      });
+      rawPublicUrl = undefined;
+      rawStoragePath = undefined;
+    };
 
     if (type === 'POSTER_IMAGE' && successfulResult) {
       // 1. Durably save raw, un-composed image binary
@@ -358,6 +368,7 @@ export class CreativeOrchestrator {
       // provider watermark/URL/third-party branding. Ralion/customer branding
       // is applied later as a deterministic composition step.
       if (visualQAResult?.prohibitedBrandingDetected) {
+        await cleanupRejectedRawAsset();
         TenantCreditsService.addCredits(organizationId, creditCost, 'Refund for third-party branding rejection');
         return {
           success: false,
@@ -375,6 +386,7 @@ export class CreativeOrchestrator {
       }
 
       if (visualQAResult?.textFidelityPassed === false) {
+        await cleanupRejectedRawAsset();
         TenantCreditsService.addCredits(organizationId, creditCost, 'Refund for rendered text fidelity rejection');
         return {
           success: false,
@@ -394,6 +406,7 @@ export class CreativeOrchestrator {
       }
 
       if (visualQAResult && visualQAResult.visualRelevanceScore < 80) {
+        await cleanupRejectedRawAsset();
         TenantCreditsService.addCredits(organizationId, creditCost, 'Refund for visual semantic relevance rejection');
         return {
           success: false,
@@ -468,6 +481,7 @@ export class CreativeOrchestrator {
 
     // Storage integrity gate: if storage write failed, never return a completed asset
     if (asset.status === 'FAILED') {
+      await cleanupRejectedRawAsset();
       TenantCreditsService.addCredits(organizationId, creditCost, 'Refund for storage failure');
       return {
         success: false,
