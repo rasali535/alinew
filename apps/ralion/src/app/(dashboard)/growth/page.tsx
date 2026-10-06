@@ -343,7 +343,7 @@ function GrowthPageContent() {
 
   // Creative Studio Brand Logo / Typography / Overlay State
   const [creativeLogo, setCreativeLogo] = useState<string>('');
-  const effectiveCreativeLogo = creativeLogo || '/ralion-logo.png';
+  const effectiveCreativeLogo = creativeLogo || '/ralion/ralion-logo.png';
   const [logoPosition, setLogoPosition] = useState<'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'>('top-right');
   const [creativeMode, setCreativeMode] = useState<'poster' | 'video'>('poster');
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('FULL_BLEED_HERO');

@@ -60,6 +60,13 @@ export class R2StorageProvider implements AssetStorageProvider {
       throw new Error('[R2StorageProvider] Missing required R2 configuration.');
     }
 
+    const accessKeyId = config.accessKeyId.trim();
+    if (accessKeyId.length !== 32) {
+      throw new Error(
+        '[R2StorageProvider] R2_ACCESS_KEY_ID must be the 32-character S3 Access Key ID from the R2 API token screen, not the API token value.'
+      );
+    }
+
     const endpoint = new URL(config.endpoint);
     if (endpoint.protocol !== 'https:') {
       throw new Error('[R2StorageProvider] R2 endpoint must use HTTPS.');
@@ -70,7 +77,7 @@ export class R2StorageProvider implements AssetStorageProvider {
 
     this.endpoint = endpoint;
     this.bucketName = config.bucketName.trim();
-    this.accessKeyId = config.accessKeyId.trim();
+    this.accessKeyId = accessKeyId;
     this.secretAccessKey = config.secretAccessKey;
     this.region = config.region?.trim() || 'auto';
   }

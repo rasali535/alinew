@@ -85,30 +85,90 @@ export async function GET(request: NextRequest) {
 
     const provider = conn.provider as string;
 
-    // 3. Facebook Business Page: delegate to full service (Zernio + Graph API + DB)
+    // 3. Facebook Business Page: delegate to the full service first, then
+    // degrade to already-persisted Ralion publication history if an upstream
+    // provider/network call fails. A transient Graph/Zernio fetch must not turn
+    // the whole Growth page into a raw HTTP 500.
     if (provider === 'facebook') {
-      const posts = await FacebookPageManagementService.getPagePosts({
-        organizationId: context.organization.id,
-        workspaceId: context.workspace.id,
-        userId: context.user.id,
-        pageId: conn.provider_account_id || conn.metadata?.pageId,
-        socialConnectionId,
-        limit,
-      });
+      try {
+        const posts = await FacebookPageManagementService.getPagePosts({
+          organizationId: context.organization.id,
+          workspaceId: context.workspace.id,
+          userId: context.user.id,
+          pageId: conn.provider_account_id || conn.metadata?.pageId,
+          socialConnectionId,
+          limit,
+        });
 
-      const respPayload = {
-        success: true,
-        socialConnectionId,
-        provider,
-        posts,
-        total: posts.length,
-        dataAvailable: true,
-        source: 'FACEBOOK_DIRECT',
-        lastSyncedAt: new Date().toISOString(),
-      };
-      tenantCache.set(cacheKey, respPayload, 60);
+        const respPayload = {
+          success: true,
+          socialConnectionId,
+          provider,
+          posts,
+          total: posts.length,
+          dataAvailable: posts.length > 0,
+          source: 'FACEBOOK_DIRECT',
+          lastSyncedAt: new Date().toISOString(),
+        };
+        tenantCache.set(cacheKey, respPayload, 60);
 
-      return corsJsonResponse(respPayload, undefined, request);
+        return corsJsonResponse(respPayload, undefined, request);
+      } catch (upstreamErr: any) {
+        console.warn(
+          '[PostsByConnection] Facebook upstream unavailable; using durable publication fallback:',
+          upstreamErr?.message || upstreamErr
+        );
+
+        const { data: fallbackRows, error: fallbackErr } = await supabase
+          .from('social_posts')
+          .select('*')
+          .eq('social_connection_id', socialConnectionId)
+          .order('created_at', { ascending: false })
+          .limit(limit);
+
+        if (fallbackErr) {
+          throw upstreamErr;
+        }
+
+        const posts = (fallbackRows || []).map((p: any) => ({
+          id: p.id,
+          platformPostId: p.platform_post_ids?.facebook || p.platform_results?.facebook?.postId || p.id,
+          title: p.title || 'Facebook Post',
+          body: p.body || '',
+          mediaUrls: p.media_urls || [],
+          mediaType: p.media_types?.[0] || 'text',
+          publishedAt: p.published_at || p.created_at,
+          scheduledFor: p.scheduled_for || undefined,
+          status: (p.status === 'PUBLISHED' ? 'published' : p.status === 'SCHEDULED' || p.status === 'QUEUED' ? 'scheduled' : 'draft') as 'published' | 'scheduled' | 'draft',
+          source: 'RALION' as const,
+          permalink: p.platform_results?.facebook?.postUrl || undefined,
+          engagement: {
+            likes: Number(p.platform_results?.facebook?.engagement?.likes || p.engagement?.likes || 0),
+            comments: Number(p.platform_results?.facebook?.engagement?.comments || p.engagement?.comments || 0),
+            shares: Number(p.platform_results?.facebook?.engagement?.shares || p.engagement?.shares || 0),
+            reach: Number(p.platform_results?.facebook?.engagement?.reach || p.engagement?.reach || 0),
+          },
+        }));
+
+        const respPayload = {
+          success: true,
+          socialConnectionId,
+          provider,
+          posts,
+          total: posts.length,
+          dataAvailable: posts.length > 0,
+          source: 'RALION_FALLBACK',
+          degraded: true,
+          reason: 'facebook_upstream_temporarily_unavailable',
+          message: posts.length
+            ? 'Showing Ralion publication history while Facebook post retrieval is temporarily unavailable.'
+            : 'Facebook post retrieval is temporarily unavailable. No locally persisted posts are available for this connection yet.',
+          lastSyncedAt: new Date().toISOString(),
+        };
+        tenantCache.set(cacheKey, respPayload, 15);
+
+        return corsJsonResponse(respPayload, undefined, request);
+      }
     }
 
     // 3b. Instagram Professional: retrieve the selected account's real media
@@ -245,9 +305,16 @@ export async function GET(request: NextRequest) {
     );
   } catch (err: any) {
     console.error('[PostsByConnection] Error:', err.message);
+    const transient = /fetch failed|network|timed? out|timeout|ECONN|ENOTFOUND|EAI_AGAIN/i.test(
+      String(err?.message || '')
+    );
     return corsJsonResponse(
-      { success: false, error: err.message || 'Failed to retrieve posts for this connection' },
-      { status: 500 },
+      {
+        success: false,
+        error: err.message || 'Failed to retrieve posts for this connection',
+        code: transient ? 'SOCIAL_UPSTREAM_UNAVAILABLE' : 'SOCIAL_POSTS_FAILED',
+      },
+      { status: transient ? 503 : 500 },
       request
     );
   }

@@ -1,6 +1,6 @@
 import React from 'react';
 import { DesktopTitleBar } from '@ralion/ui';
-import { OrganizationProvider } from '@ralion/auth';
+import { RalionAuthProvider } from '@/components/RalionAuthProvider';
 import { DesktopOAuthListener } from '@/components/DesktopOAuthListener';
 import { DesktopNetworkBootstrap } from '@/components/DesktopNetworkBootstrap';
 import './globals.css';
@@ -24,13 +24,13 @@ export default function RootLayout({
     <html lang="en" className="dark" suppressHydrationWarning>
       <body className="bg-zinc-950 text-zinc-100 font-sans antialiased flex flex-col h-screen overflow-hidden" suppressHydrationWarning>
         <DesktopNetworkBootstrap>
-          <OrganizationProvider>
+          <RalionAuthProvider>
             <DesktopTitleBar />
             <DesktopOAuthListener />
             <div className="flex-1 overflow-auto">
               {children}
             </div>
-          </OrganizationProvider>
+          </RalionAuthProvider>
         </DesktopNetworkBootstrap>
       </body>
     </html>
