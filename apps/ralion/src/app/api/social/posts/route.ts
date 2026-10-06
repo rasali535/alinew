@@ -310,7 +310,13 @@ export async function POST(request: NextRequest) {
       if (
         !Array.isArray(body.mediaTypes)
         || body.mediaTypes.length !== mediaUrls.length
-        || body.mediaTypes.some((value: unknown) => typeof value !== 'string' || !/^(image|video)\/[a-z0-9.+-]+$/i.test(value))
+        || body.mediaTypes.some((value: unknown) => {
+          if (typeof value !== 'string') return true;
+          const normalized = value.trim().toLowerCase();
+          return normalized !== 'image'
+            && normalized !== 'video'
+            && !/^(image|video)\/[a-z0-9.+-]+$/i.test(normalized);
+        })
       ) {
         return corsJsonResponse(
           {
@@ -323,7 +329,7 @@ export async function POST(request: NextRequest) {
           request
         );
       }
-      mediaTypes = body.mediaTypes.map((value: string) => value.toLowerCase());
+      mediaTypes = body.mediaTypes.map((value: string) => value.trim().toLowerCase());
     }
 
     if (body.socialConnectionId !== undefined && !UUID_PATTERN.test(body.socialConnectionId)) {
