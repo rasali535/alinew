@@ -192,11 +192,40 @@ export async function POST(request: NextRequest) {
       }, { status: httpStatus }, request);
     }
 
+    const canonicalAssetId = String(result.receipt.assetId || result.receipt.id || '');
+    const deliveryEndpoint = `/api/creatives/${encodeURIComponent(canonicalAssetId)}/delivery`;
+
+    // Browser-facing creative payloads must use the authenticated Ralion
+    // delivery route. Never make a private R2 object endpoint the preferred
+    // display URL or expose storage implementation details to the client.
     const assetPayload = {
-      id: result.receipt.assetId,
       ...result.receipt,
+      id: canonicalAssetId,
+      assetId: canonicalAssetId,
+      mediaUrl: deliveryEndpoint,
+      publicUrl: deliveryEndpoint,
+      previewUrl: deliveryEndpoint,
+      thumbnailUrl: deliveryEndpoint,
+      deliveryEndpoint,
+      rawMediaUrl: undefined,
+      rawPublicUrl: undefined,
+      rawProviderAsset: undefined,
+      finalComposedAsset: undefined,
       organizationId: authenticatedOrgId,
       workspaceId: authenticatedWorkspaceId,
+    };
+
+    const receiptPayload = {
+      ...result.receipt,
+      assetId: canonicalAssetId,
+      mediaUrl: deliveryEndpoint,
+      publicUrl: deliveryEndpoint,
+      thumbnailUrl: deliveryEndpoint,
+      deliveryEndpoint,
+      rawMediaUrl: undefined,
+      rawPublicUrl: undefined,
+      rawProviderAsset: undefined,
+      finalComposedAsset: undefined,
     };
 
     return corsJsonResponse({
@@ -204,7 +233,7 @@ export async function POST(request: NextRequest) {
       status: 'COMPLETED',
       userFacingMessage: result.userFacingMessage,
       asset: assetPayload,
-      receipt: result.receipt,
+      receipt: receiptPayload,
       requestId,
     }, undefined, request);
 
