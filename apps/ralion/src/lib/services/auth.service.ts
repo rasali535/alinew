@@ -313,20 +313,10 @@ export class AuthService {
     try {
       const { data: { session }, error } = await this.supabase.auth.getSession();
       if (error) {
+        // Session inspection is not an explicit logout action. In particular,
+        // never call Supabase signOut() here: a stale refresh error can race a
+        // newer login and revoke that otherwise-valid server session.
         console.warn('[AuthService] Session resolution note:', error.message);
-        if (
-          error.message?.includes('Refresh Token') ||
-          error.message?.includes('invalid_grant') ||
-          (error as any)?.status === 400
-        ) {
-          try {
-            await this.supabase.auth.signOut({ scope: 'local' });
-            if (typeof window !== 'undefined') {
-              window.localStorage?.removeItem('ralion-app-auth-token');
-              window.localStorage?.removeItem('sb-yidsfihagwttlmhfynmf-auth-token');
-            }
-          } catch {}
-        }
         return null;
       }
       return session;
@@ -386,7 +376,7 @@ export class AuthService {
    */
   static async logout() {
     try {
-      await this.supabase.auth.signOut();
+      await this.supabase.auth.signOut({ scope: 'local' });
     } catch (err) {
       console.warn('[AuthService] Supabase signout notice:', err);
     }

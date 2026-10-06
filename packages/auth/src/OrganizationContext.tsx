@@ -183,20 +183,36 @@ async function readResponseCode(res: Response): Promise<string | null> {
 }
 
 /**
- * Purge all auth-related storage entries and redirect to /login exactly once.
- * This is called after a session is irrecoverably invalid (double AUTH_TOKEN_INVALID).
+ * Clear an irrecoverably stale browser session and redirect to login exactly
+ * once. Automatic recovery MUST NOT call Supabase signOut(): even local-scope
+ * signOut terminates the current server session and a stale refresh callback
+ * can otherwise revoke a newer login.
  */
-async function terminateInvalidSession(): Promise<void> {
+async function terminateInvalidSession(failedAccessToken?: string): Promise<void> {
   if (_redirectedToLogin) return;
-  _redirectedToLogin = true;
 
-  // Sign out locally only — do not call the Supabase server (server may be rejecting us anyway)
-  const client = getSharedSupabaseClient();
-  if (client?.auth?.signOut) {
-    await client.auth.signOut({ scope: 'local' }).catch(() => {});
+  const stored = readStoredSessionFallback();
+  const runtimeToken =
+    typeof (window as any).__ralion_access_token__ === 'string'
+      ? (window as any).__ralion_access_token__
+      : null;
+  const currentAccessToken = stored.accessToken || runtimeToken;
+
+  // A login/refresh completed after the failing request began. Never let that
+  // stale failure erase or revoke the replacement session.
+  if (
+    failedAccessToken &&
+    currentAccessToken &&
+    currentAccessToken !== failedAccessToken
+  ) {
+    console.info('[AuthContext] Ignoring stale terminal auth failure because a newer session is active.');
+    return;
   }
 
-  // Clear all Ralion and Supabase auth storage
+  _redirectedToLogin = true;
+
+  // Browser cleanup only. Explicit user logout is the sole path allowed to
+  // revoke a Supabase server session.
   try {
     delete (window as any).__ralion_access_token__;
     delete (window as any).__ralion_access_token_user__;
@@ -213,7 +229,6 @@ async function terminateInvalidSession(): Promise<void> {
     sessionStorage.clear();
   } catch {}
 
-  // Redirect once. The packaged renderer lives under app://localhost/ralion.
   if (isDesktopRuntime()) {
     window.location.href = 'app://localhost/ralion/login';
   } else {
@@ -284,8 +299,8 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         // If server still returns AUTH_TOKEN_INVALID after a successful refresh,
         // the session is irrecoverably dead. Terminate it and redirect to login.
         if (res.status === 401 && responseCode === 'AUTH_TOKEN_INVALID') {
-          console.warn('[AuthContext] Session irrecoverably invalid after refresh — signing out.');
-          await terminateInvalidSession();
+          console.warn('[AuthContext] Session irrecoverably invalid after refresh — clearing stale browser session.');
+          await terminateInvalidSession(accessToken);
           return; // Do not call clearResolvedContext; redirect is in flight.
         }
       }
