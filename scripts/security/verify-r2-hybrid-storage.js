@@ -56,7 +56,7 @@ assert(creativeGenerateRoute.includes("mediaUrl: deliveryEndpoint") && creativeG
 assert(creativeListRoute.includes("assets: clientAssets") && creativeListRoute.includes("publicUrl: deliveryEndpoint"), 'Creative list API must normalize library assets to authenticated delivery URLs');
 
 const failedR2Url = 'https://example.r2.cloudflarestorage.com/ralion-media-prod/organizations/org/workspaces/ws/assets/asset-1791316002231-v0t1m/asset-1791316002231-v0t1m.jpg';
-const failedR2Match = failedR2Url.match(/\\/assets\\/(asset-[A-Za-z0-9_-]+)(?:\\/|$)/);
+const failedR2Match = failedR2Url.match(/\/assets\/(asset-[A-Za-z0-9_-]+)(?:\/|$)/);
 assert(failedR2Match?.[1] === 'asset-1791316002231-v0t1m', 'Exact production R2 URL shape must normalize to the canonical creative asset ID');
 
 console.log('R2 hybrid media storage contract: PASS');
