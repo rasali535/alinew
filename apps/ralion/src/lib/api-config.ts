@@ -94,19 +94,53 @@ function isTerminalRefreshFailure(error: any): boolean {
   );
 }
 
-async function clearTerminalBrowserSession(error: any): Promise<void> {
-  if (typeof window === 'undefined' || !isTerminalRefreshFailure(error)) return;
+function readStoredBrowserSession(): { access_token: string; user?: any; refresh_token?: string } | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const directSession = window.localStorage?.getItem('ralion-app-auth-token');
+    if (directSession) {
+      const parsed = JSON.parse(directSession);
+      const accessToken = parsed?.access_token || parsed?.currentSession?.access_token;
+      if (accessToken) {
+        return {
+          access_token: accessToken,
+          refresh_token: parsed?.refresh_token || parsed?.currentSession?.refresh_token,
+          user: parsed?.user || parsed?.currentSession?.user,
+        };
+      }
+    }
+  } catch {}
+  return null;
+}
+
+async function clearTerminalBrowserSession(error: any, failedAccessToken?: string | null): Promise<boolean> {
+  if (typeof window === 'undefined' || !isTerminalRefreshFailure(error)) return false;
+
+  const stored = readStoredBrowserSession();
+  const runtimeToken =
+    typeof (window as any).__ralion_access_token__ === 'string'
+      ? (window as any).__ralion_access_token__
+      : null;
+  const currentAccessToken = stored?.access_token || runtimeToken;
+
+  // A newer login/refresh won the race. Never let an older refresh failure
+  // revoke or clear the replacement session.
+  if (
+    failedAccessToken &&
+    currentAccessToken &&
+    currentAccessToken !== failedAccessToken
+  ) {
+    _terminalRefreshFailure = false;
+    console.info('[RalionAuth] Preserving newer session after stale refresh failure.');
+    return false;
+  }
 
   _terminalRefreshFailure = true;
   delete (window as any).__ralion_access_token__;
   delete (window as any).__ralion_access_token_user__;
 
-  try {
-    const { createClient } = await import('@/lib/supabase/client');
-    const supabase = createClient();
-    await supabase.auth.signOut({ scope: 'local' });
-  } catch {}
-
+  // Browser cleanup only. Do not call Supabase signOut here: automatic recovery
+  // is not an explicit logout and must never terminate the current server session.
   try {
     const keysToRemove = [
       'ralion-app-auth-token',
@@ -119,6 +153,8 @@ async function clearTerminalBrowserSession(error: any): Promise<void> {
     ];
     keysToRemove.forEach((key) => window.localStorage?.removeItem(key));
   } catch {}
+
+  return true;
 }
 
 function redirectToRalionLoginAfterSessionExpiry(): void {
@@ -146,6 +182,11 @@ async function getBrowserSession(forceRefresh = false): Promise<{ access_token: 
 
   if (forceRefresh) {
     _terminalRefreshFailure = false;
+    const failedAccessToken =
+      readStoredBrowserSession()?.access_token ||
+      ((window as any).__ralion_access_token__ as string | undefined) ||
+      null;
+
     try {
       // Prefer the globally registered deduplicated refresh function (set by client.ts)
       // to avoid importing a second Supabase client instance.
@@ -156,11 +197,15 @@ async function getBrowserSession(forceRefresh = false): Promise<{ access_token: 
           (window as any).__ralion_access_token_user__ = refreshed.data.session.user || undefined;
           return refreshed.data.session;
         }
-        await clearTerminalBrowserSession(refreshed.error);
-        delete (window as any).__ralion_access_token__;
-        delete (window as any).__ralion_access_token_user__;
+
+        const cleared = await clearTerminalBrowserSession(refreshed.error, failedAccessToken);
+        if (!cleared) {
+          const replacement = readStoredBrowserSession();
+          if (replacement) return replacement;
+        }
         return null;
       }
+
       const { createClient } = await import('@/lib/supabase/client');
       const supabase = createClient();
       const refreshed = await deduplicatedRefreshSession(supabase);
@@ -169,12 +214,15 @@ async function getBrowserSession(forceRefresh = false): Promise<{ access_token: 
         (window as any).__ralion_access_token_user__ = refreshed.data.session.user || undefined;
         return refreshed.data.session;
       }
-      await clearTerminalBrowserSession(refreshed.error);
-      delete (window as any).__ralion_access_token__;
-      delete (window as any).__ralion_access_token_user__;
+
+      const cleared = await clearTerminalBrowserSession(refreshed.error, failedAccessToken);
+      if (!cleared) {
+        const replacement = readStoredBrowserSession();
+        if (replacement) return replacement;
+      }
       return null;
     } catch {
-      return null;
+      return readStoredBrowserSession();
     }
   }
 
