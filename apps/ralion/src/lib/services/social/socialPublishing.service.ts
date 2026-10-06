@@ -24,6 +24,7 @@ import { SocialTokenManager } from './socialTokenManager.service';
 import { SocialProviderRouter } from './socialProviderRouter.service';
 import { AuditLoggerService } from '../auditLogger.service';
 import { getPrivilegedSupabase as getServiceSupabase } from '@/lib/supabase/server';
+import { CreativeAssetService } from '@ralion/ai/server';
 
 import { resolvePageAccessToken } from './facebookPageManagement.service';
 
@@ -126,6 +127,93 @@ function isPrivateOrLocalHostname(hostname: string): boolean {
     || (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31)
     || (octets[0] === 192 && octets[1] === 168)
     || octets[0] === 0;
+}
+
+function extractCreativeAssetId(candidate: string): string | null {
+  let value = String(candidate || '').trim();
+  if (!value) return null;
+
+  try {
+    const decoded = decodeURIComponent(value);
+    if (decoded) value = decoded;
+  } catch {}
+
+  if (/^asset-[A-Za-z0-9_-]+$/.test(value)) {
+    return value;
+  }
+
+  const isInternalDeliveryRef =
+    value.startsWith('/api/creatives/') ||
+    value.startsWith('/ralion/api/creatives/') ||
+    value.includes('/api/creatives/file/');
+
+  const isR2Locator = (() => {
+    try {
+      const parsed = new URL(value);
+      return parsed.hostname.endsWith('.r2.cloudflarestorage.com');
+    } catch {
+      return false;
+    }
+  })();
+
+  if (!isInternalDeliveryRef && !isR2Locator) return null;
+
+  const pathAssetMatch = value.match(/\/assets\/(asset-[A-Za-z0-9_-]+)(?:\/|$)/);
+  if (pathAssetMatch?.[1]) return pathAssetMatch[1];
+
+  const deliveryMatch = value.match(/\/api\/creatives\/(asset-[A-Za-z0-9_-]+)\/delivery(?:\?|$)/);
+  if (deliveryMatch?.[1]) return deliveryMatch[1];
+
+  const fileMatch = value.match(/\/api\/creatives\/file\/(asset-[A-Za-z0-9_-]+)(?:-raw)?\.[A-Za-z0-9]+(?:\?|$)/);
+  if (fileMatch?.[1]) return fileMatch[1];
+
+  return null;
+}
+
+async function resolveTenantCreativeMedia(params: {
+  mediaUrls?: string[];
+  organizationId: string;
+  workspaceId: string;
+}): Promise<string[]> {
+  const urls = params.mediaUrls || [];
+  if (urls.length === 0) return [];
+
+  const resolved: string[] = [];
+
+  for (const candidate of urls) {
+    if (typeof candidate !== 'string' || !candidate.trim()) {
+      throw publishingInputError('INVALID_MEDIA', 'Every media item must be a valid creative asset or public HTTPS URL.');
+    }
+
+    if (candidate.startsWith('data:')) {
+      resolved.push(candidate);
+      continue;
+    }
+
+    const assetId = extractCreativeAssetId(candidate);
+    if (!assetId) {
+      resolved.push(candidate);
+      continue;
+    }
+
+    const delivery = await CreativeAssetService.createSignedDeliveryUrl({
+      assetId,
+      organizationId: params.organizationId,
+      workspaceId: params.workspaceId,
+      expiresInSeconds: 3600,
+    });
+
+    if (!delivery?.signedUrl) {
+      throw publishingInputError(
+        'INVALID_MEDIA',
+        'The selected creative could not be resolved for this workspace. Please choose a valid tenant-owned asset.'
+      );
+    }
+
+    resolved.push(delivery.signedUrl);
+  }
+
+  return resolved;
 }
 
 function validateMediaInputs(mediaUrls?: unknown, mediaTypes?: unknown): {
@@ -769,7 +857,12 @@ export class SocialPublishingService {
     }
 
     const normalizedPlatforms = canonicalizePlatforms(params.platforms);
-    const normalizedMedia = validateMediaInputs(params.mediaUrls, params.mediaTypes);
+    const tenantResolvedMediaUrls = await resolveTenantCreativeMedia({
+      mediaUrls: params.mediaUrls,
+      organizationId: params.organizationId,
+      workspaceId: params.workspaceId,
+    });
+    const normalizedMedia = validateMediaInputs(tenantResolvedMediaUrls, params.mediaTypes);
     if (params.socialConnectionId && !UUID_PATTERN.test(params.socialConnectionId)) {
       throw publishingInputError('INVALID_CONNECTION_ID', 'socialConnectionId must be a valid UUID.');
     }
