@@ -81,11 +81,71 @@ export function getRalionApiUrl(path: string): string {
 }
 
 let _sessionPromise: Promise<any> | null = null;
+let _terminalRefreshFailure = false;
+
+function isTerminalRefreshFailure(error: any): boolean {
+  const message = String(error?.message || '');
+  const code = String(error?.code || '');
+  const status = Number(error?.status || 0);
+  return (
+    /refresh token not found|invalid refresh token|auth session missing|invalid_grant/i.test(message) ||
+    /refresh_token_not_found|invalid_refresh_token|invalid_grant/i.test(code) ||
+    (status === 400 && /refresh token|session missing/i.test(message))
+  );
+}
+
+async function clearTerminalBrowserSession(error: any): Promise<void> {
+  if (typeof window === 'undefined' || !isTerminalRefreshFailure(error)) return;
+
+  _terminalRefreshFailure = true;
+  delete (window as any).__ralion_access_token__;
+  delete (window as any).__ralion_access_token_user__;
+
+  try {
+    const { createClient } = await import('@/lib/supabase/client');
+    const supabase = createClient();
+    await supabase.auth.signOut({ scope: 'local' });
+  } catch {}
+
+  try {
+    const keysToRemove = [
+      'ralion-app-auth-token',
+      'sb-yidsfihagwttlmhfynmf-auth-token',
+      'ralion_active_workspace_id',
+      'ralion_workspace_id',
+      'ralion_organization_id',
+      'ralion_active_org_id',
+      'ralion_org_id',
+    ];
+    keysToRemove.forEach((key) => window.localStorage?.removeItem(key));
+  } catch {}
+}
+
+function redirectToRalionLoginAfterSessionExpiry(): void {
+  if (typeof window === 'undefined') return;
+
+  try {
+    const desktop =
+      Boolean((window as any).ralionDesktop?.isDesktop || (window as any).__RALION_DESKTOP__) ||
+      window.location.protocol === 'file:' ||
+      window.location.protocol === 'app:';
+
+    if (desktop) {
+      window.location.href = 'app://localhost/ralion/login';
+      return;
+    }
+
+    const currentHref = window.location.href;
+    const loginUrl = `${window.location.origin}/ralion/login?redirect=${encodeURIComponent(currentHref)}`;
+    window.location.assign(loginUrl);
+  } catch {}
+}
 
 async function getBrowserSession(forceRefresh = false): Promise<{ access_token: string; user?: any; refresh_token?: string } | null> {
   if (typeof window === 'undefined') return null;
 
   if (forceRefresh) {
+    _terminalRefreshFailure = false;
     try {
       // Prefer the globally registered deduplicated refresh function (set by client.ts)
       // to avoid importing a second Supabase client instance.
@@ -96,6 +156,7 @@ async function getBrowserSession(forceRefresh = false): Promise<{ access_token: 
           (window as any).__ralion_access_token_user__ = refreshed.data.session.user || undefined;
           return refreshed.data.session;
         }
+        await clearTerminalBrowserSession(refreshed.error);
         delete (window as any).__ralion_access_token__;
         delete (window as any).__ralion_access_token_user__;
         return null;
@@ -108,6 +169,7 @@ async function getBrowserSession(forceRefresh = false): Promise<{ access_token: 
         (window as any).__ralion_access_token_user__ = refreshed.data.session.user || undefined;
         return refreshed.data.session;
       }
+      await clearTerminalBrowserSession(refreshed.error);
       delete (window as any).__ralion_access_token__;
       delete (window as any).__ralion_access_token_user__;
       return null;
@@ -307,6 +369,19 @@ export async function authFetch(pathOrUrl: string, init?: RequestInit): Promise<
             headers,
             credentials: init?.credentials || 'include',
           });
+        } else if (_terminalRefreshFailure) {
+          const expiredResponse = new Response(JSON.stringify({
+            success: false,
+            error: 'AUTH_SESSION_EXPIRED',
+            code: 'AUTH_SESSION_EXPIRED',
+            message: 'Your Ralion session has expired. Please sign in again.',
+          }), {
+            status: 401,
+            statusText: 'Unauthorized',
+            headers: { 'Content-Type': 'application/json' },
+          });
+          redirectToRalionLoginAfterSessionExpiry();
+          return expiredResponse;
         }
       }
     }
