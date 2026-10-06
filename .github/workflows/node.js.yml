@@ -37,6 +37,10 @@ jobs:
       run: node scripts/security/test-public-function-hardening.mjs
     - name: Replay all Supabase migrations into a clean PostgreSQL database
       run: node scripts/security/test-preview-migration-replay.mjs
+    - name: Verify social health tenant isolation
+      run: node scripts/security/test-social-health-tenant-isolation.cjs
+    - name: Verify Mari action completion claims
+      run: node scripts/security/test-mari-action-results.cjs
     - name: Run production readiness smoke
       run: npm run test:e2e
     - name: Build all workspaces

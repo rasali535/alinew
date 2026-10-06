@@ -114,12 +114,18 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'health_check') {
-      const health = await SocialConnectionHealthService.checkConnectionHealth(connectionId);
+      if (typeof connectionId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(connectionId)) {
+        return corsJsonResponse({ success: false, error: 'INVALID_CONNECTION_ID' }, { status: 400 }, request);
+      }
+      const health = await SocialConnectionHealthService.checkConnectionHealth(connectionId, {
+        organizationId: resolvedTenantId,
+        workspaceId: resolvedWorkspaceId,
+      });
       return corsJsonResponse({ success: true, health }, undefined, request);
     }
 
     return corsJsonResponse({ success: false, error: 'Unknown action' }, { status: 400 }, request);
   } catch (error: any) {
-    return corsJsonResponse({ success: false, error: error.message }, { status: 500 }, request);
+    return corsJsonResponse({ success: false, error: error.message }, { status: [403, 404, 503].includes(error?.statusCode) ? error.statusCode : 500 }, request);
   }
 }

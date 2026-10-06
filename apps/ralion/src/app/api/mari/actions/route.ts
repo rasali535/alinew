@@ -37,7 +37,8 @@ export async function POST(request: NextRequest) {
       success: result.success,
       message: result.message,
       outputData: result.outputData,
-    }, undefined, request);
+      code: result.code,
+    }, { status: result.code === 'ACTION_NOT_IMPLEMENTED' ? 501 : result.success ? 200 : 400 }, request);
   } catch (err: any) {
     return corsJsonResponse({
       success: false,

@@ -51,6 +51,41 @@ try {
   // An existing production-shaped schema is preserved by baseline reapplication.
   await database.exec(fs.readFileSync(new URL(baselineName,migrationDirectory), 'utf8'));
   assert.equal(await scalar(`SELECT count(*)::int AS value FROM public.organizations WHERE owner_id='${user}'`), 1);
+  // Exercise the deployed credit procedures with two isolated synthetic tenants.
+  const orgA = (await database.query(`SELECT id FROM public.organizations WHERE owner_id=$1`, [user])).rows[0].id;
+  const userB = '00000000-0000-0000-0000-000000000012';
+  await database.query(`INSERT INTO auth.users(id,email,raw_user_meta_data) VALUES ($1,'preview-b@example.invalid',$2)`, [userB, { org_name: 'Preview Tenant B' }]);
+  const orgB = (await database.query(`SELECT id FROM public.organizations WHERE owner_id=$1`, [userB])).rows[0].id;
+  const summary = async org => (await database.query(`SELECT public.ralion_get_credit_summary($1,'COMMUNITY',100) AS value`, [org])).rows[0].value;
+  const reserve = async (org, correlation, amount) => (await database.query(`SELECT public.ralion_reserve_credits($1,$2,$3,'COMMUNITY',100,$4,'SECURITY_TEST') AS value`, [org, user, correlation, amount])).rows[0].value;
+  const finalize = async (org, correlation, success) => (await database.query(`SELECT public.ralion_finalize_credits($1,$2,$3) AS value`, [org, correlation, success])).rows[0].value;
+  await summary(orgA);
+  const untouchedB = await summary(orgB);
+  const first = await reserve(orgA, 'charged-once', 7);
+  assert.equal(first.allowed, true);
+  assert.equal((await reserve(orgA, 'charged-once', 7)).reservationId, first.reservationId);
+  assert.equal((await summary(orgA)).reservedCredits, 7);
+  assert.equal((await finalize(orgB, 'charged-once', true)).status, 'NOT_FOUND');
+  assert.equal((await finalize(orgA, 'charged-once', true)).creditsDeducted, 7);
+  assert.equal((await finalize(orgA, 'charged-once', true)).status, 'CHARGED');
+  assert.equal((await summary(orgA)).remainingCredits, 93);
+  assert.equal((await summary(orgA)).lifetimeCreditsConsumed, 7);
+  assert.equal((await database.query(`SELECT count(*)::int AS value FROM public.tenant_credit_ledger WHERE organization_id=$1 AND type='CONSUMPTION' AND correlation_id='charged-once'`, [orgA])).rows[0].value, 1);
+  await reserve(orgA, 'failed-provider', 9);
+  assert.equal((await finalize(orgA, 'failed-provider', false)).status, 'RELEASED');
+  assert.equal((await finalize(orgA, 'failed-provider', true)).status, 'RELEASED');
+  assert.equal((await summary(orgA)).remainingCredits, 93);
+  assert.equal((await summary(orgA)).reservedCredits, 0);
+  assert.equal((await reserve(orgA, 'over-quota', 94)).status, 'INSUFFICIENT_CREDITS');
+  await reserve(orgA, 'crashed-provider', 11);
+  await database.query(`UPDATE public.tenant_credit_reservations SET created_at=now()-interval '16 minutes' WHERE organization_id=$1 AND correlation_id='crashed-provider'`, [orgA]);
+  assert.equal((await summary(orgA)).reservedCredits, 0);
+  assert.equal((await finalize(orgA, 'crashed-provider', true)).status, 'RELEASED');
+  assert.deepEqual(await summary(orgB), untouchedB, 'Tenant A operations must not change Tenant B wallet.');
+  await database.exec('SET ROLE authenticated');
+  await assert.rejects(database.query(`SELECT public.ralion_finalize_credits($1,'charged-once',true)`, [orgA]), error => error.code === '42501');
+  await database.exec('RESET ROLE');
+  console.log('PASS: actual credit procedures charge once, release failed/stale requests, reject insufficient balance and direct client RPCs, and isolate two tenant wallets.');
   console.log(`PASS: ${files.length} migrations replay; 97 tables; no production tenant/admin rows; signup provisioning and anonymous RPC denial; baseline preserves existing rows.`);
 } finally {
   await database.close();
