@@ -13,6 +13,17 @@ export async function POST(request: NextRequest) {
     const required = await requireRalionContext(request);
     if (required.response) return required.response;
     const ctx = required.context;
+    if (ctx.isPlatformAdmin) {
+      return corsJsonResponse(
+        {
+          success: false,
+          code: 'PLATFORM_ADMIN_BILLING_PROTECTED',
+          error: 'Platform administration organizations cannot be converted into customer billing subscriptions.',
+        },
+        { status: 403 },
+        request
+      );
+    }
     if (!['owner', 'admin'].includes(ctx.membership.role)) {
       return corsJsonResponse({ success: false, code: 'BILLING_ADMIN_REQUIRED', error: 'Only an organization owner or administrator can change the subscription.' }, { status: 403 }, request);
     }
@@ -27,7 +38,12 @@ export async function POST(request: NextRequest) {
     if (!(existing.planId === 'COMMUNITY' || ((existing.status === 'CANCELED' || existing.status === 'EXPIRED') && periodEnded))) {
       return corsJsonResponse({ success: false, code: 'ACTIVE_BILLING_RELATIONSHIP', error: 'This organization already has an active billing relationship.' }, { status: 409 }, request);
     }
-    const result = await PayPalCardVaultService.createOrder({ organizationId, userId: ctx.user.id, planId });
+    const result = await PayPalCardVaultService.createOrder({
+      organizationId,
+      workspaceId: ctx.workspace.id,
+      userId: ctx.user.id,
+      planId,
+    });
     return corsJsonResponse({ success: true, orderId: result.orderId, clientId: PayPalCardVaultService.getClientId(), planId }, undefined, request);
   } catch (error: any) {
     console.error('[PayPal Card Order] Error:', error);
