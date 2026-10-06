@@ -192,7 +192,7 @@ export async function POST(request: NextRequest) {
       }, { status: httpStatus }, request);
     }
 
-    const canonicalAssetId = String(result.receipt.assetId || result.receipt.id || '');
+    const canonicalAssetId = String(result.receipt.assetId || '');
     const deliveryEndpoint = `/api/creatives/${encodeURIComponent(canonicalAssetId)}/delivery`;
 
     // Browser-facing creative payloads must use the authenticated Ralion
