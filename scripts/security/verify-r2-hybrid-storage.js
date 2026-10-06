@@ -15,6 +15,10 @@ const index = read('packages/ai/src/storage/index.ts');
 const creative = read('packages/ai/src/creativeAsset.service.ts');
 const aiPackage = read('packages/ai/package.json');
 const adminHealth = read('apps/ralion/src/app/api/admin/system/health/route.ts');
+const secureMedia = read('apps/ralion/src/components/SecureMedia.tsx');
+const creativeGenerateRoute = read('apps/ralion/src/app/api/creatives/generate/route.ts');
+const creativeListRoute = read('apps/ralion/src/app/api/creatives/list/route.ts');
+const creativeDeliveryRoute = read('apps/ralion/src/app/api/creatives/[assetId]/delivery/route.ts');
 
 assert(r2.includes("import 'server-only'"), 'R2 provider must be server-only');
 assert(adminHealth.includes("Cloudflare R2 Media Storage") && adminHealth.includes('new R2StorageProvider') && adminHealth.includes('await r2.list(undefined, { limit: 1 })'), 'Cloudflare R2 admin health probe must use the real storage provider');
@@ -45,5 +49,14 @@ assert(index.includes('R2_SECRET_ACCESS_KEY'), 'R2 secret must be configured fro
 
 assert(creative.includes('storage.getProviderName()'), 'Creative metadata must record the actual storage provider');
 assert(creative.includes('organizations/${orgId}/workspaces/${workspaceId}/assets/'), 'Creative storage must remain tenant/workspace namespaced');
+
+assert(secureMedia.includes("match(/\\/assets\\/(asset-[A-Za-z0-9_-]+)(?:\\/|$)/)"), 'SecureMedia must canonicalize R2 object paths back to asset IDs');
+assert(creativeDeliveryRoute.includes('canonicalizeAssetLookupKey') && creativeDeliveryRoute.includes("pathMatch?.[1]"), 'Delivery route must accept legacy encoded R2 URLs and resolve the canonical asset ID');
+assert(creativeGenerateRoute.includes("mediaUrl: deliveryEndpoint") && creativeGenerateRoute.includes("rawPublicUrl: undefined"), 'Generate API must return authenticated delivery URLs instead of private R2 object URLs');
+assert(creativeListRoute.includes("assets: clientAssets") && creativeListRoute.includes("publicUrl: deliveryEndpoint"), 'Creative list API must normalize library assets to authenticated delivery URLs');
+
+const failedR2Url = 'https://example.r2.cloudflarestorage.com/ralion-media-prod/organizations/org/workspaces/ws/assets/asset-1791316002231-v0t1m/asset-1791316002231-v0t1m.jpg';
+const failedR2Match = failedR2Url.match(/\\/assets\\/(asset-[A-Za-z0-9_-]+)(?:\\/|$)/);
+assert(failedR2Match?.[1] === 'asset-1791316002231-v0t1m', 'Exact production R2 URL shape must normalize to the canonical creative asset ID');
 
 console.log('R2 hybrid media storage contract: PASS');
