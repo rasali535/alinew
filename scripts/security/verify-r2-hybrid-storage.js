@@ -19,6 +19,7 @@ const secureMedia = read('apps/ralion/src/components/SecureMedia.tsx');
 const creativeGenerateRoute = read('apps/ralion/src/app/api/creatives/generate/route.ts');
 const creativeListRoute = read('apps/ralion/src/app/api/creatives/list/route.ts');
 const creativeDeliveryRoute = read('apps/ralion/src/app/api/creatives/[assetId]/delivery/route.ts');
+const socialPublishing = read('apps/ralion/src/lib/services/social/socialPublishing.service.ts');
 
 assert(r2.includes("import 'server-only'"), 'R2 provider must be server-only');
 assert(adminHealth.includes("Cloudflare R2 Media Storage") && adminHealth.includes('new R2StorageProvider') && adminHealth.includes('await r2.list(undefined, { limit: 1 })'), 'Cloudflare R2 admin health probe must use the real storage provider');
@@ -54,6 +55,16 @@ assert(secureMedia.includes("match(/\\/assets\\/(asset-[A-Za-z0-9_-]+)(?:\\/|$)/
 assert(creativeDeliveryRoute.includes('canonicalizeAssetLookupKey') && creativeDeliveryRoute.includes("pathMatch?.[1]"), 'Delivery route must accept legacy encoded R2 URLs and resolve the canonical asset ID');
 assert(creativeGenerateRoute.includes("mediaUrl: deliveryEndpoint") && creativeGenerateRoute.includes("rawPublicUrl: undefined"), 'Generate API must return authenticated delivery URLs instead of private R2 object URLs');
 assert(creativeListRoute.includes("assets: clientAssets") && creativeListRoute.includes("publicUrl: deliveryEndpoint"), 'Creative list API must normalize library assets to authenticated delivery URLs');
+
+assert(socialPublishing.includes("import { CreativeAssetService } from '@ralion/ai/server'"), 'Social publishing must resolve Ralion creative media through the durable asset service');
+assert(socialPublishing.includes('resolveTenantCreativeMedia') && socialPublishing.includes('CreativeAssetService.createSignedDeliveryUrl'), 'Social publishing must exchange tenant creative references for signed provider-fetchable URLs');
+assert(socialPublishing.includes('organizationId: params.organizationId') && socialPublishing.includes('workspaceId: params.workspaceId'), 'Social creative resolution must be scoped to the authenticated organization and workspace');
+assert(socialPublishing.includes("value.startsWith('/api/creatives/')") && socialPublishing.includes(".r2.cloudflarestorage.com"), 'Social publishing must recognize secure Ralion delivery URLs and legacy raw R2 locators');
+assert(socialPublishing.indexOf('resolveTenantCreativeMedia({') < socialPublishing.indexOf('validateMediaInputs(tenantResolvedMediaUrls'), 'Tenant creative media must be resolved before public HTTPS validation');
+
+const failedInternalDelivery = '/api/creatives/asset-1791316002231-v0t1m/delivery';
+const failedInternalMatch = failedInternalDelivery.match(/\/api\/creatives\/(asset-[A-Za-z0-9_-]+)\/delivery(?:\?|$)/);
+assert(failedInternalMatch?.[1] === 'asset-1791316002231-v0t1m', 'Exact Growth-to-Social internal delivery URL shape must resolve to the canonical asset ID');
 
 const failedR2Url = 'https://example.r2.cloudflarestorage.com/ralion-media-prod/organizations/org/workspaces/ws/assets/asset-1791316002231-v0t1m/asset-1791316002231-v0t1m.jpg';
 const failedR2Match = failedR2Url.match(/\/assets\/(asset-[A-Za-z0-9_-]+)(?:\/|$)/);
