@@ -43,9 +43,20 @@ export async function resolveSecureAssetUrl(
     return { signedUrl: assetIdOrPath, expiresAt: Date.now() + 15 * 60 * 1000 };
   }
 
-  // Extract canonical asset ID or filename
+  // Extract canonical asset ID or filename.
+  // R2 object URLs are private storage locators, not application asset IDs.
+  // Normalize them back to the durable Ralion asset-* identifier before
+  // calling the authenticated delivery route.
   let cleanId = assetIdOrPath;
-  if (cleanId.includes('/api/creatives/file/')) {
+  try {
+    const decoded = decodeURIComponent(cleanId);
+    if (decoded) cleanId = decoded;
+  } catch {}
+
+  const canonicalAssetMatch = cleanId.match(/\/assets\/(asset-[A-Za-z0-9_-]+)(?:\/|$)/);
+  if (canonicalAssetMatch?.[1]) {
+    cleanId = canonicalAssetMatch[1];
+  } else if (cleanId.includes('/api/creatives/file/')) {
     cleanId = cleanId.split('/api/creatives/file/')[1] || cleanId;
   } else if (cleanId.includes('/api/creatives/')) {
     cleanId = cleanId.split('/api/creatives/')[1]?.split('/')[0] || cleanId;

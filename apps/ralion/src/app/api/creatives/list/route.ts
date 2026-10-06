@@ -60,9 +60,28 @@ export async function GET(request: NextRequest) {
     offset,
   });
 
+  const clientAssets = assets.map((asset: any) => {
+    const canonicalAssetId = String(asset.assetId || asset.id || '');
+    const deliveryEndpoint = `/api/creatives/${encodeURIComponent(canonicalAssetId)}/delivery`;
+    return {
+      ...asset,
+      id: canonicalAssetId,
+      assetId: canonicalAssetId,
+      mediaUrl: deliveryEndpoint,
+      publicUrl: deliveryEndpoint,
+      previewUrl: deliveryEndpoint,
+      thumbnailUrl: deliveryEndpoint,
+      deliveryEndpoint,
+      rawMediaUrl: undefined,
+      rawPublicUrl: undefined,
+      rawProviderAsset: undefined,
+      finalComposedAsset: undefined,
+    };
+  });
+
   return corsJsonResponse({
     success: true,
-    assets,
-    count: assets.length,
+    assets: clientAssets,
+    count: clientAssets.length,
   }, undefined, request);
 }

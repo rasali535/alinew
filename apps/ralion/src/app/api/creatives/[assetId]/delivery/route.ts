@@ -10,6 +10,19 @@ export async function OPTIONS(request: NextRequest) {
   return handleCorsPreflight(request);
 }
 
+function canonicalizeAssetLookupKey(raw: string): string {
+  let value = String(raw || '').trim();
+  try {
+    const decoded = decodeURIComponent(value);
+    if (decoded) value = decoded;
+  } catch {}
+
+  const pathMatch = value.match(/\/assets\/(asset-[A-Za-z0-9_-]+)(?:\/|$)/);
+  if (pathMatch?.[1]) return pathMatch[1];
+
+  return value.split('?')[0];
+}
+
 /**
  * GET /api/creatives/[assetId]/delivery
  *
@@ -25,7 +38,8 @@ export async function GET(
   { params }: { params: Promise<{ assetId: string }> }
 ) {
   const requestId = `req_del_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
-  const { assetId } = await params;
+  const { assetId: rawAssetId } = await params;
+  const assetId = canonicalizeAssetLookupKey(rawAssetId);
 
   try {
     // 1. Require authenticated server session
