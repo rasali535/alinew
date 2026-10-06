@@ -20,6 +20,7 @@ const creativeGenerateRoute = read('apps/ralion/src/app/api/creatives/generate/r
 const creativeListRoute = read('apps/ralion/src/app/api/creatives/list/route.ts');
 const creativeDeliveryRoute = read('apps/ralion/src/app/api/creatives/[assetId]/delivery/route.ts');
 const socialPublishing = read('apps/ralion/src/lib/services/social/socialPublishing.service.ts');
+const socialPostsRoute = read('apps/ralion/src/app/api/social/posts/route.ts');
 
 assert(r2.includes("import 'server-only'"), 'R2 provider must be server-only');
 assert(adminHealth.includes("Cloudflare R2 Media Storage") && adminHealth.includes('new R2StorageProvider') && adminHealth.includes('await r2.list(undefined, { limit: 1 })'), 'Cloudflare R2 admin health probe must use the real storage provider');
@@ -61,6 +62,8 @@ assert(socialPublishing.includes('resolveTenantCreativeMedia') && socialPublishi
 assert(socialPublishing.includes('organizationId: params.organizationId') && socialPublishing.includes('workspaceId: params.workspaceId'), 'Social creative resolution must be scoped to the authenticated organization and workspace');
 assert(socialPublishing.includes("value.startsWith('/api/creatives/')") && socialPublishing.includes(".r2.cloudflarestorage.com"), 'Social publishing must recognize secure Ralion delivery URLs and legacy raw R2 locators');
 assert(socialPublishing.indexOf('resolveTenantCreativeMedia({') < socialPublishing.indexOf('validateMediaInputs(tenantResolvedMediaUrls'), 'Tenant creative media must be resolved before public HTTPS validation');
+assert(socialPostsRoute.includes('validateMediaReferences') && socialPostsRoute.includes("trimmed.startsWith('/api/creatives/')"), 'Social posts API must accept authenticated Ralion creative references for server-side resolution');
+assert(!socialPostsRoute.includes('const mediaUrls = validatePublicHttpsUrls(mediaSource);'), 'Social posts API must not reject secure Ralion delivery paths before the publishing service can resolve them');
 
 const failedInternalDelivery = '/api/creatives/asset-1791316002231-v0t1m/delivery';
 const failedInternalMatch = failedInternalDelivery.match(/\/api\/creatives\/(asset-[A-Za-z0-9_-]+)\/delivery(?:\?|$)/);
