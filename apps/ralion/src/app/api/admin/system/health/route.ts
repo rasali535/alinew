@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyPlatformAdminRequest } from '../../../../../lib/auth/adminAuth';
 import { getPrivilegedSupabase } from '@/lib/supabase/server';
+import { R2StorageProvider } from '@ralion/ai/server';
 
 type HealthStatus = 'UP' | 'DEGRADED' | 'DOWN';
 interface HealthMetric {
@@ -93,6 +94,46 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: any) {
     metrics.push({ service: 'Ralion Dynamic Backend (Render)', status: 'DEGRADED', latencyMs: Date.now() - startRender, lastChecked: now, lastError: error?.message || String(error), failureCount: 1, verification: 'PROBED' });
+  }
+
+  const r2Configured = Boolean(
+    process.env.R2_ENDPOINT &&
+    process.env.R2_BUCKET_NAME &&
+    process.env.R2_ACCESS_KEY_ID &&
+    process.env.R2_SECRET_ACCESS_KEY
+  );
+  const startR2 = Date.now();
+  if (!r2Configured) {
+    metrics.push(configMetric('Cloudflare R2 Media Storage', false, 'R2_ENDPOINT + R2_BUCKET_NAME + R2_ACCESS_KEY_ID + R2_SECRET_ACCESS_KEY', now));
+  } else {
+    try {
+      const r2 = new R2StorageProvider({
+        endpoint: process.env.R2_ENDPOINT!,
+        bucketName: process.env.R2_BUCKET_NAME!,
+        accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+        region: process.env.R2_REGION || 'auto',
+      });
+      await r2.list(undefined, { limit: 1 });
+      metrics.push({
+        service: 'Cloudflare R2 Media Storage',
+        status: 'UP',
+        latencyMs: Date.now() - startR2,
+        lastChecked: now,
+        failureCount: 0,
+        verification: 'PROBED',
+      });
+    } catch (error: any) {
+      metrics.push({
+        service: 'Cloudflare R2 Media Storage',
+        status: 'DOWN',
+        latencyMs: Date.now() - startR2,
+        lastChecked: now,
+        lastError: String(error?.message || error || 'R2 probe failed').slice(0, 500),
+        failureCount: 1,
+        verification: 'PROBED',
+      });
+    }
   }
 
   metrics.push(configMetric('Meta Graph API / OAuth Gateway', Boolean(process.env.FACEBOOK_APP_ID || process.env.META_APP_ID), 'FACEBOOK_APP_ID or META_APP_ID', now));
