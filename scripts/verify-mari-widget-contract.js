@@ -19,8 +19,8 @@ function reject(source, needle, label) {
   }
 }
 
-const migration = read('supabase/migrations/20260917150500_mari_embeddable_widget.sql');
-const fkMigration = read('supabase/migrations/20260917152500_mari_widget_fk_indexes.sql');
+const migration = read('supabase/migrations/20260917121503_mari_embeddable_widget.sql');
+const fkMigration = read('supabase/migrations/20260917122433_mari_widget_fk_indexes.sql');
 const service = read('apps/ralion/src/lib/services/mari/mariWidget.service.ts');
 const management = read('apps/ralion/src/app/api/mari/widgets/route.ts');
 const session = read('apps/ralion/src/app/api/mari/widget/session/route.ts');
