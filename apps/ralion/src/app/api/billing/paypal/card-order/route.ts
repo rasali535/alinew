@@ -13,6 +13,17 @@ export async function POST(request: NextRequest) {
     const required = await requireRalionContext(request);
     if (required.response) return required.response;
     const ctx = required.context;
+    if (ctx.isPlatformAdmin) {
+      return corsJsonResponse(
+        {
+          success: false,
+          code: 'PLATFORM_ADMIN_BILLING_PROTECTED',
+          error: 'Platform administration organizations cannot be converted into customer billing subscriptions.',
+        },
+        { status: 403 },
+        request
+      );
+    }
     if (!['owner', 'admin'].includes(ctx.membership.role)) {
       return corsJsonResponse({ success: false, code: 'BILLING_ADMIN_REQUIRED', error: 'Only an organization owner or administrator can change the subscription.' }, { status: 403 }, request);
     }
