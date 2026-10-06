@@ -64,6 +64,7 @@ assert(socialPublishing.includes("value.startsWith('/api/creatives/')") && socia
 assert(socialPublishing.indexOf('resolveTenantCreativeMedia({') < socialPublishing.indexOf('validateMediaInputs(tenantResolvedMediaUrls'), 'Tenant creative media must be resolved before public HTTPS validation');
 assert(socialPostsRoute.includes('validateMediaReferences') && socialPostsRoute.includes("trimmed.startsWith('/api/creatives/')"), 'Social posts API must accept authenticated Ralion creative references for server-side resolution');
 assert(!socialPostsRoute.includes('const mediaUrls = validatePublicHttpsUrls(mediaSource);'), 'Social posts API must not reject secure Ralion delivery paths before the publishing service can resolve them');
+assert(socialPostsRoute.includes("normalized !== 'image'") && socialPostsRoute.includes("normalized !== 'video'"), 'Social posts API must accept Growth image/video shorthand and defer MIME normalization to the publishing service');
 
 const failedInternalDelivery = '/api/creatives/asset-1791316002231-v0t1m/delivery';
 const failedInternalMatch = failedInternalDelivery.match(/\/api\/creatives\/(asset-[A-Za-z0-9_-]+)\/delivery(?:\?|$)/);
