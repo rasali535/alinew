@@ -193,7 +193,7 @@ export class R2StorageProvider implements AssetStorageProvider {
     return fetch(url, {
       method,
       headers: requestHeaders,
-      body: method === 'PUT' ? payload : undefined,
+      body: method === 'PUT' ? new Uint8Array(payload) : undefined,
       cache: 'no-store',
     });
   }
