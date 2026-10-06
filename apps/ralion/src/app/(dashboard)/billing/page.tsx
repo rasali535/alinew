@@ -233,26 +233,27 @@ export default function BillingPage() {
     setUpgradingPlan(planId);
     setError(null);
     try {
-      const res = await authFetch('/api/billing/paypal/create-subscription', {
+      const res = await authFetch('/api/billing/paypal/card-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          planId,
-          billingCycle: 'MONTHLY',
-        }),
+        body: JSON.stringify({ planId }),
       });
       const result = await res.json().catch(() => ({}));
-      if (!res.ok || !result.success || !result.subscriptionId || !result.approveUrl) {
-        throw new Error(result.error || 'PayPal checkout could not be created.');
+      if (!res.ok || !result.success || !result.orderId) {
+        throw new Error(result.error || 'PayPal secure card checkout could not be created.');
       }
 
       sessionStorage.setItem(PAYPAL_PENDING_KEY, JSON.stringify({
-        subscriptionId: result.subscriptionId,
+        orderId: result.orderId,
         planId,
         billingCycle: 'MONTHLY',
+        checkoutMode: 'paypal_card_vault',
         createdAt: new Date().toISOString(),
       }));
-      window.location.assign(result.approveUrl);
+
+      const checkoutUrl =
+        `/ralion/billing/paypal-card?orderId=${encodeURIComponent(String(result.orderId))}&plan=${encodeURIComponent(planId)}`;
+      window.location.assign(checkoutUrl);
     } catch (err: any) {
       setError(`Checkout error: ${err?.message || 'Unknown payment error'}`);
       setUpgradingPlan(null);
@@ -340,7 +341,7 @@ export default function BillingPage() {
                 <ul className="mt-5 flex flex-col gap-2 text-xs text-zinc-300">{plan.features.map(feature => <li key={feature} className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />{feature}</li>)}</ul>
               </div>
               <Button variant={active ? 'outline' : 'primary'} size="sm" className="w-full mt-6" disabled={active || plan.id === 'COMMUNITY' || upgradingPlan === plan.id} onClick={() => void handleServerUpgrade(plan.id)}>
-                {active ? 'Current Plan' : plan.id === 'COMMUNITY' ? 'Free Baseline' : upgradingPlan === plan.id ? 'Opening PayPal…' : `Subscribe to ${plan.name}`}
+                {active ? 'Current Plan' : plan.id === 'COMMUNITY' ? 'Free Baseline' : upgradingPlan === plan.id ? 'Opening secure checkout…' : `Subscribe to ${plan.name}`}
               </Button>
             </Card>;
           })}
