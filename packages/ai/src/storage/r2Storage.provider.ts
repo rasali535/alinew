@@ -130,10 +130,19 @@ export class R2StorageProvider implements AssetStorageProvider {
       url.searchParams.set(key, value);
     }
 
+    const payload = method === 'PUT' ? options.body || Buffer.alloc(0) : undefined;
+    const headers: Record<string, string> = { ...(options.headers || {}) };
+    if (payload) {
+      // Cloudflare R2's S3 PUT endpoint requires an explicit Content-Length.
+      // aws4fetch signs the header along with the request, so keep it derived
+      // directly from the exact byte payload being sent.
+      headers['content-length'] = String(payload.byteLength);
+    }
+
     return this.client.fetch(url.toString(), {
       method,
-      headers: options.headers,
-      body: method === 'PUT' ? new Uint8Array(options.body || Buffer.alloc(0)) : undefined,
+      headers,
+      body: payload ? new Uint8Array(payload) : undefined,
       cache: 'no-store',
     });
   }
