@@ -225,19 +225,20 @@ const checks = [
   ],
 
   // ── Requirement D: Terminal invalid-session failure ───────────────────────────
-  // D1. terminateInvalidSession signs out locally and clears storage
+  // D1. Automatic terminal recovery must clear stale browser state without
+  // revoking Supabase server sessions.
   [
-    'terminateInvalidSession() performs local signOut and clears all auth storage before redirecting',
+    'terminateInvalidSession() preserves newer sessions and never calls Supabase signOut',
     orgContextSource.includes('terminateInvalidSession') &&
-    orgContextSource.includes("signOut({ scope: 'local' }") &&
-    orgContextSource.includes('_redirectedToLogin') &&
-    orgContextSource.includes("window.location.href = '/login'")
+    orgContextSource.includes('currentAccessToken !== failedAccessToken') &&
+    !((orgContextSource.match(/async function terminateInvalidSession[\s\S]*?\n}/) || [''])[0]).includes('.auth.signOut(') &&
+    orgContextSource.includes('_redirectedToLogin')
   ],
-  // D2. Second AUTH_TOKEN_INVALID after refresh triggers terminal failure (not just clearResolvedContext)
+  // D2. Second AUTH_TOKEN_INVALID after refresh triggers guarded terminal cleanup.
   [
-    'Double AUTH_TOKEN_INVALID after refresh calls terminateInvalidSession(), not just clearResolvedContext()',
-    orgContextSource.includes('await terminateInvalidSession()') &&
-    !!orgContextSource.match(/AUTH_TOKEN_INVALID[\s\S]{0,400}terminateInvalidSession/)
+    'Double AUTH_TOKEN_INVALID after refresh calls guarded terminateInvalidSession(accessToken)',
+    orgContextSource.includes('await terminateInvalidSession(accessToken)') &&
+    !!orgContextSource.match(/AUTH_TOKEN_INVALID[\s\S]{0,500}terminateInvalidSession\(accessToken\)/)
   ],
 
   // ── Requirement E: authFetch exact-gate ──────────────────────────────────────
