@@ -199,7 +199,7 @@ export function validateVideoBuffer(buffer: Buffer | ArrayBuffer | Uint8Array): 
   };
 }
 
-// In-memory registry with persistent Supabase Storage synchronization
+// In-memory registry with persistent durable storage synchronization
 const assetRegistry = new Map<string, CreativeAsset>();
 
 /**
@@ -218,7 +218,7 @@ export function getAppBasePath(): string {
 
 export class CreativeAssetService {
   /**
-   * Save a binary buffer to durable Supabase storage and create an asset record.
+   * Save a binary buffer to durable storage and create an asset record.
    * Enforces the completed gate: provider -> validation -> upload -> verify existence & retrievability.
    * Hard fails if storage fails (NO local fallback in production).
    */
@@ -266,7 +266,7 @@ export class CreativeAssetService {
         : Buffer.from(params.buffer);
       byteLength = nodeBuffer.byteLength;
 
-      // 1. Upload to Supabase Storage in canonical tenant path
+      // 1. Upload to the active durable storage provider in canonical tenant path
       const uploadResult = await storage.upload(storagePath, nodeBuffer, {
         contentType: params.mimeType,
         metadata: {
@@ -283,7 +283,7 @@ export class CreativeAssetService {
       const exists = await storage.exists(storagePath);
       if (!exists) {
         throw new Error(
-          `Post-upload existence check failed: ${storagePath} not found in Supabase bucket`
+          `Post-upload existence check failed: ${storagePath} not found in active storage`
         );
       }
 
@@ -297,7 +297,7 @@ export class CreativeAssetService {
       storageWriteSuccess = true;
     } catch (err: any) {
       storageWriteSuccess = false;
-      errorDetails = `FAILED_STORAGE: ${err?.message || 'Supabase storage write error'}`;
+      errorDetails = `FAILED_STORAGE: ${err?.message || 'durable storage write error'}`;
       console.error(`[CreativeAssetService] ${errorDetails}`);
     }
 
@@ -305,7 +305,7 @@ export class CreativeAssetService {
     const basePath = getAppBasePath();
     const publicUrl = `${basePath}/api/creatives/file/${filename}`;
 
-    // Status: only COMPLETED if binary is durably stored in Supabase and verified
+    // Status: only COMPLETED if binary is durably stored and verified
     const assetStatus: CreativeAsset['status'] = storageWriteSuccess ? 'COMPLETED' : 'FAILED';
 
     const asset: CreativeAsset = {
@@ -321,8 +321,8 @@ export class CreativeAssetService {
         (params.prompt.length > 32 ? params.prompt.substring(0, 32) + '...' : params.prompt),
       mimeType: params.mimeType,
       storagePath,
-      storageProvider: storageWriteSuccess ? 'SUPABASE' : undefined,
-      bucket: 'creatives',
+      storageProvider: storageWriteSuccess ? storage.getProviderName() : undefined,
+      bucket: storageWriteSuccess ? (process.env.R2_BUCKET_NAME || process.env.SUPABASE_CREATIVE_BUCKET || 'creatives') : undefined,
       sha256: sha256 || undefined,
       publicUrl,
       previewUrl: publicUrl,
@@ -352,7 +352,7 @@ export class CreativeAssetService {
       },
     };
 
-    // Save metadata in Supabase storage under the same tenant namespace
+    // Save metadata in the active durable storage under the same tenant namespace
     if (storageWriteSuccess) {
       try {
         const metaBuffer = Buffer.from(JSON.stringify(asset, null, 2));
@@ -360,7 +360,7 @@ export class CreativeAssetService {
           contentType: 'application/json',
         });
       } catch (metaErr) {
-        console.warn('[CreativeAssetService] Notice: Could not upload meta.json to Supabase:', metaErr);
+        console.warn('[CreativeAssetService] Notice: Could not upload meta.json to durable storage:', metaErr);
       }
     }
 
@@ -372,7 +372,7 @@ export class CreativeAssetService {
   }
 
   /**
-   * Save a raw, pre-composition binary buffer to durable Supabase storage.
+   * Save a raw, pre-composition binary buffer to durable storage.
    * Scoped strictly under tenant workspace namespace:
    * organizations/{orgId}/workspaces/{workspaceId}/assets/{assetId}/raw/{filename}
    */
@@ -408,7 +408,7 @@ export class CreativeAssetService {
         contentType: params.mimeType,
       });
     } catch (err) {
-      console.warn('[CreativeAssetService] Raw Supabase storage write notice:', err);
+      console.warn('[CreativeAssetService] Raw durable storage write notice:', err);
     }
 
     const basePath = getAppBasePath();
@@ -442,7 +442,7 @@ export class CreativeAssetService {
       await storage.delete(rawStoragePath);
       return true;
     } catch (err) {
-      console.warn('[CreativeAssetService] Raw Supabase cleanup notice:', err);
+      console.warn('[CreativeAssetService] Raw durable storage cleanup notice:', err);
       return false;
     }
   }
@@ -482,8 +482,17 @@ export class CreativeAssetService {
         (params.prompt.length > 32 ? params.prompt.substring(0, 32) + '...' : params.prompt),
       mimeType: params.mimeType || (params.type === 'VIDEO_REEL' ? 'video/mp4' : 'image/jpeg'),
       storagePath: '',
-      storageProvider: 'SUPABASE',
-      bucket: 'creatives',
+      storageProvider: (
+        process.env.RALION_ASSET_STORAGE_PROVIDER ||
+        process.env.ASSET_STORAGE_PROVIDER ||
+        'SUPABASE'
+      ).trim().toUpperCase(),
+      bucket:
+        (process.env.RALION_ASSET_STORAGE_PROVIDER || process.env.ASSET_STORAGE_PROVIDER || 'SUPABASE')
+          .trim()
+          .toUpperCase() === 'R2'
+          ? process.env.R2_BUCKET_NAME || 'ralion-media-prod'
+          : process.env.SUPABASE_CREATIVE_BUCKET || 'creatives',
       publicUrl: params.publicUrl || '',
       previewUrl: params.previewUrl,
       createdAt: new Date().toISOString(),
@@ -544,7 +553,7 @@ export class CreativeAssetService {
   }
 
   /**
-   * Asynchronously get an asset by ID, checking canonical Supabase Storage if not in memory.
+   * Asynchronously get an asset by ID, checking canonical durable storage if not in memory.
    * Uses canonical path:
    * organizations/{orgId}/workspaces/{workspaceId}/assets/{id}/{filename}.meta.json
    */
@@ -618,7 +627,7 @@ export class CreativeAssetService {
 
   /**
    * Locate an asset by filename (e.g. 'asset-1788194025026-2mae6.jpg')
-   * Supports tenant verification and cross-restart lookup via canonical Supabase path.
+   * Supports tenant verification and cross-restart lookup via canonical durable storage path.
    */
   static async getAssetByFilename(
     filename: string,
@@ -633,7 +642,7 @@ export class CreativeAssetService {
       asset = assetRegistry.get(id) || null;
     }
 
-    // 2. If not found in memory (e.g. after restart), search canonical Supabase Storage path
+    // 2. If not found in memory (e.g. after restart), search canonical durable storage path
     if (!asset && requestingOrgId && requestingWorkspaceId) {
       try {
         const id = filename.replace(/\.[^/.]+$/, '').replace(/-raw$/, '');
@@ -739,7 +748,7 @@ export class CreativeAssetService {
   }
 
   /**
-   * List assets durably from Supabase Storage for the authenticated organization and workspace.
+   * List assets durably from the active storage provider for the authenticated organization and workspace.
    */
   static async listAssetsAsync(params: {
     organizationId: string;
@@ -760,7 +769,7 @@ export class CreativeAssetService {
       return filtered.slice(offset, offset + limit);
     }
 
-    // 2. Discover from durable Supabase storage prefix
+    // 2. Discover from durable storage prefix
     if (storage.list) {
       try {
         const folders = await storage.list(prefix, { limit: 100 });
@@ -825,7 +834,7 @@ export class CreativeAssetService {
         await storage.delete(existing.storagePath);
         await storage.delete(`${existing.storagePath}.meta.json`);
       } catch (err) {
-        console.warn('[CreativeAssetService] Supabase delete warning:', err);
+        console.warn('[CreativeAssetService] Durable storage delete warning:', err);
       }
     }
 
