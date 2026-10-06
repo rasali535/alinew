@@ -220,6 +220,7 @@ type PersistedCreativeRun = {
   status: 'RUNNING' | 'COMPLETED' | 'FAILED';
   type: 'poster' | 'video';
   prompt: string;
+  clientRequestId?: string;
   startedAt: string;
   completedAt?: string;
   assetId?: string;
@@ -261,6 +262,8 @@ function GrowthPageContent() {
   const growthUserId = (user as any)?.uid || (user as any)?.id || '';
   const growthMariHydratedRef = React.useRef(false);
   const creativeRunHydratedRef = React.useRef(false);
+  const creativeGenerationLockRef = React.useRef(false);
+  const creativeGenerationOperationRef = React.useRef<string | null>(null);
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -2247,6 +2250,22 @@ function GrowthPageContent() {
     const prompt = type === 'poster' ? posterPrompt : videoPrompt;
     if (!prompt.trim()) return;
 
+    if (creativeGenerationLockRef.current) {
+      setOauthAlert({
+        type: 'error',
+        message: 'A creative generation is already running. Please wait for it to finish before starting another.',
+      });
+      return;
+    }
+
+    const clientRequestId =
+      typeof globalThis.crypto?.randomUUID === 'function'
+        ? globalThis.crypto.randomUUID()
+        : `creative-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+    creativeGenerationLockRef.current = true;
+    creativeGenerationOperationRef.current = clientRequestId;
+
     if (type === 'poster') {
       setIsGeneratingPoster(true);
       setGeneratedPoster('');
@@ -2264,6 +2283,7 @@ function GrowthPageContent() {
         status: 'RUNNING',
         type,
         prompt: prompt.trim(),
+        clientRequestId,
         startedAt,
       } satisfies PersistedCreativeRun));
     }
@@ -2296,6 +2316,7 @@ function GrowthPageContent() {
             brandLogo: creativeLogo || undefined,
             brandLogoPosition: logoPosition,
             useRalionBrandFallback: !creativeLogo,
+            clientRequestId,
           }),
         });
 
@@ -2367,6 +2388,7 @@ function GrowthPageContent() {
           status: 'COMPLETED',
           type,
           prompt: assetPrompt,
+          clientRequestId,
           startedAt,
           completedAt: new Date().toISOString(),
           assetId,
@@ -2420,6 +2442,7 @@ function GrowthPageContent() {
           status: 'FAILED',
           type,
           prompt: prompt.trim(),
+          clientRequestId,
           startedAt,
           completedAt: new Date().toISOString(),
           error: error?.message || 'Creative generation failed.',
@@ -2430,6 +2453,10 @@ function GrowthPageContent() {
         message: '❌ ' + (error?.message || 'Creative generation failed. No placeholder was created.'),
       });
     } finally {
+      if (creativeGenerationOperationRef.current === clientRequestId) {
+        creativeGenerationLockRef.current = false;
+        creativeGenerationOperationRef.current = null;
+      }
       setIsGeneratingPoster(false);
       setIsGeneratingVideo(false);
     }
