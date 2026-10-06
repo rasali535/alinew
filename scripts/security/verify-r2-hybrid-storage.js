@@ -14,8 +14,10 @@ const hybrid = read('packages/ai/src/storage/hybridStorage.provider.ts');
 const index = read('packages/ai/src/storage/index.ts');
 const creative = read('packages/ai/src/creativeAsset.service.ts');
 const aiPackage = read('packages/ai/package.json');
+const adminHealth = read('apps/ralion/src/app/api/admin/system/health/route.ts');
 
 assert(r2.includes("import 'server-only'"), 'R2 provider must be server-only');
+assert(adminHealth.includes("Cloudflare R2 Media Storage") && adminHealth.includes('new R2StorageProvider') && adminHealth.includes('await r2.list(undefined, { limit: 1 })'), 'Cloudflare R2 admin health probe must use the real storage provider without writing media');
 assert(aiPackage.includes('"aws4fetch": "^1.0.20"'), 'AI package must declare aws4fetch as a direct production dependency');
 assert(r2.includes(".r2.cloudflarestorage.com"), 'R2 endpoint must be restricted to Cloudflare R2');
 assert(r2.includes("this.region = config.region?.trim() || 'auto'"), 'R2 must use auto region by default');
