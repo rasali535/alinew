@@ -64,13 +64,14 @@ export class PayPalCardVaultService {
 
   static async createOrder(params: {
     organizationId: string;
+    workspaceId?: string;
     userId: string;
     planId: SubscriptionPlanId;
   }): Promise<{ orderId: string; billingReference: string }> {
     assertPaidPlan(params.planId);
     const checkout = await DurableBillingCheckoutReferenceService.createReference({
       organizationId: params.organizationId,
-      workspaceId: params.organizationId,
+      workspaceId: params.workspaceId,
       userId: params.userId,
       planId: params.planId,
       billingCycle: 'MONTHLY',
