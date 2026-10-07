@@ -140,7 +140,7 @@ const answerPublicQuestion = (question) => {
   const normalized = question.toLowerCase();
 
   if (normalized.includes('voice') || normalized.includes('talk') || normalized.includes('speak')) {
-    return 'Yes. Mari supports natural voice conversations across Ralion. You can speak naturally, interrupt fluidly, navigate between workspaces by voice, and enable hands-free wake (“Hey Mari”) on supported devices with active microphone permission.';
+    return 'Yes. Mari supports voice input and spoken responses across supported Ralion experiences. Start voice mode from the interface or keyboard shortcut, then speak naturally while Mari works with your business context.';
   }
 
   if (normalized.includes('context') || normalized.includes('data') || normalized.includes('know')) {
@@ -457,18 +457,18 @@ const RalionMariAIProduct = () => {
               },
               {
                 icon: Radio,
-                title: 'Natural interruption',
-                desc: 'Jump in or steer the conversation at any moment while Mari is speaking, just like a real dialogue.'
+                title: 'Voice and text together',
+                desc: 'Use voice or text with the same business context, so you can switch interaction modes without starting over.'
               },
               {
                 icon: Zap,
-                title: '“Hey Mari” hands-free wake',
-                desc: 'Enable hands-free wake to start speaking without touching the keyboard. Active when enabled with mic permissions.'
+                title: 'Quick voice activation',
+                desc: 'Start voice mode from the Mari interface or supported keyboard shortcut when microphone access is enabled.'
               },
               {
                 icon: Compass,
-                title: 'Move while you talk',
-                desc: 'Switch workspaces and explore your dashboards without losing your active voice session.'
+                title: 'Workspace-aware assistance',
+                desc: 'Ask Mari for help across supported Ralion workspaces while keeping your verified business context in view.'
               }
             ].map((feature) => {
               const Icon = feature.icon;
@@ -487,21 +487,21 @@ const RalionMariAIProduct = () => {
             })}
           </div>
 
-          {/* Hands-Free Wake Callout */}
+          {/* Voice Access Callout */}
           <div className="rounded-3xl border border-purple-400/20 bg-gradient-to-r from-purple-500/10 via-indigo-900/10 to-transparent p-6 md:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
             <div className="space-y-1.5 max-w-2xl">
               <div className="flex items-center gap-2 text-purple-300 text-xs font-bold uppercase tracking-wider">
-                <Mic size={15} /> Hands-free access when enabled
+                <Mic size={15} /> Voice access when enabled
               </div>
               <h4 className="text-lg md:text-xl font-bold text-white">
-                “Enable Hey Mari and start a conversation with your voice while you work.”
+                Start Mari voice mode when you want to work hands-free.
               </h4>
               <p className="text-white/60 text-xs leading-relaxed">
-                Hands-free wake requires enabled wake mode and device microphone permission in your active browser or desktop window. Mari does not listen when the app is closed or when permissions are disabled.
+                Voice mode requires microphone permission in the active browser or desktop window. Mari does not use the microphone when voice mode is inactive or permission is disabled.
               </p>
             </div>
             <div className="px-5 py-3 rounded-2xl bg-black/40 border border-white/10 text-xs font-semibold text-white/90 shrink-0">
-              Voice shortcut: <span className="text-brand-gold font-mono ml-1">Ctrl + Space</span> or <span className="text-purple-300 font-mono ml-1">“Hey Mari”</span>
+              Voice shortcut: <span className="text-brand-gold font-mono ml-1">Ctrl + Space</span>
             </div>
           </div>
         </div>
