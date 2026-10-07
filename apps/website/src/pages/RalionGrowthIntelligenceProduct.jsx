@@ -32,7 +32,7 @@ const RalionGrowthIntelligenceProduct = () => {
     const res = await generateMariAIResponse(
       `Develop an enterprise AI growth strategy and creative campaign plan for: ${strategyPrompt}`,
       'meta-llama/Llama-3.3-70B-Instruct-Turbo',
-      'You are Mari AI — Your AI Business Growth Partner inside Ralion OS. Formulate a commercial growth brief, FLUX poster directions, CogVideoX reel concepts, and multi-channel publishing schedule.'
+      'You are Mari AI — Your AI Business Growth Partner inside Ralion OS. Formulate a commercial growth brief, poster directions, short-form video concepts, and a multi-channel publishing schedule.'
     );
     setAiStrategy(res);
     setLoadingStrategy(false);
@@ -42,7 +42,7 @@ const RalionGrowthIntelligenceProduct = () => {
     <div className="min-h-screen bg-[#181818] text-white pt-32 pb-24 px-6 lg:px-12">
       <SEO
         title="Growth Studio & Social Intelligence | Ralion OS"
-        description="Autonomous AI creative studio (FLUX, CogVideoX), multi-channel social publishing, and closed-loop performance analytics."
+        description="AI creative generation, multi-channel social publishing, campaign planning, and connected performance analytics."
         canonical="https://rasalilabs.com/products/ralion-growth-intelligence"
       />
 
@@ -56,10 +56,10 @@ const RalionGrowthIntelligenceProduct = () => {
             Autonomous Creative Studio & Social Intelligence
           </h1>
           <p className="text-brand-gold font-bold text-xl md:text-2xl mb-6">
-            Empowered to Prosper — Turn your brand into a self-optimizing revenue engine.
+            Empowered to Prosper — Turn strategy, creative production and social publishing into one connected growth workflow.
           </p>
           <p className="text-white/70 text-base md:text-lg max-w-3xl mx-auto leading-relaxed mb-10">
-            Generate studio-grade commercial posters with FLUX, render 6-second marketing video reels with CogVideoX, compose and schedule across Facebook, Instagram, LinkedIn, and X, and measure real closed-loop revenue growth.
+            Generate commercial posters and short-form video concepts, prepare social content, publish across supported connected channels, and bring campaign activity into one measurable growth workflow.
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-4">
@@ -123,9 +123,9 @@ const RalionGrowthIntelligenceProduct = () => {
             <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mb-4">
               <Sparkles size={20} />
             </div>
-            <h4 className="text-lg font-bold text-white mb-2">FLUX Poster Studio</h4>
+            <h4 className="text-lg font-bold text-white mb-2">AI Poster Studio</h4>
             <p className="text-white/60 text-xs leading-relaxed">
-              Generate commercial high-resolution advertising graphics and banners tailored to your product catalog.
+              Generate commercial advertising graphics and banners tailored to your business context and campaign brief.
             </p>
           </div>
 
@@ -133,9 +133,9 @@ const RalionGrowthIntelligenceProduct = () => {
             <div className="w-10 h-10 rounded-xl bg-brand-gold/10 text-brand-gold flex items-center justify-center mb-4">
               <Activity size={20} />
             </div>
-            <h4 className="text-lg font-bold text-white mb-2">CogVideoX Video Reels</h4>
+            <h4 className="text-lg font-bold text-white mb-2">AI Video Reels</h4>
             <p className="text-white/60 text-xs leading-relaxed">
-              Render dynamic 6-second video reels for social channels without expensive production overhead.
+              Create short-form video concepts and generated creative assets for supported social campaign workflows.
             </p>
           </div>
 
