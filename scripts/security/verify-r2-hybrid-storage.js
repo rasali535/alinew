@@ -25,6 +25,11 @@ const socialPostsRoute = read('apps/ralion/src/app/api/social/posts/route.ts');
 assert(r2.includes("import 'server-only'"), 'R2 provider must be server-only');
 assert(adminHealth.includes("Cloudflare R2 Media Storage") && adminHealth.includes('new R2StorageProvider') && adminHealth.includes('await r2.list(undefined, { limit: 1 })'), 'Cloudflare R2 admin health probe must use the real storage provider');
 assert(adminHealth.includes("Buffer.from('ralion-r2-health'") && adminHealth.includes('await r2.upload(canaryPath') && adminHealth.includes('await r2.download(canaryPath)') && adminHealth.includes('await r2.delete(canaryPath)'), 'Cloudflare R2 admin health probe must verify write, read and delete without creative credits');
+assert(adminHealth.includes('RALION_LEGACY_STORAGE_CANARY_PATH'), 'Admin health must support an explicit legacy creative fallback canary path');
+assert(adminHealth.includes('getProductionStorageProvider') && adminHealth.includes('storage.createSignedUrl'), 'Legacy fallback health must exercise the active hybrid storage provider');
+assert(adminHealth.includes("signedUrl.hostname.endsWith('.supabase.co')") && adminHealth.includes("'/storage/v1/object/sign/'"), 'Legacy fallback health must prove the resolved URL actually came from Supabase');
+assert(adminHealth.includes("service: 'Legacy Supabase Creative Fallback'") && adminHealth.includes("verification: 'PROBED'"), 'Legacy fallback health must surface a probed service metric');
+
 assert(aiPackage.includes('"aws4fetch": "^1.0.20"'), 'AI package must declare aws4fetch as a direct production dependency');
 assert(r2.includes(".r2.cloudflarestorage.com"), 'R2 endpoint must be restricted to Cloudflare R2');
 assert(r2.includes("this.region = config.region?.trim() || 'auto'"), 'R2 must use auto region by default');
