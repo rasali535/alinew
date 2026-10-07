@@ -1,15 +1,52 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import SEO from '../components/common/SEO';
+import { organizationSchema, localBusinessSchema, makeServiceSchema, makeFaqSchema, makeBreadcrumbSchema } from '../lib/seoSchema';
 import { Bot, Cpu, Workflow, Database, CheckCircle2, ArrowRight, ShieldCheck, Sparkles } from 'lucide-react';
+
+const aiFaqs = [
+  {
+    question: 'What AI automation services do you provide in Botswana?',
+    answer: 'Ras Ali Labs builds workflow automation, AI-assisted business systems, document and data pipelines, API integrations, business assistants and custom operational software for Botswana organisations.',
+  },
+  {
+    question: 'Can you integrate AI into an existing business system?',
+    answer: 'Yes. We can connect AI and automation to existing websites, databases, CRMs, internal portals and third-party APIs where the underlying systems support integration.',
+  },
+  {
+    question: 'Do you build AI solutions in Gaborone?',
+    answer: 'Yes. Ras Ali Labs is based in Gaborone, Botswana and develops practical AI and automation systems for local organisations and regional teams.',
+  },
+];
 
 const AIAutomationService = () => {
   return (
     <div className="pt-28 pb-20 bg-[#121212] text-white min-h-screen">
       <SEO
-        title="AI & Automation Systems | Ras Ali Labs"
-        description="AI-powered business systems, workflow automation, intelligent integrations and enterprise digital transformation by Ras Ali Labs in Botswana."
+        title="AI Automation Botswana | Business AI Systems | Ras Ali Labs"
+        description="AI automation, workflow systems, business assistants and intelligent integrations built by Ras Ali Labs in Gaborone, Botswana."
+        keywords="AI automation Botswana, AI company Botswana, business automation Botswana, AI solutions Gaborone, workflow automation Botswana, AI software Botswana"
         canonical="https://rasalilabs.com/services/ai-automation"
+        structuredData={{
+          '@context': 'https://schema.org',
+          '@graph': [
+            organizationSchema,
+            localBusinessSchema,
+            makeServiceSchema({
+              name: 'AI & Business Automation in Botswana',
+              description: 'AI automation, workflow systems, intelligent integrations and custom business AI solutions developed in Gaborone, Botswana.',
+              url: '/services/ai-automation',
+              serviceType: 'Artificial intelligence and business process automation',
+              image: '/assets/images/service-branding.png',
+            }),
+            makeFaqSchema(aiFaqs),
+            makeBreadcrumbSchema([
+              { name: 'Home', url: '/' },
+              { name: 'Services', url: '/services' },
+              { name: 'AI & Automation', url: '/services/ai-automation' },
+            ]),
+          ],
+        }}
       />
 
       <div className="max-w-7xl mx-auto px-6 lg:px-12">
@@ -19,10 +56,10 @@ const AIAutomationService = () => {
             <Bot size={14} /> Intelligence Discipline
           </div>
           <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-white mb-6 leading-tight">
-            AI & Automation Systems
+            AI & Business Automation in Botswana
           </h1>
           <p className="text-white/70 text-lg leading-relaxed">
-            AI-powered business systems, workflow automation, intelligent integrations and enterprise digital transformation. We build sovereign AI architectures that transform administrative bottlenecks into autonomous, high-efficiency workflows.
+            We build practical AI systems, workflow automation, business assistants and intelligent integrations from Gaborone for organisations that want to reduce manual work, connect systems and make better use of their data.
           </p>
         </div>
 
@@ -98,6 +135,32 @@ const AIAutomationService = () => {
             </div>
             <div className="lg:col-span-4 flex justify-center">
               <img src="/assets/images/logo.png" alt="Ralion OS" className="w-40 h-40 object-contain" />
+            </div>
+          </div>
+        </div>
+
+        {/* Local SEO + FAQ */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-20">
+          <div className="lg:col-span-5 bg-[#181818] border border-white/10 rounded-3xl p-8">
+            <h2 className="text-2xl font-bold text-white mb-3">AI Solutions Built for Botswana Businesses</h2>
+            <p className="text-white/65 text-sm leading-relaxed mb-5">
+              Our focus is useful automation: reducing repetitive administration, connecting business data, improving customer workflows and giving teams better operational visibility.
+            </p>
+            <div className="flex flex-wrap gap-3 text-xs font-semibold">
+              <Link to="/products/ralion-os" className="text-amber-400 hover:underline">Explore Ralion OS →</Link>
+              <Link to="/mari-ai" className="text-amber-400 hover:underline">Meet Mari AI →</Link>
+              <Link to="/work/ralion-os-flagship" className="text-amber-400 hover:underline">See the Ralion case study →</Link>
+            </div>
+          </div>
+          <div className="lg:col-span-7">
+            <h2 className="text-2xl font-bold text-white mb-5">AI Automation Botswana FAQs</h2>
+            <div className="space-y-3">
+              {aiFaqs.map((faq) => (
+                <div key={faq.question} className="bg-[#181818] border border-white/10 rounded-2xl p-5">
+                  <h3 className="text-sm font-bold text-white mb-2">{faq.question}</h3>
+                  <p className="text-xs text-white/65 leading-relaxed">{faq.answer}</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>
