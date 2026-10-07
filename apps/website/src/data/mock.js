@@ -566,7 +566,6 @@ export const awards = [
 ];
 
 export const socialLinks = [
-  { name: 'YouTube', url: 'https://youtube.com', icon: 'Youtube' },
   { name: 'Facebook', url: 'https://facebook.com/rasalilabs', icon: 'Facebook' },
   { name: 'Instagram', url: 'https://instagram.com/rasalilabs', icon: 'Instagram' },
   { name: 'GitHub', url: 'https://github.com/rasali535', icon: 'Github' },
