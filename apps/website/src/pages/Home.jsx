@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import SEO from '../components/common/SEO';
+import { organizationSchema, localBusinessSchema, personSchema, makeFaqSchema } from '../lib/seoSchema';
 import HeroSection from '../components/sections/HeroSection';
 import {
   companyInfo,
@@ -46,13 +47,46 @@ const Home = () => {
   return (
     <>
       <SEO
-        title="Ras Ali Labs | Technology, Film, Web, Apps, Music & AI"
-        description="Ras Ali Labs is a Botswana-based multidisciplinary technology and creative company delivering intelligent platforms, cinematic productions, digital experiences and original sound."
+        title="Ras Ali Labs | Software, AI & Film Production Botswana"
+        description="Ras Ali Labs is a Gaborone, Botswana technology and creative company for custom software, AI automation, web and app development, film production and audio."
+        keywords="software company Botswana, web development Botswana, web development Gaborone, AI automation Botswana, film production Botswana, video production Gaborone, Ras Ali Labs, Ralion OS"
         canonical="https://rasalilabs.com/"
+        structuredData={{
+          '@context': 'https://schema.org',
+          '@graph': [
+            organizationSchema,
+            localBusinessSchema,
+            personSchema,
+            makeFaqSchema(faqs),
+          ],
+        }}
       />
 
       {/* 1. HERO SECTION */}
       <HeroSection />
+
+      {/* Local search intent */}
+      <section className="py-16 px-6 lg:px-12 bg-[#101010] border-b border-white/10 text-white">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          <div className="lg:col-span-5">
+            <div className="text-brand-gold text-xs font-bold uppercase tracking-wider mb-3">Gaborone, Botswana</div>
+            <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-4">
+              A Botswana software, AI and creative production company.
+            </h2>
+          </div>
+          <div className="lg:col-span-7">
+            <p className="text-white/70 leading-relaxed mb-5">
+              Ras Ali Labs builds custom software and business platforms, develops AI and automation systems, and delivers film, video and audio production from Gaborone for organisations across Botswana and Southern Africa.
+            </p>
+            <div className="flex flex-wrap gap-3 text-xs font-semibold">
+              <Link to="/services/web-app-development" className="px-4 py-2 rounded-full bg-white/5 border border-white/10 hover:border-brand-gold/40">Web & Software Development Botswana</Link>
+              <Link to="/services/ai-automation" className="px-4 py-2 rounded-full bg-white/5 border border-white/10 hover:border-brand-gold/40">AI Automation Botswana</Link>
+              <Link to="/services/film-video" className="px-4 py-2 rounded-full bg-white/5 border border-white/10 hover:border-brand-gold/40">Film & Video Production Botswana</Link>
+              <Link to="/services/music-audio" className="px-4 py-2 rounded-full bg-white/5 border border-white/10 hover:border-brand-gold/40">Music & Audio Production Botswana</Link>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* 2. CAPABILITY INTRODUCTION (4 PILLARS) */}
       <section className="py-24 px-6 lg:px-12 bg-[#121212] text-white">
