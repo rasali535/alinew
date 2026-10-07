@@ -5,7 +5,6 @@ import { socialLinks, companyInfo } from '../../data/mock';
 
 const Footer = () => {
   const iconMap = {
-    'Youtube': Youtube,
     'Facebook': Facebook,
     'Instagram': Instagram,
     'Github': Github,
