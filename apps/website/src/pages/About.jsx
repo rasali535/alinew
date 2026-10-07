@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import SEO from '../components/common/SEO';
+import { organizationSchema, localBusinessSchema, personSchema, makeBreadcrumbSchema } from '../lib/seoSchema';
 import { companyInfo, capabilityPillars } from '../data/mock';
 import {
   Sparkles,
@@ -62,41 +63,20 @@ const About = () => {
   return (
     <div className="pt-28 pb-20 bg-[#121212] text-white min-h-screen">
       <SEO
-        title="About Ras Ali Labs | Technology, Film, Sound & AI from Botswana"
-        description="Ras Ali Labs is a Botswana-based multidisciplinary technology and creative company building software, AI systems, digital products, films, visual experiences and original sound."
+        title="Alpheaus Chiwaze (Ras Ali) | Founder of Ras Ali Labs"
+        description="Meet Alpheaus Chiwaze, professionally known as Ras Ali: founder of Ras Ali Labs, software builder, filmmaker, musician and creative technologist in Botswana."
+        keywords="Alpheaus Chiwaze, Ras Ali Botswana, Ras Ali Labs founder, software developer Botswana, filmmaker Botswana, creative technologist Botswana"
         canonical="https://rasalilabs.com/about"
         structuredData={{
           '@context': 'https://schema.org',
           '@graph': [
-            {
-              '@type': 'Organization',
-              '@id': 'https://rasalilabs.com/#organization',
-              name: 'Ras Ali Labs (Pty) Ltd',
-              alternateName: 'Ras Ali Labs',
-              url: 'https://rasalilabs.com',
-              founder: { '@id': 'https://rasalilabs.com/about#alpheaus-chiwaze' },
-              address: {
-                '@type': 'PostalAddress',
-                addressLocality: 'Gaborone',
-                addressCountry: 'BW',
-              },
-            },
-            {
-              '@type': 'Person',
-              '@id': 'https://rasalilabs.com/about#alpheaus-chiwaze',
-              name: 'Alpheaus Chiwaze',
-              alternateName: 'Ras Ali',
-              jobTitle: 'Founder & Creative Technologist',
-              worksFor: { '@id': 'https://rasalilabs.com/#organization' },
-              url: 'https://rasalilabs.com/about',
-              knowsAbout: [
-                'Software engineering',
-                'Artificial intelligence',
-                'Film and television production',
-                'Music and audio production',
-                'Business automation',
-              ],
-            },
+            organizationSchema,
+            localBusinessSchema,
+            personSchema,
+            makeBreadcrumbSchema([
+              { name: 'Home', url: '/' },
+              { name: 'About', url: '/about' },
+            ]),
           ],
         }}
       />
