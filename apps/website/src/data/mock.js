@@ -259,13 +259,13 @@ export const featuredProjects = [
     solution: "Led music direction, rehearsals and performance planning while supporting sound operations and cast/crew coordination across the production.",
     proof: "Production credit from October 2015 to September 2022 as Music Director and Sound Engineer.",
     title: 'The Melody Gospel TV Show',
-    subtitle: 'Television Music Direction & Sound Engineering',
-    category: 'Music & Audio Production',
+    subtitle: 'Gospel Television Production',
+    category: 'Film & Creative Production',
     roles: ['Music Director', 'Sound Engineer', 'Rehearsal & Performance Planning', 'Cast & Crew Coordination'],
     date: '2015–2022',
     verifiedNote: 'Music Director and Sound Engineer from October 2015 to September 2022.',
     image: '/assets/images/melody-logo.jpg',
-    description: 'Long-running television production work covering music direction, rehearsals, performance planning, technical sound operations and production coordination.'
+    description: 'A long-running gospel television production where Ras Ali served as Music Director and Sound Engineer, supporting rehearsals, performance planning, technical sound and production coordination.'
   },
   {
     id: 'studio-13-2023',
@@ -280,19 +280,6 @@ export const featuredProjects = [
     verifiedNote: 'Videographer from April to September 2023.',
     image: '/assets/images/service-video.png',
     description: 'Videography work spanning studio productions and client video content.'
-  },
-  {
-    id: 'sonic-branding-studio-audio-suite',
-    challenge: "Create original audio assets that could support media, brand and studio production needs.",
-    solution: "Produced original compositions and delivered audio mixing and mastering work across studio projects.",
-    proof: "Verified project scope includes original composition, audio mixing and mastering.",
-    title: 'Sonic Branding & Studio Audio Suite',
-    subtitle: 'Original Music, Mixing & Mastering',
-    category: 'Music & Audio Production',
-    roles: ['Original Composition', 'Audio Mixing', 'Mastering'],
-    verifiedNote: 'Verified work covering composition, mixing and mastering.',
-    image: '/assets/images/service-sound.png',
-    description: 'Original music and studio audio work spanning composition, mixing and mastering.'
   },
   {
     id: 'tradegrid-africa',
