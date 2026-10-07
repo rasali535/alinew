@@ -186,7 +186,7 @@ export const ralionModules = [
     id: 'crm',
     name: 'Ralion CRM',
     tagline: 'Customer & Pipeline Intelligence',
-    description: 'Unified customer records, deal pipeline tracking, interaction timelines, and predictive lead scoring.',
+    description: 'Unified customer records, deal pipeline tracking, interaction timelines, and structured follow-up context.',
     href: '/products/ralion-crm',
     badge: 'Core CRM'
   },
@@ -194,7 +194,7 @@ export const ralionModules = [
     id: 'growth-studio',
     name: 'Growth Studio',
     tagline: 'AI Creative & Campaign Generation',
-    description: 'Automated multi-channel campaign planning, FLUX commercial poster generation, and CogVideoX video creative rendering.',
+    description: 'Automated multi-channel campaign planning, AI commercial poster generation, and short-form video creative workflows.',
     href: '/products/ralion-growth-intelligence',
     badge: 'Growth Engine'
   },
@@ -217,7 +217,7 @@ export const ralionModules = [
   {
     id: 'security',
     name: 'Enterprise Security Vault',
-    tagline: 'Bank-Grade Multi-Tenant Isolation',
+    tagline: 'Multi-Tenant Security & Isolation',
     description: 'Row-level database security, encrypted token management, immutable audit logs, and sovereign cloud infrastructure.',
     href: '/about#security',
     badge: 'Sovereign Trust'
@@ -345,7 +345,7 @@ export const pricingPlans = [
       '3 Connected Social Accounts',
       '3 Workspaces & 5 Team Members',
       'Mari AI Advanced Growth Strategy',
-      'FLUX Commercial Poster Studio',
+      'AI Commercial Poster Studio',
       'Market Research & Competitor Briefs',
       'Business Intelligence & Reporting',
       'Automated Workflow Triggers'
@@ -365,7 +365,7 @@ export const pricingPlans = [
       '5,000 AI Monthly Credits',
       '10 Connected Social Accounts',
       '10 Workspaces & 20 Team Members',
-      'CogVideoX Commercial Video AI',
+      'AI Commercial Video Generation',
       'Automated Multi-Channel Campaigns',
       'Unified Social Inbox & Engagement',
       'Live Website Ingestion & Learning',
