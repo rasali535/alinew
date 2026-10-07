@@ -7,13 +7,12 @@ import { Card, CardHeader, CardTitle, CardContent, Badge, Button, Modal } from '
 import { DollarSign, Users, CheckSquare, Sparkles, TrendingUp, Plus, Calendar, FileText, Zap, Loader2, ArrowRight, Briefcase } from 'lucide-react';
 import { authFetch } from '@/lib/api-config';
 import { useOrganization } from '@ralion/auth';
+import { readDashboardOverviewCache, writeDashboardOverviewCache } from '@/lib/cache/dashboardOverviewCache';
 
 const DashboardCharts = dynamic(
   () => import('@/components/dashboard/DashboardCharts').then((mod) => mod.DashboardCharts),
   { ssr: false, loading: () => <div className="grid grid-cols-1 lg:grid-cols-2 gap-6"><div className="h-72 rounded-xl bg-zinc-900/70 border border-zinc-800 animate-pulse" /><div className="h-72 rounded-xl bg-zinc-900/70 border border-zinc-800 animate-pulse" /></div> }
 );
-
-const DASHBOARD_CACHE_TTL_MS = 5 * 60 * 1000;
 
 
 interface Overview {
@@ -41,8 +40,6 @@ export default function DashboardPage() {
   const [customer, setCustomer] = useState({ name: '', email: '', company: '', phone: '' });
   const [task, setTask] = useState({ title: '', project: 'General Operations', priority: 'MEDIUM', dueDate: '' });
 
-  const cacheKey = workspace?.id ? `ralion_dashboard_overview_v1:${workspace.id}` : null;
-
   const loadOverview = async (showBlockingLoader = true) => {
     if (showBlockingLoader && !overview) setLoading(true);
     const res = await authFetch('/api/reports/overview');
@@ -52,35 +49,27 @@ export default function DashboardPage() {
     } else {
       setOverview(body);
       setError(null);
-      if (cacheKey) {
-        try {
-          localStorage.setItem(cacheKey, JSON.stringify({ savedAt: Date.now(), overview: body }));
-        } catch {}
+      if (workspace?.id) {
+        writeDashboardOverviewCache(workspace.id, body);
       }
     }
     setLoading(false);
   };
 
   useEffect(() => {
-    if (!workspace?.id || !cacheKey) return;
+    if (!workspace?.id) return;
 
-    let restored = false;
-    try {
-      const raw = localStorage.getItem(cacheKey);
-      if (raw) {
-        const cached = JSON.parse(raw);
-        if (cached?.overview && cached?.savedAt && Date.now() - Number(cached.savedAt) <= DASHBOARD_CACHE_TTL_MS) {
-          setOverview(cached.overview);
-          setLoading(false);
-          restored = true;
-        }
-      }
-    } catch {}
+    const cached = readDashboardOverviewCache<Overview>(workspace.id);
+    const restored = Boolean(cached);
+    if (cached) {
+      setOverview(cached);
+      setLoading(false);
+    }
 
     void loadOverview(!restored);
-    // cacheKey changes only when the active workspace changes.
+    // workspace id changes only when the active tenant changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cacheKey, workspace?.id]);
+  }, [workspace?.id]);
 
   const addCustomer = async () => {
     if (!customer.name.trim() || !customer.email.trim()) return;
