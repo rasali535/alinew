@@ -33,7 +33,7 @@ const WebAppDevService = () => {
             organizationSchema,
             localBusinessSchema,
             makeServiceSchema({
-              name: 'Web & App Development in Botswana in Botswana',
+              name: 'Web & App Development in Botswana',
               description: 'Custom web development, software platforms, business portals, mobile apps and e-commerce systems from Gaborone, Botswana.',
               url: '/services/web-app-development',
               serviceType: 'Web development and custom software development',
@@ -56,7 +56,7 @@ const WebAppDevService = () => {
             <Code size={14} /> Technology Discipline
           </div>
           <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-white mb-6 leading-tight">
-            Web & App Development
+            Web & App Development in Botswana
           </h1>
           <p className="text-white/70 text-lg leading-relaxed">
             From Gaborone, we build modern websites, mobile applications, business platforms, portals, e-commerce systems and custom software for organisations across Botswana and Southern Africa.
