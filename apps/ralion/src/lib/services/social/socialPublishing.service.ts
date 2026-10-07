@@ -170,10 +170,20 @@ function extractCreativeAssetId(candidate: string): string | null {
   return null;
 }
 
+function canonicalizeDurableMediaReference(candidate: string): string {
+  const value = String(candidate || '').trim();
+  const assetId = extractCreativeAssetId(value);
+  if (assetId) {
+    return `/api/creatives/${encodeURIComponent(assetId)}/delivery`;
+  }
+  return value;
+}
+
 async function resolveTenantCreativeMedia(params: {
   mediaUrls?: string[];
   organizationId: string;
   workspaceId: string;
+  expiresInSeconds?: number;
 }): Promise<string[]> {
   const urls = params.mediaUrls || [];
   if (urls.length === 0) return [];
@@ -200,7 +210,7 @@ async function resolveTenantCreativeMedia(params: {
       assetId,
       organizationId: params.organizationId!,
       workspaceId: params.workspaceId!,
-      expiresInSeconds: 3600,
+      expiresInSeconds: Math.min(604800, Math.max(60, params.expiresInSeconds || 3600)),
     });
 
     if (!delivery?.signedUrl) {
@@ -350,6 +360,52 @@ export class SocialPublishingService {
     globalPublishStore.__ralion_published_posts = [];
     globalPublishStore.__ralion_mock_connections = [];
     inFlightDispatches.clear();
+  }
+
+  /**
+   * Non-publishing media readiness probe. Exercises the exact tenant-scoped
+   * creative resolver and media validator used by publish(), then verifies
+   * that the resulting signed media URL is externally fetchable. No social
+   * provider or publication API is called.
+   */
+  static async probeCreativeMediaForPublish(params: {
+    mediaUrl: string;
+    organizationId: string;
+    workspaceId: string;
+    mediaType?: string;
+  }): Promise<{ ok: true; providerHost: string; contentType: string; bytes: number }> {
+    const resolved = await resolveTenantCreativeMedia({
+      mediaUrls: [params.mediaUrl],
+      organizationId: params.organizationId,
+      workspaceId: params.workspaceId,
+      expiresInSeconds: 300,
+    });
+    const validated = validateMediaInputs(resolved, [params.mediaType || 'image']);
+    const providerUrl = validated.mediaUrls[0];
+    if (!providerUrl) {
+      throw publishingInputError('INVALID_MEDIA', 'Creative media probe could not resolve a provider URL.');
+    }
+
+    const parsed = new URL(providerUrl);
+    const response = await fetch(providerUrl, {
+      method: 'GET',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(7000),
+    });
+    if (!response.ok) {
+      throw new Error(`Resolved creative media was not fetchable (HTTP ${response.status}).`);
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    const bytes = Buffer.from(await response.arrayBuffer()).byteLength;
+    const expectedPrefix = (params.mediaType || 'image').toLowerCase().startsWith('video')
+      ? 'video/'
+      : 'image/';
+    if (!contentType.startsWith(expectedPrefix) || bytes < 1000) {
+      throw new Error('Resolved creative media failed content verification.');
+    }
+
+    return { ok: true, providerHost: parsed.hostname, contentType, bytes };
   }
 
   static registerMockConnectionForTesting(conn: any) {
@@ -857,10 +913,17 @@ export class SocialPublishingService {
     }
 
     const normalizedPlatforms = canonicalizePlatforms(params.platforms);
+    const durableMediaReferences = (params.mediaUrls || []).map(canonicalizeDurableMediaReference);
+    const scheduleDelaySeconds = params.scheduledFor
+      ? Math.max(0, Math.ceil((params.scheduledFor.getTime() - Date.now()) / 1000))
+      : 0;
+    const signedMediaTtlSeconds = Math.min(604800, Math.max(3600, scheduleDelaySeconds + 3600));
+
     const tenantResolvedMediaUrls = await resolveTenantCreativeMedia({
       mediaUrls: params.mediaUrls,
       organizationId: params.organizationId,
       workspaceId: params.workspaceId,
+      expiresInSeconds: signedMediaTtlSeconds,
     });
     const normalizedMedia = validateMediaInputs(tenantResolvedMediaUrls, params.mediaTypes);
     if (params.socialConnectionId && !UUID_PATTERN.test(params.socialConnectionId)) {
@@ -881,7 +944,7 @@ export class SocialPublishingService {
     const validation = SocialContentValidator.validate({
       platforms: params.platforms,
       body: params.body,
-      mediaUrls: params.mediaUrls,
+      mediaUrls: durableMediaReferences,
       mediaTypes: params.mediaTypes,
       scheduledFor: params.scheduledFor,
     });
@@ -1043,6 +1106,11 @@ export class SocialPublishingService {
 
       // 2. Pre-process media URLs (turn base64 data URLs into persistent public storage URLs)
       const normalizedMediaUrls = await this.processMediaUrls(params.mediaUrls);
+      const durableMediaUrls = durableMediaReferences.map((reference, index) =>
+        reference.startsWith('data:')
+          ? (normalizedMediaUrls[index] || reference)
+          : reference
+      );
 
       // 3. Find active connections for requested platforms strictly matching canonical tenant & user
     let connections: any[] = [];
@@ -1388,7 +1456,7 @@ export class SocialPublishingService {
             organization_id: params.organizationId,
             title: params.title || null,
             body: params.body,
-            media_urls: normalizedMediaUrls,
+            media_urls: durableMediaUrls,
             media_types: params.mediaTypes || [],
             platforms: params.platforms,
             status: isScheduled ? 'SCHEDULED' : overallStatus,
