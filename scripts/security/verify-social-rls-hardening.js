@@ -9,6 +9,7 @@ const files = [
   'packages/database/migrations/20260910_meta_provider_tenant_rls_hardening.sql',
   'packages/database/migrations/20260910_social_content_rls_hardening.sql',
   'supabase/migrations/20261007072000_social_connections_authenticated_read_only.sql',
+  'supabase/migrations/20261007074450_harden_social_provider_routing_access.sql',
 ];
 
 const source = files.map((f) => fs.readFileSync(path.join(root, f), 'utf8')).join('\n');
@@ -23,6 +24,8 @@ requirePattern(/CREATE POLICY "social_conn_user_own"[\s\S]*FOR SELECT[\s\S]*TO a
 requirePattern(/REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER[\s\S]*ON public\.social_connections[\s\S]*FROM authenticated/, 'Authenticated users must not directly mutate social_connections.');
 requirePattern(/GRANT SELECT ON public\.social_connections TO authenticated/, 'Authenticated users must retain read access to owned social connection metadata.');
 requirePattern(/CREATE POLICY "social_conn_service_role"[\s\S]*FOR ALL[\s\S]*TO service_role[\s\S]*WITH CHECK \(true\)/, 'Service-role social connection mutation policy must remain explicit.');
+requirePattern(/REVOKE ALL ON public\.social_provider_routing FROM anon, authenticated/, 'Social provider routing must be inaccessible to browser/Data API roles.');
+requirePattern(/CREATE POLICY "sp_routing_service_role"[\s\S]*FOR ALL[\s\S]*TO service_role[\s\S]*WITH CHECK \(true\)/, 'Social provider routing must remain service-role controlled.');
 requirePattern(/social_dest_tenant_select/, 'social_destinations tenant SELECT policy is required.');
 requirePattern(/meta_conn_tenant_select/, 'meta_connections tenant SELECT policy is required.');
 requirePattern(/sp_profiles_tenant_select/, 'social_provider_profiles tenant SELECT policy is required.');
@@ -42,4 +45,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log('[security:social-rls] PASS — social resources are tenant-scoped, social_connections is browser read-only, safe views obey RLS, and credential/webhook surfaces are server-only.');
+console.log('[security:social-rls] PASS — social resources are tenant-scoped, connection metadata is browser read-only, provider routing is server-only, safe views obey RLS, and credential/webhook surfaces are server-only.');
