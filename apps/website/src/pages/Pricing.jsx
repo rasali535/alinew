@@ -117,15 +117,15 @@ const Pricing = () => {
             </div>
 
             <div className="p-4 rounded-xl bg-white/5 border border-white/5">
-              <div className="font-bold text-brand-gold mb-1">FLUX Commercial Poster</div>
+              <div className="font-bold text-brand-gold mb-1">AI Commercial Poster</div>
               <div className="text-white/80 mb-2">10 Credits per image</div>
               <div className="text-white/50 text-[11px]">Studio-grade advertising graphics and social creatives.</div>
             </div>
 
             <div className="p-4 rounded-xl bg-white/5 border border-white/5">
-              <div className="font-bold text-brand-gold mb-1">CogVideoX Video Reels</div>
+              <div className="font-bold text-brand-gold mb-1">AI Video Reels</div>
               <div className="text-white/80 mb-2">50 Credits per video</div>
-              <div className="text-white/50 text-[11px]">AI-generated 6-second commercial reels for TikTok & Instagram.</div>
+              <div className="text-white/50 text-[11px]">AI-generated short-form commercial video assets for supported social workflows.</div>
             </div>
 
             <div className="p-4 rounded-xl bg-white/5 border border-white/5">
@@ -136,7 +136,7 @@ const Pricing = () => {
           </div>
         </div>
 
-        {/* Security & RLS Enterprise Guarantee */}
+        {/* Security & Multi-Tenant Controls */}
         <div className="bg-[#141414] border border-white/10 rounded-3xl p-8 flex flex-col md:flex-row items-center justify-between gap-6 text-xs text-white/70">
           <div className="flex items-center gap-4">
             <ShieldCheck size={32} className="text-brand-gold shrink-0" />

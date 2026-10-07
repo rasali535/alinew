@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://rasalibassist.themaplin.com/sitemap.xml
+Sitemap: https://rasalilabs.com/sitemap.xml

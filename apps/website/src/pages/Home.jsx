@@ -208,7 +208,7 @@ const Home = () => {
                   <div className="p-3.5 rounded-xl bg-black/40 border border-white/5">
                     <div className="text-[10px] uppercase font-bold text-white/40 mb-1">Growth Engine</div>
                     <div className="text-xs font-bold text-white">Multi-Channel Studio</div>
-                    <div className="text-[10px] text-brand-gold mt-1">FLUX & CogVideoX ready</div>
+                    <div className="text-[10px] text-brand-gold mt-1">AI creative generation</div>
                   </div>
                 </div>
 
@@ -269,11 +269,11 @@ const Home = () => {
                 </div>
                 <div className="flex items-start gap-3 text-sm text-white/80">
                   <CheckCircle2 size={18} className="text-purple-400 shrink-0 mt-0.5" />
-                  <span><strong>Talk to your business:</strong> Natural voice conversation with hands-free wake and fluid interruption.</span>
+                  <span><strong>Talk to your business:</strong> Use voice input and spoken responses when voice mode is enabled.</span>
                 </div>
                 <div className="flex items-start gap-3 text-sm text-white/80">
                   <CheckCircle2 size={18} className="text-purple-400 shrink-0 mt-0.5" />
-                  <span><strong>Persistent voice navigation:</strong> Move across Growth, CRM, and Reports without dropping the session.</span>
+                  <span><strong>Voice-assisted navigation:</strong> Ask Mari to help you move between supported Ralion workspaces.</span>
                 </div>
                 <div className="flex items-start gap-3 text-sm text-white/80">
                   <CheckCircle2 size={18} className="text-purple-400 shrink-0 mt-0.5" />
@@ -390,7 +390,7 @@ const Home = () => {
                   <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-400/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <Mic size={14} className="text-purple-300 shrink-0" />
-                      <span className="text-xs font-semibold text-purple-100">“Hey Mari, open Growth.”</span>
+                      <span className="text-xs font-semibold text-purple-100">“Mari, open Growth.”</span>
                     </div>
                     <div className="flex items-center gap-1.5 text-[10px] text-emerald-300 font-medium">
                       <span>→</span>
