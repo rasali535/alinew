@@ -227,6 +227,9 @@ export const ralionModules = [
 export const featuredProjects = [
   {
     id: 'pula-pitch-2024',
+    challenge: "Deliver a consistent visual production workflow across a full television season.",
+    solution: "Led videography across 13 episodes, covering set design input, pre-production planning, production capture and post-production.",
+    proof: "13-episode production credit with lead videography responsibility.",
     title: 'Pula Pitch',
     subtitle: 'Television & Digital Enterprise Series',
     category: 'Film & Creative Production',
@@ -238,6 +241,9 @@ export const featuredProjects = [
   },
   {
     id: 'dedications-2020',
+    challenge: "Support a broadcast music production where performance, studio readiness and artist coordination had to work together.",
+    solution: "Performed as bass guitarist while also supporting studio setup and artist management throughout the shoots.",
+    proof: "Broadcast production credit spanning musicianship, studio setup and artist coordination.",
     title: 'Dedications',
     subtitle: 'Broadcast Music Production & Studio Sessions',
     category: 'Music & Audio Production',
@@ -249,6 +255,9 @@ export const featuredProjects = [
   },
   {
     id: 'ralion-os-flagship',
+    challenge: "Bring fragmented business workflows, customer information, growth activity and AI assistance into one connected operating environment.",
+    solution: "Architected and developed Ralion OS with CRM, operations, growth, social workflows, automation and Mari AI as an integrated platform.",
+    proof: "Live flagship product developed by Ras Ali Labs and deployed at rasalilabs.com/ralion.",
     title: 'Ralion OS',
     subtitle: 'AI Business Operating System (Flagship Product)',
     category: 'Software & Technology',
@@ -259,6 +268,9 @@ export const featuredProjects = [
   },
   {
     id: 'pameltex',
+    challenge: "Create a clearer digital presence for an industrial business with structured product information and business enquiry needs.",
+    solution: "Delivered a responsive corporate platform with product information architecture, enquiry pathways and modern UI/UX.",
+    proof: "Publicly accessible production website at pameltex.com.",
     title: 'Pameltex',
     subtitle: 'Industrial Digital Platform',
     category: 'Web & App Development',
@@ -271,6 +283,9 @@ export const featuredProjects = [
   },
   {
     id: 'lebvilleboutique',
+    challenge: "Create an online retail experience that could present products clearly and support a complete shopping flow.",
+    solution: "Built the boutique storefront, product presentation system, responsive shopping experience and payment integration.",
+    proof: "Publicly accessible e-commerce website at lebvilleboutique.com.",
     title: 'Lebville Boutique',
     subtitle: 'Fashion E-Commerce Storefront',
     category: 'Web & App Development',
@@ -283,6 +298,9 @@ export const featuredProjects = [
   },
   {
     id: 'peregrine-systems',
+    challenge: "Turn a corporate identity into a clean, credible digital interface.",
+    solution: "Developed the visual identity direction and web portal experience around clarity, usability and professional presentation.",
+    proof: "Delivered brand identity and digital portal work by Ras Ali Labs.",
     title: 'Peregrine Systems',
     subtitle: 'Brand Identity & Digital Web Portal',
     category: 'Web & App Development',
@@ -551,6 +569,7 @@ export const socialLinks = [
   { name: 'YouTube', url: 'https://youtube.com', icon: 'Youtube' },
   { name: 'Facebook', url: 'https://facebook.com/rasalilabs', icon: 'Facebook' },
   { name: 'Instagram', url: 'https://instagram.com/rasalilabs', icon: 'Instagram' },
+  { name: 'GitHub', url: 'https://github.com/rasali535', icon: 'Github' },
   { name: 'Phone', url: 'tel:+26772113009', icon: 'Phone' },
   { name: 'Mail', url: 'mailto:contact@rasalilabs.com', icon: 'Mail' }
 ];

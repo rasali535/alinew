@@ -12,6 +12,8 @@ import {
   ArrowRight,
   MapPin,
   Globe2,
+  Github,
+  ExternalLink,
 } from 'lucide-react';
 
 const journey = [
@@ -247,6 +249,51 @@ const About = () => {
                 </Link>
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* Public proof */}
+        <div className="mb-24 rounded-[2rem] border border-white/10 bg-[#181818] p-8 md:p-12">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            <div className="lg:col-span-7">
+              <div className="text-xs font-bold text-brand-gold uppercase tracking-wider mb-3">Public Proof</div>
+              <h2 className="text-3xl md:text-4xl font-extrabold text-white mb-4">
+                The work should be inspectable, not just described.
+              </h2>
+              <p className="text-white/65 leading-relaxed mb-5">
+                We separate portfolio claims from marketing language. Public case studies identify the role Ras Ali Labs actually performed, the deliverable produced, and the evidence we can point to — whether that is a live platform, a production credit, or a product developed by the lab.
+              </p>
+              <p className="text-white/55 text-sm leading-relaxed">
+                Technical work is also backed by an active GitHub engineering footprint covering the systems and products we build. Private customer repositories remain private; public code and repository activity are linked where appropriate.
+              </p>
+            </div>
+            <div className="lg:col-span-5 space-y-3">
+              <a
+                href="https://github.com/rasali535"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-between gap-4 p-5 rounded-2xl bg-black/30 border border-white/10 hover:border-brand-gold/30 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <Github className="w-6 h-6 text-white" />
+                  <div>
+                    <div className="font-bold text-white text-sm">GitHub Engineering Profile</div>
+                    <div className="text-xs text-white/45">Public technical footprint</div>
+                  </div>
+                </div>
+                <ExternalLink size={16} className="text-brand-gold" />
+              </a>
+              <Link
+                to="/work"
+                className="w-full flex items-center justify-between gap-4 p-5 rounded-2xl bg-black/30 border border-white/10 hover:border-brand-gold/30 transition-colors"
+              >
+                <div>
+                  <div className="font-bold text-white text-sm">Verified Portfolio Archive</div>
+                  <div className="text-xs text-white/45">Production credits, live platforms and product work</div>
+                </div>
+                <ArrowRight size={16} className="text-brand-gold" />
+              </Link>
+            </div>
           </div>
         </div>
 
