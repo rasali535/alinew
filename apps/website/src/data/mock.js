@@ -54,7 +54,7 @@ export const companyInfo = {
   flagship: 'Ralion OS',
   flagshipTagline: 'Empowered to Prosper',
   flagshipPositioning: 'Your AI Business Operating System',
-  mariPositioning: 'Mari — The Intelligence Inside Ralion OS',
+  mariPositioning: 'Mari AI — Your AI Business Growth Partner',
   email: 'contact@rasalilabs.com',
   phone: '+267 72 113 009',
   address: 'Plot 18680 Khuhurutse Drive, Phase 2, Gaborone, Botswana',
@@ -166,7 +166,7 @@ export const ralionOSOverview = {
   tagline: 'Empowered to Prosper',
   headline: 'Your AI Business Operating System',
   description: 'Ralion OS brings business intelligence, Mari AI, growth, social media, customer management and operational tools into one connected platform.',
-  mariTagline: 'Mari — The Intelligence Inside Ralion OS',
+  mariTagline: 'Mari AI — Your AI Business Growth Partner',
   mariDescription: 'Understands your verified business context, speaks with you naturally, navigates across Ralion workspaces, and turns business data into useful decisions.',
   launchHref: '/ralion',
   exploreHref: '/products/ralion-os',
@@ -177,7 +177,7 @@ export const ralionModules = [
   {
     id: 'mari-ai',
     name: 'Mari AI',
-    tagline: 'The Intelligence Inside Ralion OS',
+    tagline: 'Your AI Business Growth Partner',
     description: 'Understands verified business context, speaks with you naturally, navigates across Ralion workspaces, and turns business data into useful decisions.',
     href: '/mari-ai',
     badge: 'Flagship AI'
@@ -226,97 +226,15 @@ export const ralionModules = [
 
 export const featuredProjects = [
   {
-    id: 'eagletouchtours',
-    title: 'Eagle Touch Tours',
-    subtitle: 'Safari & Tour Booking Management Platform',
-    category: 'Web & App Development',
-    roles: ['Web Development', 'Tour Management System', 'UI/UX Design', 'Cloud Deployment'],
-    url: 'https://eagletouchtours.com',
-    domain: 'eagletouchtours.com',
-    verifiedNote: 'Full-stack safari tour and booking management web platform engineered by Ras Ali Labs.',
-    image: '/assets/images/eagle-touch-logo.png',
-    description: 'A full-stack booking and tour management platform engineered for Eagle Touch Tours, featuring tour itineraries, inquiry workflows, and responsive travel booking capabilities.'
-  },
-  {
-    id: 'pameltex',
-    title: 'Pameltex',
-    subtitle: 'Textile Manufacturing & Industrial Web Platform',
-    category: 'Web & App Development',
-    roles: ['Web Engineering', 'Product Catalog Architecture', 'UI/UX Design'],
-    url: 'https://pameltex.com',
-    domain: 'pameltex.com',
-    verifiedNote: 'Corporate web platform and industrial catalog showcase engineered by Ras Ali Labs.',
-    image: '/assets/images/pameltex-logo.png',
-    description: 'Corporate web platform engineered for Pameltex Industrial Fabrics, delivering structured product catalog showcase, business inquiry pipelines, and responsive performance.'
-  },
-  {
-    id: 'bbtraveltours',
-    title: 'BB Travel & Tours',
-    subtitle: 'Travel Booking & Tour Operations Portal',
-    category: 'Web & App Development',
-    roles: ['Web Development', 'Tour Package Architecture', 'Responsive UI/UX'],
-    url: 'https://bbtraveltours.com',
-    domain: 'bbtraveltours.com',
-    verifiedNote: 'Digital travel and tour package platform engineered by Ras Ali Labs.',
-    image: '/assets/images/bb-travel-logo.jpg',
-    description: 'A dedicated travel and tour booking platform for BB Travel & Tours, enabling seamless package discovery, itinerary showcase, and streamlined traveler contact.'
-  },
-  {
-    id: 'academyfoundations',
-    title: 'Academy Foundations',
-    subtitle: 'Educational Platform & Foundation Web Portal',
-    category: 'Web & App Development',
-    roles: ['Web Development', 'Content Architecture', 'UI/UX Design'],
-    url: 'https://academyfoundations.com',
-    domain: 'academyfoundations.com',
-    verifiedNote: 'Official educational and institutional web portal engineered by Ras Ali Labs.',
-    image: '/assets/images/service-dev.png',
-    description: 'A modern, responsive web portal engineered for Academy Foundations, supporting curriculum presentation, institutional communication, and stakeholder engagement.'
-  },
-  {
-    id: 'lebvilleboutique',
-    title: 'Lebville Boutique',
-    subtitle: 'Fashion E-Commerce Storefront & Payment Integration',
-    category: 'Web & App Development',
-    roles: ['E-Commerce Development', 'Storefront Architecture', 'Payment Integration'],
-    url: 'https://lebvilleboutique.com',
-    domain: 'lebvilleboutique.com',
-    verifiedNote: 'Boutique e-commerce platform and digital storefront engineered by Ras Ali Labs.',
-    image: '/assets/images/lebville-logo.png',
-    description: 'Boutique e-commerce storefront designed and deployed for Lebville Boutique, featuring product catalogs, responsive shopping experience, and online payment gateway integration.'
-  },
-  {
-    id: 'the-melody-gospel-tv-show',
-    title: 'The Melody Gospel TV Show',
-    subtitle: 'Broadcast Television Series & Studio Production',
-    category: 'Film & Creative Production',
-    roles: ['Television Production', 'Videography', 'Studio Setup', 'Audiovisual Post-Production'],
-    verifiedNote: 'Television series production, videography, and audiovisual post-production by Ras Ali Labs.',
-    image: '/assets/images/melody-logo.jpg',
-    description: 'Broadcast television production and audiovisual engineering for The Melody Gospel TV Show, delivering studio filming, visual capture, and broadcast post-production.'
-  },
-  {
-    id: 'pameltechlabs',
-    title: 'Pameltech Labs',
-    subtitle: 'Technology Solutions & Software Engineering Platform',
-    category: 'Web & App Development',
-    roles: ['Full-Stack Development', 'Software Engineering', 'Cloud Architecture'],
-    url: 'https://pameltechlabs.com',
-    domain: 'pameltechlabs.com',
-    verifiedNote: 'Technology and software solutions web platform engineered by Ras Ali Labs.',
-    image: '/assets/images/service-dev.png',
-    description: 'Technology web platform and software solutions portal engineered for Pameltech Labs, showcasing enterprise digital products and technical infrastructure capabilities.'
-  },
-  {
     id: 'pula-pitch-2024',
     title: 'Pula Pitch',
     subtitle: 'Television & Digital Enterprise Series',
     category: 'Film & Creative Production',
-    roles: ['Set Design', 'Pre-Production', 'Production', 'Post-Production'],
+    roles: ['Lead Videography', 'Set Design', 'Pre-Production', 'Post-Production'],
     date: '2024',
     verifiedNote: 'Lead videographer responsible for set design, pre-production, production and post-production across 13 episodes.',
     image: '/assets/images/pula-pitch-logo.jpg',
-    description: 'Lead videographer responsible for set design, pre-production, production and post-production across 13 episodes.'
+    description: 'A 13-episode television production delivered across set design, visual production, camera execution and post-production.'
   },
   {
     id: 'dedications-2020',
@@ -327,27 +245,51 @@ export const featuredProjects = [
     date: '2020',
     verifiedNote: 'Bass guitarist, studio setup and artist management during all shoots.',
     image: '/assets/images/ras-ali-bass-1.jpg',
-    description: 'Bass guitarist, studio setup and artist management during all shoots.'
+    description: 'Broadcast music production work spanning live musicianship, studio setup and artist coordination.'
   },
   {
     id: 'ralion-os-flagship',
     title: 'Ralion OS',
     subtitle: 'AI Business Operating System (Flagship Product)',
     category: 'Software & Technology',
-    roles: ['Software Architecture', 'Mari AI Engine', 'Full-Stack Development'],
-    verifiedNote: 'Developed by Ras Ali Labs.',
+    roles: ['Software Architecture', 'Mari AI', 'Full-Stack Development', 'Business Automation'],
+    verifiedNote: 'Created and developed by Ras Ali Labs.',
     image: '/assets/images/logo.png',
-    description: 'Developed by Ras Ali Labs. The flagship AI operating system uniting CRM, business operations, Mari AI reasoning, and multi-channel growth.'
+    description: 'Ras Ali Labs’ flagship AI business operating system, connecting CRM, operations, growth, social workflows and Mari AI in one platform.'
+  },
+  {
+    id: 'pameltex',
+    title: 'Pameltex',
+    subtitle: 'Industrial Digital Platform',
+    category: 'Web & App Development',
+    roles: ['Web Engineering', 'Product Information Architecture', 'UI/UX'],
+    url: 'https://pameltex.com',
+    domain: 'pameltex.com',
+    verifiedNote: 'Corporate web platform delivered by Ras Ali Labs.',
+    image: '/assets/images/pameltex-logo.png',
+    description: 'A responsive corporate digital platform structured around product information, business enquiries and a clearer online presence.'
+  },
+  {
+    id: 'lebvilleboutique',
+    title: 'Lebville Boutique',
+    subtitle: 'Fashion E-Commerce Storefront',
+    category: 'Web & App Development',
+    roles: ['E-Commerce Development', 'Storefront Architecture', 'Payment Integration'],
+    url: 'https://lebvilleboutique.com',
+    domain: 'lebvilleboutique.com',
+    verifiedNote: 'Boutique e-commerce platform delivered by Ras Ali Labs.',
+    image: '/assets/images/lebville-logo.png',
+    description: 'An online boutique experience combining responsive product presentation, shopping flows and payment integration.'
   },
   {
     id: 'peregrine-systems',
-    title: 'Peregrine Brand & Web Portal',
-    subtitle: 'Enterprise Digital Identity & Web Interface',
+    title: 'Peregrine Systems',
+    subtitle: 'Brand Identity & Digital Web Portal',
     category: 'Web & App Development',
     roles: ['Visual Identity', 'Web Development', 'Interface Design'],
-    verifiedNote: 'Brand identity and digital web portal designed and developed by Ras Ali Labs.',
+    verifiedNote: 'Brand identity and digital portal work by Ras Ali Labs.',
     image: '/assets/images/peregrine-logo.png',
-    description: 'Clean, modern digital identity and web portal engineered for high performance, accessibility, and clear corporate communications.'
+    description: 'A corporate identity and digital interface project focused on clarity, usability and a modern public-facing presence.'
   }
 ];
 

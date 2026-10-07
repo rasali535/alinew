@@ -18,7 +18,8 @@ const SEO = ({
   url, // Legacy fallback
   ogImage = '/assets/images/logo.png',
   image, // Legacy fallback
-  ogType = 'website'
+  ogType = 'website',
+  structuredData
 }) => {
   const targetCanonical = formatAbsoluteUrl(canonical || url || '/');
   const targetOgImage = formatAbsoluteUrl(ogImage || image || '/assets/images/logo.png');
@@ -44,6 +45,13 @@ const SEO = ({
       <meta name="twitter:title" content={title} />
       <meta name="twitter:description" content={description} />
       <meta name="twitter:image" content={targetOgImage} />
+
+      {/* Optional JSON-LD structured data */}
+      {structuredData && (
+        <script type="application/ld+json">
+          {JSON.stringify(structuredData)}
+        </script>
+      )}
     </Helmet>
   );
 };
