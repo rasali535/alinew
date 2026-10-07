@@ -92,6 +92,30 @@ const ProjectDetails = () => {
             <h3 className="text-2xl text-white font-bold">About the Project</h3>
             <div className="text-white/75 text-sm md:text-base leading-relaxed space-y-4">
               <p>{project.description}</p>
+
+              {(project.challenge || project.solution || project.proof) && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                  {project.challenge && (
+                    <div className="p-4 rounded-2xl bg-[#181818] border border-white/10">
+                      <div className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-2">Challenge</div>
+                      <p className="text-xs text-white/70 leading-relaxed">{project.challenge}</p>
+                    </div>
+                  )}
+                  {project.solution && (
+                    <div className="p-4 rounded-2xl bg-[#181818] border border-white/10">
+                      <div className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-2">What We Delivered</div>
+                      <p className="text-xs text-white/70 leading-relaxed">{project.solution}</p>
+                    </div>
+                  )}
+                  {project.proof && (
+                    <div className="p-4 rounded-2xl bg-[#181818] border border-brand-gold/20">
+                      <div className="text-[10px] uppercase tracking-widest font-bold text-brand-gold mb-2">Public Proof</div>
+                      <p className="text-xs text-white/75 leading-relaxed">{project.proof}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {project.verifiedNote && (
                 <div className="p-4 rounded-2xl bg-[#181818] border border-brand-gold/30 text-xs text-white/80">
                   <strong className="text-brand-gold block font-bold mb-1 uppercase tracking-wider">
