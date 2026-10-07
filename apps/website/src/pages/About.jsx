@@ -16,7 +16,7 @@ import {
 
 const journey = [
   {
-    year: '2003',
+    year: 'Creative roots',
     title: 'Music became the first language',
     body: 'Long before the software, there was sound. Performance and musicianship shaped the discipline, timing, collaboration and emotional intelligence that still influence how Ras Ali Labs approaches every project.',
     icon: Music,
@@ -63,6 +63,40 @@ const About = () => {
         title="About Ras Ali Labs | Technology, Film, Sound & AI from Botswana"
         description="Ras Ali Labs is a Botswana-based multidisciplinary technology and creative company building software, AI systems, digital products, films, visual experiences and original sound."
         canonical="https://rasalilabs.com/about"
+        structuredData={{
+          '@context': 'https://schema.org',
+          '@graph': [
+            {
+              '@type': 'Organization',
+              '@id': 'https://rasalilabs.com/#organization',
+              name: 'Ras Ali Labs (Pty) Ltd',
+              alternateName: 'Ras Ali Labs',
+              url: 'https://rasalilabs.com',
+              founder: { '@id': 'https://rasalilabs.com/about#alpheaus-chiwaze' },
+              address: {
+                '@type': 'PostalAddress',
+                addressLocality: 'Gaborone',
+                addressCountry: 'BW',
+              },
+            },
+            {
+              '@type': 'Person',
+              '@id': 'https://rasalilabs.com/about#alpheaus-chiwaze',
+              name: 'Alpheaus Chiwaze',
+              alternateName: 'Ras Ali',
+              jobTitle: 'Founder & Creative Technologist',
+              worksFor: { '@id': 'https://rasalilabs.com/#organization' },
+              url: 'https://rasalilabs.com/about',
+              knowsAbout: [
+                'Software engineering',
+                'Artificial intelligence',
+                'Film and television production',
+                'Music and audio production',
+                'Business automation',
+              ],
+            },
+          ],
+        }}
       />
 
       <div className="max-w-7xl mx-auto px-6 lg:px-12">
@@ -96,7 +130,7 @@ const About = () => {
             <div className="relative aspect-[4/5] rounded-3xl overflow-hidden bg-[#181818] border border-white/15 shadow-2xl">
               <img
                 src="/assets/images/ras-ali-formal.jpg"
-                alt="Ras Ali, Founder and Creative Technologist at Ras Ali Labs"
+                alt="Alpheaus Chiwaze, also known as Ras Ali, Founder and Creative Technologist at Ras Ali Labs"
                 className="w-full h-full object-cover opacity-90"
                 onError={(e) => {
                   e.target.src = '/assets/images/logo.png';
@@ -104,7 +138,7 @@ const About = () => {
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
               <div className="absolute bottom-6 left-6 right-6">
-                <h3 className="text-2xl font-bold text-white mb-1">Ras Ali</h3>
+                <h3 className="text-2xl font-bold text-white mb-1">Alpheaus Chiwaze <span className="text-white/55 font-medium">(Ras Ali)</span></h3>
                 <p className="text-brand-gold text-xs font-semibold uppercase tracking-wider">
                   Founder & Creative Technologist
                 </p>
@@ -121,7 +155,7 @@ const About = () => {
               Musician. Filmmaker. Builder. Technologist.
             </h2>
             <p className="text-white/70 text-base md:text-lg leading-relaxed">
-              Ras Ali Labs did not grow out of one discipline. It grew from a career shaped by music, broadcast production, digital creation, software engineering and a constant curiosity about how things can work better.
+              Ras Ali Labs was founded by Alpheaus Chiwaze, professionally known as Ras Ali. The company grew from a career shaped by music, broadcast production, digital creation, software engineering and a constant curiosity about how things can work better.
             </p>
             <p className="text-white/70 text-base leading-relaxed">
               That journey matters because it explains how we think. We approach technology with a storyteller's instinct for people and experience, and we approach creative work with an engineer's instinct for structure, repeatability and execution.
