@@ -29,6 +29,11 @@ assert(adminHealth.includes('RALION_LEGACY_STORAGE_CANARY_PATH'), 'Admin health 
 assert(adminHealth.includes('getProductionStorageProvider') && adminHealth.includes('storage.createSignedUrl'), 'Legacy fallback health must exercise the active hybrid storage provider');
 assert(adminHealth.includes("signedUrl.hostname.endsWith('.supabase.co')") && adminHealth.includes("'/storage/v1/object/sign/'"), 'Legacy fallback health must prove the resolved URL actually came from Supabase');
 assert(adminHealth.includes("service: 'Legacy Supabase Creative Fallback'") && adminHealth.includes("verification: 'PROBED'"), 'Legacy fallback health must surface a probed service metric');
+assert(adminHealth.includes("service: 'Cross-Tenant Creative Isolation'"), 'Admin health must expose the live cross-tenant creative isolation probe');
+assert(adminHealth.includes('RALION_ISOLATION_CANARY_ASSET_ID') && adminHealth.includes('RALION_ISOLATION_FOREIGN_ORG_ID'), 'Cross-tenant isolation probe must require explicit owner and foreign tenant configuration');
+assert(adminHealth.includes('ownerDelivery') && adminHealth.includes('foreignDelivery'), 'Cross-tenant isolation probe must use an owner positive control and foreign negative control');
+assert(adminHealth.includes('foreignDelivery?.signedUrl'), 'Cross-tenant isolation probe must fail if a foreign tenant receives a signed URL');
+
 
 assert(aiPackage.includes('"aws4fetch": "^1.0.20"'), 'AI package must declare aws4fetch as a direct production dependency');
 assert(r2.includes(".r2.cloudflarestorage.com"), 'R2 endpoint must be restricted to Cloudflare R2');

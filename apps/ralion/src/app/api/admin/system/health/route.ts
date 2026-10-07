@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyPlatformAdminRequest } from '../../../../../lib/auth/adminAuth';
 import { getPrivilegedSupabase } from '@/lib/supabase/server';
-import { R2StorageProvider, getProductionStorageProvider } from '@ralion/ai/server';
+import { R2StorageProvider, getProductionStorageProvider, CreativeAssetService } from '@ralion/ai/server';
 import { SocialPublishingService } from '@/lib/services/social/socialPublishing.service';
 
 type HealthStatus = 'UP' | 'DEGRADED' | 'DOWN';
@@ -269,6 +269,71 @@ export async function GET(request: NextRequest) {
       'R2 → Social Media Handoff',
       false,
       'RALION_SOCIAL_MEDIA_CANARY_ASSET_ID + RALION_SOCIAL_MEDIA_CANARY_ORG_ID + RALION_SOCIAL_MEDIA_CANARY_WORKSPACE_ID',
+      now
+    ));
+  }
+
+  const isolationAssetId = process.env.RALION_ISOLATION_CANARY_ASSET_ID?.trim();
+  const isolationOwnerOrgId = process.env.RALION_ISOLATION_OWNER_ORG_ID?.trim();
+  const isolationOwnerWorkspaceId = process.env.RALION_ISOLATION_OWNER_WORKSPACE_ID?.trim();
+  const isolationForeignOrgId = process.env.RALION_ISOLATION_FOREIGN_ORG_ID?.trim();
+  const isolationForeignWorkspaceId = process.env.RALION_ISOLATION_FOREIGN_WORKSPACE_ID?.trim();
+
+  if (
+    isolationAssetId &&
+    isolationOwnerOrgId &&
+    isolationOwnerWorkspaceId &&
+    isolationForeignOrgId &&
+    isolationForeignWorkspaceId
+  ) {
+    const startIsolation = Date.now();
+    try {
+      const ownerDelivery = await CreativeAssetService.createSignedDeliveryUrl({
+        assetId: isolationAssetId,
+        organizationId: isolationOwnerOrgId,
+        workspaceId: isolationOwnerWorkspaceId,
+        expiresInSeconds: 120,
+      });
+
+      if (!ownerDelivery?.signedUrl) {
+        throw new Error('Isolation positive control failed: owner could not resolve the configured asset.');
+      }
+
+      const foreignDelivery = await CreativeAssetService.createSignedDeliveryUrl({
+        assetId: isolationAssetId,
+        organizationId: isolationForeignOrgId,
+        workspaceId: isolationForeignWorkspaceId,
+        expiresInSeconds: 120,
+      });
+
+      if (foreignDelivery?.signedUrl) {
+        throw new Error('Cross-tenant creative isolation failed: foreign tenant received a signed asset URL.');
+      }
+
+      metrics.push({
+        service: 'Cross-Tenant Creative Isolation',
+        status: 'UP',
+        latencyMs: Date.now() - startIsolation,
+        lastChecked: now,
+        failureCount: 0,
+        verification: 'PROBED',
+      });
+    } catch (error: any) {
+      metrics.push({
+        service: 'Cross-Tenant Creative Isolation',
+        status: 'DOWN',
+        latencyMs: Date.now() - startIsolation,
+        lastChecked: now,
+        lastError: String(error?.message || error || 'Cross-tenant isolation probe failed').slice(0, 500),
+        failureCount: 1,
+        verification: 'PROBED',
+      });
+    }
+  } else {
+    metrics.push(configMetric(
+      'Cross-Tenant Creative Isolation',
+      false,
+      'RALION_ISOLATION_CANARY_ASSET_ID + owner org/workspace + foreign org/workspace',
       now
     ));
   }
