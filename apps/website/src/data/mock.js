@@ -282,19 +282,6 @@ export const featuredProjects = [
     description: 'Videography work spanning studio productions and client video content.'
   },
   {
-    id: 'sonic-branding-studio-audio-suite',
-    challenge: "Create original audio assets that could support media, brand and studio production needs.",
-    solution: "Produced original compositions and delivered audio mixing and mastering work across studio projects.",
-    proof: "Verified project scope includes original composition, audio mixing and mastering.",
-    title: 'Sonic Branding & Studio Audio Suite',
-    subtitle: 'Original Music, Mixing & Mastering',
-    category: 'Music & Audio Production',
-    roles: ['Original Composition', 'Audio Mixing', 'Mastering'],
-    verifiedNote: 'Verified work covering composition, mixing and mastering.',
-    image: '/assets/images/service-sound.png',
-    description: 'Original music and studio audio work spanning composition, mixing and mastering.'
-  },
-  {
     id: 'tradegrid-africa',
     challenge: "Build a digital trade platform capable of connecting business workflows, data and intelligent services across a modern web architecture.",
     solution: "Developed platform architecture, full-stack application flows, REST APIs, AI integrations and cloud deployment infrastructure.",
