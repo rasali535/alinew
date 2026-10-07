@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import SEO from '../components/common/SEO';
+import { organizationSchema, makeBreadcrumbSchema, SITE_URL } from '../lib/seoSchema';
 import {
   Bot,
   Sparkles,
@@ -182,9 +183,30 @@ const RalionMariAIProduct = () => {
   return (
     <div className="min-h-screen bg-[#070b14] text-white pt-24 overflow-hidden">
       <SEO
-        title="Mari AI — The AI Intelligence Inside Ralion OS | Ras Ali Labs"
-        description="Meet Mari AI, the intelligence inside Ralion OS. Understand business context, talk naturally with voice, navigate workspaces hands-free, and turn business data into decisions."
+        title="Mari AI | AI Business Assistant from Botswana | Ras Ali Labs"
+        description="Mari AI is a business-aware AI assistant from Ras Ali Labs that works with approved company context across Ralion OS, web, voice and connected workflows."
+        keywords="AI business assistant Botswana, business AI Botswana, Mari AI, AI assistant Africa, business intelligence assistant, Ralion OS AI"
         canonical="https://rasalilabs.com/mari-ai"
+        structuredData={{
+          '@context': 'https://schema.org',
+          '@graph': [
+            organizationSchema,
+            makeBreadcrumbSchema([
+              { name: 'Home', url: '/' },
+              { name: 'Mari AI', url: '/mari-ai' },
+            ]),
+            {
+              '@type': 'SoftwareApplication',
+              '@id': `${SITE_URL}/mari-ai#software`,
+              name: 'Mari AI',
+              applicationCategory: 'BusinessApplication',
+              description: 'Business-aware AI assistant for approved company context, business questions, workspace support and connected Ralion workflows.',
+              url: `${SITE_URL}/mari-ai`,
+              author: { '@id': `${SITE_URL}/#organization` },
+              isPartOf: { '@id': `${SITE_URL}/products/ralion-os#software` },
+            },
+          ],
+        }}
       />
 
       {/* 1. HERO SECTION */}
