@@ -76,7 +76,7 @@ const navigationSteps = [
     id: 'mari',
     name: 'Mari AI Core',
     icon: Bot,
-    voicePrompt: '“Hey Mari, what should we focus our marketing on this week?”',
+    voicePrompt: '“Mari, what should we focus our marketing on this week?”',
     response: '“Based on your CRM leads and recent campaign performance, I recommend re-engaging stalled enterprise prospects.”',
     moduleBadge: 'Conversational Brain'
   },
@@ -312,7 +312,7 @@ const RalionMariAIProduct = () => {
                   <div className="flex items-center gap-2 text-purple-300 text-xs font-bold">
                     <Mic size={14} /> Voice Command
                   </div>
-                  <p className="text-sm font-semibold text-white">“Hey Mari, open Growth.”</p>
+                  <p className="text-sm font-semibold text-white">“Mari, open Growth.”</p>
                   <div className="text-[11px] text-emerald-300 flex items-center gap-1.5 pt-1">
                     <span>→</span>
                     <span>Navigating to Growth Studio</span>
@@ -433,7 +433,7 @@ const RalionMariAIProduct = () => {
         </div>
       </section>
 
-      {/* 3. TALK TO MARI (VOICE & HEY MARI) */}
+      {/* 3. TALK TO MARI (VOICE) */}
       <section className="py-24 px-6 lg:px-12 bg-[#070b14] border-b border-white/10 relative">
         <div className="max-w-6xl mx-auto">
           <div className="text-center max-w-3xl mx-auto mb-16">
