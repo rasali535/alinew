@@ -1,15 +1,52 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import SEO from '../components/common/SEO';
+import { organizationSchema, localBusinessSchema, makeServiceSchema, makeFaqSchema, makeBreadcrumbSchema } from '../lib/seoSchema';
 import { Music, Mic, Volume2, CheckCircle2, ArrowRight } from 'lucide-react';
+
+const musicFaqs = [
+  {
+    question: 'Do you provide music and audio production in Botswana?',
+    answer: 'Yes. Ras Ali Labs provides music production, arrangement, recording support, sound design, audio post-production and session instrumentation from Gaborone, Botswana.',
+  },
+  {
+    question: 'Can you create original music for film or branded content?',
+    answer: 'Yes. We can develop original music, arrangements, sonic cues and audio post-production for film, broadcast, branded content and digital media.',
+  },
+  {
+    question: 'What broadcast music experience do you have?',
+    answer: 'Our verified work includes Dedications in 2020, where Ras Ali worked as bass guitarist and supported studio setup and artist management during the shoots.',
+  },
+];
 
 const MusicAudioService = () => {
   return (
     <div className="pt-28 pb-20 bg-[#121212] text-white min-h-screen">
       <SEO
-        title="Music & Audio Production | Ras Ali Labs"
-        description="Music production, arrangement, recording, sound design, audio post-production and live creative performance by Ras Ali Labs in Botswana."
+        title="Music & Audio Production Botswana | Ras Ali Labs"
+        description="Music production, studio support, sound design, original composition and audio post-production from Ras Ali Labs in Gaborone, Botswana."
+        keywords="music production Botswana, audio production Botswana, sound design Botswana, studio recording Gaborone, music producer Botswana, audio post production Botswana"
         canonical="https://rasalilabs.com/services/music-audio"
+        structuredData={{
+          '@context': 'https://schema.org',
+          '@graph': [
+            organizationSchema,
+            localBusinessSchema,
+            makeServiceSchema({
+              name: 'Music & Audio Production in Botswana',
+              description: 'Music production, arrangement, recording support, sound design and audio post-production from Gaborone, Botswana.',
+              url: '/services/music-audio',
+              serviceType: 'Music and audio production',
+              image: '/assets/images/service-sound.png',
+            }),
+            makeFaqSchema(musicFaqs),
+            makeBreadcrumbSchema([
+              { name: 'Home', url: '/' },
+              { name: 'Services', url: '/services' },
+              { name: 'Music & Audio Production', url: '/services/music-audio' },
+            ]),
+          ],
+        }}
       />
 
       <div className="max-w-7xl mx-auto px-6 lg:px-12">
@@ -19,10 +56,10 @@ const MusicAudioService = () => {
             <Music size={14} /> Sonic Discipline
           </div>
           <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-white mb-6 leading-tight">
-            Music Production & Audio
+            Music & Audio Production in Botswana
           </h1>
           <p className="text-white/70 text-lg leading-relaxed">
-            Music production, arrangement, recording, sound design, audio post-production and live creative performance. We create authentic soundscapes, sonic signatures, and professional broadcast audio.
+            From Gaborone, we provide music production, arrangement, recording support, original composition, sound design and audio post-production for broadcast, film, brands and artists in Botswana.
           </p>
         </div>
 
@@ -96,6 +133,27 @@ const MusicAudioService = () => {
               >
                 View Project Details →
               </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* Local SEO + FAQ */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-20">
+          <div className="lg:col-span-5 bg-[#181818] border border-white/10 rounded-3xl p-8">
+            <h2 className="text-2xl font-bold text-white mb-3">Music Production and Sound from Gaborone</h2>
+            <p className="text-white/65 text-sm leading-relaxed">
+              Ras Ali Labs combines musicianship with production thinking for original music, session performance, broadcast audio, sound design and post-production.
+            </p>
+          </div>
+          <div className="lg:col-span-7">
+            <h2 className="text-2xl font-bold text-white mb-5">Music & Audio Production Botswana FAQs</h2>
+            <div className="space-y-3">
+              {musicFaqs.map((faq) => (
+                <div key={faq.question} className="bg-[#181818] border border-white/10 rounded-2xl p-5">
+                  <h3 className="text-sm font-bold text-white mb-2">{faq.question}</h3>
+                  <p className="text-xs text-white/65 leading-relaxed">{faq.answer}</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>
