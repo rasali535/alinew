@@ -259,13 +259,13 @@ export const featuredProjects = [
     solution: "Led music direction, rehearsals and performance planning while supporting sound operations and cast/crew coordination across the production.",
     proof: "Production credit from October 2015 to September 2022 as Music Director and Sound Engineer.",
     title: 'The Melody Gospel TV Show',
-    subtitle: 'Television Music Direction & Sound Engineering',
-    category: 'Music & Audio Production',
+    subtitle: 'Gospel Television Production',
+    category: 'Film & Creative Production',
     roles: ['Music Director', 'Sound Engineer', 'Rehearsal & Performance Planning', 'Cast & Crew Coordination'],
     date: '2015–2022',
     verifiedNote: 'Music Director and Sound Engineer from October 2015 to September 2022.',
     image: '/assets/images/melody-logo.jpg',
-    description: 'Long-running television production work covering music direction, rehearsals, performance planning, technical sound operations and production coordination.'
+    description: 'A long-running gospel television production where Ras Ali served as Music Director and Sound Engineer, supporting rehearsals, performance planning, technical sound and production coordination.'
   },
   {
     id: 'studio-13-2023',
