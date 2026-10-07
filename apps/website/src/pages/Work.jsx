@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import SEO from '../components/common/SEO';
+import { organizationSchema, makeBreadcrumbSchema, SITE_URL } from '../lib/seoSchema';
 import { featuredProjects } from '../data/mock';
 import { ArrowRight, Sparkles, Filter, CheckCircle2 } from 'lucide-react';
 
@@ -23,9 +24,32 @@ const Work = () => {
   return (
     <div className="pt-28 pb-20 bg-[#121212] text-white min-h-screen">
       <SEO
-        title="Our Work & Portfolio | Ras Ali Labs"
-        description="Selected work across film & video production, web & app development, music production, sound design, and intelligent software platforms by Ras Ali Labs."
+        title="Botswana Software, Film & Creative Portfolio | Ras Ali Labs"
+        description="Verified Ras Ali Labs work across Botswana software development, web platforms, film and video production, music, audio and Ralion OS."
+        keywords="Botswana software portfolio, film production portfolio Botswana, web development projects Botswana, Ras Ali Labs work, Pula Pitch videographer, Ralion OS"
         canonical="https://rasalilabs.com/work"
+        structuredData={{
+          '@context': 'https://schema.org',
+          '@graph': [
+            organizationSchema,
+            makeBreadcrumbSchema([
+              { name: 'Home', url: '/' },
+              { name: 'Work', url: '/work' },
+            ]),
+            {
+              '@type': 'CollectionPage',
+              '@id': `${SITE_URL}/work#portfolio`,
+              name: 'Ras Ali Labs Verified Portfolio',
+              url: `${SITE_URL}/work`,
+              hasPart: featuredProjects.map((project) => ({
+                '@type': 'CreativeWork',
+                name: project.title,
+                url: `${SITE_URL}/work/${project.id}`,
+                description: project.description,
+              })),
+            },
+          ],
+        }}
       />
 
       <div className="max-w-7xl mx-auto px-6 lg:px-12">
@@ -35,10 +59,10 @@ const Work = () => {
             <Sparkles size={14} /> Proven Track Record
           </div>
           <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-white mb-6 leading-tight">
-            Our Work
+            Verified Work from Botswana
           </h1>
           <p className="text-white/70 text-lg leading-relaxed">
-            Explore our multidisciplinary portfolio spanning broadcast television series, studio music productions, modern web platforms, and flagship software innovations.
+            Explore verified Ras Ali Labs work from Botswana across television production, music and audio, custom web platforms and flagship software products.
           </p>
         </div>
 

@@ -30,6 +30,7 @@ const SEO = ({
       <title>{title}</title>
       <meta name="description" content={description} />
       <meta name="keywords" content={keywords} />
+      <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
       <link rel="canonical" href={targetCanonical} />
 
       {/* OpenGraph / Facebook */}
@@ -39,6 +40,7 @@ const SEO = ({
       <meta property="og:image" content={targetOgImage} />
       <meta property="og:url" content={targetCanonical} />
       <meta property="og:site_name" content="Ras Ali Labs" />
+      <meta property="og:locale" content="en_BW" />
 
       {/* Twitter */}
       <meta name="twitter:card" content="summary_large_image" />

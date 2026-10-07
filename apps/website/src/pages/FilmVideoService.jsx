@@ -1,15 +1,52 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import SEO from '../components/common/SEO';
+import { organizationSchema, localBusinessSchema, makeServiceSchema, makeFaqSchema, makeBreadcrumbSchema } from '../lib/seoSchema';
 import { Video, Film, Camera, Clapperboard, CheckCircle2, ArrowRight, Sparkles } from 'lucide-react';
+
+const filmFaqs = [
+  {
+    question: 'Do you provide video production in Gaborone and Botswana?',
+    answer: 'Yes. Ras Ali Labs provides film and video production from Gaborone for corporate films, commercials, interviews, event coverage, television and digital content across Botswana.',
+  },
+  {
+    question: 'Can you handle a full corporate video production?',
+    answer: 'Yes. Depending on scope, we can support concept development, pre-production, filming, production coordination, editing, colour work, motion graphics and final delivery.',
+  },
+  {
+    question: 'What television production experience does Ras Ali Labs have?',
+    answer: 'Our verified portfolio includes Pula Pitch in 2024, where lead videography responsibilities covered set design, pre-production, production and post-production across 13 episodes.',
+  },
+];
 
 const FilmVideoService = () => {
   return (
     <div className="pt-28 pb-20 bg-[#121212] text-white min-h-screen">
       <SEO
-        title="Film & Creative Production | Ras Ali Labs"
-        description="Cinematic films, corporate storytelling, commercials, interviews, event coverage, photography, motion graphics and post-production by Ras Ali Labs in Botswana."
+        title="Film & Video Production Botswana | Gaborone | Ras Ali Labs"
+        description="Corporate video, film production, commercials, interviews, event coverage and post-production from Ras Ali Labs in Gaborone, Botswana."
+        keywords="film production Botswana, video production Gaborone, video production Botswana, corporate video Botswana, videographer Gaborone, commercial video Botswana"
         canonical="https://rasalilabs.com/services/film-video"
+        structuredData={{
+          '@context': 'https://schema.org',
+          '@graph': [
+            organizationSchema,
+            localBusinessSchema,
+            makeServiceSchema({
+              name: 'Film & Video Production in Botswana',
+              description: 'Corporate video, commercials, interviews, television, event coverage and post-production from Gaborone, Botswana.',
+              url: '/services/film-video',
+              serviceType: 'Film and video production',
+              image: '/assets/images/service-video.png',
+            }),
+            makeFaqSchema(filmFaqs),
+            makeBreadcrumbSchema([
+              { name: 'Home', url: '/' },
+              { name: 'Services', url: '/services' },
+              { name: 'Film & Video Production', url: '/services/film-video' },
+            ]),
+          ],
+        }}
       />
 
       <div className="max-w-7xl mx-auto px-6 lg:px-12">
@@ -19,10 +56,10 @@ const FilmVideoService = () => {
             <Video size={14} /> Creative Discipline
           </div>
           <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-white mb-6 leading-tight">
-            Film & Creative Production
+            Film & Video Production in Botswana
           </h1>
           <p className="text-white/70 text-lg leading-relaxed">
-            Cinematic films, corporate storytelling, commercials, interviews, event coverage, photography, motion graphics and post-production. We craft memorable visual stories for broadcast, digital, and enterprise communications.
+            Based in Gaborone, we produce corporate films, commercials, interviews, television and digital content, event coverage, photography and post-production for organisations across Botswana.
           </p>
         </div>
 
@@ -96,6 +133,27 @@ const FilmVideoService = () => {
               >
                 View Project Details →
               </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* Local SEO + FAQ */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-20">
+          <div className="lg:col-span-5 bg-[#181818] border border-white/10 rounded-3xl p-8">
+            <h2 className="text-2xl font-bold text-white mb-3">Video Production in Gaborone with Broadcast Experience</h2>
+            <p className="text-white/65 text-sm leading-relaxed">
+              Our production work spans corporate storytelling, commercials, events and television. Pula Pitch provides public proof of multi-episode production experience across a 13-episode season.
+            </p>
+          </div>
+          <div className="lg:col-span-7">
+            <h2 className="text-2xl font-bold text-white mb-5">Film & Video Production Botswana FAQs</h2>
+            <div className="space-y-3">
+              {filmFaqs.map((faq) => (
+                <div key={faq.question} className="bg-[#181818] border border-white/10 rounded-2xl p-5">
+                  <h3 className="text-sm font-bold text-white mb-2">{faq.question}</h3>
+                  <p className="text-xs text-white/65 leading-relaxed">{faq.answer}</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>

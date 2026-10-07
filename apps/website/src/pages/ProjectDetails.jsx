@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { featuredProjects } from '../data/mock';
 import SEO from '../components/common/SEO';
+import { organizationSchema, makeBreadcrumbSchema, SITE_URL } from '../lib/seoSchema';
 import { ArrowLeft, ArrowRight, CheckCircle2, Sparkles, ExternalLink, Globe } from 'lucide-react';
 
 const ProjectDetails = () => {
@@ -29,10 +30,35 @@ const ProjectDetails = () => {
   return (
     <div className="min-h-screen bg-[#121212] pt-32 pb-20 px-6 lg:px-12 text-white">
       <SEO
-        title={`${project.title} | Ras Ali Labs Portfolio`}
-        description={`Details about ${project.title}, a ${project.subtitle} project by Ras Ali Labs in Botswana.`}
+        title={`${project.title} Case Study | Ras Ali Labs Botswana`}
+        description={`${project.title}: ${project.description} Verified work by Ras Ali Labs in Botswana.`}
+        keywords={`${project.title}, ${project.category}, Ras Ali Labs Botswana, Botswana portfolio, ${project.roles?.join(', ') || ''}`}
         canonical={`https://rasalilabs.com/work/${project.id}`}
         ogImage={project.image}
+        ogType="article"
+        structuredData={{
+          '@context': 'https://schema.org',
+          '@graph': [
+            organizationSchema,
+            makeBreadcrumbSchema([
+              { name: 'Home', url: '/' },
+              { name: 'Work', url: '/work' },
+              { name: project.title, url: `/work/${project.id}` },
+            ]),
+            {
+              '@type': 'CreativeWork',
+              '@id': `${SITE_URL}/work/${project.id}#project`,
+              name: project.title,
+              headline: project.subtitle,
+              description: project.description,
+              url: `${SITE_URL}/work/${project.id}`,
+              image: project.image?.startsWith('http') ? project.image : `${SITE_URL}${project.image}`,
+              dateCreated: project.date || undefined,
+              creator: { '@id': `${SITE_URL}/#organization` },
+              about: project.roles || [],
+            },
+          ],
+        }}
       />
 
       <div className="max-w-6xl mx-auto">

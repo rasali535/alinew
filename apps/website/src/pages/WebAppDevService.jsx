@@ -1,15 +1,52 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import SEO from '../components/common/SEO';
+import { organizationSchema, localBusinessSchema, makeServiceSchema, makeFaqSchema, makeBreadcrumbSchema } from '../lib/seoSchema';
 import { Code, Smartphone, Globe, Layout, CheckCircle2, ArrowRight } from 'lucide-react';
+
+const webFaqs = [
+  {
+    question: 'Do you build websites and custom software for businesses in Botswana?',
+    answer: 'Yes. Ras Ali Labs is based in Gaborone and builds websites, web applications, customer portals, internal business systems, e-commerce platforms and custom software for organisations in Botswana and the wider region.',
+  },
+  {
+    question: 'Can Ras Ali Labs build a custom business portal or CRM?',
+    answer: 'Yes. We design role-based portals, dashboards, workflow systems, customer platforms and API integrations around the way your organisation actually works.',
+  },
+  {
+    question: 'Do you provide web development in Gaborone?',
+    answer: 'Yes. Ras Ali Labs provides web and app development from Gaborone, Botswana, with remote collaboration available for organisations elsewhere in Botswana and Southern Africa.',
+  },
+];
 
 const WebAppDevService = () => {
   return (
     <div className="pt-28 pb-20 bg-[#121212] text-white min-h-screen">
       <SEO
-        title="Web & App Development | Ras Ali Labs"
-        description="Modern websites, mobile applications, business platforms, portals, e-commerce systems and custom digital products built by Ras Ali Labs in Botswana."
+        title="Web Development Botswana & Gaborone | Ras Ali Labs"
+        description="Custom web development, software, business portals, mobile apps and e-commerce systems from Ras Ali Labs in Gaborone, Botswana."
+        keywords="web development Botswana, web development Gaborone, software company Botswana, custom software development Botswana, web app development Botswana, mobile app development Botswana"
         canonical="https://rasalilabs.com/services/web-app-development"
+        structuredData={{
+          '@context': 'https://schema.org',
+          '@graph': [
+            organizationSchema,
+            localBusinessSchema,
+            makeServiceSchema({
+              name: 'Web & App Development in Botswana',
+              description: 'Custom web development, software platforms, business portals, mobile apps and e-commerce systems from Gaborone, Botswana.',
+              url: '/services/web-app-development',
+              serviceType: 'Web development and custom software development',
+              image: '/assets/images/service-dev.png',
+            }),
+            makeFaqSchema(webFaqs),
+            makeBreadcrumbSchema([
+              { name: 'Home', url: '/' },
+              { name: 'Services', url: '/services' },
+              { name: 'Web & App Development', url: '/services/web-app-development' },
+            ]),
+          ],
+        }}
       />
 
       <div className="max-w-7xl mx-auto px-6 lg:px-12">
@@ -19,10 +56,10 @@ const WebAppDevService = () => {
             <Code size={14} /> Technology Discipline
           </div>
           <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-white mb-6 leading-tight">
-            Web & App Development
+            Web & App Development in Botswana
           </h1>
           <p className="text-white/70 text-lg leading-relaxed">
-            Modern websites, mobile applications, business platforms, portals, e-commerce systems and custom digital products. We build resilient, high-speed digital experiences engineered for scale.
+            From Gaborone, we build modern websites, mobile applications, business platforms, portals, e-commerce systems and custom software for organisations across Botswana and Southern Africa.
           </p>
         </div>
 
@@ -65,6 +102,32 @@ const WebAppDevService = () => {
               <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-emerald-400" /> PostgreSQL & Supabase Backends</li>
               <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-emerald-400" /> Automated Document & Report Engines</li>
             </ul>
+          </div>
+        </div>
+
+        {/* Local SEO + FAQ */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-20">
+          <div className="lg:col-span-5 bg-[#181818] border border-white/10 rounded-3xl p-8">
+            <h2 className="text-2xl font-bold text-white mb-3">Custom Software Development in Gaborone</h2>
+            <p className="text-white/65 text-sm leading-relaxed mb-5">
+              We work with Botswana businesses that need more than a template website: customer portals, operational dashboards, e-commerce, workflow tools and connected business systems.
+            </p>
+            <div className="flex flex-wrap gap-3 text-xs font-semibold">
+              <Link to="/work/pameltex" className="text-emerald-400 hover:underline">See Pameltex →</Link>
+              <Link to="/work/lebvilleboutique" className="text-emerald-400 hover:underline">See Lebville Boutique →</Link>
+              <Link to="/products/ralion-os" className="text-emerald-400 hover:underline">Explore Ralion OS →</Link>
+            </div>
+          </div>
+          <div className="lg:col-span-7">
+            <h2 className="text-2xl font-bold text-white mb-5">Web Development Botswana FAQs</h2>
+            <div className="space-y-3">
+              {webFaqs.map((faq) => (
+                <div key={faq.question} className="bg-[#181818] border border-white/10 rounded-2xl p-5">
+                  <h3 className="text-sm font-bold text-white mb-2">{faq.question}</h3>
+                  <p className="text-xs text-white/65 leading-relaxed">{faq.answer}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 

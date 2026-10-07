@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import SEO from '../components/common/SEO';
+import { organizationSchema, makeBreadcrumbSchema, SITE_URL } from '../lib/seoSchema';
 import { ralionModules, pricingPlans } from '../data/mock';
 import {
   Sparkles,
@@ -21,9 +22,34 @@ const RalionOSProduct = () => {
   return (
     <div className="pt-28 pb-20 bg-[#121212] text-white min-h-screen">
       <SEO
-        title="Ralion OS — Empowered to Prosper | Ras Ali Labs"
-        description="Download Ralion OS Desktop or use Mari AI on its own. Ralion OS brings CRM, operations, Mari AI, growth intelligence and business workflows into one connected platform."
+        title="Ralion OS | AI Business Operating System from Botswana"
+        description="Ralion OS is an AI business operating system built by Ras Ali Labs in Botswana, connecting CRM, operations, Mari AI, growth and business workflows."
+        keywords="AI business operating system, business software Botswana, AI CRM Botswana, Ralion OS, business operating system Africa, Mari AI"
         canonical="https://rasalilabs.com/products/ralion-os"
+        structuredData={{
+          '@context': 'https://schema.org',
+          '@graph': [
+            organizationSchema,
+            makeBreadcrumbSchema([
+              { name: 'Home', url: '/' },
+              { name: 'Ralion OS', url: '/products/ralion-os' },
+            ]),
+            {
+              '@type': 'SoftwareApplication',
+              '@id': `${SITE_URL}/products/ralion-os#software`,
+              name: 'Ralion OS',
+              applicationCategory: 'BusinessApplication',
+              operatingSystem: 'Web, Windows',
+              description: 'AI business operating system connecting CRM, operations, Mari AI, growth, social workflows and business tools.',
+              url: `${SITE_URL}/products/ralion-os`,
+              author: { '@id': `${SITE_URL}/#organization` },
+              offers: {
+                '@type': 'Offer',
+                category: 'Business software',
+              },
+            },
+          ],
+        }}
       />
 
       <div className="max-w-7xl mx-auto px-6 lg:px-12">
