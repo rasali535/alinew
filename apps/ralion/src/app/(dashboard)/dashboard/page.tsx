@@ -1,11 +1,20 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, Badge, Button, Modal } from '@ralion/ui';
+import { Card, CardHeader, CardTitle, CardContent, Badge, Button, Modal } from '@ralion/ui';
 import { DollarSign, Users, CheckSquare, Sparkles, TrendingUp, Plus, Calendar, FileText, Zap, Loader2, ArrowRight, Briefcase } from 'lucide-react';
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, CartesianGrid } from 'recharts';
 import { authFetch } from '@/lib/api-config';
+import { useOrganization } from '@ralion/auth';
+
+const DashboardCharts = dynamic(
+  () => import('@/components/dashboard/DashboardCharts').then((mod) => mod.DashboardCharts),
+  { ssr: false, loading: () => <div className="grid grid-cols-1 lg:grid-cols-2 gap-6"><div className="h-72 rounded-xl bg-zinc-900/70 border border-zinc-800 animate-pulse" /><div className="h-72 rounded-xl bg-zinc-900/70 border border-zinc-800 animate-pulse" /></div> }
+);
+
+const DASHBOARD_CACHE_TTL_MS = 5 * 60 * 1000;
+
 
 interface Overview {
   generatedAt: string;
@@ -22,6 +31,7 @@ interface Overview {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { workspace } = useOrganization();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -31,16 +41,46 @@ export default function DashboardPage() {
   const [customer, setCustomer] = useState({ name: '', email: '', company: '', phone: '' });
   const [task, setTask] = useState({ title: '', project: 'General Operations', priority: 'MEDIUM', dueDate: '' });
 
-  const loadOverview = async () => {
-    setLoading(true);
+  const cacheKey = workspace?.id ? `ralion_dashboard_overview_v1:${workspace.id}` : null;
+
+  const loadOverview = async (showBlockingLoader = true) => {
+    if (showBlockingLoader && !overview) setLoading(true);
     const res = await authFetch('/api/reports/overview');
     const body = await res.json().catch(() => ({}));
-    if (!res.ok) setError(body.error || 'Failed to load command centre.');
-    else { setOverview(body); setError(null); }
+    if (!res.ok) {
+      setError(body.error || 'Failed to load command centre.');
+    } else {
+      setOverview(body);
+      setError(null);
+      if (cacheKey) {
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify({ savedAt: Date.now(), overview: body }));
+        } catch {}
+      }
+    }
     setLoading(false);
   };
 
-  useEffect(() => { void loadOverview(); }, []);
+  useEffect(() => {
+    if (!workspace?.id || !cacheKey) return;
+
+    let restored = false;
+    try {
+      const raw = localStorage.getItem(cacheKey);
+      if (raw) {
+        const cached = JSON.parse(raw);
+        if (cached?.overview && cached?.savedAt && Date.now() - Number(cached.savedAt) <= DASHBOARD_CACHE_TTL_MS) {
+          setOverview(cached.overview);
+          setLoading(false);
+          restored = true;
+        }
+      }
+    } catch {}
+
+    void loadOverview(!restored);
+    // cacheKey changes only when the active workspace changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cacheKey, workspace?.id]);
 
   const addCustomer = async () => {
     if (!customer.name.trim() || !customer.email.trim()) return;
@@ -86,10 +126,10 @@ export default function DashboardPage() {
           <Card className="p-5"><div className="flex items-center gap-2 text-xs text-zinc-400"><Sparkles className="w-4 h-4 text-purple-400" /> Credits</div><div className="text-2xl font-black text-white mt-2">{creditBalance.toLocaleString()}</div></Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card><CardHeader><CardTitle>Workspace Growth</CardTitle><CardDescription>Customers and deals created over the last six months</CardDescription></CardHeader><CardContent className="h-64"><ResponsiveContainer width="100%" height="100%"><AreaChart data={overview.monthlyCustomerGrowth}><CartesianGrid strokeDasharray="3 3" stroke="#27272a" /><XAxis dataKey="month" stroke="#71717a" fontSize={11} /><YAxis stroke="#71717a" fontSize={11} /><Tooltip contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: 8 }} /><Area type="monotone" dataKey="customers" stroke="#10b981" fill="#10b981" fillOpacity={0.14} /><Area type="monotone" dataKey="dealsCreated" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.08} /></AreaChart></ResponsiveContainer></CardContent></Card>
-          <Card><CardHeader><CardTitle>Sales Pipeline</CardTitle><CardDescription>Current deal value by stage</CardDescription></CardHeader><CardContent className="h-64"><ResponsiveContainer width="100%" height="100%"><BarChart data={overview.salesByStage}><CartesianGrid strokeDasharray="3 3" stroke="#27272a" /><XAxis dataKey="stage" stroke="#71717a" fontSize={10} /><YAxis stroke="#71717a" fontSize={11} /><Tooltip contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: 8 }} /><Bar dataKey="value" fill="#a855f7" radius={[5,5,0,0]} /></BarChart></ResponsiveContainer></CardContent></Card>
-        </div>
+        <DashboardCharts
+          monthlyCustomerGrowth={overview.monthlyCustomerGrowth}
+          salesByStage={overview.salesByStage}
+        />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card><CardHeader><CardTitle className="justify-between"><span className="flex gap-2 items-center"><CheckSquare className="w-4 h-4 text-blue-400" /> Tasks</span><button onClick={() => router.push('/tasks')} className="text-xs text-blue-400 flex items-center">Open <ArrowRight className="w-3 h-3 ml-1" /></button></CardTitle></CardHeader><CardContent className="space-y-2">{overview.recentTasks.slice(0,5).map(t => <div key={t.id} className="p-3 rounded-lg bg-zinc-900 border border-zinc-800"><div className="flex justify-between gap-2"><span className="text-xs font-semibold text-white">{t.title}</span><Badge variant={t.status === 'COMPLETED' ? 'success' : 'default'}>{t.status}</Badge></div><p className="text-[10px] text-zinc-500 mt-1">{t.project || 'General'} · {t.due_date || 'No due date'}</p></div>)}{!overview.recentTasks.length && <p className="text-xs text-zinc-500 py-6 text-center">No tasks yet.</p>}</CardContent></Card>
