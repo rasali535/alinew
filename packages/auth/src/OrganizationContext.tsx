@@ -44,6 +44,56 @@ let _activeContextResolution: Promise<void> | null = null;
 // Terminal redirect guard: once we redirect to /login we must not do it again.
 let _redirectedToLogin = false;
 
+const CONTEXT_SNAPSHOT_KEY = 'ralion_verified_context_v1';
+const CONTEXT_SNAPSHOT_MAX_AGE_MS = 15 * 60 * 1000;
+
+type CachedContextSnapshot = {
+  savedAt: number;
+  user: UserProfile;
+  organization: Organization;
+  workspace: WorkspaceContextSummary;
+  activeBranch: Branch;
+};
+
+function readCachedContextSnapshot(): CachedContextSnapshot | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(CONTEXT_SNAPSHOT_KEY);
+    if (!raw) return null;
+    const snapshot = JSON.parse(raw) as CachedContextSnapshot;
+    if (!snapshot?.user?.uid || !snapshot?.organization?.id || !snapshot?.workspace?.id || !snapshot?.activeBranch?.id) {
+      localStorage.removeItem(CONTEXT_SNAPSHOT_KEY);
+      return null;
+    }
+    if (!snapshot.savedAt || Date.now() - snapshot.savedAt > CONTEXT_SNAPSHOT_MAX_AGE_MS) {
+      localStorage.removeItem(CONTEXT_SNAPSHOT_KEY);
+      return null;
+    }
+
+    // The snapshot is only an optimistic rendering cache. Require the locally
+    // persisted Supabase session to belong to the same user before restoring it.
+    const stored = readStoredSessionFallback();
+    const storedUserId = stored.user?.id || stored.user?.uid || null;
+    if (!stored.accessToken || !storedUserId || storedUserId !== snapshot.user.uid) {
+      localStorage.removeItem(CONTEXT_SNAPSHOT_KEY);
+      return null;
+    }
+    return snapshot;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedContextSnapshot(snapshot: Omit<CachedContextSnapshot, 'savedAt'>) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(CONTEXT_SNAPSHOT_KEY, JSON.stringify({
+      ...snapshot,
+      savedAt: Date.now(),
+    }));
+  } catch {}
+}
+
 function isDesktopRuntime(): boolean {
   if (typeof window === 'undefined') return false;
   const protocol = window.location.protocol;
@@ -238,12 +288,18 @@ async function terminateInvalidSession(failedAccessToken?: string): Promise<void
 }
 
 export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [organization, setOrganization] = useState<Organization | null>(null);
-  const [workspace, setWorkspace] = useState<WorkspaceContextSummary | null>(null);
-  const [activeBranch, setActiveBranch] = useState<Branch | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isContextResolved, setIsContextResolved] = useState(false);
+  const initialSnapshotRef = useRef<CachedContextSnapshot | null>(null);
+  if (initialSnapshotRef.current === null && typeof window !== 'undefined') {
+    initialSnapshotRef.current = readCachedContextSnapshot();
+  }
+  const initialSnapshot = initialSnapshotRef.current;
+  const [user, setUser] = useState<UserProfile | null>(() => initialSnapshot?.user || null);
+  const [organization, setOrganization] = useState<Organization | null>(() => initialSnapshot?.organization || null);
+  const [workspace, setWorkspace] = useState<WorkspaceContextSummary | null>(() => initialSnapshot?.workspace || null);
+  const [activeBranch, setActiveBranch] = useState<Branch | null>(() => initialSnapshot?.activeBranch || null);
+  const [isLoading, setIsLoading] = useState(() => !initialSnapshot);
+  const [isContextResolved, setIsContextResolved] = useState(() => Boolean(initialSnapshot));
+  const hasOptimisticContextRef = useRef(Boolean(initialSnapshot));
   // isResolvingRef guards setIsLoading(true) from running after unmount
   const isResolvingRef = useRef(false);
 
@@ -271,8 +327,13 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     _activeContextResolution = new Promise<void>(r => { resolveGuard = r; });
 
     isResolvingRef.current = true;
-    setIsLoading(true);
-    setIsContextResolved(false);
+    // If a recently server-verified snapshot exists, keep the shell interactive
+    // while we revalidate it. API routes still perform authoritative auth/tenant
+    // checks, so this cache never grants access by itself.
+    if (!hasOptimisticContextRef.current) {
+      setIsLoading(true);
+      setIsContextResolved(false);
+    }
 
     try {
       let { accessToken, user: supabaseUser } = await readCurrentSession(false);
@@ -377,6 +438,14 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setWorkspace(resolvedWorkspace);
       setActiveBranch(branch);
       setIsContextResolved(true);
+      hasOptimisticContextRef.current = true;
+
+      writeCachedContextSnapshot({
+        user: profile,
+        organization: resolvedOrg,
+        workspace: resolvedWorkspace,
+        activeBranch: branch,
+      });
 
       try {
         localStorage.setItem('ralion_active_workspace_id', resolvedWorkspace.id);
@@ -392,7 +461,12 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       });
     } catch (err) {
       console.warn('[AuthContext] Context resolution error:', err);
-      clearResolvedContext();
+      // Preserve a recent verified snapshot on transient network failure so a
+      // returning user can still reach the shell quickly. Server APIs remain
+      // authoritative and will reject stale/invalid credentials.
+      if (!hasOptimisticContextRef.current) {
+        clearResolvedContext();
+      }
     } finally {
       setIsLoading(false);
       isResolvingRef.current = false;
@@ -454,11 +528,13 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     setWorkspace(null);
     setActiveBranch(null);
     setIsContextResolved(false);
+    hasOptimisticContextRef.current = false;
     if (typeof window !== 'undefined') {
       try {
         const keysToPurge = Object.keys(localStorage).filter(
           k => k.startsWith('ralion:') || k.startsWith('ralion_') || k.startsWith('sb-') || k.includes('auth') || k.includes('tenant')
         );
+        localStorage.removeItem(CONTEXT_SNAPSHOT_KEY);
         keysToPurge.forEach(k => localStorage.removeItem(k));
         sessionStorage.clear();
       } catch (e) {

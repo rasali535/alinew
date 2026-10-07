@@ -7,7 +7,6 @@ import { Sidebar, Header } from '@ralion/ui';
 import { useOrganization } from '@ralion/auth';
 import { ProductAccessGuard } from '../../components/ProductAccessGuard';
 import { DesktopWorkspaceHome } from '../../components/DesktopWorkspaceHome';
-import { MariVoiceControl } from '../../components/MariVoiceControl';
 
 const MariAiDrawer = dynamic(
   () => import('../../components/MariAiDrawer').then((mod) => mod.MariAiDrawer),
@@ -16,6 +15,11 @@ const MariAiDrawer = dynamic(
 
 const FloatingMariAi = dynamic(
   () => import('../../components/FloatingMariAi').then((mod) => mod.FloatingMariAi),
+  { ssr: false }
+);
+
+const MariVoiceControl = dynamic(
+  () => import('../../components/MariVoiceControl').then((mod) => mod.MariVoiceControl),
   { ssr: false }
 );
 
