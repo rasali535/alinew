@@ -390,7 +390,7 @@ const Home = () => {
                   <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-400/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <Mic size={14} className="text-purple-300 shrink-0" />
-                      <span className="text-xs font-semibold text-purple-100">“Hey Mari, open Growth.”</span>
+                      <span className="text-xs font-semibold text-purple-100">“Mari, open Growth.”</span>
                     </div>
                     <div className="flex items-center gap-1.5 text-[10px] text-emerald-300 font-medium">
                       <span>→</span>
