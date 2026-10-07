@@ -2,8 +2,15 @@ name: Playwright Tests
 on:
   push:
     branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
+  workflow_dispatch:
+
+# These tests intentionally hit live production. Never fan out multiple runs
+# against the same tenant/account, and never pretend a PR branch is being
+# exercised when the deployed site is still main.
+concurrency:
+  group: ralion-production-playwright
+  cancel-in-progress: true
+
 jobs:
   test:
     timeout-minutes: 60
@@ -35,6 +42,40 @@ jobs:
           echo "::error::Authenticated E2E credentials are required; business-flow tests must not silently skip."
           exit 1
         fi
+    - name: Wait for stable production edge
+      env:
+        RALION_E2E_BASE_URL: ${{ secrets.RALION_E2E_BASE_URL }}
+      run: |
+        set -euo pipefail
+        target="${RALION_E2E_BASE_URL%/}/api/auth/context"
+        consecutive=0
+
+        # Render/proxy deploys are asynchronous relative to the GitHub push.
+        # Require repeated fast auth-boundary responses before starting a
+        # destructive/authenticated production gauntlet.
+        for attempt in $(seq 1 30); do
+          code="$(curl --silent --show-error --output /tmp/ralion-e2e-preflight.txt --write-out '%{http_code}' --max-time 15 "$target" || true)"
+
+          if [ "$code" = "200" ] || [ "$code" = "401" ] || [ "$code" = "403" ]; then
+            consecutive=$((consecutive + 1))
+            echo "Production preflight $attempt: HTTP $code ($consecutive/3 stable)"
+            if [ "$consecutive" -ge 3 ]; then
+              echo "Production edge is stable."
+              break
+            fi
+          else
+            consecutive=0
+            echo "Production preflight $attempt: HTTP ${code:-000}; waiting for deployment/proxy stability."
+          fi
+
+          if [ "$attempt" -eq 30 ]; then
+            echo "::error::Production E2E target did not become stable within the preflight window."
+            cat /tmp/ralion-e2e-preflight.txt || true
+            exit 1
+          fi
+          sleep 10
+        done
+
     - name: Run Ralion Playwright tests
       env:
         RALION_E2E_BASE_URL: ${{ secrets.RALION_E2E_BASE_URL }}
