@@ -424,17 +424,17 @@ export const featuredProjects = [
     description: 'Technology work spanning intelligent systems, workflow automation, software engineering, cloud infrastructure and business platforms.'
   },
   {
-    id: 'peregrine-systems',
-    challenge: "Turn a corporate identity into a clean, credible digital interface.",
-    solution: "Developed the visual identity direction and web portal experience around clarity, usability and professional presentation.",
-    proof: "Delivered brand identity and digital portal work by Ras Ali Labs.",
-    title: 'Peregrine Systems',
-    subtitle: 'Brand Identity & Digital Web Portal',
+    id: 'peregrine-tours-and-safaris',
+    challenge: "Create a clear, credible digital presence for a tours and safari business that makes travel services easy to discover.",
+    solution: "Developed the public-facing website experience and visual presentation around tourism services, destinations and customer enquiries.",
+    proof: "Delivered web and digital presentation work for Peregrine Tours and Safaris.",
+    title: 'Peregrine Tours and Safaris',
+    subtitle: 'Tours & Safari Digital Platform',
     category: 'Web & App Development',
-    roles: ['Visual Identity', 'Web Development', 'Interface Design'],
-    verifiedNote: 'Brand identity and digital portal work by Ras Ali Labs.',
+    roles: ['Web Development', 'Tourism Content Architecture', 'Interface Design'],
+    verifiedNote: 'Web and digital presentation work by Ras Ali Labs.',
     image: '/assets/images/peregrine-logo.png',
-    description: 'A corporate identity and digital interface project focused on clarity, usability and a modern public-facing presence.'
+    description: 'A tourism-focused digital project presenting tours, safari services and destination experiences through a clear public-facing website.'
   }
 ];
 
