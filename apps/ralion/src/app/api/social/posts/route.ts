@@ -60,7 +60,7 @@ function isPrivateOrLocalHostname(hostname: string): boolean {
     || octets[0] === 0;
 }
 
-function validatePublicHttpsUrls(value: unknown): string[] {
+function validateMediaReferences(value: unknown): string[] {
   if (value === undefined || value === null) return [];
   if (!Array.isArray(value) || value.length > 20) {
     throw Object.assign(new Error('Invalid media collection.'), {
@@ -70,16 +70,30 @@ function validatePublicHttpsUrls(value: unknown): string[] {
   }
 
   return value.map((candidate) => {
-    if (typeof candidate !== 'string') {
-      throw Object.assign(new Error('Invalid media URL.'), {
+    if (typeof candidate !== 'string' || !candidate.trim()) {
+      throw Object.assign(new Error('Invalid media reference.'), {
         statusCode: 400,
         publicCode: 'INVALID_MEDIA',
       });
     }
 
+    const trimmed = candidate.trim();
+
+    // Ralion creative references are intentionally authenticated/internal at
+    // the browser boundary. SocialPublishingService resolves them to
+    // tenant-scoped signed HTTPS URLs immediately before provider dispatch.
+    if (
+      /^asset-[A-Za-z0-9_-]+$/.test(trimmed) ||
+      trimmed.startsWith('/api/creatives/') ||
+      trimmed.startsWith('/ralion/api/creatives/') ||
+      trimmed.startsWith('data:')
+    ) {
+      return trimmed;
+    }
+
     let parsed: URL;
     try {
-      parsed = new URL(candidate);
+      parsed = new URL(trimmed);
     } catch {
       throw Object.assign(new Error('Invalid media URL.'), {
         statusCode: 400,
@@ -290,13 +304,19 @@ export async function POST(request: NextRequest) {
     }
 
     const mediaSource = body.mediaUrls ?? body.mediaItems;
-    const mediaUrls = validatePublicHttpsUrls(mediaSource);
+    const mediaUrls = validateMediaReferences(mediaSource);
     let mediaTypes: string[] | undefined;
     if (body.mediaTypes !== undefined) {
       if (
         !Array.isArray(body.mediaTypes)
         || body.mediaTypes.length !== mediaUrls.length
-        || body.mediaTypes.some((value: unknown) => typeof value !== 'string' || !/^(image|video)\/[a-z0-9.+-]+$/i.test(value))
+        || body.mediaTypes.some((value: unknown) => {
+          if (typeof value !== 'string') return true;
+          const normalized = value.trim().toLowerCase();
+          return normalized !== 'image'
+            && normalized !== 'video'
+            && !/^(image|video)\/[a-z0-9.+-]+$/i.test(normalized);
+        })
       ) {
         return corsJsonResponse(
           {
@@ -309,7 +329,7 @@ export async function POST(request: NextRequest) {
           request
         );
       }
-      mediaTypes = body.mediaTypes.map((value: string) => value.toLowerCase());
+      mediaTypes = body.mediaTypes.map((value: string) => value.trim().toLowerCase());
     }
 
     if (body.socialConnectionId !== undefined && !UUID_PATTERN.test(body.socialConnectionId)) {
