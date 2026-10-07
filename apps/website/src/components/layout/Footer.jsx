@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Youtube, Facebook, Instagram, Phone, Mail, MapPin, Sparkles, ArrowRight } from 'lucide-react';
+import { Youtube, Facebook, Instagram, Github, Phone, Mail, MapPin, Sparkles, ArrowRight } from 'lucide-react';
 import { socialLinks, companyInfo } from '../../data/mock';
 
 const Footer = () => {
@@ -8,6 +8,7 @@ const Footer = () => {
     'Youtube': Youtube,
     'Facebook': Facebook,
     'Instagram': Instagram,
+    'Github': Github,
     'Phone': Phone,
     'Mail': Mail
   };
