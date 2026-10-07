@@ -9,7 +9,7 @@ const Contact = () => {
     name: '',
     email: '',
     phone: '',
-    service: 'Film & Video Production',
+    service: 'Film & Creative Production',
     subject: '',
     message: ''
   });
@@ -40,7 +40,7 @@ const Contact = () => {
           name: '',
           email: '',
           phone: '',
-          service: 'Film & Video Production',
+          service: 'Film & Creative Production',
           subject: '',
           message: ''
         });
@@ -55,7 +55,7 @@ const Contact = () => {
         error.response?.data?.message ||
         (error.code === 'ECONNABORTED' ? 'Request timed out after 10 seconds.' : error.message) ||
         'Unable to send message at this time.';
-      setErrorMessage(`${failureMsg} Please check your connection or contact us directly at ali@rasalilabs.com or +267 72 113 009.`);
+      setErrorMessage(`${failureMsg} Please check your connection or contact us directly at ${companyInfo.email} or ${companyInfo.phone}.`);
       setStatus('error');
     }
   };
@@ -102,9 +102,7 @@ const Contact = () => {
                 <div>
                   <h4 className="text-white font-bold text-xs uppercase tracking-wider mb-1">Location</h4>
                   <p className="text-white/70 text-xs leading-relaxed">
-                    Plot 18680 Khuhurutse Drive<br />
-                    Phase 2, Gaborone<br />
-                    Botswana
+                    {companyInfo.address}
                   </p>
                 </div>
               </div>
@@ -119,7 +117,7 @@ const Contact = () => {
                     href="tel:+26772113009"
                     className="text-white/80 hover:text-brand-gold transition-colors text-xs font-mono font-bold"
                   >
-                    +267 72 113 009
+                    {companyInfo.phone}
                   </a>
                 </div>
               </div>
@@ -131,10 +129,10 @@ const Contact = () => {
                 <div>
                   <h4 className="text-white font-bold text-xs uppercase tracking-wider mb-1">Official Email</h4>
                   <a
-                    href="mailto:ali@rasalilabs.com"
+                    href={`mailto:${companyInfo.email}`}
                     className="text-white/80 hover:text-brand-gold transition-colors text-xs font-mono"
                   >
-                    ali@rasalilabs.com
+                    {companyInfo.email}
                   </a>
                 </div>
               </div>
@@ -238,7 +236,7 @@ const Contact = () => {
                       onChange={handleChange}
                       className="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/10 text-white text-xs focus:border-brand-gold focus:outline-none transition-colors"
                     >
-                      <option value="Film & Video Production">Film & Video Production</option>
+                      <option value="Film & Creative Production">Film & Creative Production</option>
                       <option value="Web & App Development">Web & App Development</option>
                       <option value="Music & Audio Production">Music & Audio Production</option>
                       <option value="AI & Enterprise Automation">AI & Enterprise Automation</option>
