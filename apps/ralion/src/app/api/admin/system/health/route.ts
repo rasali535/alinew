@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyPlatformAdminRequest } from '../../../../../lib/auth/adminAuth';
 import { getPrivilegedSupabase } from '@/lib/supabase/server';
-import { R2StorageProvider } from '@ralion/ai/server';
+import { R2StorageProvider, getProductionStorageProvider } from '@ralion/ai/server';
 
 type HealthStatus = 'UP' | 'DEGRADED' | 'DOWN';
 interface HealthMetric {
@@ -158,6 +158,73 @@ export async function GET(request: NextRequest) {
         verification: 'PROBED',
       });
     }
+  }
+
+  const legacyFallbackPath = process.env.RALION_LEGACY_STORAGE_CANARY_PATH?.trim();
+  if (legacyFallbackPath) {
+    const startLegacyFallback = Date.now();
+    try {
+      const storage = getProductionStorageProvider();
+      if (!storage.createSignedUrl) {
+        throw new Error('Active storage provider cannot create signed URLs.');
+      }
+
+      const signed = await storage.createSignedUrl(legacyFallbackPath, 120);
+      if (!signed?.signedUrl) {
+        throw new Error('Hybrid storage did not resolve the configured legacy asset.');
+      }
+
+      const signedUrl = new URL(signed.signedUrl);
+      const isSupabaseFallback =
+        signedUrl.hostname.endsWith('.supabase.co') &&
+        signedUrl.pathname.includes('/storage/v1/object/sign/');
+
+      if (!isSupabaseFallback) {
+        throw new Error('Configured legacy canary did not resolve through Supabase fallback.');
+      }
+
+      const probe = await fetch(signed.signedUrl, {
+        method: 'GET',
+        cache: 'no-store',
+        signal: AbortSignal.timeout(7000),
+      });
+
+      if (!probe.ok) {
+        throw new Error(`Legacy fallback signed delivery failed (HTTP ${probe.status}).`);
+      }
+
+      const contentType = probe.headers.get('content-type') || '';
+      const body = Buffer.from(await probe.arrayBuffer());
+      if (!contentType.startsWith('image/') || body.byteLength < 1000) {
+        throw new Error('Legacy fallback returned an invalid or unexpectedly small media object.');
+      }
+
+      metrics.push({
+        service: 'Legacy Supabase Creative Fallback',
+        status: 'UP',
+        latencyMs: Date.now() - startLegacyFallback,
+        lastChecked: now,
+        failureCount: 0,
+        verification: 'PROBED',
+      });
+    } catch (error: any) {
+      metrics.push({
+        service: 'Legacy Supabase Creative Fallback',
+        status: 'DOWN',
+        latencyMs: Date.now() - startLegacyFallback,
+        lastChecked: now,
+        lastError: String(error?.message || error || 'Legacy fallback probe failed').slice(0, 500),
+        failureCount: 1,
+        verification: 'PROBED',
+      });
+    }
+  } else {
+    metrics.push(configMetric(
+      'Legacy Supabase Creative Fallback',
+      false,
+      'RALION_LEGACY_STORAGE_CANARY_PATH',
+      now
+    ));
   }
 
   metrics.push(configMetric('Meta Graph API / OAuth Gateway', Boolean(process.env.FACEBOOK_APP_ID || process.env.META_APP_ID), 'FACEBOOK_APP_ID or META_APP_ID', now));
