@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyPlatformAdminRequest } from '../../../../../lib/auth/adminAuth';
 import { getPrivilegedSupabase } from '@/lib/supabase/server';
 import { R2StorageProvider, getProductionStorageProvider } from '@ralion/ai/server';
+import { SocialPublishingService } from '@/lib/services/social/socialPublishing.service';
 
 type HealthStatus = 'UP' | 'DEGRADED' | 'DOWN';
 interface HealthMetric {
@@ -223,6 +224,51 @@ export async function GET(request: NextRequest) {
       'Legacy Supabase Creative Fallback',
       false,
       'RALION_LEGACY_STORAGE_CANARY_PATH',
+      now
+    ));
+  }
+
+  const socialCanaryAssetId = process.env.RALION_SOCIAL_MEDIA_CANARY_ASSET_ID?.trim();
+  const socialCanaryOrgId = process.env.RALION_SOCIAL_MEDIA_CANARY_ORG_ID?.trim();
+  const socialCanaryWorkspaceId = process.env.RALION_SOCIAL_MEDIA_CANARY_WORKSPACE_ID?.trim();
+  if (socialCanaryAssetId && socialCanaryOrgId && socialCanaryWorkspaceId) {
+    const startSocialMedia = Date.now();
+    try {
+      const result = await SocialPublishingService.probeCreativeMediaForPublish({
+        mediaUrl: socialCanaryAssetId,
+        organizationId: socialCanaryOrgId,
+        workspaceId: socialCanaryWorkspaceId,
+        mediaType: 'image',
+      });
+
+      if (!result.ok || !result.providerHost.endsWith('.r2.cloudflarestorage.com')) {
+        throw new Error('Social media canary did not resolve through Cloudflare R2.');
+      }
+
+      metrics.push({
+        service: 'R2 → Social Media Handoff',
+        status: 'UP',
+        latencyMs: Date.now() - startSocialMedia,
+        lastChecked: now,
+        failureCount: 0,
+        verification: 'PROBED',
+      });
+    } catch (error: any) {
+      metrics.push({
+        service: 'R2 → Social Media Handoff',
+        status: 'DOWN',
+        latencyMs: Date.now() - startSocialMedia,
+        lastChecked: now,
+        lastError: String(error?.message || error || 'Social media handoff probe failed').slice(0, 500),
+        failureCount: 1,
+        verification: 'PROBED',
+      });
+    }
+  } else {
+    metrics.push(configMetric(
+      'R2 → Social Media Handoff',
+      false,
+      'RALION_SOCIAL_MEDIA_CANARY_ASSET_ID + RALION_SOCIAL_MEDIA_CANARY_ORG_ID + RALION_SOCIAL_MEDIA_CANARY_WORKSPACE_ID',
       now
     ));
   }

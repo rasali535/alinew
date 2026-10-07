@@ -64,6 +64,13 @@ assert(creativeListRoute.includes("assets: clientAssets") && creativeListRoute.i
 
 assert(socialPublishing.includes("import { CreativeAssetService } from '@ralion/ai/server'"), 'Social publishing must resolve Ralion creative media through the durable asset service');
 assert(socialPublishing.includes('resolveTenantCreativeMedia') && socialPublishing.includes('CreativeAssetService.createSignedDeliveryUrl'), 'Social publishing must exchange tenant creative references for signed provider-fetchable URLs');
+assert(socialPublishing.includes('canonicalizeDurableMediaReference'), 'Social publishing must keep a canonical durable creative reference separate from provider URLs');
+assert(socialPublishing.includes('const durableMediaReferences = (params.mediaUrls || []).map(canonicalizeDurableMediaReference)'), 'Social publishing must derive durable media references before signing');
+assert(socialPublishing.includes('mediaUrls: durableMediaReferences') && socialPublishing.includes('media_urls: durableMediaUrls'), 'Idempotency and publication history must use durable media references instead of expiring signed URLs');
+assert(socialPublishing.includes('signedMediaTtlSeconds') && socialPublishing.includes('604800'), 'Scheduled creative media must use a bounded schedule-aware signed URL TTL');
+assert(socialPublishing.includes('probeCreativeMediaForPublish') && socialPublishing.includes("signal: AbortSignal.timeout(7000)"), 'Social publishing must expose a non-publishing media readiness probe');
+assert(adminHealth.includes("service: 'R2 → Social Media Handoff'") && adminHealth.includes('SocialPublishingService.probeCreativeMediaForPublish'), 'Admin health must probe the exact R2-to-Social media resolver without publishing');
+
 assert(socialPublishing.includes('organizationId: params.organizationId') && socialPublishing.includes('workspaceId: params.workspaceId'), 'Social creative resolution must be scoped to the authenticated organization and workspace');
 assert(socialPublishing.includes("value.startsWith('/api/creatives/')") && socialPublishing.includes(".r2.cloudflarestorage.com"), 'Social publishing must recognize secure Ralion delivery URLs and legacy raw R2 locators');
 assert(socialPublishing.indexOf('resolveTenantCreativeMedia({') < socialPublishing.indexOf('validateMediaInputs(tenantResolvedMediaUrls'), 'Tenant creative media must be resolved before public HTTPS validation');
