@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import SEO from '../components/common/SEO';
+import { organizationSchema, localBusinessSchema, makeBreadcrumbSchema } from '../lib/seoSchema';
 import { capabilityPillars, howWeWork } from '../data/mock';
 import { Video, Code, Music, Bot, CheckCircle2, ArrowRight, Sparkles, Layers } from 'lucide-react';
 
@@ -15,9 +16,21 @@ const Services = () => {
   return (
     <div className="pt-28 pb-20 bg-[#121212] text-white min-h-screen">
       <SEO
-        title="Multidisciplinary Services | Ras Ali Labs"
-        description="Explore the full spectrum of creative and technology capabilities from Ras Ali Labs: Film & Video Production, Web & App Development, Music & Audio, and AI & Automation."
+        title="Technology & Creative Services Botswana | Ras Ali Labs"
+        description="Software development, AI automation, web and app development, film and video production, and music services from Ras Ali Labs in Gaborone, Botswana."
+        keywords="technology company Botswana, creative agency Botswana, software services Gaborone, film production Botswana, AI automation Botswana, web development Botswana"
         canonical="https://rasalilabs.com/services"
+        structuredData={{
+          '@context': 'https://schema.org',
+          '@graph': [
+            organizationSchema,
+            localBusinessSchema,
+            makeBreadcrumbSchema([
+              { name: 'Home', url: '/' },
+              { name: 'Services', url: '/services' },
+            ]),
+          ],
+        }}
       />
 
       <div className="max-w-7xl mx-auto px-6 lg:px-12">
@@ -27,10 +40,10 @@ const Services = () => {
             <Layers size={14} /> Full-Spectrum Capabilities
           </div>
           <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-white mb-6 leading-tight">
-            Our Services & Disciplines
+            Technology & Creative Services in Botswana
           </h1>
           <p className="text-white/70 text-lg leading-relaxed">
-            Ras Ali Labs is a multidisciplinary technology and creative company. We seamlessly integrate software engineering, artificial intelligence, cinematic video production, and sound design to solve complex challenges and tell powerful stories.
+            Based in Gaborone, Ras Ali Labs provides custom software development, web and app development, AI automation, film and video production, and music and audio services for organisations across Botswana and Southern Africa.
           </p>
         </div>
 
