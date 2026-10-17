@@ -8,8 +8,21 @@ import { metaAdapterV26 } from '@/lib/services/metaAdapter.service';
 import { instagramBusinessAdapter } from '@/lib/services/instagramBusinessAdapter.service';
 import { tenantCache, buildTenantCacheKey } from '@/lib/cache/tenantCache';
 import { FacebookConnectionStateService } from '@/lib/services/social/facebookConnectionState.service';
+import { legacyOAuthVerifierCookieName, oauthProviderMatches, oauthStateCookieName, oauthVerifierCookieName } from '@/lib/services/oauthConnectionState.service';
 
 export const dynamic = 'force-dynamic';
+
+function redirectAndClearOAuthFlow(url: string, provider: string, state?: string | null) {
+  const response = NextResponse.redirect(url);
+  if (state) {
+    response.cookies.set(oauthStateCookieName(provider, state), '', { maxAge: 0, path: '/' });
+    response.cookies.set(oauthVerifierCookieName(provider, state), '', { maxAge: 0, path: '/' });
+  }
+  // Clear the pre-hardening cookie name as well so an old in-flight browser
+  // cannot leave a stale verifier behind after deployment.
+  response.cookies.set(legacyOAuthVerifierCookieName(provider), '', { maxAge: 0, path: '/' });
+  return response;
+}
 
 export async function GET(
   request: NextRequest,
@@ -32,37 +45,83 @@ export async function GET(
 
     console.log(`[OAuth Callback Received] provider=${provider} | hasCode=${Boolean(code)} | hasState=${Boolean(state)} | error=${errorParam || 'none'}`);
 
+    if (!state && errorParam) {
+      return redirectAndClearOAuthFlow(
+        `${growthRedirect}?oauth_error=missing_state&provider=${encodeURIComponent(provider)}`,
+        provider,
+        state
+      );
+    }
+
+    if (!code && !errorParam) {
+      return redirectAndClearOAuthFlow(
+        `${growthRedirect}?oauth_error=missing_params&provider=${encodeURIComponent(provider)}`,
+        provider,
+        state
+      );
+    }
+
+    const verified = state ? verifyOAuthState(state) : null;
+    if (
+      !verified ||
+      !verified.valid ||
+      !verified.userId ||
+      !verified.workspaceId ||
+      !oauthProviderMatches(provider, verified.provider)
+    ) {
+      console.warn(`[OAuth Callback Warning] Invalid/incomplete/mismatched state | provider=${provider}`);
+      return redirectAndClearOAuthFlow(
+        `${growthRedirect}?oauth_error=invalid_state&provider=${encodeURIComponent(provider)}`,
+        provider,
+        state
+      );
+    }
+
+    const browserStateCookie = request.cookies.get(oauthStateCookieName(provider, state!))?.value;
+    if (browserStateCookie !== 'pending') {
+      console.warn(`[OAuth Callback Warning] OAuth state was not initiated by this browser session | provider=${provider}`);
+      return redirectAndClearOAuthFlow(
+        `${growthRedirect}?oauth_error=invalid_state_session&provider=${encodeURIComponent(provider)}`,
+        provider,
+        state
+      );
+    }
+
+    const intent = verified.intent || 'login';
+
     if (errorParam) {
-      let intent = 'login';
-      if (state) {
-        try {
-          const verified = verifyOAuthState(state);
-          if (verified.intent) intent = verified.intent;
-        } catch {}
-      }
       console.warn(`[OAuth Callback Provider Error] provider=${provider} | intent=${intent} | error=${errorParam} | reason=${errorReason || ''} | desc=${errorDescription || ''}`);
       if (provider === 'facebook' && (intent === 'page_connection' || errorParam.includes('access_denied') || errorParam.includes('unavailable'))) {
-        return NextResponse.redirect(`${growthRedirect}?facebook=page_permission_pending&oauth_error=meta_permission_unavailable&provider=facebook&stage=2`);
+        return redirectAndClearOAuthFlow(
+          `${growthRedirect}?facebook=page_permission_pending&oauth_error=meta_permission_unavailable&provider=facebook&stage=2`,
+          provider,
+          state
+        );
       }
-      return NextResponse.redirect(`${growthRedirect}?oauth_error=${encodeURIComponent(errorParam)}&provider=${provider}`);
+      return redirectAndClearOAuthFlow(
+        `${growthRedirect}?oauth_error=${encodeURIComponent(errorParam)}&provider=${encodeURIComponent(provider)}`,
+        provider,
+        state
+      );
     }
 
-    if (!code || !state) {
-      return NextResponse.redirect(`${growthRedirect}?oauth_error=missing_params&provider=${provider}`);
+    if (!code) {
+      return redirectAndClearOAuthFlow(
+        `${growthRedirect}?oauth_error=missing_params&provider=${encodeURIComponent(provider)}`,
+        provider,
+        state
+      );
     }
 
-    const verified = verifyOAuthState(state);
-    if (!verified.valid || !verified.userId || !verified.workspaceId) {
-      console.warn(`[OAuth Callback Warning] Invalid/incomplete state | provider=${provider}`);
-      return NextResponse.redirect(`${growthRedirect}?oauth_error=invalid_state&provider=${provider}`);
-    }
-
-    // Tenant identity comes only from the signed state created after requireRalionContext.
+    // Tenant identity comes only from the signed, browser-bound state created
+    // after requireRalionContext().
     const userId = verified.userId;
     const workspaceId = verified.workspaceId;
     const organizationId = verified.organizationId || workspaceId;
-    const intent = verified.intent || 'login';
-    const codeVerifier = request.cookies.get(`oauth_verifier_${provider}`)?.value || '';
+    const codeVerifier =
+      request.cookies.get(oauthVerifierCookieName(provider, state!))?.value ||
+      request.cookies.get(legacyOAuthVerifierCookieName(provider))?.value ||
+      '';
 
     let accessToken = '';
     let refreshToken: string | undefined;
@@ -159,7 +218,7 @@ export async function GET(
       }
       case 'x':
       case 'twitter': {
-        if (!codeVerifier) return NextResponse.redirect(`${growthRedirect}?oauth_error=missing_verifier&provider=${provider}`);
+        if (!codeVerifier) return redirectAndClearOAuthFlow(`${growthRedirect}?oauth_error=missing_verifier&provider=${encodeURIComponent(provider)}`, provider, state);
         const tokens = await xAdapter.exchangeCode(code, codeVerifier);
         accessToken = tokens.accessToken;
         refreshToken = tokens.refreshToken;
@@ -171,7 +230,7 @@ export async function GET(
         break;
       }
       case 'tiktok': {
-        if (!codeVerifier) return NextResponse.redirect(`${growthRedirect}?oauth_error=missing_verifier&provider=${provider}`);
+        if (!codeVerifier) return redirectAndClearOAuthFlow(`${growthRedirect}?oauth_error=missing_verifier&provider=${encodeURIComponent(provider)}`, provider, state);
         const tokens = await tiktokAdapter.exchangeCode(code, codeVerifier);
         accessToken = tokens.accessToken;
         refreshToken = tokens.refreshToken;
@@ -196,7 +255,7 @@ export async function GET(
         break;
       }
       default:
-        return NextResponse.redirect(`${growthRedirect}?oauth_error=unsupported_provider&provider=${provider}`);
+        return redirectAndClearOAuthFlow(`${growthRedirect}?oauth_error=unsupported_provider&provider=${encodeURIComponent(provider)}`, provider, state);
     }
 
     const storeResult = await storeOAuthTokens({
@@ -231,9 +290,7 @@ export async function GET(
       : (intent === 'page_connection' ? '&stage=2&page_connected=true' : '&stage=1&profile_connected=true');
     const connectionQuery = storeResult.connectionId ? `&connection_id=${encodeURIComponent(storeResult.connectionId)}` : '';
     const finalRedirectUrl = `${growthRedirect}?connected=${provider}&handle=${encodeURIComponent(profile.handle)}${connectionQuery}${stageQuery}`;
-    const redirectResponse = NextResponse.redirect(finalRedirectUrl);
-    redirectResponse.cookies.set(`oauth_verifier_${provider}`, '', { maxAge: 0, path: '/' });
-    return redirectResponse;
+    return redirectAndClearOAuthFlow(finalRedirectUrl, provider, state);
   } catch (error: any) {
     const rawMsg = error?.message || 'oauth_failed';
     const sanitizedError = rawMsg
