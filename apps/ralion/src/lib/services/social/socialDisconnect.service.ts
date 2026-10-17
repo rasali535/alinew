@@ -54,25 +54,33 @@ export class SocialDisconnectService {
     let tokensPurged = 0;
     let zernioDisconnected = false;
 
-    // 1. Target social_connections records
+    // 1. Target social_connections records. Every selector is an AND
+    // boundary: connection ID never weakens organization/workspace/user scope.
     let connQuery = supabase
       .from('social_connections')
       .select('*')
       .eq('provider', provider);
 
-    if (connectionId) {
-      connQuery = connQuery.eq('id', connectionId);
-    } else if (workspaceId && workspaceId !== 'default' && workspaceId !== 'unconfigured-workspace') {
-      if (userId) {
-        connQuery = connQuery.or(`workspace_id.eq.${workspaceId},user_id.eq.${userId}`);
-      } else {
-        connQuery = connQuery.eq('workspace_id', workspaceId);
-      }
-    } else if (userId) {
+    if (tenantId && tenantId !== 'unconfigured-tenant') {
+      connQuery = connQuery.eq('organization_id', tenantId);
+    }
+    if (workspaceId && workspaceId !== 'default' && workspaceId !== 'unconfigured-workspace') {
+      connQuery = connQuery.eq('workspace_id', workspaceId);
+    }
+    if (userId) {
       connQuery = connQuery.eq('user_id', userId);
     }
+    if (connectionId) {
+      connQuery = connQuery.eq('id', connectionId);
+    }
 
-    const { data: matchedConns } = await connQuery;
+    const { data: matchedConns, error: connectionLookupError } = await connQuery;
+    if (connectionLookupError) {
+      throw Object.assign(new Error('Unable to resolve the social connection to disconnect.'), { statusCode: 503 });
+    }
+    if (connectionId && (!matchedConns || matchedConns.length === 0)) {
+      throw Object.assign(new Error('Social connection not found in this workspace.'), { statusCode: 404 });
+    }
 
     for (const conn of matchedConns || []) {
       // If connected via Zernio, disconnect on remote Zernio platform first
@@ -107,21 +115,39 @@ export class SocialDisconnectService {
           disconnected_at: nowIso,
           updated_at: nowIso,
         })
-        .eq('id', conn.id);
+        .eq('id', conn.id)
+        .eq('organization_id', tenantId)
+        .eq('workspace_id', workspaceId)
+        .eq('user_id', userId || conn.user_id);
 
       if (!updateErr) recordsUpdated += 1;
     }
 
-    // 2. Purge from secondary token vaults (social_account_tokens, meta_connections)
-    if (userId) {
+    // 2. Purge provider-level authorization vaults only for an explicit
+    // provider-wide disconnect. Disconnecting one Page/account must not revoke
+    // another account or another workspace's authorization state.
+    if (userId && !connectionId) {
       try {
-        const { error: delTokenErr } = await supabase
+        const { data: legacyToken } = await supabase
           .from('social_account_tokens')
-          .delete()
+          .select('id, extra_meta')
           .eq('user_id', userId)
-          .eq('provider', provider);
+          .eq('provider', provider)
+          .maybeSingle();
 
-        if (!delTokenErr) tokensPurged += 1;
+        const legacyMeta = (legacyToken?.extra_meta || {}) as Record<string, any>;
+        const belongsToScope =
+          legacyToken &&
+          legacyMeta.workspaceId === workspaceId &&
+          legacyMeta.organizationId === tenantId;
+
+        if (belongsToScope) {
+          const { error: delTokenErr } = await supabase
+            .from('social_account_tokens')
+            .delete()
+            .eq('id', legacyToken.id);
+          if (!delTokenErr) tokensPurged += 1;
+        }
       } catch {}
 
       if (['facebook', 'instagram', 'meta', 'whatsapp'].includes(provider)) {
@@ -135,29 +161,31 @@ export class SocialDisconnectService {
               disconnected_at: nowIso,
               updated_at: nowIso,
             })
-            .eq('user_id', userId);
+            .eq('user_id', userId)
+            .eq('workspace_id', workspaceId)
+            .eq('provider', provider);
         } catch {}
       }
     }
 
-    // 3. Invalidate social_destinations bindings
-    try {
-      let destQuery = supabase
-        .from('social_destinations')
-        .update({
-          is_active: false,
-          status: 'DISCONNECTED',
-          updated_at: nowIso,
-        })
-        .eq('provider', provider);
+    // 3. Provider-wide destination invalidation is safe only when the user
+    // explicitly disconnected the provider rather than one isolated account.
+    if (!connectionId) {
+      try {
+        let destQuery = supabase
+          .from('social_destinations')
+          .update({
+            is_active: false,
+            status: 'DISCONNECTED',
+            updated_at: nowIso,
+          })
+          .eq('provider', provider)
+          .eq('workspace_id', workspaceId);
 
-      if (workspaceId && workspaceId !== 'default' && workspaceId !== 'unconfigured-workspace') {
-        destQuery = destQuery.eq('workspace_id', workspaceId);
-      } else if (userId) {
-        destQuery = destQuery.eq('user_id', userId);
-      }
-      await destQuery;
-    } catch {}
+        if (userId) destQuery = destQuery.eq('user_id', userId);
+        await destQuery;
+      } catch {}
+    }
 
     // 4. Invalidate all In-Memory & Service Caches
     FacebookConnectionStateService.invalidateCache(tenantId);
