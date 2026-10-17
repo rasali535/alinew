@@ -19,6 +19,7 @@ import { getPrivilegedSupabase as getServiceSupabase } from '@/lib/supabase/serv
 export interface SaveMetaTokenParams {
   userId: string;
   workspaceId?: string;
+  organizationId?: string;
   metaUserId: string;
   provider: 'facebook' | 'instagram' | 'meta' | 'whatsapp';
   accessToken: string;
@@ -39,6 +40,9 @@ export class MetaCredentialService {
    * Encrypt and store Meta OAuth credentials
    */
   static async saveToken(params: SaveMetaTokenParams): Promise<boolean> {
+    if (!params.workspaceId) {
+      throw new Error('[MetaCredentialService] workspaceId is required for OAuth credential persistence.');
+    }
     const supabase = getServiceSupabase();
     const encryptedAccessToken = encryptToken(params.accessToken);
     const encryptedRefreshToken = params.refreshToken ? encryptToken(params.refreshToken) : null;
@@ -52,10 +56,12 @@ export class MetaCredentialService {
     }
 
     try {
-      // 1. Store in primary meta_connections table
-      const { error: connError } = await supabase.from('meta_connections').upsert({
+      // 1. Store in the exact workspace Meta credential row. Explicit
+      // lookup/update keeps reconnects safe even before the workspace-unique
+      // migration has reached every environment.
+      const metaPayload = {
         user_id: params.userId,
-        workspace_id: params.workspaceId || null,
+        workspace_id: params.workspaceId,
         meta_user_id: params.metaUserId,
         provider: params.provider,
         email: params.email || null,
@@ -69,29 +75,64 @@ export class MetaCredentialService {
         encrypted_refresh_token: encryptedRefreshToken,
         token_expires_at: tokenExpiresAt,
         last_sync_at: new Date().toISOString(),
+        disconnected_at: null,
         updated_at: new Date().toISOString(),
-      }, { onConflict: 'workspace_id,user_id,provider,meta_user_id' });
+      };
 
-      if (connError) {
-        throw new Error(`[MetaCredentialService] Connection upsert error: ${connError.message}`);
+      const { data: existingMeta, error: lookupError } = await supabase
+        .from('meta_connections')
+        .select('id')
+        .eq('workspace_id', params.workspaceId)
+        .eq('user_id', params.userId)
+        .eq('provider', params.provider)
+        .eq('meta_user_id', params.metaUserId)
+        .maybeSingle();
+
+      if (lookupError) {
+        throw new Error(`[MetaCredentialService] Connection lookup error: ${lookupError.message}`);
       }
 
-      // 2. Also keep Growth OS social_account_tokens table synchronized
-      await supabase.from('social_account_tokens').upsert({
-        user_id: params.userId,
-        provider: params.provider,
-        encrypted_access_token: encryptedAccessToken,
-        encrypted_refresh_token: encryptedRefreshToken,
-        expires_at: tokenExpiresAt,
-        account_handle: params.accountHandle || `@${params.metaUserId}`,
-        account_label: params.accountName || `${params.provider.toUpperCase()} Business`,
-        avatar_url: params.profilePictureUrl || null,
-        page_id: params.pageId || null,
-        scopes: params.scopes || [],
-        status: 'connected',
-        connected_at: new Date().toISOString(),
-        last_synced_at: new Date().toISOString(),
-      }, { onConflict: 'user_id,provider' });
+      const metaWrite = existingMeta?.id
+        ? await supabase.from('meta_connections').update(metaPayload).eq('id', existingMeta.id)
+        : await supabase.from('meta_connections').insert(metaPayload);
+
+      if (metaWrite.error) {
+        throw new Error(`[MetaCredentialService] Connection persistence error: ${metaWrite.error.message}`);
+      }
+
+      // 2. social_account_tokens is a legacy user-global compatibility row.
+      // Never let one workspace overwrite another workspace's credential.
+      const { data: legacyToken } = await supabase
+        .from('social_account_tokens')
+        .select('id, extra_meta')
+        .eq('user_id', params.userId)
+        .eq('provider', params.provider)
+        .maybeSingle();
+
+      const legacyWorkspaceId = legacyToken?.extra_meta?.workspaceId;
+      if (!legacyWorkspaceId || legacyWorkspaceId === params.workspaceId) {
+        await supabase.from('social_account_tokens').upsert({
+          user_id: params.userId,
+          provider: params.provider,
+          encrypted_access_token: encryptedAccessToken,
+          encrypted_refresh_token: encryptedRefreshToken,
+          expires_at: tokenExpiresAt,
+          account_handle: params.accountHandle || `@${params.metaUserId}`,
+          account_label: params.accountName || `${params.provider.toUpperCase()} Business`,
+          avatar_url: params.profilePictureUrl || null,
+          page_id: params.pageId || null,
+          scopes: params.scopes || [],
+          extra_meta: {
+            ...(legacyToken?.extra_meta || {}),
+            workspaceId: params.workspaceId,
+            organizationId: params.organizationId,
+            metaUserId: params.metaUserId,
+          },
+          status: 'connected',
+          connected_at: new Date().toISOString(),
+          last_synced_at: new Date().toISOString(),
+        }, { onConflict: 'user_id,provider' });
+      }
 
       // 3. Emit structured audit log event (zero token exposure)
       await AuditLoggerService.log({
