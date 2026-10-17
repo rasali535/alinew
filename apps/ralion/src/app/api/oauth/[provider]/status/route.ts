@@ -26,7 +26,8 @@ export async function GET(
   { params }: { params: Promise<{ provider: string }> }
 ) {
   try {
-    const { provider } = await params;
+    const { provider: routeProvider } = await params;
+    const provider = routeProvider === 'google' ? 'youtube' : routeProvider === 'twitter' ? 'x' : routeProvider;
 
     const required = await requireRalionContext(request);
     if (required.response || !required.context) {
