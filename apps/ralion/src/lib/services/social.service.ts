@@ -202,30 +202,48 @@ export async function storeOAuthTokens(params: {
     console.warn('[SocialService] legacy token compatibility notice:', tokErr.message);
   }
 
-  // 4. If Meta provider (Facebook/Instagram), also synchronize with dedicated meta_connections table
+  // 4. If Meta provider, synchronize the exact workspace credential row
+  // without relying on a constraint that may not yet exist in older deployments.
   if (['facebook', 'instagram', 'meta', 'whatsapp'].includes(params.provider.toLowerCase())) {
-    try {
-      const metaUserId = params.pageId || resolvedAccountId || params.userId;
-      await supabase.from('meta_connections').upsert({
-        user_id: params.userId,
-        workspace_id: tenant.workspaceId,
-        meta_user_id: metaUserId,
-        provider: params.provider.toLowerCase() as any,
-        account_handle: params.accountHandle,
-        account_name: params.accountLabel,
-        profile_picture_url: params.avatarUrl || null,
-        page_id: params.pageId || null,
-        scopes: params.scopes || [],
-        connection_status: 'connected',
-        encrypted_access_token: encryptedAccessToken,
-        encrypted_refresh_token: encryptedRefreshToken,
-        token_expires_at: tokenExpiresAt,
-        last_sync_at: new Date().toISOString(),
-        disconnected_at: null,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'workspace_id,user_id,provider,meta_user_id' });
-    } catch (metaErr) {
-      console.warn('[SocialService] meta_connections sync notice:', (metaErr as Error).message);
+    const metaUserId = params.pageId || resolvedAccountId || params.userId;
+    const metaPayload = {
+      user_id: params.userId,
+      workspace_id: tenant.workspaceId,
+      meta_user_id: metaUserId,
+      provider: params.provider.toLowerCase() as any,
+      account_handle: params.accountHandle,
+      account_name: params.accountLabel,
+      profile_picture_url: params.avatarUrl || null,
+      page_id: params.pageId || null,
+      scopes: params.scopes || [],
+      connection_status: 'connected',
+      encrypted_access_token: encryptedAccessToken,
+      encrypted_refresh_token: encryptedRefreshToken,
+      token_expires_at: tokenExpiresAt,
+      last_sync_at: new Date().toISOString(),
+      disconnected_at: null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data: existingMeta, error: metaLookupErr } = await supabase
+      .from('meta_connections')
+      .select('id')
+      .eq('workspace_id', tenant.workspaceId)
+      .eq('user_id', params.userId)
+      .eq('provider', params.provider.toLowerCase())
+      .eq('meta_user_id', metaUserId)
+      .maybeSingle();
+
+    if (metaLookupErr) {
+      throw new Error(`Unable to resolve workspace Meta credential: ${metaLookupErr.message}`);
+    }
+
+    const metaWrite = existingMeta?.id
+      ? await supabase.from('meta_connections').update(metaPayload).eq('id', existingMeta.id)
+      : await supabase.from('meta_connections').insert(metaPayload);
+
+    if (metaWrite.error) {
+      throw new Error(`Unable to persist workspace Meta credential: ${metaWrite.error.message}`);
     }
   }
 
