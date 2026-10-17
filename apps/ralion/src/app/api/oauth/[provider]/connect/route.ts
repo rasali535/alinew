@@ -9,6 +9,7 @@ import { instagramBusinessAdapter } from '@/lib/services/instagramBusinessAdapte
 import { generateOAuthState } from '@ralion/integrations/server';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 import { requireRalionContext } from '@/lib/auth/serverAuth';
+import { oauthStateCookieName, oauthVerifierCookieName } from '@/lib/services/oauthConnectionState.service';
 
 export const dynamic = 'force-dynamic';
 
@@ -112,12 +113,27 @@ export async function GET(
           ? { graphVersion: instagramBusinessAdapter.graphVersion(), oauthMode: 'instagram_login' }
           : {}),
     }, undefined, request);
-    response.cookies.set(`oauth_verifier_${provider}`, codeVerifier, {
+
+    const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 600,
+      sameSite: 'lax' as const,
       path: '/',
+    };
+
+    // Bind the callback to the browser session that initiated this exact OAuth
+    // flow. The state token remains HMAC-signed, while this cookie prevents a
+    // valid state copied from another browser/session from being replayed here.
+    response.cookies.set(oauthStateCookieName(provider, stateToken), 'pending', {
+      ...cookieOptions,
+      maxAge: 15 * 60,
+    });
+
+    // Bind PKCE to this exact state instead of provider-only storage. Two tabs
+    // connecting the same provider can no longer overwrite each other's verifier.
+    response.cookies.set(oauthVerifierCookieName(provider, stateToken), codeVerifier, {
+      ...cookieOptions,
+      maxAge: 10 * 60,
     });
 
     return response;
