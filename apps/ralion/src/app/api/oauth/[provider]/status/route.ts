@@ -33,15 +33,27 @@ export async function GET(
       return required.response || corsJsonResponse({ success: false, connected: false, error: 'Authentication required' }, { status: 401 }, request);
     }
     const user = required.context.user;
+    const scope = {
+      organizationId: required.context.organization.id,
+      workspaceId: required.context.workspace.id,
+    };
 
-    // Special case: fetch ALL accounts for this user (provider='all')
+    // Special case: fetch ALL accounts only for the authenticated workspace.
     if (provider === 'all') {
-      const accounts = await loadAllUserAccounts(user.id);
-      return corsJsonResponse({ success: true, accounts }, undefined, request);
+      const accounts = await loadAllUserAccounts(user.id, scope);
+      return corsJsonResponse({
+        success: true,
+        organizationId: scope.organizationId,
+        workspaceId: scope.workspaceId,
+        accounts,
+      }, undefined, request);
     }
 
-    // Load specific provider token record from Supabase
-    const tokenData = await loadOAuthTokens(user.id, provider);
+    const socialConnectionId = request.nextUrl.searchParams.get('socialConnectionId') || undefined;
+
+    // Load only a tenant-owned active credential. An explicit connection ID
+    // never falls back to another account of the same provider.
+    const tokenData = await loadOAuthTokens(user.id, provider, socialConnectionId, scope);
     if (!tokenData) {
       return corsJsonResponse({ success: true, connected: false, provider }, undefined, request);
     }
@@ -51,8 +63,11 @@ export async function GET(
 
     return corsJsonResponse({
       success: true,
-      connected: !isExpired,
+      connected: !isExpired && tokenData.record.status === 'connected',
       provider,
+      organizationId: scope.organizationId,
+      workspaceId: scope.workspaceId,
+      socialConnectionId: tokenData.record.id || socialConnectionId || null,
       account: {
         provider: record.provider,
         label: record.account_label,
