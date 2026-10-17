@@ -903,7 +903,13 @@ export const tiktokAdapter = {
     });
     if (!res.ok) throw new Error(`TikTok token exchange failed: ${await res.text()}`);
     const data = await res.json();
-    return { accessToken: data.data.access_token, refreshToken: data.data.refresh_token, expiresIn: data.data.expires_in };
+    const accessToken = data.access_token || data.data?.access_token;
+    const refreshToken = data.refresh_token || data.data?.refresh_token;
+    const expiresIn = data.expires_in || data.data?.expires_in || 86400;
+    if (!accessToken) {
+      throw new Error('TikTok token exchange returned no access token');
+    }
+    return { accessToken, refreshToken, expiresIn };
   },
 
   async refreshAccessToken(refreshToken: string) {
