@@ -19,17 +19,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_social_connections_workspace_user_provider
   ON public.social_connections (workspace_id, user_id, provider, provider_account_id);
 
 -- ---------------------------------------------------------------------------
--- 2. meta_connections: mirror the already-required workspace-scoped Meta key.
+-- 2. meta_connections
 -- ---------------------------------------------------------------------------
-DO $
-BEGIN
-  IF to_regclass('public.meta_connections') IS NOT NULL THEN
-    EXECUTE 'ALTER TABLE public.meta_connections DROP CONSTRAINT IF EXISTS meta_connections_user_id_provider_meta_user_id_key';
-    EXECUTE 'DROP INDEX IF EXISTS public.meta_connections_user_id_provider_meta_user_id_key';
-    EXECUTE 'CREATE UNIQUE INDEX IF NOT EXISTS idx_meta_connections_workspace_identity_unique ON public.meta_connections (workspace_id, user_id, provider, meta_user_id)';
-  END IF;
-END
-$;
+-- Workspace-scoped Meta credential uniqueness is owned by the earlier
+-- 20260923053000_meta_credentials_workspace_unique.sql migration in the
+-- package database schema. The clean Supabase preview schema does not create
+-- meta_connections, so this migration intentionally does not reference that
+-- optional table. Runtime Meta writes are exact workspace lookup/update/insert
+-- and do not depend on this constraint being present.
 
 -- ---------------------------------------------------------------------------
 -- 3. Legacy social_account_tokens: add explicit tenant columns for migration
