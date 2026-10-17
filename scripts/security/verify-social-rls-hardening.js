@@ -10,6 +10,7 @@ const files = [
   'packages/database/migrations/20260910_social_content_rls_hardening.sql',
   'supabase/migrations/20261007072000_social_connections_authenticated_read_only.sql',
   'supabase/migrations/20261007074450_harden_social_provider_routing_access.sql',
+  'supabase/migrations/20261017190000_oauth_connection_state_workspace_isolation.sql',
 ];
 
 const source = files.map((f) => fs.readFileSync(path.join(root, f), 'utf8')).join('\n');
@@ -33,6 +34,8 @@ requirePattern(/social_posts_tenant_select/, 'social_posts tenant SELECT policy 
 requirePattern(/social_inbox_tenant_select/, 'social inbox tenant SELECT policy is required.');
 requirePattern(/webhooks_log_service_role_only/, 'webhook audit log must remain service-role only.');
 requirePattern(/REVOKE ALL ON public\.social_credentials FROM anon, authenticated/, 'credential vault must revoke direct client access.');
+requirePattern(/REVOKE ALL ON public\.social_account_tokens FROM anon, authenticated/, 'legacy OAuth token vault must revoke direct client access.');
+requirePattern(/social_account_tokens_service_role_only/, 'legacy OAuth token vault must remain service-role only.');
 requirePattern(/ALTER VIEW public\.social_connections_safe SET \(security_invoker = true\)/, 'social safe view must invoke caller RLS.');
 requirePattern(/ALTER VIEW public\.meta_connections_safe SET \(security_invoker = true\)/, 'Meta safe view must invoke caller RLS.');
 requirePattern(/REVOKE ALL ON public\.social_destinations FROM anon/, 'anonymous social destination access must be revoked.');
