@@ -25,6 +25,14 @@ export interface SocialAccountRecord {
   extra_meta?: Record<string, any>;
 }
 
+export interface OAuthConnectionScope {
+  organizationId?: string;
+  workspaceId?: string;
+}
+
+const ACTIVE_CONNECTION_STATES = ['CONNECTED', 'ACTIVE', 'connected', 'active'];
+const INVALID_TOKEN_STATES = new Set(['TOKEN_EXPIRED', 'TOKEN_REVOKED', 'REAUTH_REQUIRED']);
+
 export interface SocialPost {
   id: string;
   platform: string;
@@ -92,6 +100,8 @@ export async function storeOAuthTokens(params: {
         pageId: params.pageId,
         avatarUrl: params.avatarUrl,
         providerAccountId: resolvedAccountId,
+        organizationId: params.organizationId || undefined,
+        workspaceId: params.workspaceId || undefined,
         encrypted_access_token: encryptedAccessToken,
         encrypted_refresh_token: encryptedRefreshToken,
         token_expires_at: tokenExpiresAt,
@@ -100,7 +110,7 @@ export async function storeOAuthTokens(params: {
       last_sync_at: new Date().toISOString(),
       connected_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,provider,provider_account_id' }).select('id').maybeSingle();
+    }, { onConflict: 'organization_id,workspace_id,user_id,provider,provider_account_id' }).select('id').maybeSingle();
 
     if (!connErr && connData?.id) {
       connectionId = connData.id;
@@ -125,6 +135,8 @@ export async function storeOAuthTokens(params: {
         ...(params.extraMeta ?? {}),
         connectionId,
         providerAccountId: resolvedAccountId,
+        organizationId: params.organizationId || undefined,
+        workspaceId: params.workspaceId || undefined,
       },
       status: 'connected', connected_at: new Date().toISOString(),
     }, { onConflict: 'user_id,provider' });
@@ -161,112 +173,139 @@ export async function storeOAuthTokens(params: {
   return { success: true, connectionId, providerAccountId: resolvedAccountId };
 }
 
-export async function loadOAuthTokens(userId: string, provider: string, connectionId?: string) {
+export async function loadOAuthTokens(
+  userId: string,
+  provider: string,
+  connectionId?: string,
+  scope?: OAuthConnectionScope
+) {
   const supabase = getServiceSupabase();
+  const normalizedProvider = provider.toLowerCase();
 
-  if (connectionId) {
-    // 1. Check social_connections by ID
-    const { data: conn } = await supabase
-      .from('social_connections')
-      .select('*')
-      .eq('id', connectionId)
-      .maybeSingle();
-
-    if (conn && conn.connection_status !== 'DISCONNECTED') {
-      const encAccess = conn.metadata?.encrypted_access_token;
-      const encRefresh = conn.metadata?.encrypted_refresh_token;
-      if (encAccess) {
-        return {
-          accessToken: decryptToken(encAccess),
-          refreshToken: encRefresh ? decryptToken(encRefresh) : undefined,
-          expiresAt: conn.metadata?.token_expires_at ? new Date(conn.metadata.token_expires_at) : undefined,
-          record: {
-            id: conn.id,
-            provider: conn.provider || provider,
-            account_handle: conn.username ? `@${conn.username}` : `@${provider}`,
-            account_label: conn.account_name || provider,
-            followers_count: Number(conn.followers_count || 0),
-            avatar_url: conn.profile_image_url,
-            page_id: conn.provider_account_id,
-            scopes: conn.scopes || [],
-            status: 'connected',
-            connected_at: conn.connected_at,
-            last_synced_at: conn.last_sync_at,
-            extra_meta: conn.metadata || {},
-          } as SocialAccountRecord
-        };
-      }
-    }
-
-  }
-
-  // Fallback to social_connections by user and provider
-  try {
-    const { data: conn } = await supabase
+  const readConnection = async (byId?: string) => {
+    let query = supabase
       .from('social_connections')
       .select('*')
       .eq('user_id', userId)
-      .eq('provider', provider.toLowerCase())
-      .neq('connection_status', 'DISCONNECTED')
-      .order('updated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .eq('provider', normalizedProvider)
+      .in('connection_status', ACTIVE_CONNECTION_STATES);
 
-    if (conn && conn.metadata?.encrypted_access_token) {
-      return {
-        accessToken: decryptToken(conn.metadata.encrypted_access_token),
-        refreshToken: conn.metadata.encrypted_refresh_token ? decryptToken(conn.metadata.encrypted_refresh_token) : undefined,
-        expiresAt: conn.metadata.token_expires_at ? new Date(conn.metadata.token_expires_at) : undefined,
-        record: {
-          id: conn.id,
-          provider: conn.provider,
-          account_handle: conn.username ? `@${conn.username}` : `@${provider}`,
-          account_label: conn.account_name,
-          followers_count: Number(conn.followers_count || 0),
-          avatar_url: conn.profile_image_url,
-          page_id: conn.provider_account_id,
-          scopes: conn.scopes || [],
-          status: 'connected',
-          extra_meta: conn.metadata || {},
-        } as SocialAccountRecord
-      };
+    if (byId) query = query.eq('id', byId);
+    if (scope?.organizationId) query = query.eq('organization_id', scope.organizationId);
+    if (scope?.workspaceId) query = query.eq('workspace_id', scope.workspaceId);
+
+    const { data: conn } = byId
+      ? await query.maybeSingle()
+      : await query.order('updated_at', { ascending: false }).limit(1).maybeSingle();
+
+    if (!conn || INVALID_TOKEN_STATES.has(String(conn.token_status || '').toUpperCase())) {
+      return null;
     }
+
+    const encAccess = conn.metadata?.encrypted_access_token;
+    if (!encAccess) return null;
+
+    const accessToken = decryptToken(encAccess);
+    if (!accessToken) return null;
+
+    const encRefresh = conn.metadata?.encrypted_refresh_token;
+    return {
+      accessToken,
+      refreshToken: encRefresh ? decryptToken(encRefresh) : undefined,
+      expiresAt: conn.metadata?.token_expires_at ? new Date(conn.metadata.token_expires_at) : undefined,
+      record: {
+        id: conn.id,
+        provider: conn.provider || normalizedProvider,
+        account_handle: conn.username ? `@${conn.username}` : `@${normalizedProvider}`,
+        account_label: conn.account_name || normalizedProvider,
+        followers_count: Number(conn.followers_count || 0),
+        avatar_url: conn.profile_image_url,
+        page_id: conn.provider_account_id,
+        scopes: conn.scopes || [],
+        status: 'connected',
+        connected_at: conn.connected_at,
+        last_synced_at: conn.last_sync_at,
+        extra_meta: conn.metadata || {},
+      } as SocialAccountRecord,
+    };
+  };
+
+  if (connectionId) {
+    const exact = await readConnection(connectionId);
+    if (exact) return exact;
+    // A caller that supplied an explicit connection ID must never silently
+    // fall back to another account of the same provider.
+    return null;
+  }
+
+  try {
+    const scopedConnection = await readConnection();
+    if (scopedConnection) return scopedConnection;
   } catch {}
 
-  const { data, error } = await supabase.from('social_account_tokens').select('*')
-    .eq('user_id', userId).eq('provider', provider).maybeSingle();
-  if (error || !data) return null;
+  // Legacy provider-level credentials are safe to use in a scoped request only
+  // when their embedded tenant metadata matches the current context.
+  const { data, error } = await supabase
+    .from('social_account_tokens')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('provider', normalizedProvider)
+    .maybeSingle();
+
+  if (error || !data || String(data.status || '').toLowerCase() !== 'connected') return null;
+
+  const legacyMeta = (data.extra_meta || {}) as Record<string, any>;
+  if (scope?.workspaceId && legacyMeta.workspaceId !== scope.workspaceId) return null;
+  if (scope?.organizationId && legacyMeta.organizationId !== scope.organizationId) return null;
+
+  const accessToken = decryptToken(data.encrypted_access_token);
+  if (!accessToken) return null;
+
   return {
-    accessToken: decryptToken(data.encrypted_access_token),
+    accessToken,
     refreshToken: data.encrypted_refresh_token ? decryptToken(data.encrypted_refresh_token) : undefined,
     expiresAt: data.expires_at ? new Date(data.expires_at) : undefined,
     record: {
-      provider: data.provider, account_handle: data.account_handle,
-      account_label: data.account_label, followers_count: data.followers_count,
-      avatar_url: data.avatar_url, page_id: data.page_id, scopes: data.scopes,
-      status: data.status, connected_at: data.connected_at, last_synced_at: data.last_synced_at,
+      provider: data.provider,
+      account_handle: data.account_handle,
+      account_label: data.account_label,
+      followers_count: data.followers_count,
+      avatar_url: data.avatar_url,
+      page_id: data.page_id,
+      scopes: data.scopes,
+      status: data.status,
+      connected_at: data.connected_at,
+      last_synced_at: data.last_synced_at,
       extra_meta: data.extra_meta,
-    } as SocialAccountRecord
+    } as SocialAccountRecord,
   };
 }
 
-export async function loadAllUserAccounts(userId: string): Promise<SocialAccountRecord[]> {
+export async function loadAllUserAccounts(
+  userId: string,
+  scope?: OAuthConnectionScope
+): Promise<SocialAccountRecord[]> {
   const supabase = getServiceSupabase();
   const accounts: SocialAccountRecord[] = [];
   const seenConnectionKeys = new Set<string>();
 
-  // 1. Primary: load from unified social_connections
   try {
-    const { data: unifiedAccounts } = await supabase
+    let query = supabase
       .from('social_connections')
       .select('*')
       .eq('user_id', userId)
-      .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected', 'active']);
+      .in('connection_status', ACTIVE_CONNECTION_STATES);
 
+    if (scope?.organizationId) query = query.eq('organization_id', scope.organizationId);
+    if (scope?.workspaceId) query = query.eq('workspace_id', scope.workspaceId);
+
+    const { data: unifiedAccounts } = await query;
     if (Array.isArray(unifiedAccounts)) {
-      unifiedAccounts.forEach((u: any) => {
-        const uniqueKey = u.id || `${u.provider}_${u.provider_account_id}`;
-        if (!seenConnectionKeys.has(uniqueKey)) {
+      unifiedAccounts
+        .filter((u: any) => !INVALID_TOKEN_STATES.has(String(u.token_status || '').toUpperCase()))
+        .forEach((u: any) => {
+          const uniqueKey = u.id || `${u.provider}_${u.provider_account_id}`;
+          if (seenConnectionKeys.has(uniqueKey)) return;
           seenConnectionKeys.add(uniqueKey);
           accounts.push({
             id: u.id,
@@ -284,32 +323,37 @@ export async function loadAllUserAccounts(userId: string): Promise<SocialAccount
               ...(u.metadata || {}),
               connectionId: u.id,
               providerAccountId: u.provider_account_id,
+              organizationId: u.organization_id,
+              workspaceId: u.workspace_id,
             },
-          } as any);
-        }
-      });
+          } as SocialAccountRecord);
+        });
     }
   } catch (err: any) {
     console.warn('[SocialService] social_connections load notice:', err.message);
   }
 
-  // 2. Secondary: load legacy accounts if not already captured
-  try {
-    const { data: legacyAccounts } = await supabase
-      .from('social_accounts_safe')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('status', 'connected');
-    if (Array.isArray(legacyAccounts)) {
-      legacyAccounts.forEach((leg: any) => {
-        const legKey = leg.id || `${leg.provider}_${leg.account_handle}`;
-        if (!seenConnectionKeys.has(legKey)) {
-          seenConnectionKeys.add(legKey);
-          accounts.push(leg as SocialAccountRecord);
-        }
-      });
-    }
-  } catch {}
+  // Legacy safe-view rows have no canonical workspace key. Keep this fallback
+  // only for unscoped legacy callers; tenant-scoped UI/API surfaces must never
+  // mix an account from another workspace.
+  if (!scope?.organizationId && !scope?.workspaceId) {
+    try {
+      const { data: legacyAccounts } = await supabase
+        .from('social_accounts_safe')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('status', 'connected');
+      if (Array.isArray(legacyAccounts)) {
+        legacyAccounts.forEach((leg: any) => {
+          const legKey = leg.id || `${leg.provider}_${leg.account_handle}`;
+          if (!seenConnectionKeys.has(legKey)) {
+            seenConnectionKeys.add(legKey);
+            accounts.push(leg as SocialAccountRecord);
+          }
+        });
+      }
+    } catch {}
+  }
 
   return accounts;
 }
