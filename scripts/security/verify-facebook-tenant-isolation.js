@@ -9,6 +9,8 @@ const connectionState = fs.readFileSync(path.join(root, 'apps/ralion/src/lib/ser
 const metaCredential = fs.readFileSync(path.join(root, 'apps/ralion/src/lib/services/metaCredential.service.ts'), 'utf8');
 const socialService = fs.readFileSync(path.join(root, 'apps/ralion/src/lib/services/social.service.ts'), 'utf8');
 const serverAuth = fs.readFileSync(path.join(root, 'apps/ralion/src/lib/auth/serverAuth.ts'), 'utf8');
+const postsByConnection = fs.readFileSync(path.join(root, 'apps/ralion/src/app/api/social/posts/by-connection/route.ts'), 'utf8');
+const adminHealth = fs.readFileSync(path.join(root, 'apps/ralion/src/app/api/admin/system/health/route.ts'), 'utf8');
 
 const failures = [];
 
@@ -58,6 +60,12 @@ forbid(serverAuth, /https:\/\/yidsfihagwttlmhfynmf\.supabase\.co/, 'Server auth 
 forbid(serverAuth, /targetWorkspaceId\s*=\s*primaryWorkspaceId/, 'Unauthorized tenant requests must not silently fall back to another workspace.');
 requirePattern(serverAuth, /workspace_members/, 'Server auth must verify workspace membership for non-owner tenant access.');
 requirePattern(serverAuth, /if \(error \|\| !member\) return null;/, 'Missing tenant membership must fail closed.');
+requirePattern(postsByConnection, /\.eq\('workspace_id',\s*context\.workspace\.id\)[\s\S]{0,180}\.eq\('organization_id',\s*context\.organization\.id\)[\s\S]{0,180}\.eq\('user_id',\s*context\.user\.id\)/, 'Posts-by-connection lookup must enforce workspace, organization, and authenticated user scope.');
+requirePattern(postsByConnection, /\.from\('social_posts'\)[\s\S]{0,500}\.eq\('social_connection_id',\s*socialConnectionId\)[\s\S]{0,300}\.eq\('organization_id',\s*context\.organization\.id\)[\s\S]{0,300}\.eq\('workspace_id',\s*context\.workspace\.id\)[\s\S]{0,300}\.eq\('user_id',\s*context\.user\.id\)/, 'Posts-by-connection durable fallback must retain full tenant and user scope.');
+requirePattern(adminHealth, /Cross-Tenant Social Connection Isolation/, 'Admin health must expose a non-destructive cross-tenant social isolation probe.');
+requirePattern(adminHealth, /RALION_ISOLATION_CANARY_FOREIGN_CONNECTION_ID/, 'Cross-tenant social isolation probe must use an explicit foreign connection canary.');
+requirePattern(adminHealth, /if \(foreign\?\.id\) throw new Error\('Cross-tenant isolation failure:/, 'Cross-tenant social isolation probe must fail closed if a foreign connection resolves.');
+
 
 if (failures.length) {
   console.error(`[security:facebook-isolation] FAILED — ${failures.length} invariant(s).`);
