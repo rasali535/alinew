@@ -9,6 +9,15 @@ import { encryptToken, decryptToken, SocialPlatformType, SocialProviderRegistry 
 import { AuditLoggerService } from '../auditLogger.service';
 import { getPrivilegedSupabase as getServiceSupabase } from '@/lib/supabase/server';
 
+export interface SocialTokenScope {
+  organizationId: string;
+  workspaceId: string;
+  userId?: string;
+}
+
+const ACTIVE_CONNECTION_STATES = new Set(['CONNECTED', 'ACTIVE', 'connected', 'active']);
+const INVALID_TOKEN_STATES = new Set(['TOKEN_EXPIRED', 'TOKEN_REVOKED', 'REAUTH_REQUIRED']);
+
 export class SocialTokenManager {
   /**
    * Save OAuth credentials with AES-256-GCM authenticated encryption into isolated vault
@@ -93,7 +102,11 @@ export class SocialTokenManager {
    * Retrieve and decrypt valid token in server memory, auto-refreshing if expiring.
    * Unknown/plaintext token envelopes are rejected by decryptToken().
    */
-  static async getValidToken(connectionId: string, provider: SocialPlatformType): Promise<string | null> {
+  static async getValidToken(
+    connectionId: string,
+    provider: SocialPlatformType,
+    scope?: SocialTokenScope
+  ): Promise<string | null> {
     const supabase = getServiceSupabase();
 
     let encryptedAccessToken: string | null = null;
@@ -101,13 +114,25 @@ export class SocialTokenManager {
     let expiresAt: number | null = null;
 
     try {
-      const { data: conn, error: connErr } = await supabase
+      let query = supabase
         .from('social_connections')
-        .select('id, metadata, connection_status')
+        .select('id, provider, user_id, organization_id, workspace_id, metadata, connection_status, token_status')
         .eq('id', connectionId)
-        .maybeSingle();
+        .eq('provider', provider);
 
-      if (!connErr && conn && conn.connection_status !== 'DISCONNECTED' && conn.metadata?.encrypted_access_token) {
+      if (scope?.organizationId) query = query.eq('organization_id', scope.organizationId);
+      if (scope?.workspaceId) query = query.eq('workspace_id', scope.workspaceId);
+      if (scope?.userId) query = query.eq('user_id', scope.userId);
+
+      const { data: conn, error: connErr } = await query.maybeSingle();
+
+      if (
+        !connErr &&
+        conn &&
+        ACTIVE_CONNECTION_STATES.has(String(conn.connection_status || '')) &&
+        !INVALID_TOKEN_STATES.has(String(conn.token_status || '').toUpperCase()) &&
+        conn.metadata?.encrypted_access_token
+      ) {
         encryptedAccessToken = conn.metadata.encrypted_access_token;
         encryptedRefreshToken = conn.metadata.encrypted_refresh_token || null;
         expiresAt = conn.metadata.token_expires_at ? new Date(conn.metadata.token_expires_at).getTime() : null;
@@ -153,6 +178,99 @@ export class SocialTokenManager {
     }
 
     return decryptedAccessToken;
+  }
+
+  /**
+   * Force-refresh a specific tenant-owned connection and persist the replacement
+   * credential atomically before reporting the connection healthy.
+   */
+  static async refreshConnectionToken(params: {
+    connectionId: string;
+    provider: SocialPlatformType;
+    organizationId: string;
+    workspaceId: string;
+    userId: string;
+  }): Promise<{ expiresAt: string | null }> {
+    const supabase = getServiceSupabase();
+    const { data: conn, error } = await supabase
+      .from('social_connections')
+      .select('id, provider, user_id, organization_id, workspace_id, metadata, connection_status')
+      .eq('id', params.connectionId)
+      .eq('provider', params.provider)
+      .eq('organization_id', params.organizationId)
+      .eq('workspace_id', params.workspaceId)
+      .eq('user_id', params.userId)
+      .maybeSingle();
+
+    if (error) {
+      throw Object.assign(new Error('Unable to resolve social connection for refresh.'), { statusCode: 503 });
+    }
+    if (!conn) {
+      throw Object.assign(new Error('Social connection not found in this workspace.'), { statusCode: 404 });
+    }
+
+    const encryptedRefreshToken = conn.metadata?.encrypted_refresh_token;
+    const refreshToken = encryptedRefreshToken ? decryptToken(encryptedRefreshToken) : '';
+    if (!refreshToken) {
+      await supabase
+        .from('social_connections')
+        .update({
+          token_status: 'REAUTH_REQUIRED',
+          connection_status: 'RECONNECT_REQUIRED',
+          health_error_message: 'Refresh token unavailable. Reconnection required.',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', params.connectionId)
+        .eq('organization_id', params.organizationId)
+        .eq('workspace_id', params.workspaceId)
+        .eq('user_id', params.userId);
+
+      throw Object.assign(new Error('Refresh token unavailable. Reconnect this account.'), {
+        statusCode: 409,
+        publicCode: 'REAUTH_REQUIRED',
+      });
+    }
+
+    try {
+      const adapter = SocialProviderRegistry.getProvider(params.provider);
+      const refreshed = await adapter.refreshToken(refreshToken);
+      if (!refreshed?.accessToken) {
+        throw new Error('Provider returned no replacement access token.');
+      }
+
+      await this.saveCredentials({
+        connectionId: params.connectionId,
+        accessToken: refreshed.accessToken,
+        refreshToken: refreshed.refreshToken || refreshToken,
+        expiresIn: refreshed.expiresIn,
+        userId: params.userId,
+        provider: params.provider,
+      });
+
+      const expiresAt = refreshed.expiresIn
+        ? new Date(Date.now() + refreshed.expiresIn * 1000).toISOString()
+        : null;
+
+      return { expiresAt };
+    } catch (refreshError: any) {
+      await supabase
+        .from('social_connections')
+        .update({
+          token_status: 'REAUTH_REQUIRED',
+          connection_status: 'RECONNECT_REQUIRED',
+          health_error_message: 'OAuth refresh failed. Reconnection required.',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', params.connectionId)
+        .eq('organization_id', params.organizationId)
+        .eq('workspace_id', params.workspaceId)
+        .eq('user_id', params.userId);
+
+      throw Object.assign(
+        new Error(refreshError?.message || 'OAuth refresh failed. Reconnect this account.'),
+        { statusCode: 401, publicCode: 'REAUTH_REQUIRED' }
+      );
+    }
   }
 
   /**
