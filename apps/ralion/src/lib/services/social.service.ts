@@ -270,7 +270,13 @@ export async function loadOAuthTokens(
       .eq('workspace_id', tenant.workspaceId)
       .maybeSingle();
 
-    if (conn && conn.connection_status !== 'DISCONNECTED') {
+    const exactConnectionActive = Boolean(
+      conn &&
+      ['CONNECTED', 'ACTIVE'].includes(String(conn.connection_status || '').toUpperCase()) &&
+      ['TOKEN_VALID', 'TOKEN_EXPIRING'].includes(String(conn.token_status || '').toUpperCase()) &&
+      !conn.disconnected_at
+    );
+    if (exactConnectionActive && conn) {
       const encAccess = conn.metadata?.encrypted_access_token;
       const encRefresh = conn.metadata?.encrypted_refresh_token;
       if (encAccess) {
