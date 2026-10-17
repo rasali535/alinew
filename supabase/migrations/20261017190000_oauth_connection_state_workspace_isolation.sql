@@ -21,13 +21,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_social_connections_workspace_user_provider
 -- ---------------------------------------------------------------------------
 -- 2. meta_connections: mirror the already-required workspace-scoped Meta key.
 -- ---------------------------------------------------------------------------
-ALTER TABLE public.meta_connections
-  DROP CONSTRAINT IF EXISTS meta_connections_user_id_provider_meta_user_id_key;
-
-DROP INDEX IF EXISTS public.meta_connections_user_id_provider_meta_user_id_key;
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_meta_connections_workspace_identity_unique
-  ON public.meta_connections (workspace_id, user_id, provider, meta_user_id);
+DO $
+BEGIN
+  IF to_regclass('public.meta_connections') IS NOT NULL THEN
+    EXECUTE 'ALTER TABLE public.meta_connections DROP CONSTRAINT IF EXISTS meta_connections_user_id_provider_meta_user_id_key';
+    EXECUTE 'DROP INDEX IF EXISTS public.meta_connections_user_id_provider_meta_user_id_key';
+    EXECUTE 'CREATE UNIQUE INDEX IF NOT EXISTS idx_meta_connections_workspace_identity_unique ON public.meta_connections (workspace_id, user_id, provider, meta_user_id)';
+  END IF;
+END
+$;
 
 -- ---------------------------------------------------------------------------
 -- 3. Legacy social_account_tokens: add explicit tenant columns for migration
