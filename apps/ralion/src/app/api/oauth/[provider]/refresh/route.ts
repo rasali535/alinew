@@ -1,7 +1,8 @@
 import { NextRequest } from 'next/server';
-import { getConnectorForProvider, IntegrationProvider } from '@ralion/integrations/server';
+import { SocialPlatformType } from '@ralion/integrations/server';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 import { requireRalionContext } from '@/lib/auth/serverAuth';
+import { SocialTokenManager } from '@/lib/services/social/socialTokenManager.service';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,18 +32,39 @@ export async function POST(
     }
 
     const { provider } = await params;
-    const body = await request.json();
-    const { refreshToken } = body;
+    const body = await request.json().catch(() => ({}));
+    const socialConnectionId = body.socialConnectionId;
 
-    const connector = getConnectorForProvider(provider as IntegrationProvider);
-    const refreshed = await connector.refreshToken(refreshToken);
+    if (typeof socialConnectionId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(socialConnectionId)) {
+      return corsJsonResponse(
+        { success: false, code: 'CONNECTION_ID_REQUIRED', error: 'A valid socialConnectionId is required to refresh OAuth state.' },
+        { status: 400 },
+        request
+      );
+    }
+
+    const refreshed = await SocialTokenManager.refreshConnectionToken({
+      connectionId: socialConnectionId,
+      provider: provider as SocialPlatformType,
+      organizationId: required.context.organization.id,
+      workspaceId: required.context.workspace.id,
+      userId: required.context.user.id,
+    });
 
     return corsJsonResponse({
       success: true,
       provider,
-      expiresAt: refreshed.expiresAt
+      socialConnectionId,
+      connectionStatus: 'CONNECTED',
+      tokenStatus: 'TOKEN_VALID',
+      expiresAt: refreshed.expiresAt,
     }, undefined, request);
   } catch (error: any) {
-    return corsJsonResponse({ success: false, error: error.message || 'Token refresh failed' }, { status: 500 }, request);
+    const status = [400, 401, 403, 404, 409, 503].includes(error?.statusCode) ? error.statusCode : 500;
+    return corsJsonResponse(
+      { success: false, code: error?.publicCode || 'TOKEN_REFRESH_FAILED', error: error.message || 'Token refresh failed' },
+      { status },
+      request
+    );
   }
 }
