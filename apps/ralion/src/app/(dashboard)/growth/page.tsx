@@ -241,6 +241,15 @@ function creativeRunStorageKey(orgId: string, workspaceId: string, userId: strin
   return `ralion:${orgId}:${workspaceId}:${userId || 'user'}:creative:last_generation`;
 }
 
+function socialAccountStorageKey(
+  kind: 'accounts' | 'selected',
+  orgId: string,
+  workspaceId: string,
+  userId: string
+): string {
+  return `ralion:${orgId || 'org'}:${workspaceId || 'workspace'}:${userId || 'user'}:social:${kind}`;
+}
+
 function readCreativeRun(raw: string | null): PersistedCreativeRun | null {
   if (!raw) return null;
   try {
@@ -1177,9 +1186,9 @@ function GrowthPageContent() {
 
         // User-scoped localStorage cache
         try {
-          localStorage.setItem(`ralion_social_accounts_${user.id}`, JSON.stringify(accountList));
+          localStorage.setItem(socialAccountStorageKey('accounts', growthOrgId, growthWorkspaceId, user.id), JSON.stringify(accountList));
           if (accountList.length > 0) {
-            const savedSelected = localStorage.getItem(`ralion_selected_social_account_${user.id}`);
+            const savedSelected = localStorage.getItem(socialAccountStorageKey('selected', growthOrgId, growthWorkspaceId, user.id));
             const validSelected = accountList.find(a => a.id === savedSelected);
             setSelectedAccountId(validSelected ? validSelected.id : accountList[0].id);
           }
@@ -1197,7 +1206,7 @@ function GrowthPageContent() {
 
     inFlightAccountsPromiseRef.current = task;
     return task;
-  }, []);
+  }, [growthOrgId, growthWorkspaceId]);
 
   // ── Load Posts for Selected Connection (Authoritative Account Isolation) ─
   /**
@@ -1746,7 +1755,7 @@ function GrowthPageContent() {
 
     try {
       const supabaseUserId = growthUserId || 'user';
-      localStorage.setItem(`ralion_selected_social_account_${supabaseUserId}`, selectedConn.id);
+      localStorage.setItem(socialAccountStorageKey('selected', growthOrgId, growthWorkspaceId, supabaseUserId), selectedConn.id);
     } catch {}
 
     setNewPost(prev => ({ ...prev, platform: selectedConn.provider as ContentPost['platform'] }));
@@ -1776,7 +1785,7 @@ function GrowthPageContent() {
     if (selectedConn.provider === 'facebook') {
       Promise.allSettled([fetchFacebookPages(), fetchPageAnalytics()]);
     }
-  }, [selectedAccountId, connectedAccounts, growthUserId, fetchPostsForConnection, fetchFacebookPages, fetchPageAnalytics]);
+  }, [selectedAccountId, connectedAccounts, growthOrgId, growthWorkspaceId, growthUserId, fetchPostsForConnection, fetchFacebookPages, fetchPageAnalytics]);
 
   // ── Tab-Level Lazy Loading (selected-account scoped) ─────────────────────
   useEffect(() => {
@@ -1914,7 +1923,7 @@ function GrowthPageContent() {
       if (connectionIdParam) {
         setSelectedAccountId(connectionIdParam);
         if (typeof window !== 'undefined' && growthUserId) {
-          localStorage.setItem(`ralion_selected_social_account_${growthUserId}`, connectionIdParam);
+          localStorage.setItem(socialAccountStorageKey('selected', growthOrgId, growthWorkspaceId, growthUserId), connectionIdParam);
         }
       }
       if ((connected === 'facebook' || profileConnected === 'true') && (stage === '1' || facebookParam === 'account_connected' || profileConnected === 'true')) {
@@ -1984,6 +1993,8 @@ function GrowthPageContent() {
         if (user) {
           await supabase.from('social_connections').upsert({
             user_id: user.id,
+            organization_id: growthOrgId || null,
+            workspace_id: growthWorkspaceId || null,
             provider: selectedConnectPlatform,
             provider_account_id: handle.replace(/^@/, ''),
             account_name: newAcc.label,
@@ -1994,7 +2005,7 @@ function GrowthPageContent() {
             followers_count: 1200,
             connected_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-          }, { onConflict: 'user_id,provider,provider_account_id' });
+          }, { onConflict: 'organization_id,workspace_id,user_id,provider,provider_account_id' });
         }
       } catch (e) {
         console.warn('[Growth] Manual Supabase save note:', e);
@@ -2085,55 +2096,33 @@ function GrowthPageContent() {
   // ── Disconnect account (isolated by connection ID) ────────────────────────
   const handleDisconnectAccount = async (targetIdOrProvider: string, providerHint?: string) => {
     try {
-      const supabase = createClient();
-      const { data } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
-      const user = data?.user;
       const targetAccount = connectedAccounts.find(a => a.id === targetIdOrProvider);
-      const isConnectionId = targetIdOrProvider.includes('-') || (targetAccount && targetAccount.id === targetIdOrProvider);
+      const isConnectionId = Boolean(targetAccount?.id === targetIdOrProvider) ||
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetIdOrProvider);
       const providerKey = targetAccount?.provider || providerHint || targetIdOrProvider;
 
-      if (user) {
-        if (isConnectionId) {
-          await supabase.from('social_connections').update({
-            connection_status: 'DISCONNECTED',
-            token_status: 'TOKEN_REVOKED',
-            disconnected_at: new Date().toISOString()
-          }).eq('id', targetIdOrProvider);
-        } else {
-          await supabase.from('social_account_tokens').delete().eq('user_id', user.id).eq('provider', providerKey);
-        }
+      const response = await authFetch('/api/social/connections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'disconnect',
+          connectionId: isConnectionId ? targetIdOrProvider : undefined,
+          provider: providerKey,
+        }),
+      });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Ralion could not disconnect this social account.');
       }
 
-      // API route disconnect
-      try {
-        await authFetch('/api/social/connections', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'disconnect',
-            connectionId: isConnectionId ? targetIdOrProvider : undefined,
-            provider: providerKey,
-            userId: user?.id
-          })
-        });
-      } catch {}
+      const remaining = await loadConnectedAccounts();
+      const nextSelected = remaining.find(a => a.id === selectedAccountId)
+        || remaining[0]
+        || null;
+      setSelectedAccountId(nextSelected?.id || null);
 
-      if (user) {
-        try {
-          const userStorageKey = `ralion_social_accounts_${user.id}`;
-          const stored = JSON.parse(localStorage.getItem(userStorageKey) || '[]');
-          const filtered = stored.filter((a: any) => a.id !== targetIdOrProvider && (isConnectionId ? true : a.provider !== providerKey));
-          localStorage.setItem(userStorageKey, JSON.stringify(filtered));
-        } catch {}
-      }
-
-      setConnectedAccounts(prev => prev.filter(a => a.id !== targetIdOrProvider && (isConnectionId ? true : a.provider !== providerKey)));
-      if (selectedAccountId === targetIdOrProvider) {
-        const remaining = connectedAccounts.filter(a => a.id !== targetIdOrProvider);
-        setSelectedAccountId(remaining[0]?.id || null);
-      }
-
-      if (providerKey === 'facebook') {
+      if (providerKey === 'facebook' && !remaining.some(a => a.provider === 'facebook')) {
         setAvailableFacebookPages([]);
         setFacebookPagePosts([]);
         setFacebookEntitlement(prev => ({ ...prev, current: 0, remaining: prev.limit }));
@@ -2144,8 +2133,13 @@ function GrowthPageContent() {
         message: `✅ Disconnected ${targetAccount?.label || providerKey} account.`
       });
       setTimeout(() => setOauthAlert(null), 4000);
-    } catch (e) {
+    } catch (e: any) {
       console.warn('[Growth] Disconnect error:', e);
+      setOauthAlert({
+        type: 'error',
+        message: e?.message || 'Could not disconnect this social account.',
+      });
+      setTimeout(() => setOauthAlert(null), 5000);
     }
   };
 
@@ -4177,7 +4171,7 @@ function GrowthPageContent() {
                           const supabase = createClient();
                           supabase.auth.getUser().then(({ data }) => {
                             if (data?.user) {
-                              localStorage.setItem(`ralion_selected_social_account_${data.user.id}`, acc.id);
+                              localStorage.setItem(socialAccountStorageKey('selected', growthOrgId, growthWorkspaceId, data.user.id), acc.id);
                             }
                           });
                         } catch {}
