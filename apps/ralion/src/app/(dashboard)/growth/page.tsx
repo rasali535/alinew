@@ -1957,65 +1957,13 @@ function GrowthPageContent() {
 
   // ── Manual / Page Token Direct Connect ────────────────────────────────────
   const handleSaveManualConnection = async () => {
-    if (!manualAccountHandle.trim()) {
-      alert('Please enter an Account Handle or Facebook Page name');
-      return;
-    }
-    setIsConnecting(true);
-    try {
-      const handle = manualAccountHandle.startsWith('@') ? manualAccountHandle : `@${manualAccountHandle}`;
-      const newAccId = `acc-${selectedConnectPlatform}-${Date.now()}`;
-      const newAcc: SocialAccount = {
-        id: newAccId,
-        provider: selectedConnectPlatform,
-        label: platformConfig[selectedConnectPlatform]?.label || selectedConnectPlatform,
-        handle: handle,
-        connectedAt: 'Today',
-        status: 'connected',
-        scopes: ['public_profile', 'email'],
-        followers: '1.2k',
-      };
-
-      // 1. Save to Supabase with isolated connection ID
-      try {
-        const supabase = createClient();
-        const { data } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
-        const user = data?.user;
-        if (user) {
-          await supabase.from('social_connections').upsert({
-            user_id: user.id,
-            provider: selectedConnectPlatform,
-            provider_account_id: handle.replace(/^@/, ''),
-            account_name: newAcc.label,
-            username: handle.replace(/^@/, ''),
-            account_type: 'PERSONAL',
-            connection_status: 'CONNECTED',
-            token_status: 'TOKEN_VALID',
-            followers_count: 1200,
-            connected_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          }, { onConflict: 'user_id,provider,provider_account_id' });
-        }
-      } catch (e) {
-        console.warn('[Growth] Manual Supabase save note:', e);
-      }
-
-      setConnectedAccounts(prev => {
-        const filtered = prev.filter(a => a.id !== newAccId);
-        return [...filtered, newAcc];
-      });
-      setSelectedAccountId(newAccId);
-
-      setIsConnectModalOpen(false);
-      setManualAccountHandle('');
-      setManualAccessToken('');
-      loadConnectedAccounts().catch(() => []);
-    } catch (err: any) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      alert(`Failed to save manual connection: ${errMsg}`);
-    } finally {
-      setIsConnecting(false);
-    }
+    setIsConnectModalOpen(false);
+    setManualAccessToken('');
+    setOauthAlert({
+      type: 'error',
+      message: 'Manual connection state is disabled. Connect this account through the provider OAuth flow so Ralion can verify tenant ownership and token health.',
+    });
+    setTimeout(() => setOauthAlert(null), 7000);
   };
 
   // ── Real OAuth Connect: fetch auth URL → redirect browser ─────────────────
@@ -2059,18 +2007,12 @@ function GrowthPageContent() {
         return;
       }
 
-      // Supabase Social OAuth Provider fallback (wrapped safely to avoid uncaught rejections)
-      try {
-        setIsConnectModalOpen(false);
-        await AuthService.linkSocialAccount(providerKey);
-      } catch (authErr: any) {
-        console.warn('[Growth OAuth fallback]', authErr);
-        const authMsg = authErr instanceof Error ? authErr.message : (typeof authErr === 'object' ? authErr.error_description || authErr.message || JSON.stringify(authErr) : String(authErr));
-        setOauthAlert({
-          type: 'error',
-          message: authMsg || 'Social connection authorization could not be started.'
-        });
-      }
+      setOauthAlert({
+        type: 'error',
+        message: 'Ralion could not start the tenant-scoped integration OAuth flow. No connection state was changed.',
+      });
+      setIsConnecting(false);
+      return;
     } catch (err: any) {
       const errMsg = err instanceof Error ? err.message : String(err);
       setOauthAlert({
@@ -2084,56 +2026,45 @@ function GrowthPageContent() {
 
   // ── Disconnect account (isolated by connection ID) ────────────────────────
   const handleDisconnectAccount = async (targetIdOrProvider: string, providerHint?: string) => {
-    try {
-      const supabase = createClient();
-      const { data } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
-      const user = data?.user;
-      const targetAccount = connectedAccounts.find(a => a.id === targetIdOrProvider);
-      const isConnectionId = targetIdOrProvider.includes('-') || (targetAccount && targetAccount.id === targetIdOrProvider);
-      const providerKey = targetAccount?.provider || providerHint || targetIdOrProvider;
+    const targetAccount = connectedAccounts.find(a => a.id === targetIdOrProvider);
+    const providerKey = targetAccount?.provider || providerHint || targetIdOrProvider;
+    const isConnectionId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetIdOrProvider);
 
-      if (user) {
-        if (isConnectionId) {
-          await supabase.from('social_connections').update({
-            connection_status: 'DISCONNECTED',
-            token_status: 'TOKEN_REVOKED',
-            disconnected_at: new Date().toISOString()
-          }).eq('id', targetIdOrProvider);
-        } else {
-          await supabase.from('social_account_tokens').delete().eq('user_id', user.id).eq('provider', providerKey);
-        }
+    try {
+      const response = await authFetch('/api/social/connections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'disconnect',
+          connectionId: isConnectionId ? targetIdOrProvider : undefined,
+          provider: providerKey,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || !result?.success) {
+        throw new Error(result?.error || `Disconnect failed (HTTP ${response.status})`);
       }
 
-      // API route disconnect
+      const authoritativeAccounts = await loadConnectedAccounts();
+
       try {
-        await authFetch('/api/social/connections', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'disconnect',
-            connectionId: isConnectionId ? targetIdOrProvider : undefined,
-            provider: providerKey,
-            userId: user?.id
-          })
-        });
+        const supabase = createClient();
+        const { data } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+        const user = data?.user;
+        if (user) {
+          localStorage.setItem(`ralion_social_accounts_${user.id}`, JSON.stringify(authoritativeAccounts));
+          const selectedStillExists = authoritativeAccounts.some(a => a.id === selectedAccountId);
+          if (!selectedStillExists) {
+            const nextId = authoritativeAccounts[0]?.id || null;
+            setSelectedAccountId(nextId);
+            if (nextId) localStorage.setItem(`ralion_selected_social_account_${user.id}`, nextId);
+            else localStorage.removeItem(`ralion_selected_social_account_${user.id}`);
+          }
+        }
       } catch {}
 
-      if (user) {
-        try {
-          const userStorageKey = `ralion_social_accounts_${user.id}`;
-          const stored = JSON.parse(localStorage.getItem(userStorageKey) || '[]');
-          const filtered = stored.filter((a: any) => a.id !== targetIdOrProvider && (isConnectionId ? true : a.provider !== providerKey));
-          localStorage.setItem(userStorageKey, JSON.stringify(filtered));
-        } catch {}
-      }
-
-      setConnectedAccounts(prev => prev.filter(a => a.id !== targetIdOrProvider && (isConnectionId ? true : a.provider !== providerKey)));
-      if (selectedAccountId === targetIdOrProvider) {
-        const remaining = connectedAccounts.filter(a => a.id !== targetIdOrProvider);
-        setSelectedAccountId(remaining[0]?.id || null);
-      }
-
-      if (providerKey === 'facebook') {
+      if (providerKey === 'facebook' && !authoritativeAccounts.some(a => a.provider === 'facebook')) {
         setAvailableFacebookPages([]);
         setFacebookPagePosts([]);
         setFacebookEntitlement(prev => ({ ...prev, current: 0, remaining: prev.limit }));
@@ -2141,11 +2072,17 @@ function GrowthPageContent() {
 
       setOauthAlert({
         type: 'info',
-        message: `✅ Disconnected ${targetAccount?.label || providerKey} account.`
+        message: `✅ Disconnected ${targetAccount?.label || providerKey} account.`,
       });
       setTimeout(() => setOauthAlert(null), 4000);
-    } catch (e) {
+    } catch (e: any) {
       console.warn('[Growth] Disconnect error:', e);
+      await loadConnectedAccounts().catch(() => []);
+      setOauthAlert({
+        type: 'error',
+        message: `Disconnect failed: ${e?.message || 'Ralion could not verify the authoritative connection state.'}`,
+      });
+      setTimeout(() => setOauthAlert(null), 7000);
     }
   };
 
