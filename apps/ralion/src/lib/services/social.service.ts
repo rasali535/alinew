@@ -88,8 +88,8 @@ export async function storeOAuthTokens(params: {
   const isFacebookAuthorizationIdentity =
     params.provider.toLowerCase() === 'facebook' && !params.pageId;
   if (!isFacebookAuthorizationIdentity) {
-  try {
-    const { data: connData, error: connErr } = await supabase.from('social_connections').upsert({
+    const nowIso = new Date().toISOString();
+    const connectionPayload = {
       user_id: params.userId,
       organization_id: tenant.organizationId,
       workspace_id: tenant.workspaceId,
@@ -115,46 +115,91 @@ export async function storeOAuthTokens(params: {
         workspaceId: tenant.workspaceId,
       },
       followers_count: params.followersCount ?? 0,
-      last_sync_at: new Date().toISOString(),
-      connected_at: new Date().toISOString(),
+      last_sync_at: nowIso,
       disconnected_at: null,
       health_error_message: null,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'workspace_id,user_id,provider,provider_account_id' }).select('id').maybeSingle();
+      updated_at: nowIso,
+    };
 
-    if (!connErr && connData?.id) {
-      connectionId = connData.id;
-    } else if (connErr) {
-      console.warn('[SocialService] connErr:', connErr.message);
+    const { data: existingConn, error: lookupErr } = await supabase
+      .from('social_connections')
+      .select('id, connected_at')
+      .eq('user_id', params.userId)
+      .eq('organization_id', tenant.organizationId)
+      .eq('workspace_id', tenant.workspaceId)
+      .eq('provider', params.provider.toLowerCase())
+      .eq('provider_account_id', resolvedAccountId)
+      .maybeSingle();
+
+    if (lookupErr) {
+      throw new Error(`Unable to resolve existing OAuth connection: ${lookupErr.message}`);
     }
-  } catch (dbErr: any) {
-    console.warn('[SocialService] social_connections multi-account upsert notice:', dbErr.message);
-  }
+
+    if (existingConn?.id) {
+      const { error: updateErr } = await supabase
+        .from('social_connections')
+        .update(connectionPayload)
+        .eq('id', existingConn.id)
+        .eq('user_id', params.userId)
+        .eq('organization_id', tenant.organizationId)
+        .eq('workspace_id', tenant.workspaceId);
+      if (updateErr) throw new Error(`Unable to reconnect OAuth account: ${updateErr.message}`);
+      connectionId = existingConn.id;
+    } else {
+      const { data: inserted, error: insertErr } = await supabase
+        .from('social_connections')
+        .insert({
+          ...connectionPayload,
+          connected_at: nowIso,
+        })
+        .select('id')
+        .maybeSingle();
+      if (insertErr || !inserted?.id) {
+        throw new Error(`Unable to create tenant-scoped OAuth connection: ${insertErr?.message || 'missing connection id'}`);
+      }
+      connectionId = inserted.id;
+    }
   }
 
-  // 3. Keep backward-compatible social_account_tokens table updated
+  // 3. Keep the legacy user-global token row only when it already belongs
+  // to this workspace (or has never been scoped). Canonical state is the
+  // tenant-owned social_connections/meta_connections record above.
   try {
-    await supabase.from('social_account_tokens').upsert({
-      user_id: params.userId,
-      organization_id: tenant.organizationId,
-      workspace_id: tenant.workspaceId,
-      provider: params.provider,
-      encrypted_access_token: encryptedAccessToken,
-      encrypted_refresh_token: encryptedRefreshToken,
-      expires_at: tokenExpiresAt,
-      account_handle: params.accountHandle, account_label: params.accountLabel,
-      followers_count: params.followersCount ?? 0, avatar_url: params.avatarUrl ?? null,
-      page_id: params.pageId ?? null, scopes: params.scopes ?? [], extra_meta: {
-        ...(params.extraMeta ?? {}),
-        connectionId,
-        providerAccountId: resolvedAccountId,
-        organizationId: tenant.organizationId,
-        workspaceId: tenant.workspaceId,
-      },
-      status: 'connected', connected_at: new Date().toISOString(),
-    }, { onConflict: 'workspace_id,user_id,provider' });
+    const { data: legacyRow } = await supabase
+      .from('social_account_tokens')
+      .select('id, extra_meta')
+      .eq('user_id', params.userId)
+      .eq('provider', params.provider)
+      .maybeSingle();
+
+    const legacyWorkspaceId = legacyRow?.extra_meta?.workspaceId;
+    if (!legacyWorkspaceId || legacyWorkspaceId === tenant.workspaceId) {
+      await supabase.from('social_account_tokens').upsert({
+        user_id: params.userId,
+        provider: params.provider,
+        encrypted_access_token: encryptedAccessToken,
+        encrypted_refresh_token: encryptedRefreshToken,
+        expires_at: tokenExpiresAt,
+        account_handle: params.accountHandle,
+        account_label: params.accountLabel,
+        followers_count: params.followersCount ?? 0,
+        avatar_url: params.avatarUrl ?? null,
+        page_id: params.pageId ?? null,
+        scopes: params.scopes ?? [],
+        extra_meta: {
+          ...(params.extraMeta ?? {}),
+          connectionId,
+          providerAccountId: resolvedAccountId,
+          organizationId: tenant.organizationId,
+          workspaceId: tenant.workspaceId,
+        },
+        status: 'connected',
+        connected_at: new Date().toISOString(),
+        last_synced_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,provider' });
+    }
   } catch (tokErr: any) {
-    console.warn('[SocialService] social_account_tokens fallback notice:', tokErr.message);
+    console.warn('[SocialService] legacy token compatibility notice:', tokErr.message);
   }
 
   // 4. If Meta provider (Facebook/Instagram), also synchronize with dedicated meta_connections table
@@ -274,12 +319,15 @@ export async function loadOAuthTokens(
 
   const { data, error } = await supabase.from('social_account_tokens').select('*')
     .eq('user_id', userId)
-    .eq('organization_id', tenant.organizationId)
-    .eq('workspace_id', tenant.workspaceId)
     .eq('provider', provider)
     .eq('status', 'connected')
     .maybeSingle();
-  if (error || !data) return null;
+  if (
+    error ||
+    !data ||
+    data.extra_meta?.workspaceId !== tenant.workspaceId ||
+    data.extra_meta?.organizationId !== tenant.organizationId
+  ) return null;
   return {
     accessToken: decryptToken(data.encrypted_access_token),
     refreshToken: data.encrypted_refresh_token ? decryptToken(data.encrypted_refresh_token) : undefined,
@@ -410,33 +458,34 @@ export async function persistRefreshedOAuthTokens(params: {
     encryptedRefreshToken ||
     (existing.refreshToken ? encryptToken(existing.refreshToken) : null);
 
-  await supabase
-    .from('social_account_tokens')
-    .upsert({
-      user_id: params.userId,
-      organization_id: tenant.organizationId,
-      workspace_id: tenant.workspaceId,
-      provider: params.provider.toLowerCase(),
-      encrypted_access_token: encryptedAccessToken,
-      encrypted_refresh_token: legacyRefreshEnvelope,
-      expires_at: expiresAt,
-      account_handle: existing.record.account_handle,
-      account_label: existing.record.account_label,
-      followers_count: existing.record.followers_count || 0,
-      avatar_url: existing.record.avatar_url || null,
-      page_id: existing.record.page_id || null,
-      scopes: existing.record.scopes || [],
-      extra_meta: {
-        ...(existing.record.extra_meta || {}),
-        connectionId: params.connectionId,
-        organizationId: tenant.organizationId,
-        workspaceId: tenant.workspaceId,
-      },
-      status: 'connected',
-      connected_at: existing.record.connected_at || nowIso,
-      last_synced_at: nowIso,
-      updated_at: nowIso,
-    }, { onConflict: 'workspace_id,user_id,provider' });
+  try {
+    const { data: legacyRow } = await supabase
+      .from('social_account_tokens')
+      .select('id, extra_meta')
+      .eq('user_id', params.userId)
+      .eq('provider', params.provider.toLowerCase())
+      .maybeSingle();
+
+    if (
+      legacyRow?.id &&
+      legacyRow.extra_meta?.workspaceId === tenant.workspaceId &&
+      legacyRow.extra_meta?.organizationId === tenant.organizationId
+    ) {
+      await supabase
+        .from('social_account_tokens')
+        .update({
+          encrypted_access_token: encryptedAccessToken,
+          encrypted_refresh_token: legacyRefreshEnvelope,
+          expires_at: expiresAt,
+          status: 'connected',
+          last_synced_at: nowIso,
+          updated_at: nowIso,
+        })
+        .eq('id', legacyRow.id);
+    }
+  } catch (legacyErr: any) {
+    console.warn('[SocialService] legacy refresh compatibility notice:', legacyErr.message);
+  }
 
   return { expiresAt };
 }
