@@ -54,25 +54,43 @@ export class SocialDisconnectService {
     let tokensPurged = 0;
     let zernioDisconnected = false;
 
-    // 1. Target social_connections records
+    // 1. Target social_connections records. OAuth/social ownership is
+    // conjunctive: organization + workspace + user + provider. Never broaden
+    // tenant scope with OR conditions.
+    if (
+      !params.tenantId ||
+      !params.workspaceId ||
+      !params.userId ||
+      tenantId === 'unconfigured-tenant' ||
+      workspaceId === 'unconfigured-workspace'
+    ) {
+      const scopeError = new Error('Canonical tenant, workspace, and user context are required to disconnect a social account.');
+      (scopeError as any).statusCode = 403;
+      throw scopeError;
+    }
+
     let connQuery = supabase
       .from('social_connections')
       .select('*')
-      .eq('provider', provider);
+      .eq('provider', provider)
+      .eq('organization_id', tenantId)
+      .eq('workspace_id', workspaceId)
+      .eq('user_id', userId);
 
     if (connectionId) {
       connQuery = connQuery.eq('id', connectionId);
-    } else if (workspaceId && workspaceId !== 'default' && workspaceId !== 'unconfigured-workspace') {
-      if (userId) {
-        connQuery = connQuery.or(`workspace_id.eq.${workspaceId},user_id.eq.${userId}`);
-      } else {
-        connQuery = connQuery.eq('workspace_id', workspaceId);
-      }
-    } else if (userId) {
-      connQuery = connQuery.eq('user_id', userId);
     }
 
-    const { data: matchedConns } = await connQuery;
+    const { data: matchedConns, error: matchErr } = await connQuery;
+    if (matchErr) {
+      throw new Error(`Unable to resolve tenant-owned social connection: ${matchErr.message}`);
+    }
+
+    if (connectionId && (!matchedConns || matchedConns.length === 0)) {
+      const notFound = new Error('Social connection was not found in the authenticated workspace.');
+      (notFound as any).statusCode = 404;
+      throw notFound;
+    }
 
     for (const conn of matchedConns || []) {
       // If connected via Zernio, disconnect on remote Zernio platform first
@@ -112,16 +130,29 @@ export class SocialDisconnectService {
       if (!updateErr) recordsUpdated += 1;
     }
 
-    // 2. Purge from secondary token vaults (social_account_tokens, meta_connections)
+    // 2. Purge secondary credentials only when they belong to this exact
+    // workspace. social_account_tokens is legacy/user-global, so its embedded
+    // workspace tag is checked before deletion.
     if (userId) {
       try {
-        const { error: delTokenErr } = await supabase
+        const { data: legacyToken } = await supabase
           .from('social_account_tokens')
-          .delete()
+          .select('id, extra_meta')
           .eq('user_id', userId)
-          .eq('provider', provider);
+          .eq('provider', provider)
+          .maybeSingle();
 
-        if (!delTokenErr) tokensPurged += 1;
+        if (
+          legacyToken?.id &&
+          legacyToken.extra_meta?.workspaceId === workspaceId &&
+          legacyToken.extra_meta?.organizationId === tenantId
+        ) {
+          const { error: delTokenErr } = await supabase
+            .from('social_account_tokens')
+            .delete()
+            .eq('id', legacyToken.id);
+          if (!delTokenErr) tokensPurged += 1;
+        }
       } catch {}
 
       if (['facebook', 'instagram', 'meta', 'whatsapp'].includes(provider)) {
@@ -135,7 +166,9 @@ export class SocialDisconnectService {
               disconnected_at: nowIso,
               updated_at: nowIso,
             })
-            .eq('user_id', userId);
+            .eq('workspace_id', workspaceId)
+            .eq('user_id', userId)
+            .eq('provider', provider);
         } catch {}
       }
     }
@@ -151,11 +184,10 @@ export class SocialDisconnectService {
         })
         .eq('provider', provider);
 
-      if (workspaceId && workspaceId !== 'default' && workspaceId !== 'unconfigured-workspace') {
-        destQuery = destQuery.eq('workspace_id', workspaceId);
-      } else if (userId) {
-        destQuery = destQuery.eq('user_id', userId);
-      }
+      destQuery = destQuery
+        .eq('organization_id', tenantId)
+        .eq('workspace_id', workspaceId)
+        .eq('user_id', userId);
       await destQuery;
     } catch {}
 
