@@ -11,6 +11,7 @@ const disconnect = read('apps/ralion/src/lib/services/social/socialDisconnect.se
 const connectionsRoute = read('apps/ralion/src/app/api/social/connections/route.ts');
 const growth = read('apps/ralion/src/app/(dashboard)/growth/page.tsx');
 const migration = read('supabase/migrations/20261017190000_oauth_connection_state_workspace_isolation.sql');
+const metaWorkspaceMigration = read('packages/database/migrations/20260923053000_meta_credentials_workspace_unique.sql');
 
 const failures = [];
 const requireCheck = (condition, message) => {
@@ -96,8 +97,9 @@ requireCheck(
 
 requireCheck(
   migration.includes('idx_social_connections_workspace_user_provider_account_unique') &&
-  migration.includes('idx_meta_connections_workspace_identity_unique') &&
-  migration.includes('idx_social_account_tokens_workspace_user_provider_unique'),
+  migration.includes('idx_social_account_tokens_workspace_user_provider_unique') &&
+  metaWorkspaceMigration.includes('idx_meta_connections_workspace_identity_unique') &&
+  metaWorkspaceMigration.includes('(workspace_id, user_id, provider, meta_user_id)'),
   'Database uniqueness must include workspace for OAuth connection/token identities.'
 );
 requireCheck(
