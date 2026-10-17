@@ -48,6 +48,7 @@ export async function GET(request: NextRequest) {
       .eq('id', socialConnectionId)
       .eq('workspace_id', context.workspace.id)
       .eq('organization_id', context.organization.id)
+      .eq('user_id', context.user.id)
       .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected', 'active'])
       .maybeSingle();
 
@@ -123,6 +124,9 @@ export async function GET(request: NextRequest) {
           .from('social_posts')
           .select('*')
           .eq('social_connection_id', socialConnectionId)
+          .eq('organization_id', context.organization.id)
+          .eq('workspace_id', context.workspace.id)
+          .eq('user_id', context.user.id)
           .order('created_at', { ascending: false })
           .limit(limit);
 
