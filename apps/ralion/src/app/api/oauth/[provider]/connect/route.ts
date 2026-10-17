@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { createHash } from 'crypto';
 import {
   linkedinAdapter, xAdapter, tiktokAdapter, youtubeAdapter,
   generateCodeVerifier, generateCodeChallenge,
@@ -101,6 +102,8 @@ export async function GET(
         return corsJsonResponse({ success: false, error: `Social provider '${provider}' is not yet supported for direct OAuth. Supported: ${SUPPORTED_SOCIAL_PROVIDERS.join(', ')}` }, { status: 400 }, request);
     }
 
+    const verifierStateId = createHash('sha256').update(stateToken).digest('hex').slice(0, 16);
+
     const response = corsJsonResponse({
       success: true,
       provider,
@@ -112,7 +115,7 @@ export async function GET(
           ? { graphVersion: instagramBusinessAdapter.graphVersion(), oauthMode: 'instagram_login' }
           : {}),
     }, undefined, request);
-    response.cookies.set(`oauth_verifier_${provider}`, codeVerifier, {
+    response.cookies.set(`oauth_verifier_${provider}_${verifierStateId}`, codeVerifier, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
