@@ -42,7 +42,7 @@ export async function GET(
 
     const userId = context.user.id;
     const workspaceId = context.workspace.id;
-    const orgId = context.workspace.organization_id || context.workspace.id;
+    const orgId = context.organization.id;
 
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = await generateCodeChallenge(codeVerifier);
