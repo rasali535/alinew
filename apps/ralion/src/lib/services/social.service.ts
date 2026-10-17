@@ -514,60 +514,123 @@ export async function persistRefreshedOAuthTokens(params: {
   return { expiresAt };
 }
 
-export async function deleteOAuthToken(userId: string, provider: string, connectionId?: string) {
+export async function deleteOAuthToken(
+  userId: string,
+  provider: string,
+  scope: OAuthTenantScope,
+  connectionId?: string
+) {
   const supabase = getServiceSupabase();
+  const tenant = requireOAuthTenantScope(scope);
+  const normalizedProvider = provider.toLowerCase();
+  const nowIso = new Date().toISOString();
 
-  if (connectionId) {
-    const { data: conn } = await supabase.from('social_connections').select('metadata').eq('id', connectionId).maybeSingle();
-    const sanitizedMeta = { ...(conn?.metadata || {}) };
+  let query = supabase
+    .from('social_connections')
+    .select('id, metadata')
+    .eq('user_id', userId)
+    .eq('organization_id', tenant.organizationId)
+    .eq('workspace_id', tenant.workspaceId)
+    .eq('provider', normalizedProvider);
+
+  if (connectionId) query = query.eq('id', connectionId);
+  const { data: connections, error: lookupError } = await query;
+  if (lookupError) throw new Error(`Unable to resolve OAuth connection for deletion: ${lookupError.message}`);
+
+  for (const conn of connections || []) {
+    const sanitizedMeta = { ...(conn.metadata || {}) };
     delete sanitizedMeta.encrypted_access_token;
     delete sanitizedMeta.encrypted_refresh_token;
+    delete sanitizedMeta.token_expires_at;
 
-    await supabase.from('social_connections').update({
-      metadata: sanitizedMeta,
-      connection_status: 'DISCONNECTED',
-      token_status: 'TOKEN_REVOKED',
-      disconnected_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }).eq('id', connectionId);
-  } else {
-    await supabase.from('social_account_tokens').delete().eq('user_id', userId).eq('provider', provider);
-    await supabase.from('social_connections').update({
-      connection_status: 'DISCONNECTED',
-      token_status: 'TOKEN_REVOKED',
-      disconnected_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }).eq('user_id', userId).eq('provider', provider.toLowerCase());
+    const { error } = await supabase
+      .from('social_connections')
+      .update({
+        metadata: sanitizedMeta,
+        connection_status: 'DISCONNECTED',
+        token_status: 'TOKEN_REVOKED',
+        disconnected_at: nowIso,
+        updated_at: nowIso,
+      })
+      .eq('id', conn.id)
+      .eq('user_id', userId)
+      .eq('organization_id', tenant.organizationId)
+      .eq('workspace_id', tenant.workspaceId);
+    if (error) throw new Error(`Unable to revoke OAuth connection: ${error.message}`);
   }
 
-  if (['facebook', 'instagram', 'meta', 'whatsapp'].includes(provider.toLowerCase())) {
+  try {
+    const { data: legacy } = await supabase
+      .from('social_account_tokens')
+      .select('id, extra_meta')
+      .eq('user_id', userId)
+      .eq('provider', normalizedProvider)
+      .maybeSingle();
+    if (
+      legacy?.id &&
+      legacy.extra_meta?.workspaceId === tenant.workspaceId &&
+      legacy.extra_meta?.organizationId === tenant.organizationId
+    ) {
+      await supabase.from('social_account_tokens').delete().eq('id', legacy.id);
+    }
+  } catch {}
+
+  if (['facebook', 'instagram', 'meta', 'whatsapp'].includes(normalizedProvider)) {
     await supabase.from('meta_connections').update({
       connection_status: 'disconnected',
       encrypted_access_token: null,
       encrypted_refresh_token: null,
-      disconnected_at: new Date().toISOString()
-    }).eq('user_id', userId).eq('provider', provider.toLowerCase());
+      disconnected_at: nowIso,
+      updated_at: nowIso,
+    })
+      .eq('workspace_id', tenant.workspaceId)
+      .eq('user_id', userId)
+      .eq('provider', normalizedProvider);
   }
 }
 
-export async function markTokenExpired(userId: string, provider: string, connectionId?: string) {
+export async function markTokenExpired(
+  userId: string,
+  provider: string,
+  scope: OAuthTenantScope,
+  connectionId?: string
+) {
   const supabase = getServiceSupabase();
-  if (connectionId) {
-    await supabase.from('social_connections').update({ token_status: 'TOKEN_EXPIRED', connection_status: 'RECONNECT_REQUIRED' }).eq('id', connectionId);
-  }
-  await supabase.from('social_account_tokens').update({ status: 'expired' })
-    .eq('user_id', userId).eq('provider', provider);
+  const tenant = requireOAuthTenantScope(scope);
+  let query = supabase
+    .from('social_connections')
+    .update({
+      token_status: 'TOKEN_EXPIRED',
+      connection_status: 'RECONNECT_REQUIRED',
+      health_error_message: 'OAuth token expired; reconnect required.',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', userId)
+    .eq('organization_id', tenant.organizationId)
+    .eq('workspace_id', tenant.workspaceId)
+    .eq('provider', provider.toLowerCase());
+  if (connectionId) query = query.eq('id', connectionId);
+  await query;
 }
 
-export async function updateLastSynced(userId: string, provider: string, connectionId?: string) {
+export async function updateLastSynced(
+  userId: string,
+  provider: string,
+  scope: OAuthTenantScope,
+  connectionId?: string
+) {
   const supabase = getServiceSupabase();
-  if (connectionId) {
-    await supabase.from('social_connections').update({ last_sync_at: new Date().toISOString() }).eq('id', connectionId);
-  }
-  await supabase.from('social_account_tokens').update({ last_synced_at: new Date().toISOString() })
-    .eq('user_id', userId).eq('provider', provider);
+  const tenant = requireOAuthTenantScope(scope);
+  let query = supabase
+    .from('social_connections')
+    .update({ last_sync_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq('user_id', userId)
+    .eq('organization_id', tenant.organizationId)
+    .eq('workspace_id', tenant.workspaceId)
+    .eq('provider', provider.toLowerCase());
+  if (connectionId) query = query.eq('id', connectionId);
+  await query;
 }
-
 
 // LinkedIn Adapter
 export const linkedinAdapter = {
