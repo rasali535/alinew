@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createHash } from 'crypto';
 import { verifyOAuthState } from '@ralion/integrations/server';
 import {
   linkedinAdapter, xAdapter, tiktokAdapter, youtubeAdapter,
@@ -57,12 +58,24 @@ export async function GET(
       return NextResponse.redirect(`${growthRedirect}?oauth_error=invalid_state&provider=${provider}`);
     }
 
+    if (verified.provider.trim().toLowerCase() !== provider.trim().toLowerCase()) {
+      console.warn(`[OAuth Callback Warning] Signed provider mismatch | route=${provider} | state=${verified.provider}`);
+      return NextResponse.redirect(`${growthRedirect}?oauth_error=provider_state_mismatch&provider=${provider}`);
+    }
+
     // Tenant identity comes only from the signed state created after requireRalionContext.
     const userId = verified.userId;
     const workspaceId = verified.workspaceId;
     const organizationId = verified.organizationId || workspaceId;
     const intent = verified.intent || 'login';
-    const codeVerifier = request.cookies.get(`oauth_verifier_${provider}`)?.value || '';
+    const verifierStateId = createHash('sha256').update(state).digest('hex').slice(0, 16);
+    const verifierCookieName = `oauth_verifier_${provider}_${verifierStateId}`;
+    // Old provider-only cookie is read only for an in-flight flow started
+    // immediately before this deployment.
+    const codeVerifier =
+      request.cookies.get(verifierCookieName)?.value ||
+      request.cookies.get(`oauth_verifier_${provider}`)?.value ||
+      '';
 
     let accessToken = '';
     let refreshToken: string | undefined;
@@ -199,11 +212,13 @@ export async function GET(
         return NextResponse.redirect(`${growthRedirect}?oauth_error=unsupported_provider&provider=${provider}`);
     }
 
+    const persistedProvider = provider === 'google' ? 'youtube' : provider === 'twitter' ? 'x' : provider;
+
     const storeResult = await storeOAuthTokens({
       userId,
       workspaceId,
       organizationId,
-      provider,
+      provider: persistedProvider,
       providerAccountId,
       accessToken,
       refreshToken,
@@ -232,6 +247,7 @@ export async function GET(
     const connectionQuery = storeResult.connectionId ? `&connection_id=${encodeURIComponent(storeResult.connectionId)}` : '';
     const finalRedirectUrl = `${growthRedirect}?connected=${provider}&handle=${encodeURIComponent(profile.handle)}${connectionQuery}${stageQuery}`;
     const redirectResponse = NextResponse.redirect(finalRedirectUrl);
+    redirectResponse.cookies.set(verifierCookieName, '', { maxAge: 0, path: '/' });
     redirectResponse.cookies.set(`oauth_verifier_${provider}`, '', { maxAge: 0, path: '/' });
     return redirectResponse;
   } catch (error: any) {
