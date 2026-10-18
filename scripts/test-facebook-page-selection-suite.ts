@@ -3,6 +3,9 @@ dotenv.config({ path: 'apps/ralion/.env.local' });
 dotenv.config({ path: '.env.local' });
 dotenv.config();
 
+import './preload-server-only.cjs';
+process.env.OAUTH_ENCRYPTION_KEY = process.env.OAUTH_ENCRYPTION_KEY || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+
 import { FacebookPageManagementService } from '../apps/ralion/src/lib/services/social/facebookPageManagement.service';
 import { MariFacebookGrowthService, MariPageContext } from '../apps/ralion/src/lib/services/social/mariFacebookGrowth.service';
 import { metaAdapter } from '../apps/ralion/src/lib/services/social.service';
@@ -36,8 +39,13 @@ async function runFacebookPageSelectionSuite() {
     `OAuth scopes include managed page permissions (${defaultScopes.join(', ')})`
   );
 
+  const TEST_TENANT_ID = '11111111-1111-4111-8111-111111111111';
+  const TEST_USER_ID = '22222222-2222-4222-8222-222222222222';
+  const NON_EXISTENT_TENANT_ID = '99999999-9999-4999-8999-999999999999';
+  const NON_EXISTENT_USER_ID = '88888888-8888-4888-8888-888888888888';
+
   // MG-FB-02: Entitlement resolution
-  const ent = await FacebookPageManagementService.getOrganizationEntitlement('test-org-1');
+  const ent = await FacebookPageManagementService.getOrganizationEntitlement(TEST_TENANT_ID);
   assert(
     ent.limit >= 1 && typeof ent.remaining === 'number' && ent.planName !== undefined,
     'MG-FB-02',
@@ -46,7 +54,7 @@ async function runFacebookPageSelectionSuite() {
 
   // MG-FB-03: getActivePage returns null or valid PageDescriptor (never user profile ID as page)
   const activePage = await FacebookPageManagementService.getActivePage({
-    organizationId: 'non-existent-tenant-xyz',
+    organizationId: NON_EXISTENT_TENANT_ID,
   });
   assert(
     activePage === null,
@@ -56,8 +64,8 @@ async function runFacebookPageSelectionSuite() {
 
   // MG-FB-04: discoverAvailablePages handles empty state gracefully
   const discovery = await FacebookPageManagementService.discoverAvailablePages({
-    organizationId: 'non-existent-tenant-xyz',
-    userId: 'non-existent-user-xyz',
+    organizationId: NON_EXISTENT_TENANT_ID,
+    userId: NON_EXISTENT_USER_ID,
   });
   assert(
     Array.isArray(discovery.pages) && discovery.pages.length === 0,
@@ -67,7 +75,8 @@ async function runFacebookPageSelectionSuite() {
 
   // MG-FB-05: Page analytics empty state
   const analytics = await FacebookPageManagementService.getPageAnalytics({
-    organizationId: 'non-existent-tenant-xyz',
+    organizationId: NON_EXISTENT_TENANT_ID,
+    userId: NON_EXISTENT_USER_ID,
     pageId: 'default',
   });
   assert(
@@ -78,7 +87,7 @@ async function runFacebookPageSelectionSuite() {
 
   // MG-FB-06: Mari 7-Day Growth Plan generation branded dynamically to page context
   const testContext: MariPageContext = {
-    organizationId: 'test-org',
+    organizationId: TEST_TENANT_ID,
     pageId: 'page-123456789',
     pageName: 'SolarTech Solutions Botswana',
     followers: 2450,
@@ -94,10 +103,9 @@ async function runFacebookPageSelectionSuite() {
 
   const plan = await MariFacebookGrowthService.generate7DayGrowthPlan({
     context: testContext,
-    userId: 'test-user',
+    userId: TEST_USER_ID,
     focusObjective: 'Lead Generation',
   });
-
   assert(
     plan.days.length === 7 &&
     plan.pageName === 'SolarTech Solutions Botswana' &&
@@ -119,7 +127,7 @@ async function runFacebookPageSelectionSuite() {
   // MG-FB-08: Mari Strategic Growth Insights generation
   const insights = await MariFacebookGrowthService.generateGrowthInsights({
     context: testContext,
-    userId: 'test-user',
+    userId: TEST_USER_ID,
   });
   assert(
     insights.score.total >= 0 &&
@@ -133,7 +141,7 @@ async function runFacebookPageSelectionSuite() {
   const askRes = await MariFacebookGrowthService.askMari({
     context: testContext,
     prompt: 'Why should we post more video content on SolarTech Solutions Botswana?',
-    userId: 'test-user',
+    userId: TEST_USER_ID,
   });
   assert(
     askRes.answer.length > 50 &&
@@ -144,7 +152,7 @@ async function runFacebookPageSelectionSuite() {
   );
 
   // MG-FB-10: Token encryption/decryption roundtrip
-  const { encryptToken, decryptToken } = await import('@ralion/integrations');
+  const { encryptToken, decryptToken } = await import('@ralion/integrations/server');
   const secretKey = 'super_secret_test_token_12345';
   const encrypted = encryptToken(secretKey);
   const decrypted = decryptToken(encrypted);

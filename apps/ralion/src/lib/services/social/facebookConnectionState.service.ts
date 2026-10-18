@@ -70,7 +70,9 @@ export interface FacebookConnectionStateResult {
   requiresReauth: boolean;
   reason?: string;
   statusMessage: string;
-  ctaAction?: 'CONNECT_FACEBOOK' | 'SELECT_FACEBOOK_PAGE' | 'RECONNECT_PAGE_ACCESS' | 'RECONNECT_EXPIRED' | 'MANAGE_PAGE';
+  discoveryStatus?: 'SUCCESS' | 'NO_MANAGEABLE_PAGES' | 'PERMISSION_MISSING' | 'TOKEN_EXPIRED' | 'REAUTH_REQUIRED' | 'GRAPH_ERROR' | 'PROFILE_NOT_CONNECTED';
+  discoveryErrorDetail?: string;
+  ctaAction?: 'CONNECT_FACEBOOK' | 'SELECT_FACEBOOK_PAGE' | 'RECONNECT_PAGE_ACCESS' | 'RECONNECT_EXPIRED' | 'MANAGE_PAGE' | 'RETRY_DISCOVERY' | 'CREATE_PAGE';
   ctaLabel?: string;
 }
 
@@ -294,13 +296,20 @@ export class FacebookConnectionStateService {
       // (Admins, Developers, Testers) to access /me/accounts under Standard Access even when
       // pages_show_list is pending App Review or omitted from /me/permissions.
       const availablePages: DiscoveredPageSummary[] = [];
+      let graphDiscoveryError: string | null = null;
+      let graphStatusCode: number | null = null;
 
       try {
         let nextPageUrl: string | null = `https://graph.facebook.com/${META_GRAPH_API_VERSION}/me/accounts?fields=id,name,username,category,tasks,picture,followers_count,fan_count,about,website,phone,single_line_address&limit=100&access_token=${encodeURIComponent(accessToken)}`;
 
         while (nextPageUrl) {
           const pageRes: Response = await fetch(nextPageUrl);
-          if (!pageRes.ok) break;
+          if (!pageRes.ok) {
+            graphStatusCode = pageRes.status;
+            const errData = await pageRes.json().catch(() => ({}));
+            graphDiscoveryError = errData?.error?.message || `HTTP ${pageRes.status}`;
+            break;
+          }
           const pData: any = await pageRes.json();
           const graphPages = pData.data || [];
 
@@ -318,6 +327,7 @@ export class FacebookConnectionStateService {
           nextPageUrl = pData.paging?.next || null;
         }
       } catch (pageErr: any) {
+        graphDiscoveryError = pageErr.message || 'Network error reaching Meta Graph API';
         console.warn('[FacebookStateService] /me/accounts discovery note:', pageErr.message);
       }
 
@@ -378,6 +388,32 @@ export class FacebookConnectionStateService {
       // Check state branches:
       // STATE: PROFILE_CONNECTED_PAGE_ACCESS_UNAVAILABLE
       if ((availablePages.length === 0 && !selectedPage)) {
+        let discoveryStatus: 'PERMISSION_MISSING' | 'GRAPH_ERROR' | 'NO_MANAGEABLE_PAGES' = 'NO_MANAGEABLE_PAGES';
+        let reason = 'NO_PAGES_RETURNED_BY_META';
+        let statusMessage = 'Your Facebook account is connected, but no Facebook Pages were found.';
+        let ctaAction: 'CONNECT_FACEBOOK' | 'SELECT_FACEBOOK_PAGE' | 'RECONNECT_PAGE_ACCESS' | 'RECONNECT_EXPIRED' | 'MANAGE_PAGE' | 'RETRY_DISCOVERY' | 'CREATE_PAGE' = 'CREATE_PAGE';
+        let ctaLabel = 'Create a Facebook Page';
+
+        if (declinedPermissions.includes('pages_show_list') || (!hasPagesShowList && graphStatusCode === 403)) {
+          discoveryStatus = 'PERMISSION_MISSING';
+          reason = 'PERMISSION_MISSING: pages_show_list was not granted by the user.';
+          statusMessage = 'Page discovery permission (pages_show_list) was not granted during login. Reconnect and accept Page permissions to see your Facebook Pages.';
+          ctaAction = 'RECONNECT_PAGE_ACCESS';
+          ctaLabel = 'Grant Page Access';
+        } else if (graphDiscoveryError) {
+          discoveryStatus = 'GRAPH_ERROR';
+          reason = `GRAPH_API_ERROR: ${graphDiscoveryError}`;
+          statusMessage = 'Meta Graph API temporarily failed while listing Pages. Please retry discovery.';
+          ctaAction = 'RETRY_DISCOVERY';
+          ctaLabel = 'Retry Discovery';
+        } else {
+          discoveryStatus = 'NO_MANAGEABLE_PAGES';
+          reason = 'NO_MANAGEABLE_PAGES: Meta confirmed 0 Pages for this personal Facebook profile.';
+          statusMessage = 'No manageable Facebook Pages found for this account. Ensure you are an Admin or Editor of a published Facebook Page.';
+          ctaAction = 'CREATE_PAGE';
+          ctaLabel = 'Create a Facebook Page';
+        }
+
         const result: FacebookConnectionStateResult = {
           state: 'PROFILE_CONNECTED_PAGE_ACCESS_UNAVAILABLE',
           provider: 'facebook',
@@ -398,10 +434,12 @@ export class FacebookConnectionStateService {
           availablePages,
           pageAccessible: false,
           requiresReauth: false,
-          reason: 'NO_PAGES_RETURNED_BY_META',
-          statusMessage: 'Your Facebook account is connected, but Facebook Page access is not currently available.',
-          ctaAction: 'RECONNECT_PAGE_ACCESS',
-          ctaLabel: 'Reconnect Facebook with Page Access',
+          discoveryStatus,
+          discoveryErrorDetail: graphDiscoveryError || undefined,
+          reason,
+          statusMessage,
+          ctaAction,
+          ctaLabel,
         };
         stateCache.set(cacheKey, { result, cachedAt: now });
         return result;
@@ -435,6 +473,7 @@ export class FacebookConnectionStateService {
           selectedPageWebsite: activeConnRecord?.metadata?.website,
           pageAccessible: true,
           requiresReauth: false,
+          discoveryStatus: 'SUCCESS',
           statusMessage: `Facebook Page connected — ${selectedPage.name}`,
           ctaAction: 'MANAGE_PAGE',
           ctaLabel: 'Manage Page / Change Page',
@@ -488,6 +527,7 @@ export class FacebookConnectionStateService {
         availablePages,
         pageAccessible: false,
         requiresReauth: false,
+        discoveryStatus: 'SUCCESS',
         statusMessage: 'Facebook is connected. Select the Page you want Ralion to manage.',
         ctaAction: 'SELECT_FACEBOOK_PAGE',
         ctaLabel: 'Select Facebook Page',

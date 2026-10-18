@@ -101,10 +101,12 @@ export class MetaProvider extends SocialProvider {
     return process.env.FACEBOOK_APP_SECRET || process.env.META_APP_SECRET || '';
   }
 
-  getCapabilities(scopes: string[] = []): SocialCapabilities {
-    const hasPostScope = scopes.includes('pages_manage_posts') || scopes.length === 0;
-    const hasAnalyticsScope = scopes.includes('read_insights') || scopes.includes('pages_read_engagement') || scopes.length === 0;
-    const hasMsgScope = scopes.includes('pages_messaging');
+  getCapabilities(scopes?: string[]): SocialCapabilities {
+    const grantedScopes = scopes !== undefined ? scopes : [...this.defaultScopes, ...this.pageScopes];
+    const hasPostScope = grantedScopes.includes('pages_manage_posts');
+    const hasAnalyticsScope = grantedScopes.includes('read_insights') || grantedScopes.includes('pages_read_engagement');
+    const hasMsgScope = grantedScopes.includes('pages_messaging');
+    const hasPageListScope = grantedScopes.includes('pages_show_list');
 
     return {
       canPublish: hasPostScope,
@@ -115,12 +117,12 @@ export class MetaProvider extends SocialProvider {
       canPublishReels: hasPostScope,
       canPublishShortVideo: hasPostScope,
       canReadAnalytics: hasAnalyticsScope,
-      canReadComments: true,
+      canReadComments: hasAnalyticsScope || hasPostScope,
       canReplyToComments: hasPostScope,
       canReadMessages: hasMsgScope,
       canSendMessages: hasMsgScope,
-      canManagePages: true,
-      canManageBusinessAccounts: true,
+      canManagePages: hasPageListScope,
+      canManageBusinessAccounts: hasPageListScope,
     };
   }
 
@@ -238,7 +240,16 @@ export class MetaProvider extends SocialProvider {
   }
 
   async publish(accessToken: string, params: PublishContentParams): Promise<PublishResponse> {
-    const targetId = params.pageId || 'me';
+    const targetId = params.pageId;
+    if (!targetId || targetId === 'me') {
+      return {
+        success: false,
+        error: 'A valid Facebook Page ID is required for publishing. Direct personal profile publishing is not supported by Meta Graph API.',
+        statusCode: 400,
+        platform: 'facebook',
+        publishedAt: new Date().toISOString(),
+      };
+    }
     const publishedAt = new Date().toISOString();
     const version = getMetaGraphVersion();
 

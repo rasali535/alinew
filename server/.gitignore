@@ -41,6 +41,7 @@ coverage/
 !package.json
 !.eslintrc.json
 !src/data/*.json
+!.eslintrc.json
 service-account-key.json
 gcp-key.json
 

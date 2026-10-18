@@ -35,6 +35,14 @@ export async function GET(request: NextRequest) {
       selectedPageId: result.selectedPageId,
       hasConnectedProfile: result.hasConnectedProfile,
       profileName: result.profileName,
+      connectionState: result.connectionState,
+      discoveryStatus: result.discoveryStatus,
+      reason: result.reason,
+      statusMessage: result.statusMessage,
+      ctaAction: result.ctaAction,
+      ctaLabel: result.ctaLabel,
+      grantedPermissions: result.grantedPermissions,
+      declinedPermissions: result.declinedPermissions,
     };
     if (Array.isArray(payload.pages) && payload.pages.length > 0) {
       tenantCache.set(cacheKey, payload, 60);

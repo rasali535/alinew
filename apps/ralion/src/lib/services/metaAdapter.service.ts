@@ -27,10 +27,18 @@ export const metaAdapterV26 = {
 
   getAuthUrl(state: string, provider: string = 'facebook', intent: 'login' | 'page_connection' = 'page_connection'): string {
     if (!this.clientId()) throw new Error('Meta App ID is not configured');
-    const customScopes = process.env.META_OAUTH_SCOPES;
-    const baseScopes = customScopes
-      ? customScopes.split(',').map((s) => s.trim()).filter(Boolean)
-      : (intent === 'login' ? this.scopes.stage1_login : this.scopes.facebook);
+    let baseScopes: string[];
+    if (intent === 'login') {
+      const customLoginScopes = process.env.META_LOGIN_SCOPES;
+      baseScopes = customLoginScopes
+        ? customLoginScopes.split(',').map((s) => s.trim()).filter(Boolean)
+        : this.scopes.stage1_login;
+    } else {
+      const customPageScopes = process.env.META_PAGE_SCOPES || process.env.META_OAUTH_SCOPES;
+      baseScopes = customPageScopes
+        ? customPageScopes.split(',').map((s) => s.trim()).filter(Boolean)
+        : this.scopes.facebook;
+    }
     const params = new URLSearchParams({
       client_id: this.clientId(),
       redirect_uri: this.redirectUri(provider),
