@@ -42,6 +42,18 @@ export interface PublishResult {
   error?: string;
 }
 
+export interface OAuthTenantScope {
+  organizationId: string;
+  workspaceId: string;
+}
+
+function requireOAuthTenantScope(scope: Partial<OAuthTenantScope>): OAuthTenantScope {
+  if (!scope.organizationId || !scope.workspaceId) {
+    throw new Error('Canonical organization and workspace context are required for OAuth connection state.');
+  }
+  return { organizationId: scope.organizationId, workspaceId: scope.workspaceId };
+}
+
 // Token Storage
 export async function storeOAuthTokens(params: {
   userId: string; provider: string; accessToken: string; refreshToken?: string; expiresAt?: Date;
@@ -50,6 +62,10 @@ export async function storeOAuthTokens(params: {
   workspaceId?: string; organizationId?: string; providerAccountId?: string;
 }) {
   const supabase = getServiceSupabase();
+  const tenant = requireOAuthTenantScope({
+    organizationId: params.organizationId,
+    workspaceId: params.workspaceId,
+  });
   const encryptedAccessToken = encryptToken(params.accessToken);
   const encryptedRefreshToken = params.refreshToken ? encryptToken(params.refreshToken) : null;
   const tokenExpiresAt = params.expiresAt?.toISOString() ?? null;
@@ -72,11 +88,11 @@ export async function storeOAuthTokens(params: {
   const isFacebookAuthorizationIdentity =
     params.provider.toLowerCase() === 'facebook' && !params.pageId;
   if (!isFacebookAuthorizationIdentity) {
-  try {
-    const { data: connData, error: connErr } = await supabase.from('social_connections').upsert({
+    const nowIso = new Date().toISOString();
+    const connectionPayload = {
       user_id: params.userId,
-      organization_id: params.organizationId || null,
-      workspace_id: params.workspaceId || null,
+      organization_id: tenant.organizationId,
+      workspace_id: tenant.workspaceId,
       provider: params.provider.toLowerCase(),
       provider_account_id: resolvedAccountId,
       account_name: params.accountLabel,
@@ -95,74 +111,153 @@ export async function storeOAuthTokens(params: {
         encrypted_access_token: encryptedAccessToken,
         encrypted_refresh_token: encryptedRefreshToken,
         token_expires_at: tokenExpiresAt,
+        organizationId: tenant.organizationId,
+        workspaceId: tenant.workspaceId,
       },
       followers_count: params.followersCount ?? 0,
-      last_sync_at: new Date().toISOString(),
-      connected_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,provider,provider_account_id' }).select('id').maybeSingle();
+      last_sync_at: nowIso,
+      disconnected_at: null,
+      health_error_message: null,
+      updated_at: nowIso,
+    };
 
-    if (!connErr && connData?.id) {
-      connectionId = connData.id;
-    } else if (connErr) {
-      console.warn('[SocialService] connErr:', connErr.message);
+    const { data: existingConn, error: lookupErr } = await supabase
+      .from('social_connections')
+      .select('id, connected_at')
+      .eq('user_id', params.userId)
+      .eq('organization_id', tenant.organizationId)
+      .eq('workspace_id', tenant.workspaceId)
+      .eq('provider', params.provider.toLowerCase())
+      .eq('provider_account_id', resolvedAccountId)
+      .maybeSingle();
+
+    if (lookupErr) {
+      throw new Error(`Unable to resolve existing OAuth connection: ${lookupErr.message}`);
     }
-  } catch (dbErr: any) {
-    console.warn('[SocialService] social_connections multi-account upsert notice:', dbErr.message);
-  }
+
+    if (existingConn?.id) {
+      const { error: updateErr } = await supabase
+        .from('social_connections')
+        .update(connectionPayload)
+        .eq('id', existingConn.id)
+        .eq('user_id', params.userId)
+        .eq('organization_id', tenant.organizationId)
+        .eq('workspace_id', tenant.workspaceId);
+      if (updateErr) throw new Error(`Unable to reconnect OAuth account: ${updateErr.message}`);
+      connectionId = existingConn.id;
+    } else {
+      const { data: inserted, error: insertErr } = await supabase
+        .from('social_connections')
+        .insert({
+          ...connectionPayload,
+          connected_at: nowIso,
+        })
+        .select('id')
+        .maybeSingle();
+      if (insertErr || !inserted?.id) {
+        throw new Error(`Unable to create tenant-scoped OAuth connection: ${insertErr?.message || 'missing connection id'}`);
+      }
+      connectionId = inserted.id;
+    }
   }
 
-  // 3. Keep backward-compatible social_account_tokens table updated
+  // 3. Keep the legacy user-global token row only when it already belongs
+  // to this workspace (or has never been scoped). Canonical state is the
+  // tenant-owned social_connections/meta_connections record above.
   try {
-    await supabase.from('social_account_tokens').upsert({
-      user_id: params.userId, provider: params.provider,
-      encrypted_access_token: encryptedAccessToken,
-      encrypted_refresh_token: encryptedRefreshToken,
-      expires_at: tokenExpiresAt,
-      account_handle: params.accountHandle, account_label: params.accountLabel,
-      followers_count: params.followersCount ?? 0, avatar_url: params.avatarUrl ?? null,
-      page_id: params.pageId ?? null, scopes: params.scopes ?? [], extra_meta: {
-        ...(params.extraMeta ?? {}),
-        connectionId,
-        providerAccountId: resolvedAccountId,
-      },
-      status: 'connected', connected_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,provider' });
-  } catch (tokErr: any) {
-    console.warn('[SocialService] social_account_tokens fallback notice:', tokErr.message);
-  }
+    const { data: legacyRow } = await supabase
+      .from('social_account_tokens')
+      .select('id, extra_meta')
+      .eq('user_id', params.userId)
+      .eq('provider', params.provider)
+      .maybeSingle();
 
-  // 4. If Meta provider (Facebook/Instagram), also synchronize with dedicated meta_connections table
-  if (['facebook', 'instagram', 'meta', 'whatsapp'].includes(params.provider.toLowerCase())) {
-    try {
-      const metaUserId = params.pageId || resolvedAccountId || params.userId;
-      await supabase.from('meta_connections').upsert({
+    const legacyWorkspaceId = legacyRow?.extra_meta?.workspaceId;
+    if (!legacyWorkspaceId || legacyWorkspaceId === tenant.workspaceId) {
+      await supabase.from('social_account_tokens').upsert({
         user_id: params.userId,
-        workspace_id: params.workspaceId || null,
-        meta_user_id: metaUserId,
-        provider: params.provider.toLowerCase() as any,
-        account_handle: params.accountHandle,
-        account_name: params.accountLabel,
-        profile_picture_url: params.avatarUrl || null,
-        page_id: params.pageId || null,
-        scopes: params.scopes || [],
-        connection_status: 'connected',
+        provider: params.provider,
         encrypted_access_token: encryptedAccessToken,
         encrypted_refresh_token: encryptedRefreshToken,
-        token_expires_at: tokenExpiresAt,
-        last_sync_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'workspace_id,user_id,provider,meta_user_id' });
-    } catch (metaErr) {
-      console.warn('[SocialService] meta_connections sync notice:', (metaErr as Error).message);
+        expires_at: tokenExpiresAt,
+        account_handle: params.accountHandle,
+        account_label: params.accountLabel,
+        followers_count: params.followersCount ?? 0,
+        avatar_url: params.avatarUrl ?? null,
+        page_id: params.pageId ?? null,
+        scopes: params.scopes ?? [],
+        extra_meta: {
+          ...(params.extraMeta ?? {}),
+          connectionId,
+          providerAccountId: resolvedAccountId,
+          organizationId: tenant.organizationId,
+          workspaceId: tenant.workspaceId,
+        },
+        status: 'connected',
+        connected_at: new Date().toISOString(),
+        last_synced_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,provider' });
+    }
+  } catch (tokErr: any) {
+    console.warn('[SocialService] legacy token compatibility notice:', tokErr.message);
+  }
+
+  // 4. If Meta provider, synchronize the exact workspace credential row
+  // without relying on a constraint that may not yet exist in older deployments.
+  if (['facebook', 'instagram', 'meta', 'whatsapp'].includes(params.provider.toLowerCase())) {
+    const metaUserId = params.pageId || resolvedAccountId || params.userId;
+    const metaPayload = {
+      user_id: params.userId,
+      workspace_id: tenant.workspaceId,
+      meta_user_id: metaUserId,
+      provider: params.provider.toLowerCase() as any,
+      account_handle: params.accountHandle,
+      account_name: params.accountLabel,
+      profile_picture_url: params.avatarUrl || null,
+      page_id: params.pageId || null,
+      scopes: params.scopes || [],
+      connection_status: 'connected',
+      encrypted_access_token: encryptedAccessToken,
+      encrypted_refresh_token: encryptedRefreshToken,
+      token_expires_at: tokenExpiresAt,
+      last_sync_at: new Date().toISOString(),
+      disconnected_at: null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data: existingMeta, error: metaLookupErr } = await supabase
+      .from('meta_connections')
+      .select('id')
+      .eq('workspace_id', tenant.workspaceId)
+      .eq('user_id', params.userId)
+      .eq('provider', params.provider.toLowerCase())
+      .eq('meta_user_id', metaUserId)
+      .maybeSingle();
+
+    if (metaLookupErr) {
+      throw new Error(`Unable to resolve workspace Meta credential: ${metaLookupErr.message}`);
+    }
+
+    const metaWrite = existingMeta?.id
+      ? await supabase.from('meta_connections').update(metaPayload).eq('id', existingMeta.id)
+      : await supabase.from('meta_connections').insert(metaPayload);
+
+    if (metaWrite.error) {
+      throw new Error(`Unable to persist workspace Meta credential: ${metaWrite.error.message}`);
     }
   }
 
   return { success: true, connectionId, providerAccountId: resolvedAccountId };
 }
 
-export async function loadOAuthTokens(userId: string, provider: string, connectionId?: string) {
+export async function loadOAuthTokens(
+  userId: string,
+  provider: string,
+  scope: OAuthTenantScope,
+  connectionId?: string
+) {
   const supabase = getServiceSupabase();
+  const tenant = requireOAuthTenantScope(scope);
 
   if (connectionId) {
     // 1. Check social_connections by ID
@@ -170,9 +265,18 @@ export async function loadOAuthTokens(userId: string, provider: string, connecti
       .from('social_connections')
       .select('*')
       .eq('id', connectionId)
+      .eq('user_id', userId)
+      .eq('organization_id', tenant.organizationId)
+      .eq('workspace_id', tenant.workspaceId)
       .maybeSingle();
 
-    if (conn && conn.connection_status !== 'DISCONNECTED') {
+    const exactConnectionActive = Boolean(
+      conn &&
+      ['CONNECTED', 'ACTIVE'].includes(String(conn.connection_status || '').toUpperCase()) &&
+      ['TOKEN_VALID', 'TOKEN_EXPIRING'].includes(String(conn.token_status || '').toUpperCase()) &&
+      !conn.disconnected_at
+    );
+    if (exactConnectionActive && conn) {
       const encAccess = conn.metadata?.encrypted_access_token;
       const encRefresh = conn.metadata?.encrypted_refresh_token;
       if (encAccess) {
@@ -206,8 +310,12 @@ export async function loadOAuthTokens(userId: string, provider: string, connecti
       .from('social_connections')
       .select('*')
       .eq('user_id', userId)
+      .eq('organization_id', tenant.organizationId)
+      .eq('workspace_id', tenant.workspaceId)
       .eq('provider', provider.toLowerCase())
-      .neq('connection_status', 'DISCONNECTED')
+      .in('connection_status', ['CONNECTED', 'ACTIVE'])
+      .in('token_status', ['TOKEN_VALID', 'TOKEN_EXPIRING'])
+      .is('disconnected_at', null)
       .order('updated_at', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -234,8 +342,16 @@ export async function loadOAuthTokens(userId: string, provider: string, connecti
   } catch {}
 
   const { data, error } = await supabase.from('social_account_tokens').select('*')
-    .eq('user_id', userId).eq('provider', provider).maybeSingle();
-  if (error || !data) return null;
+    .eq('user_id', userId)
+    .eq('provider', provider)
+    .eq('status', 'connected')
+    .maybeSingle();
+  if (
+    error ||
+    !data ||
+    data.extra_meta?.workspaceId !== tenant.workspaceId ||
+    data.extra_meta?.organizationId !== tenant.organizationId
+  ) return null;
   return {
     accessToken: decryptToken(data.encrypted_access_token),
     refreshToken: data.encrypted_refresh_token ? decryptToken(data.encrypted_refresh_token) : undefined,
@@ -250,8 +366,9 @@ export async function loadOAuthTokens(userId: string, provider: string, connecti
   };
 }
 
-export async function loadAllUserAccounts(userId: string): Promise<SocialAccountRecord[]> {
+export async function loadAllUserAccounts(userId: string, scope: OAuthTenantScope): Promise<SocialAccountRecord[]> {
   const supabase = getServiceSupabase();
+  const tenant = requireOAuthTenantScope(scope);
   const accounts: SocialAccountRecord[] = [];
   const seenConnectionKeys = new Set<string>();
 
@@ -261,7 +378,11 @@ export async function loadAllUserAccounts(userId: string): Promise<SocialAccount
       .from('social_connections')
       .select('*')
       .eq('user_id', userId)
-      .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected', 'active']);
+      .eq('organization_id', tenant.organizationId)
+      .eq('workspace_id', tenant.workspaceId)
+      .in('connection_status', ['CONNECTED', 'ACTIVE'])
+      .in('token_status', ['TOKEN_VALID', 'TOKEN_EXPIRING'])
+      .is('disconnected_at', null);
 
     if (Array.isArray(unifiedAccounts)) {
       unifiedAccounts.forEach((u: any) => {
@@ -293,81 +414,223 @@ export async function loadAllUserAccounts(userId: string): Promise<SocialAccount
     console.warn('[SocialService] social_connections load notice:', err.message);
   }
 
-  // 2. Secondary: load legacy accounts if not already captured
-  try {
-    const { data: legacyAccounts } = await supabase
-      .from('social_accounts_safe')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('status', 'connected');
-    if (Array.isArray(legacyAccounts)) {
-      legacyAccounts.forEach((leg: any) => {
-        const legKey = leg.id || `${leg.provider}_${leg.account_handle}`;
-        if (!seenConnectionKeys.has(legKey)) {
-          seenConnectionKeys.add(legKey);
-          accounts.push(leg as SocialAccountRecord);
-        }
-      });
-    }
-  } catch {}
+  // Legacy user-global account projections are intentionally excluded from authoritative OAuth state.
+
 
   return accounts;
 }
 
-export async function deleteOAuthToken(userId: string, provider: string, connectionId?: string) {
+export async function persistRefreshedOAuthTokens(params: {
+  userId: string;
+  provider: string;
+  scope: OAuthTenantScope;
+  connectionId: string;
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt?: Date;
+}) {
   const supabase = getServiceSupabase();
-
-  if (connectionId) {
-    const { data: conn } = await supabase.from('social_connections').select('metadata').eq('id', connectionId).maybeSingle();
-    const sanitizedMeta = { ...(conn?.metadata || {}) };
-    delete sanitizedMeta.encrypted_access_token;
-    delete sanitizedMeta.encrypted_refresh_token;
-
-    await supabase.from('social_connections').update({
-      metadata: sanitizedMeta,
-      connection_status: 'DISCONNECTED',
-      token_status: 'TOKEN_REVOKED',
-      disconnected_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }).eq('id', connectionId);
-  } else {
-    await supabase.from('social_account_tokens').delete().eq('user_id', userId).eq('provider', provider);
-    await supabase.from('social_connections').update({
-      connection_status: 'DISCONNECTED',
-      token_status: 'TOKEN_REVOKED',
-      disconnected_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }).eq('user_id', userId).eq('provider', provider.toLowerCase());
+  const tenant = requireOAuthTenantScope(params.scope);
+  const encryptedAccessToken = encryptToken(params.accessToken);
+  const existing = await loadOAuthTokens(
+    params.userId,
+    params.provider,
+    tenant,
+    params.connectionId
+  );
+  if (!existing) {
+    throw new Error('OAuth connection is no longer active in this workspace.');
   }
 
-  if (['facebook', 'instagram', 'meta', 'whatsapp'].includes(provider.toLowerCase())) {
+  const encryptedRefreshToken = params.refreshToken
+    ? encryptToken(params.refreshToken)
+    : undefined;
+  const expiresAt = params.expiresAt?.toISOString() || null;
+  const nowIso = new Date().toISOString();
+
+  const metadata = {
+    ...(existing.record.extra_meta || {}),
+    encrypted_access_token: encryptedAccessToken,
+    encrypted_refresh_token: encryptedRefreshToken || encryptToken(existing.refreshToken || ''),
+    token_expires_at: expiresAt,
+    organizationId: tenant.organizationId,
+    workspaceId: tenant.workspaceId,
+  };
+
+  const { error: connError } = await supabase
+    .from('social_connections')
+    .update({
+      metadata,
+      connection_status: 'CONNECTED',
+      token_status: 'TOKEN_VALID',
+      disconnected_at: null,
+      health_error_message: null,
+      last_sync_at: nowIso,
+      updated_at: nowIso,
+    })
+    .eq('id', params.connectionId)
+    .eq('user_id', params.userId)
+    .eq('organization_id', tenant.organizationId)
+    .eq('workspace_id', tenant.workspaceId)
+    .eq('provider', params.provider.toLowerCase());
+
+  if (connError) {
+    throw new Error(`Failed to persist refreshed OAuth state: ${connError.message}`);
+  }
+
+  const legacyRefreshEnvelope =
+    encryptedRefreshToken ||
+    (existing.refreshToken ? encryptToken(existing.refreshToken) : null);
+
+  try {
+    const { data: legacyRow } = await supabase
+      .from('social_account_tokens')
+      .select('id, extra_meta')
+      .eq('user_id', params.userId)
+      .eq('provider', params.provider.toLowerCase())
+      .maybeSingle();
+
+    if (
+      legacyRow?.id &&
+      legacyRow.extra_meta?.workspaceId === tenant.workspaceId &&
+      legacyRow.extra_meta?.organizationId === tenant.organizationId
+    ) {
+      await supabase
+        .from('social_account_tokens')
+        .update({
+          encrypted_access_token: encryptedAccessToken,
+          encrypted_refresh_token: legacyRefreshEnvelope,
+          expires_at: expiresAt,
+          status: 'connected',
+          last_synced_at: nowIso,
+          updated_at: nowIso,
+        })
+        .eq('id', legacyRow.id);
+    }
+  } catch (legacyErr: any) {
+    console.warn('[SocialService] legacy refresh compatibility notice:', legacyErr.message);
+  }
+
+  return { expiresAt };
+}
+
+export async function deleteOAuthToken(
+  userId: string,
+  provider: string,
+  scope: OAuthTenantScope,
+  connectionId?: string
+) {
+  const supabase = getServiceSupabase();
+  const tenant = requireOAuthTenantScope(scope);
+  const normalizedProvider = provider.toLowerCase();
+  const nowIso = new Date().toISOString();
+
+  let query = supabase
+    .from('social_connections')
+    .select('id, metadata')
+    .eq('user_id', userId)
+    .eq('organization_id', tenant.organizationId)
+    .eq('workspace_id', tenant.workspaceId)
+    .eq('provider', normalizedProvider);
+
+  if (connectionId) query = query.eq('id', connectionId);
+  const { data: connections, error: lookupError } = await query;
+  if (lookupError) throw new Error(`Unable to resolve OAuth connection for deletion: ${lookupError.message}`);
+
+  for (const conn of connections || []) {
+    const sanitizedMeta = { ...(conn.metadata || {}) };
+    delete sanitizedMeta.encrypted_access_token;
+    delete sanitizedMeta.encrypted_refresh_token;
+    delete sanitizedMeta.token_expires_at;
+
+    const { error } = await supabase
+      .from('social_connections')
+      .update({
+        metadata: sanitizedMeta,
+        connection_status: 'DISCONNECTED',
+        token_status: 'TOKEN_REVOKED',
+        disconnected_at: nowIso,
+        updated_at: nowIso,
+      })
+      .eq('id', conn.id)
+      .eq('user_id', userId)
+      .eq('organization_id', tenant.organizationId)
+      .eq('workspace_id', tenant.workspaceId);
+    if (error) throw new Error(`Unable to revoke OAuth connection: ${error.message}`);
+  }
+
+  try {
+    const { data: legacy } = await supabase
+      .from('social_account_tokens')
+      .select('id, extra_meta')
+      .eq('user_id', userId)
+      .eq('provider', normalizedProvider)
+      .maybeSingle();
+    if (
+      legacy?.id &&
+      legacy.extra_meta?.workspaceId === tenant.workspaceId &&
+      legacy.extra_meta?.organizationId === tenant.organizationId
+    ) {
+      await supabase.from('social_account_tokens').delete().eq('id', legacy.id);
+    }
+  } catch {}
+
+  if (['facebook', 'instagram', 'meta', 'whatsapp'].includes(normalizedProvider)) {
     await supabase.from('meta_connections').update({
       connection_status: 'disconnected',
       encrypted_access_token: null,
       encrypted_refresh_token: null,
-      disconnected_at: new Date().toISOString()
-    }).eq('user_id', userId).eq('provider', provider.toLowerCase());
+      disconnected_at: nowIso,
+      updated_at: nowIso,
+    })
+      .eq('workspace_id', tenant.workspaceId)
+      .eq('user_id', userId)
+      .eq('provider', normalizedProvider);
   }
 }
 
-export async function markTokenExpired(userId: string, provider: string, connectionId?: string) {
+export async function markTokenExpired(
+  userId: string,
+  provider: string,
+  scope: OAuthTenantScope,
+  connectionId?: string
+) {
   const supabase = getServiceSupabase();
-  if (connectionId) {
-    await supabase.from('social_connections').update({ token_status: 'TOKEN_EXPIRED', connection_status: 'RECONNECT_REQUIRED' }).eq('id', connectionId);
-  }
-  await supabase.from('social_account_tokens').update({ status: 'expired' })
-    .eq('user_id', userId).eq('provider', provider);
+  const tenant = requireOAuthTenantScope(scope);
+  let query = supabase
+    .from('social_connections')
+    .update({
+      token_status: 'TOKEN_EXPIRED',
+      connection_status: 'RECONNECT_REQUIRED',
+      health_error_message: 'OAuth token expired; reconnect required.',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', userId)
+    .eq('organization_id', tenant.organizationId)
+    .eq('workspace_id', tenant.workspaceId)
+    .eq('provider', provider.toLowerCase());
+  if (connectionId) query = query.eq('id', connectionId);
+  await query;
 }
 
-export async function updateLastSynced(userId: string, provider: string, connectionId?: string) {
+export async function updateLastSynced(
+  userId: string,
+  provider: string,
+  scope: OAuthTenantScope,
+  connectionId?: string
+) {
   const supabase = getServiceSupabase();
-  if (connectionId) {
-    await supabase.from('social_connections').update({ last_sync_at: new Date().toISOString() }).eq('id', connectionId);
-  }
-  await supabase.from('social_account_tokens').update({ last_synced_at: new Date().toISOString() })
-    .eq('user_id', userId).eq('provider', provider);
+  const tenant = requireOAuthTenantScope(scope);
+  let query = supabase
+    .from('social_connections')
+    .update({ last_sync_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq('user_id', userId)
+    .eq('organization_id', tenant.organizationId)
+    .eq('workspace_id', tenant.workspaceId)
+    .eq('provider', provider.toLowerCase());
+  if (connectionId) query = query.eq('id', connectionId);
+  await query;
 }
-
 
 // LinkedIn Adapter
 export const linkedinAdapter = {
@@ -703,7 +966,33 @@ export const tiktokAdapter = {
     });
     if (!res.ok) throw new Error(`TikTok token exchange failed: ${await res.text()}`);
     const data = await res.json();
-    return { accessToken: data.data.access_token, refreshToken: data.data.refresh_token, expiresIn: data.data.expires_in };
+    const accessToken = data.access_token || data.data?.access_token;
+    const refreshToken = data.refresh_token || data.data?.refresh_token;
+    const expiresIn = data.expires_in || data.data?.expires_in || 86400;
+    if (!accessToken) {
+      throw new Error('TikTok token exchange returned no access token');
+    }
+    return { accessToken, refreshToken, expiresIn };
+  },
+
+  async refreshAccessToken(refreshToken: string) {
+    const res = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_key: this.clientKey(),
+        client_secret: this.clientSecret(),
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+      }),
+    });
+    if (!res.ok) throw new Error('TikTok token refresh failed');
+    const data = await res.json();
+    return {
+      accessToken: data.access_token || data.data?.access_token,
+      refreshToken: data.refresh_token || data.data?.refresh_token,
+      expiresIn: data.expires_in || data.data?.expires_in || 86400,
+    };
   },
 
   async getProfile(accessToken: string) {

@@ -54,7 +54,8 @@ requirePattern(connectionState, /MetaCredentialService\.getValidTokenForWorkspac
 requirePattern(metaCredential, /\.eq\('workspace_id',\s*workspaceId\)/, 'Workspace credential lookup must filter by workspace_id.');
 requirePattern(metaCredential, /\.eq\('user_id',\s*userId\)/, 'Workspace credential lookup must filter by authenticated user_id.');
 requirePattern(metaCredential, /satRow\.extra_meta\?\.workspaceId\s*!==\s*workspaceId/, 'Legacy Meta credential fallback must fail closed unless extra_meta.workspaceId exactly matches the requested workspace.');
-requirePattern(socialService, /workspace_id:\s*params\.workspaceId\s*\|\|\s*null/, 'Meta OAuth persistence must retain the signed workspace context.');
+requirePattern(socialService, /workspace_id:\s*tenant\.workspaceId/, 'Meta OAuth persistence must retain the validated signed workspace context.');
+requirePattern(socialService, /requireOAuthTenantScope\(/, 'OAuth persistence must fail closed without canonical organization + workspace context.');
 
 forbid(serverAuth, /https:\/\/yidsfihagwttlmhfynmf\.supabase\.co/, 'Server auth must not hardcode a production Supabase project URL.');
 forbid(serverAuth, /targetWorkspaceId\s*=\s*primaryWorkspaceId/, 'Unauthorized tenant requests must not silently fall back to another workspace.');

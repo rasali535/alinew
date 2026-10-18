@@ -26,32 +26,38 @@ export async function GET(
   { params }: { params: Promise<{ provider: string }> }
 ) {
   try {
-    const { provider } = await params;
+    const { provider: routeProvider } = await params;
+    const provider = routeProvider === 'google' ? 'youtube' : routeProvider === 'twitter' ? 'x' : routeProvider;
 
     const required = await requireRalionContext(request);
     if (required.response || !required.context) {
       return required.response || corsJsonResponse({ success: false, connected: false, error: 'Authentication required' }, { status: 401 }, request);
     }
     const user = required.context.user;
+    const scope = {
+      organizationId: required.context.organization.id,
+      workspaceId: required.context.workspace.id,
+    };
 
-    // Special case: fetch ALL accounts for this user (provider='all')
+    // Special case: fetch ALL accounts for this exact tenant/workspace.
     if (provider === 'all') {
-      const accounts = await loadAllUserAccounts(user.id);
+      const accounts = await loadAllUserAccounts(user.id, scope);
       return corsJsonResponse({ success: true, accounts }, undefined, request);
     }
 
     // Load specific provider token record from Supabase
-    const tokenData = await loadOAuthTokens(user.id, provider);
+    const tokenData = await loadOAuthTokens(user.id, provider, scope);
     if (!tokenData) {
       return corsJsonResponse({ success: true, connected: false, provider }, undefined, request);
     }
 
     const record = tokenData.record;
     const isExpired = tokenData.expiresAt ? tokenData.expiresAt < new Date() : false;
+    const isConnected = tokenData.record.status === 'connected' && !isExpired;
 
     return corsJsonResponse({
       success: true,
-      connected: !isExpired,
+      connected: isConnected,
       provider,
       account: {
         provider: record.provider,

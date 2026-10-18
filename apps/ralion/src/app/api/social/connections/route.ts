@@ -23,11 +23,13 @@ export async function GET(request: NextRequest) {
     const { data: rawConnections, error } = await supabase
       .from('social_connections')
       .select(
-        'id, user_id, organization_id, workspace_id, provider, provider_account_id, account_name, username, profile_image_url, account_type, connection_status, token_status, scopes, capabilities, metadata, followers_count, infrastructure_provider, zernio_account_id, zernio_profile_id, connected_at, created_at, updated_at'
+        'id, user_id, organization_id, workspace_id, provider, provider_account_id, account_name, username, profile_image_url, account_type, connection_status, token_status, scopes, capabilities, metadata, followers_count, infrastructure_provider, zernio_account_id, zernio_profile_id, connected_at, disconnected_at, created_at, updated_at'
       )
       .eq('workspace_id', context.workspace.id)
       .eq('organization_id', context.organization.id)
-      .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected', 'active'])
+      .in('connection_status', ['CONNECTED', 'ACTIVE'])
+      .in('token_status', ['TOKEN_VALID', 'TOKEN_EXPIRING'])
+      .is('disconnected_at', null)
       // A Facebook person is an OAuth authorization identity, never an
       // operational social destination in Ralion. Only selected Pages belong
       // in the connected-accounts surface.

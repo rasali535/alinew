@@ -68,7 +68,6 @@ export default function DashboardPage() {
 
     void loadOverview(!restored);
     // workspace id changes only when the active tenant changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace?.id]);
 
   const addCustomer = async () => {
