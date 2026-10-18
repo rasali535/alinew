@@ -15,6 +15,9 @@ dotenv.config({ path: 'apps/ralion/.env.local' });
 dotenv.config({ path: '.env.local' });
 dotenv.config();
 
+import '../preload-server-only.cjs';
+process.env.OAUTH_ENCRYPTION_KEY = process.env.OAUTH_ENCRYPTION_KEY || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+
 import { FacebookPageManagementService } from '../../apps/ralion/src/lib/services/social/facebookPageManagement.service';
 import { FacebookConnectionStateService } from '../../apps/ralion/src/lib/services/social/facebookConnectionState.service';
 import { MetaCredentialService } from '../../apps/ralion/src/lib/services/metaCredential.service';

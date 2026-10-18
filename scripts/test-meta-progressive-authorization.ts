@@ -11,6 +11,9 @@
  * 6. Graceful Meta permission failure handling
  */
 
+import './preload-server-only.cjs';
+process.env.OAUTH_ENCRYPTION_KEY = process.env.OAUTH_ENCRYPTION_KEY || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+
 import { generateOAuthState, verifyOAuthState } from '../packages/integrations/src/core/crypto';
 import { MetaProvider } from '../packages/integrations/src/social/adapters/MetaProvider';
 import { metaAdapter } from '../apps/ralion/src/lib/services/social.service';
