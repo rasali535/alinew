@@ -778,6 +778,7 @@ function GrowthPageContent() {
 
   // ── Facebook Page Management & Multi-Destination States ─────────────────
   const [availableFacebookPages, setAvailableFacebookPages] = useState<any[]>([]);
+  const [facebookDiscoveryMeta, setFacebookDiscoveryMeta] = useState<any>({});
   const [isPageSelectionModalOpen, setIsPageSelectionModalOpen] = useState(false);
   const [selectedPageForConnect, setSelectedPageForConnect] = useState<string>('');
   const [isConnectingPage, setIsConnectingPage] = useState(false);
@@ -888,6 +889,18 @@ function GrowthPageContent() {
         const data = await res.json().catch(() => ({}));
         if (data.entitlement) {
           setFacebookEntitlement(data.entitlement);
+        }
+        if (data.discoveryStatus || data.statusMessage || data.connectionState) {
+          setFacebookDiscoveryMeta({
+            discoveryStatus: data.discoveryStatus || (data.pages?.length > 0 ? 'SUCCESS' : 'NO_MANAGEABLE_PAGES'),
+            connectionState: data.connectionState,
+            statusMessage: data.statusMessage,
+            reason: data.reason,
+            ctaAction: data.ctaAction,
+            ctaLabel: data.ctaLabel,
+            declinedPermissions: data.declinedPermissions,
+            grantedPermissions: data.grantedPermissions,
+          });
         }
         if (data.pages && Array.isArray(data.pages)) {
           setAvailableFacebookPages(data.pages);
@@ -7468,25 +7481,73 @@ function GrowthPageContent() {
                 <Globe className="w-6 h-6" />
               </div>
               <div className="max-w-sm">
-                <h4 className="text-sm font-bold text-white">No Manageable Facebook Pages Found</h4>
+                <h4 className="text-sm font-bold text-white">
+                  {facebookDiscoveryMeta.discoveryStatus === 'PERMISSION_MISSING'
+                    ? 'Facebook Page Permission Required'
+                    : facebookDiscoveryMeta.discoveryStatus === 'TOKEN_EXPIRED'
+                      ? 'Facebook Connection Expired'
+                      : facebookDiscoveryMeta.discoveryStatus === 'GRAPH_ERROR'
+                        ? 'Meta Service Temporarily Unavailable'
+                        : 'No Manageable Facebook Pages Found'}
+                </h4>
                 <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
-                  Facebook is connected, but no manageable Pages were found for this account. To allow Ralion OS to manage your business Page, reconnect and grant <strong>Page Management Permissions</strong>.
+                  {facebookDiscoveryMeta.discoveryStatus === 'PERMISSION_MISSING'
+                    ? 'The pages_show_list permission was not granted. Meta requires this permission so Ralion OS can display the Facebook Pages you manage.'
+                    : facebookDiscoveryMeta.discoveryStatus === 'TOKEN_EXPIRED'
+                      ? 'Your Facebook authorization has expired. Please re-authenticate to discover your Facebook Pages.'
+                      : facebookDiscoveryMeta.discoveryStatus === 'GRAPH_ERROR'
+                        ? 'Meta Graph API encountered a temporary error while listing Pages. Your account remains connected.'
+                        : 'Facebook is connected, but Meta returned 0 manageable Pages for this account. Ensure your personal Facebook profile is an Admin or Editor of a published Facebook Page, or create a Page on Facebook.'}
                 </p>
               </div>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => {
-                  setIsPageSelectionModalOpen(false);
-                  handleConnectSocialAccount('facebook', 'page_connection');
-                }}
-                disabled={isConnecting}
-                className="gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 font-bold text-xs shadow-lg shadow-indigo-600/30 text-white"
-              >
-                <Plus className="w-4 h-4" /> {isConnecting ? 'Connecting...' : 'Reconnect Facebook with Page Permissions'}
-              </Button>
+
+              {facebookDiscoveryMeta.discoveryStatus === 'GRAPH_ERROR' ? (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => fetchFacebookPages()}
+                  disabled={isLoadingPages}
+                  className="gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 font-bold text-xs shadow-lg shadow-indigo-600/30 text-white"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isLoadingPages ? 'animate-spin' : ''}`} /> {isLoadingPages ? 'Retrying...' : 'Retry Discovery'}
+                </Button>
+              ) : facebookDiscoveryMeta.discoveryStatus === 'NO_MANAGEABLE_PAGES' ? (
+                <div className="flex flex-col sm:flex-row gap-2.5 items-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fetchFacebookPages()}
+                    disabled={isLoadingPages}
+                    className="gap-2 px-4 py-2 text-xs border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isLoadingPages ? 'animate-spin' : ''}`} /> Refresh Pages
+                  </Button>
+                  <a
+                    href="https://www.facebook.com/pages/create"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 font-bold text-xs shadow-lg shadow-indigo-600/30 text-white transition"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" /> Create a Facebook Page
+                  </a>
+                </div>
+              ) : (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    setIsPageSelectionModalOpen(false);
+                    handleConnectSocialAccount('facebook', 'page_connection');
+                  }}
+                  disabled={isConnecting}
+                  className="gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 font-bold text-xs shadow-lg shadow-indigo-600/30 text-white"
+                >
+                  <Plus className="w-4 h-4" /> {isConnecting ? 'Connecting...' : (facebookDiscoveryMeta.ctaLabel || 'Reconnect Facebook with Page Permissions')}
+                </Button>
+              )}
+
               <div className="p-3.5 rounded-xl bg-amber-950/20 border border-amber-500/30 text-[11px] text-amber-300 text-left max-w-md leading-relaxed">
-                💡 <strong>Meta Permission Notice:</strong> Ensure you are logged into Facebook with an account that has <strong>Admin or Editor</strong> access to the target Facebook Page, and ensure you accept the <em>pages_show_list</em> and <em>pages_manage_posts</em> permissions during login.
+                💡 <strong>Meta Permission Notice:</strong> Ralion OS uses the <em>pages_show_list</em> permission to show you the Facebook Pages you manage so you can choose which Page to connect to your workspace. Ensure you are an Admin or Editor of the target Page.
               </div>
             </div>
           ) : (

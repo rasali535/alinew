@@ -40,6 +40,7 @@ coverage/
 !tsconfig.json
 !package.json
 !src/data/*.json
+!.eslintrc.json
 service-account-key.json
 gcp-key.json
 

@@ -12,6 +12,7 @@
     "paths": {
       "@ralion/ai": ["packages/ai/src/index.ts"],
       "@ralion/integrations": ["packages/integrations/src/index.ts"],
+      "@ralion/integrations/*": ["packages/integrations/src/*.ts"],
       "@ralion/core": ["packages/core/src/index.ts"],
       "@ralion/database": ["packages/database/src/index.ts"],
       "@ralion/auth": ["packages/auth/src/index.ts"],

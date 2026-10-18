@@ -233,17 +233,26 @@ export class FacebookPageManagementService {
     userId?: string;
   }): Promise<FacebookPageDescriptor | null> {
     const tenantId = requireTenantId(params.organizationId, params.workspaceId);
-    const userId = requireUserId(params.userId);
+    const workspaceId = toCanonicalUuid(params.workspaceId);
+    const userId = toCanonicalUuid(params.userId);
     const supabase = getServiceSupabase();
 
-    const { data: conns } = await supabase
+    let query = supabase
       .from('social_connections')
       .select('*')
       .eq('provider', 'facebook')
       .eq('organization_id', tenantId)
-      .eq('user_id', userId)
       .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected'])
       .order('updated_at', { ascending: false });
+
+    if (workspaceId) {
+      query = query.eq('workspace_id', workspaceId);
+    }
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+
+    const { data: conns } = await query;
 
     if (!conns?.length) return null;
 
@@ -313,6 +322,14 @@ export class FacebookPageManagementService {
     };
   }
 
+  static async getActivePage(params: {
+    workspaceId?: string;
+    organizationId?: string;
+    userId?: string;
+  }): Promise<FacebookPageDescriptor | null> {
+    return this.getPrimaryPage(params);
+  }
+
   static async discoverAvailablePages(params: {
     organizationId?: string;
     workspaceId?: string;
@@ -324,8 +341,14 @@ export class FacebookPageManagementService {
     selectedPageId?: string;
     hasConnectedProfile: boolean;
     profileName?: string;
-    connectionState?: string;
-    statusMessage?: string;
+    connectionState: string;
+    discoveryStatus: string;
+    reason?: string;
+    statusMessage: string;
+    ctaAction?: string;
+    ctaLabel?: string;
+    grantedPermissions: string[];
+    declinedPermissions: string[];
   }> {
     const tenantId = requireTenantId(params.organizationId, params.workspaceId);
     const userId = requireUserId(params.userId);
@@ -345,7 +368,13 @@ export class FacebookPageManagementService {
         hasConnectedProfile: false,
         profileName: undefined,
         connectionState: stateResult.state,
+        discoveryStatus: stateResult.discoveryStatus || 'PROFILE_NOT_CONNECTED',
+        reason: stateResult.reason,
         statusMessage: stateResult.statusMessage,
+        ctaAction: stateResult.ctaAction || 'CONNECT_FACEBOOK',
+        ctaLabel: stateResult.ctaLabel || 'Connect Facebook',
+        grantedPermissions: stateResult.grantedPermissions || [],
+        declinedPermissions: stateResult.declinedPermissions || [],
       };
     }
 
@@ -377,7 +406,13 @@ export class FacebookPageManagementService {
       hasConnectedProfile: stateResult.userConnectionExists,
       profileName: stateResult.facebookUserName || 'Facebook User',
       connectionState: stateResult.state,
+      discoveryStatus: stateResult.discoveryStatus || (pages.length > 0 ? 'SUCCESS' : 'NO_MANAGEABLE_PAGES'),
+      reason: stateResult.reason,
       statusMessage: stateResult.statusMessage,
+      ctaAction: stateResult.ctaAction,
+      ctaLabel: stateResult.ctaLabel,
+      grantedPermissions: stateResult.grantedPermissions || [],
+      declinedPermissions: stateResult.declinedPermissions || [],
     };
   }
 
@@ -402,6 +437,7 @@ export class FacebookPageManagementService {
       .from('social_connections')
       .select('id, connection_status')
       .eq('organization_id', tenantId)
+      .eq('workspace_id', workspaceId)
       .eq('user_id', userId)
       .eq('provider', 'facebook')
       .eq('provider_account_id', params.pageId)
@@ -447,6 +483,7 @@ export class FacebookPageManagementService {
       .select('*')
       .eq('provider', 'facebook')
       .eq('organization_id', tenantId)
+      .eq('workspace_id', workspaceId)
       .eq('user_id', userId);
 
     let zernioProfileId: string | null = null;
@@ -597,10 +634,11 @@ export class FacebookPageManagementService {
       success: true,
       resourceType: 'social_destination',
       resourceId: params.pageId,
-      metadata: { pageName: params.pageData.name, pageId: params.pageId, organizationId: tenantId, connectionId },
+      metadata: { pageName: params.pageData.name, pageId: params.pageId, organizationId: tenantId, workspaceId, connectionId },
     });
 
     FacebookConnectionStateService.invalidateCache(tenantId);
+    if (workspaceId) FacebookConnectionStateService.invalidateCache(workspaceId);
     FacebookConnectionStateService.invalidateCache(userId);
 
     const updatedEntitlement = await this.getOrganizationEntitlement(tenantId, userId);
@@ -614,25 +652,30 @@ export class FacebookPageManagementService {
     pageId: string;
   }): Promise<{ success: boolean }> {
     const tenantId = requireTenantId(params.organizationId, params.workspaceId);
+    const workspaceId = toCanonicalUuid(params.workspaceId);
     const userId = requireUserId(params.userId);
     const supabase = getServiceSupabase();
 
-    const { error: destinationError } = await supabase
+    let destQuery = supabase
       .from('social_destinations')
       .update({ status: 'DISCONNECTED', is_active: false, updated_at: new Date().toISOString() })
       .eq('organization_id', tenantId)
       .eq('user_id', userId)
       .eq('platform', 'facebook')
       .eq('provider_page_id', params.pageId);
+    if (workspaceId) destQuery = destQuery.eq('workspace_id', workspaceId);
+    const { error: destinationError } = await destQuery;
     if (destinationError) throw destinationError;
 
-    const { error: connectionError } = await supabase
+    let connQuery = supabase
       .from('social_connections')
       .update({ connection_status: 'DISCONNECTED', updated_at: new Date().toISOString() })
       .eq('organization_id', tenantId)
       .eq('user_id', userId)
       .eq('provider', 'facebook')
       .eq('provider_account_id', params.pageId);
+    if (workspaceId) connQuery = connQuery.eq('workspace_id', workspaceId);
+    const { error: connectionError } = await connQuery;
     if (connectionError) throw connectionError;
 
     await AuditLoggerService.log({
@@ -642,10 +685,11 @@ export class FacebookPageManagementService {
       success: true,
       resourceType: 'social_destination',
       resourceId: params.pageId,
-      metadata: { organizationId: tenantId },
+      metadata: { organizationId: tenantId, workspaceId },
     });
 
     FacebookConnectionStateService.invalidateCache(tenantId);
+    if (workspaceId) FacebookConnectionStateService.invalidateCache(workspaceId);
     FacebookConnectionStateService.invalidateCache(userId);
     return { success: true };
   }
@@ -659,7 +703,8 @@ export class FacebookPageManagementService {
     limit?: number;
   }): Promise<FacebookPagePostItem[]> {
     const tenantId = requireTenantId(params.organizationId, params.workspaceId);
-    const userId = requireUserId(params.userId);
+    const workspaceId = toCanonicalUuid(params.workspaceId);
+    const userId = toCanonicalUuid(params.userId);
     const supabase = getServiceSupabase();
 
     let query = supabase
@@ -667,8 +712,10 @@ export class FacebookPageManagementService {
       .select('id, zernio_profile_id, zernio_account_id, provider_account_id, workspace_id, organization_id, user_id, account_type, metadata, followers_count, account_name')
       .eq('provider', 'facebook')
       .eq('organization_id', tenantId)
-      .eq('user_id', userId)
       .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected']);
+
+    if (workspaceId) query = query.eq('workspace_id', workspaceId);
+    if (userId) query = query.eq('user_id', userId);
 
     if (params.socialConnectionId) query = query.eq('id', params.socialConnectionId);
     if (params.pageId) query = query.eq('provider_account_id', params.pageId);
@@ -698,7 +745,7 @@ export class FacebookPageManagementService {
 
     let commentCountsByPostId: Record<string, number> = {};
     try {
-      const allComments = await FacebookCommentsService.getComments({ workspaceId: tenantId, userId, organizationId: tenantId });
+      const allComments = await FacebookCommentsService.getComments({ workspaceId: tenantId, userId: userId || undefined, organizationId: tenantId });
       if (Array.isArray(allComments)) {
         allComments.forEach((cm) => {
           if (cm.postId) commentCountsByPostId[cm.postId] = (commentCountsByPostId[cm.postId] || 0) + 1 + (cm.replies?.length || 0);
@@ -882,7 +929,8 @@ export class FacebookPageManagementService {
     prefetchedPosts?: FacebookPagePostItem[];
   }): Promise<NormalizedPageAnalytics> {
     const tenantId = requireTenantId(params.organizationId, params.workspaceId);
-    const userId = requireUserId(params.userId);
+    const workspaceId = toCanonicalUuid(params.workspaceId);
+    const userId = toCanonicalUuid(params.userId);
     const supabase = getServiceSupabase();
 
     let query = supabase
@@ -890,8 +938,10 @@ export class FacebookPageManagementService {
       .select('id, provider, workspace_id, organization_id, user_id, zernio_profile_id, zernio_account_id, provider_account_id, account_name, account_type, followers_count, metadata')
       .eq('provider', 'facebook')
       .eq('organization_id', tenantId)
-      .eq('user_id', userId)
       .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected']);
+
+    if (workspaceId) query = query.eq('workspace_id', workspaceId);
+    if (userId) query = query.eq('user_id', userId);
 
     if (params.socialConnectionId) query = query.eq('id', params.socialConnectionId);
     if (params.pageId) query = query.eq('provider_account_id', params.pageId);
@@ -971,7 +1021,7 @@ export class FacebookPageManagementService {
     const livePosts = params.prefetchedPosts || await this.getPagePosts({
       organizationId: params.organizationId || tenantId,
       workspaceId: params.workspaceId || tenantId,
-      userId,
+      userId: userId || undefined,
       socialConnectionId: conn.id,
       limit: 50,
     });

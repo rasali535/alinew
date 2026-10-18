@@ -473,10 +473,18 @@ export const metaAdapter = {
   },
 
   getAuthUrl(state: string, provider: string = 'facebook', intent: 'login' | 'page_connection' = 'page_connection'): string {
-    const customScopes = process.env.META_OAUTH_SCOPES;
-    const baseScopes = customScopes
-      ? customScopes.split(',').map(s => s.trim())
-      : (intent === 'login' ? this.scopes.stage1_login : this.scopes.facebook);
+    let baseScopes: string[];
+    if (intent === 'login') {
+      const customLoginScopes = process.env.META_LOGIN_SCOPES;
+      baseScopes = customLoginScopes
+        ? customLoginScopes.split(',').map((s) => s.trim()).filter(Boolean)
+        : this.scopes.stage1_login;
+    } else {
+      const customPageScopes = process.env.META_PAGE_SCOPES || process.env.META_OAUTH_SCOPES;
+      baseScopes = customPageScopes
+        ? customPageScopes.split(',').map((s) => s.trim()).filter(Boolean)
+        : this.scopes.facebook;
+    }
     const redirectUri = this.redirectUri(provider);
     const params = new URLSearchParams({
       client_id: this.clientId(),

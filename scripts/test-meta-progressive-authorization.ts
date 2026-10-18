@@ -103,11 +103,14 @@ async function runMetaProgressiveAuthorizationTests() {
   const stage2Scopes = stage2Params.get('scope')?.split(',') || [];
   const authType = stage2Params.get('auth_type');
 
+  const configuredScopes = process.env.META_OAUTH_SCOPES
+    ? process.env.META_OAUTH_SCOPES.split(',').map(s => s.trim())
+    : ['pages_show_list', 'pages_read_engagement', 'pages_manage_posts', 'pages_manage_metadata'];
+  const matchesExpectedScopes = configuredScopes.every(scope => stage2Scopes.includes(scope));
+
   assert(
     stage2Scopes.includes('pages_show_list') &&
-    stage2Scopes.includes('pages_read_engagement') &&
-    stage2Scopes.includes('pages_manage_posts') &&
-    stage2Scopes.includes('pages_manage_metadata') &&
+    matchesExpectedScopes &&
     authType === 'rerequest',
     'Stage 2 requests Page-management scopes with auth_type=rerequest',
     `Actual Scopes: ${stage2Scopes.join(', ')} | auth_type: ${authType}`
