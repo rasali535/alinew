@@ -88,10 +88,14 @@ function getOrCreateBrowserClient(): SupabaseClient {
 
   const isDesktop = isDesktopRuntime();
   const supabaseUrl = resolveSupabaseUrl();
-  const supabaseKey =
+  const rawKey =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    (isDesktop ? CANONICAL_SUPABASE_PUBLISHABLE_KEY : undefined);
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const isPlaceholderKey = !rawKey || rawKey.includes('placeholder');
+  const supabaseKey =
+    (isDesktop || isPlaceholderKey)
+      ? (isPlaceholderKey ? CANONICAL_SUPABASE_PUBLISHABLE_KEY : (rawKey || CANONICAL_SUPABASE_PUBLISHABLE_KEY))
+      : rawKey;
 
   if (!supabaseKey) {
     throw new Error(

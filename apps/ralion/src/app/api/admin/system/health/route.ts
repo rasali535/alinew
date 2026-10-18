@@ -338,6 +338,75 @@ export async function GET(request: NextRequest) {
     ));
   }
 
+  const socialIsolationOwnConnectionId = process.env.RALION_SOCIAL_ISOLATION_OWN_CONNECTION_ID?.trim();
+  const socialIsolationForeignConnectionId = process.env.RALION_SOCIAL_ISOLATION_FOREIGN_CONNECTION_ID?.trim();
+  const socialIsolationOrgId = process.env.RALION_SOCIAL_ISOLATION_ORG_ID?.trim();
+  const socialIsolationWorkspaceId = process.env.RALION_SOCIAL_ISOLATION_WORKSPACE_ID?.trim();
+  const socialIsolationUserId = process.env.RALION_SOCIAL_ISOLATION_USER_ID?.trim();
+
+  if (
+    socialIsolationOwnConnectionId &&
+    socialIsolationForeignConnectionId &&
+    socialIsolationOrgId &&
+    socialIsolationWorkspaceId &&
+    socialIsolationUserId &&
+    supabase
+  ) {
+    const startSocialIsolation = Date.now();
+    try {
+      const [{ data: own, error: ownError }, { data: foreign, error: foreignError }] = await Promise.all([
+        supabase
+          .from('social_connections')
+          .select('id')
+          .eq('id', socialIsolationOwnConnectionId)
+          .eq('organization_id', socialIsolationOrgId)
+          .eq('workspace_id', socialIsolationWorkspaceId)
+          .eq('user_id', socialIsolationUserId)
+          .in('connection_status', ['CONNECTED', 'ACTIVE', 'connected', 'active'])
+          .maybeSingle(),
+        supabase
+          .from('social_connections')
+          .select('id')
+          .eq('id', socialIsolationForeignConnectionId)
+          .eq('organization_id', socialIsolationOrgId)
+          .eq('workspace_id', socialIsolationWorkspaceId)
+          .eq('user_id', socialIsolationUserId)
+          .maybeSingle(),
+      ]);
+
+      if (ownError) throw ownError;
+      if (foreignError) throw foreignError;
+      if (!own?.id) throw new Error('Social isolation positive control could not resolve the expected tenant-owned connection.');
+      if (foreign?.id) throw new Error('Cross-tenant social isolation failed: foreign connection resolved inside the current tenant.');
+
+      metrics.push({
+        service: 'Cross-Tenant Social Connection Isolation',
+        status: 'UP',
+        latencyMs: Date.now() - startSocialIsolation,
+        lastChecked: now,
+        failureCount: 0,
+        verification: 'PROBED',
+      });
+    } catch (error: any) {
+      metrics.push({
+        service: 'Cross-Tenant Social Connection Isolation',
+        status: 'DOWN',
+        latencyMs: Date.now() - startSocialIsolation,
+        lastChecked: now,
+        lastError: String(error?.message || error || 'Cross-tenant social isolation probe failed').slice(0, 500),
+        failureCount: 1,
+        verification: 'PROBED',
+      });
+    }
+  } else {
+    metrics.push(configMetric(
+      'Cross-Tenant Social Connection Isolation',
+      false,
+      'RALION_SOCIAL_ISOLATION_OWN_CONNECTION_ID + RALION_SOCIAL_ISOLATION_FOREIGN_CONNECTION_ID + RALION_SOCIAL_ISOLATION_ORG_ID + RALION_SOCIAL_ISOLATION_WORKSPACE_ID + RALION_SOCIAL_ISOLATION_USER_ID',
+      now
+    ));
+  }
+
   metrics.push(configMetric('Meta Graph API / OAuth Gateway', Boolean(process.env.FACEBOOK_APP_ID || process.env.META_APP_ID), 'FACEBOOK_APP_ID or META_APP_ID', now));
   metrics.push(configMetric('Zernio Social Publishing Bridge', Boolean(process.env.ZERNIO_API_KEY), 'ZERNIO_API_KEY', now));
   metrics.push(configMetric('PayPal Commercial Gateway', Boolean(process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET), 'PAYPAL_CLIENT_ID + PAYPAL_CLIENT_SECRET', now));

@@ -25,7 +25,19 @@ if (!fs.existsSync(ralionPackage)) {
 
 console.log('🚀 [Build Renderer] Step 1: Building apps/ralion Next.js application...');
 try {
-  execSync('npm run build', { cwd: webDir, stdio: 'inherit' });
+  execSync('npm run build', {
+    cwd: webDir,
+    stdio: 'inherit',
+    env: {
+      ...process.env,
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
+        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+        'sb_publishable_ZBMkUxUqKAz1b5fQ9aqUcA_xL2SB85N',
+      NEXT_PUBLIC_SUPABASE_URL:
+        process.env.NEXT_PUBLIC_SUPABASE_URL ||
+        'https://yidsfihagwttlmhfynmf.supabase.co',
+    },
+  });
 } catch (error) {
   fail('Ralion web build failed. Desktop renderer will not be packaged.', error);
 }

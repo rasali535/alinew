@@ -47,8 +47,15 @@ export async function POST(
     }
     const context = required.context;
     const user = context.user;
+    const scope = {
+      organizationId: context.organization.id,
+      workspaceId: context.workspace.id,
+    };
+    const socialConnectionId = typeof body?.socialConnectionId === 'string'
+      ? body.socialConnectionId
+      : undefined;
 
-    const tokenData = await loadOAuthTokens(user.id, provider);
+    const tokenData = await loadOAuthTokens(user.id, provider, scope, socialConnectionId);
     if (!tokenData?.accessToken) {
       return corsJsonResponse({ success: false, error: "No connected account found for " + provider + ". Please connect your account first." }, { status: 404 }, request);
     }
@@ -87,7 +94,7 @@ export async function POST(
 
     if (!result.success) {
       if (result.error?.includes("401") || result.error?.toLowerCase().includes("unauthorized")) {
-        await markTokenExpired(user.id, provider);
+        await markTokenExpired(user.id, provider, scope, socialConnectionId);
         return corsJsonResponse({ success: false, error: "Token expired — please reconnect your account.", tokenExpired: true }, { status: 401 }, request);
       }
       return corsJsonResponse({ success: false, error: result.error }, { status: 500 }, request);
