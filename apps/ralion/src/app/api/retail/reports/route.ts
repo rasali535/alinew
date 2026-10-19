@@ -15,9 +15,17 @@ export async function GET(request: NextRequest) {
     const { context, response } = await requireRalionContext(request);
     if (response) return response;
 
+    const scopeCheck = RetailEntitlementService.validateClientWorkspaceScope(request, context);
+    if (!scopeCheck.valid) {
+      return corsJsonResponse({ success: false, error: scopeCheck.error }, { status: 403 }, request);
+    }
+
     const entitlement = await RetailEntitlementService.verifyEntitlement(context);
     if (!entitlement.isEntitled) {
       return corsJsonResponse({ success: false, error: 'RETAIL_MODULE_NOT_ENTITLED' }, { status: 403 }, request);
+    }
+    if (!entitlement.canAccessExpenses && !entitlement.canAccessPayroll && !entitlement.canManageSettings) {
+      return corsJsonResponse({ success: false, error: 'FORBIDDEN_REPORTS_ACCESS' }, { status: 403 }, request);
     }
 
     const metrics = await RetailDatabaseService.computeFinancialMetrics(context.workspace.id);

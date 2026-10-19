@@ -15,6 +15,11 @@ export async function GET(request: NextRequest) {
     const { context, response } = await requireRalionContext(request);
     if (response) return response;
 
+    const scopeCheck = RetailEntitlementService.validateClientWorkspaceScope(request, context);
+    if (!scopeCheck.valid) {
+      return corsJsonResponse({ success: false, error: scopeCheck.error }, { status: 403 }, request);
+    }
+
     const entitlement = await RetailEntitlementService.verifyEntitlement(context);
     if (!entitlement.isEntitled) {
       return corsJsonResponse(

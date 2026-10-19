@@ -16,6 +16,11 @@ export async function GET(request: NextRequest) {
     const { context, response } = await requireRalionContext(request);
     if (response) return response;
 
+    const scopeCheck = RetailEntitlementService.validateClientWorkspaceScope(request, context);
+    if (!scopeCheck.valid) {
+      return corsJsonResponse({ success: false, error: scopeCheck.error }, { status: 403 }, request);
+    }
+
     const entitlement = await RetailEntitlementService.verifyEntitlement(context);
     if (!entitlement.isEntitled) {
       return corsJsonResponse({ success: false, error: 'RETAIL_MODULE_NOT_ENTITLED' }, { status: 403 }, request);
@@ -49,6 +54,12 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
+
+    const scopeCheck = RetailEntitlementService.validateClientWorkspaceScope(request, context, body);
+    if (!scopeCheck.valid) {
+      return corsJsonResponse({ success: false, error: scopeCheck.error }, { status: 403 }, request);
+    }
+
     if (!body.name || !body.sku || body.sellingPrice === undefined) {
       return corsJsonResponse({ success: false, error: 'Missing required product fields (name, sku, sellingPrice).' }, { status: 400 }, request);
     }

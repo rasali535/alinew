@@ -21,6 +21,12 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
+
+    const scopeCheck = RetailEntitlementService.validateClientWorkspaceScope(request, context, body);
+    if (!scopeCheck.valid) {
+      return corsJsonResponse({ success: false, error: scopeCheck.error }, { status: 403 }, request);
+    }
+
     const { purchaseOrderId, receiptNumber, items, notes } = body;
 
     if (!purchaseOrderId || !Array.isArray(items) || items.length === 0) {

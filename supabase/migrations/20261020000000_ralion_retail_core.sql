@@ -544,6 +544,26 @@ DECLARE
     v_current_stock NUMERIC;
     v_allow_negative BOOLEAN := false;
 BEGIN
+    -- 0. Security & Entitlement Gating: Enforce active tenant module entitlement
+    IF NOT EXISTS (
+        SELECT 1 FROM public.tenant_module_entitlements
+        WHERE organization_id = p_organization_id
+          AND workspace_id = p_workspace_id
+          AND module_key = 'retail'
+          AND status = 'ACTIVE'
+    ) THEN
+        RAISE EXCEPTION 'RETAIL_MODULE_NOT_ENTITLED: Workspace % is not actively entitled to Retail OS.', p_workspace_id;
+    END IF;
+
+    -- Verify workspace belongs to organization
+    IF NOT EXISTS (
+        SELECT 1 FROM public.workspaces
+        WHERE id = p_workspace_id
+          AND organization_id = p_organization_id
+    ) THEN
+        RAISE EXCEPTION 'INVALID_WORKSPACE: Workspace % does not belong to organization %.', p_workspace_id, p_organization_id;
+    END IF;
+
     -- 1. Idempotency Check: Return existing sale without re-executing
     IF p_idempotency_key IS NOT NULL AND p_idempotency_key <> '' THEN
         SELECT id INTO v_existing_sale_id
@@ -702,6 +722,26 @@ DECLARE
     v_po_item_id UUID;
     v_all_received BOOLEAN := true;
 BEGIN
+    -- 0. Security & Entitlement Gating: Enforce active tenant module entitlement
+    IF NOT EXISTS (
+        SELECT 1 FROM public.tenant_module_entitlements
+        WHERE organization_id = p_organization_id
+          AND workspace_id = p_workspace_id
+          AND module_key = 'retail'
+          AND status = 'ACTIVE'
+    ) THEN
+        RAISE EXCEPTION 'RETAIL_MODULE_NOT_ENTITLED: Workspace % is not actively entitled to Retail OS.', p_workspace_id;
+    END IF;
+
+    -- Verify workspace belongs to organization
+    IF NOT EXISTS (
+        SELECT 1 FROM public.workspaces
+        WHERE id = p_workspace_id
+          AND organization_id = p_organization_id
+    ) THEN
+        RAISE EXCEPTION 'INVALID_WORKSPACE: Workspace % does not belong to organization %.', p_workspace_id, p_organization_id;
+    END IF;
+
     -- 1. Lock Purchase Order FOR UPDATE
     SELECT status, po_number INTO v_po_status, v_po_number
     FROM public.retail_purchase_orders
@@ -834,6 +874,26 @@ DECLARE
     v_qitem RECORD;
     v_sale_result JSONB;
 BEGIN
+    -- 0. Security & Entitlement Gating: Enforce active tenant module entitlement
+    IF NOT EXISTS (
+        SELECT 1 FROM public.tenant_module_entitlements
+        WHERE organization_id = p_organization_id
+          AND workspace_id = p_workspace_id
+          AND module_key = 'retail'
+          AND status = 'ACTIVE'
+    ) THEN
+        RAISE EXCEPTION 'RETAIL_MODULE_NOT_ENTITLED: Workspace % is not actively entitled to Retail OS.', p_workspace_id;
+    END IF;
+
+    -- Verify workspace belongs to organization
+    IF NOT EXISTS (
+        SELECT 1 FROM public.workspaces
+        WHERE id = p_workspace_id
+          AND organization_id = p_organization_id
+    ) THEN
+        RAISE EXCEPTION 'INVALID_WORKSPACE: Workspace % does not belong to organization %.', p_workspace_id, p_organization_id;
+    END IF;
+
     -- 1. Lock Quotation FOR UPDATE
     SELECT status, quote_number, customer_id, customer_name,
            subtotal, tax_total, discount_total, total_amount, currency
@@ -931,6 +991,26 @@ DECLARE
     v_item RECORD;
     v_current_stock NUMERIC;
 BEGIN
+    -- 0. Security & Entitlement Gating: Enforce active tenant module entitlement
+    IF NOT EXISTS (
+        SELECT 1 FROM public.tenant_module_entitlements
+        WHERE organization_id = p_organization_id
+          AND workspace_id = p_workspace_id
+          AND module_key = 'retail'
+          AND status = 'ACTIVE'
+    ) THEN
+        RAISE EXCEPTION 'RETAIL_MODULE_NOT_ENTITLED: Workspace % is not actively entitled to Retail OS.', p_workspace_id;
+    END IF;
+
+    -- Verify workspace belongs to organization
+    IF NOT EXISTS (
+        SELECT 1 FROM public.workspaces
+        WHERE id = p_workspace_id
+          AND organization_id = p_organization_id
+    ) THEN
+        RAISE EXCEPTION 'INVALID_WORKSPACE: Workspace % does not belong to organization %.', p_workspace_id, p_organization_id;
+    END IF;
+
     -- 1. Lock Sale FOR UPDATE
     SELECT status, sale_number, customer_name
     INTO v_sale_status, v_sale_number, v_customer_name

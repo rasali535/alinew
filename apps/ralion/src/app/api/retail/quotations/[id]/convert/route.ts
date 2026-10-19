@@ -25,6 +25,12 @@ export async function POST(
 
     const { id: quotationId } = await params;
     const body = await request.json().catch(() => ({}));
+
+    const scopeCheck = RetailEntitlementService.validateClientWorkspaceScope(request, context, body);
+    if (!scopeCheck.valid) {
+      return corsJsonResponse({ success: false, error: scopeCheck.error }, { status: 403 }, request);
+    }
+
     const paymentMethod = body.paymentMethod || 'CASH';
     const shiftId = body.shiftId;
 

@@ -16,6 +16,11 @@ export async function GET(request: NextRequest) {
     const { context, response } = await requireRalionContext(request);
     if (response) return response;
 
+    const scopeCheck = RetailEntitlementService.validateClientWorkspaceScope(request, context);
+    if (!scopeCheck.valid) {
+      return corsJsonResponse({ success: false, error: scopeCheck.error }, { status: 403 }, request);
+    }
+
     const entitlement = await RetailEntitlementService.verifyEntitlement(context);
     if (!entitlement.isEntitled || !entitlement.canAccessInventory) {
       return corsJsonResponse({ success: false, error: 'FORBIDDEN_PURCHASING_ACCESS' }, { status: 403 }, request);
@@ -39,6 +44,12 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
+
+    const scopeCheck = RetailEntitlementService.validateClientWorkspaceScope(request, context, body);
+    if (!scopeCheck.valid) {
+      return corsJsonResponse({ success: false, error: scopeCheck.error }, { status: 403 }, request);
+    }
+
     if (!body.supplierId || !Array.isArray(body.items) || body.items.length === 0) {
       return corsJsonResponse({ success: false, error: 'Supplier ID and at least one item are required.' }, { status: 400 }, request);
     }
