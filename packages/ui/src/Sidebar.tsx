@@ -53,6 +53,7 @@ export interface SidebarProps {
   orgName?: string;
   userName?: string;
   isPlatformAdmin?: boolean;
+  hasRetailEntitlement?: boolean;
   platformUrl?: string;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -67,6 +68,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   orgName = 'Organization Workspace',
   userName,
   isPlatformAdmin = false,
+  hasRetailEntitlement = false,
   platformUrl = 'https://portal.rasalilabs.com',
   isCollapsed = false,
   onToggleCollapse,
@@ -115,13 +117,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'developer', label: 'Developer Platform', href: '/ralion/developer', icon: <Code className="w-4 h-4 text-indigo-400" />, badge: 'Live', badgeVariant: 'purple' },
   ];
 
-  // 3. INDUSTRY SOLUTIONS Items (Locked with Coming Soon for Early Access)
+  const isRetailActive = Boolean(hasRetailEntitlement || isPlatformAdmin || currentPath?.includes('/retail'));
   const industryNav: SidebarItem[] = [
     { id: 'industry-hub', label: 'Solutions Hub', href: '/ralion/industry', icon: <Building2 className="w-4 h-4 text-zinc-400" />, badge: 'Coming Soon', isLocked: true },
     { id: 'health', label: 'Healthcare OS', href: '/ralion/industry/health', icon: <HeartPulse className="w-4 h-4 text-zinc-400" />, badge: 'Coming Soon', isLocked: true, isIndustryPlugin: true },
     { id: 'funeral', label: 'Funeral Services OS', href: '/ralion/industry/funeral', icon: <Shield className="w-4 h-4 text-zinc-400" />, badge: 'Coming Soon', isLocked: true, isIndustryPlugin: true },
     { id: 'logistics', label: 'Logistics & Fleet OS', href: '/ralion/industry/logistics', icon: <Truck className="w-4 h-4 text-zinc-400" />, badge: 'Coming Soon', isLocked: true, isIndustryPlugin: true },
-    { id: 'trade', label: 'Trade & Retail OS', href: '/ralion/industry/trade', icon: <ShoppingBag className="w-4 h-4 text-zinc-400" />, badge: 'Coming Soon', isLocked: true, isIndustryPlugin: true },
+    isRetailActive
+      ? { id: 'retail', label: 'Ralion Retail OS', href: '/ralion/retail', icon: <ShoppingBag className="w-4 h-4 text-emerald-400" />, badge: 'Pilot', isLocked: false, isIndustryPlugin: true }
+      : { id: 'trade', label: 'Trade & Retail OS', href: '/ralion/industry/trade', icon: <ShoppingBag className="w-4 h-4 text-zinc-400" />, badge: 'Coming Soon', isLocked: true, isIndustryPlugin: true },
     { id: 'government', label: 'Government Edition', href: '/ralion/government', icon: <Layers className="w-4 h-4 text-zinc-400" />, badge: 'Coming Soon', isLocked: true, isIndustryPlugin: true },
   ];
 

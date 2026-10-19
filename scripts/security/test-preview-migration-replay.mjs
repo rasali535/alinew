@@ -31,7 +31,7 @@ try {
     catch (error) { throw new Error(`Migration ${file} failed: ${error.message}`, { cause: error }); }
   }
   const scalar = async sql => (await database.query(sql)).rows[0].value;
-  assert.equal(await scalar(`SELECT count(*)::int AS value FROM pg_tables WHERE schemaname='public'`), 97);
+  assert.equal(await scalar(`SELECT count(*)::int AS value FROM pg_tables WHERE schemaname='public'`), 117);
   for (const table of ['profiles', 'organizations', 'workspaces', 'social_connections', 'social_posts', 'platform_admins']) {
     assert.equal(await scalar(`SELECT count(*)::int AS value FROM public.${table}`), 0, `Preview must not copy production ${table} rows.`);
   }

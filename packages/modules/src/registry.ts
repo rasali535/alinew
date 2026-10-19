@@ -129,5 +129,15 @@ export const REGISTERED_MODULES: Record<string, IndustryModuleManifest> = {
     route: '/industry/trade',
     isIndustryPlugin: true,
     requiredPermissions: ['industry:trade']
+  },
+  retail: {
+    id: 'retail',
+    name: 'Ralion Retail OS',
+    category: 'TRADE',
+    description: 'Complete multi-tenant hardware store management system with stock ledger, POS, quotations, expenses, and payroll.',
+    icon: 'shopping-cart',
+    route: '/retail',
+    isIndustryPlugin: true,
+    requiredPermissions: ['retail:read']
   }
 };

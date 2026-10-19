@@ -3,3 +3,4 @@ export * from './schema';
 export * from './collections';
 export * from './supabaseClient';
 export * from './billingDatabase.service';
+export * from './retail';
