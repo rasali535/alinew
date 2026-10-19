@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     const { context, response } = await requireRalionContext(request);
     if (response) return response;
 
-    const entitlement = RetailEntitlementService.verifyEntitlement(context);
+    const entitlement = await RetailEntitlementService.verifyEntitlement(context);
     if (!entitlement.isEntitled) {
       return corsJsonResponse({ success: false, error: 'RETAIL_MODULE_NOT_ENTITLED' }, { status: 403 }, request);
     }

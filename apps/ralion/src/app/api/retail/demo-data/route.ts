@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     const { context, response } = await requireRalionContext(request);
     if (response) return response;
 
-    const entitlement = RetailEntitlementService.verifyEntitlement(context);
+    const entitlement = await RetailEntitlementService.verifyEntitlement(context);
     if (!entitlement.isEntitled || !entitlement.canManageSettings) {
       return corsJsonResponse({ success: false, error: 'FORBIDDEN_DEMO_MANAGEMENT' }, { status: 403 }, request);
     }

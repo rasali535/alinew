@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     const { context, response } = await requireRalionContext(request);
     if (response) return response;
 
-    const entitlement = RetailEntitlementService.verifyEntitlement(context);
+    const entitlement = await RetailEntitlementService.verifyEntitlement(context);
     if (!entitlement.isEntitled || !entitlement.canAccessPayroll) {
       return corsJsonResponse({ success: false, error: 'FORBIDDEN_PAYROLL_ACCESS' }, { status: 403 }, request);
     }
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     const { context, response } = await requireRalionContext(request);
     if (response) return response;
 
-    const entitlement = RetailEntitlementService.verifyEntitlement(context);
+    const entitlement = await RetailEntitlementService.verifyEntitlement(context);
     if (!entitlement.isEntitled || !entitlement.canAccessPayroll) {
       return corsJsonResponse({ success: false, error: 'FORBIDDEN_PAYROLL_ACCESS' }, { status: 403 }, request);
     }

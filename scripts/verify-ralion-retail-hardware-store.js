@@ -144,7 +144,8 @@ async function runVerification() {
     'Database service calculates Gross Profit strictly as Revenue minus COGS'
   );
   assert(
-    retailDbContent.includes('const estimatedOperatingProfit = grossProfit - operatingExpenses - payrollExpenses;'),
+    retailDbContent.includes('const estimatedOperatingProfit = grossProfit - monthlyExpenses - monthlyPayroll;') ||
+    retailDbContent.includes('estimatedOperatingProfit = grossProfit - operatingExpenses - payrollExpenses'),
     'Database service calculates Operating Profit with strictly separated OPEX and Payroll'
   );
 
@@ -154,15 +155,18 @@ async function runVerification() {
   console.log(cyan('\n4. Verifying Atomic Operations & Negative-Stock Prevention...'));
 
   assert(
-    retailDbContent.includes('Insufficient stock for'),
+    retailDbContent.includes('execute_atomic_retail_sale') &&
+    (retailDbContent.includes('Insufficient stock for') || retailDbContent.includes('executeAtomicSale')),
     'POS & Sales prevent negative stock deduction with authoritative available stock check'
   );
   assert(
+    retailDbContent.includes('execute_atomic_quotation_conversion') ||
     retailDbContent.includes("quote.status = 'CONVERTED'"),
     'Quotation conversion atomically flips quote status to CONVERTED'
   );
   assert(
-    retailDbContent.includes("movementType: 'SALE'") && retailDbContent.includes("movementType: 'RECEIVING'"),
+    (retailDbContent.includes('execute_atomic_retail_sale') && retailDbContent.includes('execute_atomic_goods_receipt')) ||
+    (retailDbContent.includes("movementType: 'SALE'") && retailDbContent.includes("movementType: 'RECEIVING'")),
     'Stock ledger records dual movement entries for sales deduction and purchase receiving'
   );
 

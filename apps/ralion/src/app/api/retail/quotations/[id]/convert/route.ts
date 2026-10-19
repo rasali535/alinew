@@ -18,7 +18,7 @@ export async function POST(
     const { context, response } = await requireRalionContext(request);
     if (response) return response;
 
-    const entitlement = RetailEntitlementService.verifyEntitlement(context);
+    const entitlement = await RetailEntitlementService.verifyEntitlement(context);
     if (!entitlement.isEntitled || !entitlement.canAccessQuotations || !entitlement.canAccessSales) {
       return corsJsonResponse({ success: false, error: 'FORBIDDEN_CONVERSION_ACCESS' }, { status: 403 }, request);
     }
