@@ -989,3 +989,15 @@ BEGIN
 END;
 $$;
 
+-- Security hardening: Revoke execute from public and anon on SECURITY DEFINER functions
+REVOKE EXECUTE ON FUNCTION public.execute_atomic_retail_sale FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.execute_atomic_goods_receipt FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.execute_atomic_quotation_conversion FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.execute_atomic_sale_refund FROM PUBLIC, anon;
+
+GRANT EXECUTE ON FUNCTION public.execute_atomic_retail_sale TO service_role, authenticated;
+GRANT EXECUTE ON FUNCTION public.execute_atomic_goods_receipt TO service_role, authenticated;
+GRANT EXECUTE ON FUNCTION public.execute_atomic_quotation_conversion TO service_role, authenticated;
+GRANT EXECUTE ON FUNCTION public.execute_atomic_sale_refund TO service_role, authenticated;
+
+
