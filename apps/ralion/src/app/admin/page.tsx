@@ -19,10 +19,17 @@ import {
   TrendingUp,
   Users,
   XCircle,
+  ShoppingBag,
+  ExternalLink,
+  ShieldCheck,
+  Package,
+  DollarSign,
+  TrendingDown,
+  Lock,
 } from 'lucide-react';
 import { authFetch } from '@/lib/api-config';
 
-type Tab = 'overview' | 'customers' | 'mari' | 'social' | 'billing' | 'system' | 'audit';
+type Tab = 'overview' | 'customers' | 'retail' | 'mari' | 'social' | 'billing' | 'system' | 'audit';
 
 interface MetricsData {
   totalCustomers: number;
@@ -169,6 +176,7 @@ export default function PlatformAdminPortal() {
   const [metrics, setMetrics] = useState<MetricsData | null>(null);
   const [customers, setCustomers] = useState<CustomerRow[]>([]);
   const [mariTelemetry, setMariTelemetry] = useState<MariTelemetryData | null>(null);
+  const [retailData, setRetailData] = useState<any | null>(null);
   const [health, setHealth] = useState<HealthMetric[]>([]);
   const [overallHealth, setOverallHealth] = useState('UNKNOWN');
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
@@ -198,16 +206,20 @@ export default function PlatformAdminPortal() {
         authFetch('/api/admin/system/health'),
         authFetch('/api/admin/audit-logs?limit=100'),
         authFetch('/api/admin/mari/overview'),
+        authFetch('/api/admin/retail/overview').catch(() => null),
       ]);
-      const bodies = await Promise.all(responses.map(json));
-      const failed = responses.findIndex(res => !res.ok);
-      if (failed >= 0) throw new Error(bodies[failed]?.error || `Admin API returned HTTP ${responses[failed].status}.`);
-      setMetrics(bodies[0].data || null);
-      setCustomers(bodies[1].data || []);
-      setOverallHealth(bodies[2].data?.overallStatus || 'UNKNOWN');
-      setHealth(bodies[2].data?.services || []);
-      setAuditLogs(bodies[3].data || []);
-      setMariTelemetry(bodies[4].data || null);
+      const bodies: any[] = await Promise.all(responses.map(r => r ? json(r).catch(() => ({})) : {}));
+      const failed = responses.findIndex((res, i) => i < 5 && (!res || !res.ok));
+      if (failed >= 0) throw new Error(bodies[failed]?.error || `Admin API returned HTTP ${responses[failed]?.status}.`);
+      setMetrics(bodies[0]?.data || null);
+      setCustomers(bodies[1]?.data || []);
+      setOverallHealth(bodies[2]?.data?.overallStatus || 'UNKNOWN');
+      setHealth(bodies[2]?.data?.services || []);
+      setAuditLogs(bodies[3]?.data || []);
+      setMariTelemetry(bodies[4]?.data || null);
+      if (bodies[5]?.success) {
+        setRetailData(bodies[5]?.data || null);
+      }
     } catch (err: any) {
       setError(err?.message || 'Unable to load Command Centre.');
     } finally {
@@ -216,6 +228,47 @@ export default function PlatformAdminPortal() {
   };
 
   useEffect(() => { void loadAll(); }, []);
+
+  const updateRetailEntitlement = async (status: 'ACTIVE' | 'SUSPENDED' | 'EXPIRED') => {
+    const reason = window.prompt(
+      `Enter operational justification for setting Proinsight Retail pilot entitlement to ${status}:`,
+      `Administrative ${status.toLowerCase()} action by platform admin`
+    );
+    if (!reason || reason.trim().length < 5) {
+      setError('A justification reason of at least 5 characters is required for the audit trail.');
+      return;
+    }
+    try {
+      const res = await authFetch('/api/admin/retail/entitlement', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, reason: reason.trim() }),
+      });
+      const body = await json(res);
+      if (!res.ok) throw new Error(body.error || 'Failed to update entitlement.');
+      setMessage(body.message || `Proinsight Retail entitlement set to ${status}.`);
+      await loadAll();
+    } catch (err: any) {
+      setError(err?.message || 'Error updating entitlement.');
+    }
+  };
+
+  const openRetailWorkspace = async () => {
+    try {
+      const res = await authFetch('/api/admin/retail/impersonate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'Platform administrator operational inspection from Command Centre' }),
+      });
+      const body = await json(res);
+      if (!res.ok) throw new Error(body.error || 'Failed to authorize inspection session.');
+      window.open(body.redirectUrl || '/ralion/retail?admin_inspect=true', '_blank');
+      setMessage('Platform administrator inspection session opened in new window.');
+      await loadAll();
+    } catch (err: any) {
+      setError(err?.message || 'Error launching inspection session.');
+    }
+  };
 
   const filteredCustomers = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -262,6 +315,7 @@ export default function PlatformAdminPortal() {
   const tabs: Array<{ id: Tab; label: string; icon: any }> = [
     { id: 'overview', label: 'Overview', icon: Activity },
     { id: 'customers', label: `Tenants (${customers.length})`, icon: Users },
+    { id: 'retail', label: `Retail Pilot (${retailData?.entitlement?.status || 'Proinsight'})`, icon: ShoppingBag },
     { id: 'mari', label: `Mari & API (${mariTelemetry?.summary.liveWidgets || 0} live)`, icon: Sparkles },
     { id: 'social', label: 'Social', icon: Share2 },
     { id: 'billing', label: 'Billing & Credits', icon: CreditCard },
@@ -295,14 +349,184 @@ export default function PlatformAdminPortal() {
             <Metric title="Credits" value={Number(metrics.totalCreditsIssued || 0).toLocaleString()} detail={`${Number(metrics.totalCreditsConsumed || 0).toLocaleString()} consumed`} icon={Coins} />
             <Metric title="Finalized Creatives (30d)" value={metrics.creativeGenerations?.total || 0} detail={`${metrics.creativeGenerations?.images || 0} image · ${metrics.creativeGenerations?.videos || 0} video · ${metrics.creativeGenerations?.successRate || 0}% finalized success`} icon={Sparkles} />
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <InfoCard title="System Health" value={overallHealth} detail="Based on live probes and explicit configuration checks." tone={overallHealth === 'UP' ? 'good' : overallHealth === 'DEGRADED' ? 'warn' : 'bad'} />
+            <InfoCard title="Retail Pilot" value={retailData?.entitlement?.status || 'PROINSIGHT'} detail={`Hardware OS · USD ($) · ${retailData?.operationalHealth?.totalProducts || 0} products · ${retailData?.operationalHealth?.completedSalesCount || 0} sales`} tone={retailData?.entitlement?.status === 'ACTIVE' ? 'good' : retailData?.entitlement?.status === 'SUSPENDED' ? 'warn' : 'bad'} />
             <InfoCard title="Mari Websites" value={`${mariTelemetry?.summary.liveWidgets || 0} live`} detail={`${mariTelemetry?.summary.connectedWidgets || 0} observed · ${mariTelemetry?.summary.configuredNoTraffic || 0} configured without traffic`} tone={(mariTelemetry?.summary.errorWidgets || 0) > 0 ? 'warn' : 'good'} />
             <InfoCard title="Social Connections" value={metrics.activeSocialConnections || 0} detail={`Facebook ${metrics.connectedFacebookAccounts || 0} · Instagram ${metrics.connectedInstagramAccounts || 0} · ${metrics.socialAttentionCount || 0} need attention`} tone={(metrics.socialAttentionCount || 0) > 0 ? 'warn' : 'good'} />
             <InfoCard title="Audit Error Share (30d)" value={`${metrics.apiErrorRatePct || 0}%`} detail={`${metrics.recentSecurityEvents || 0} auth/security-related audit events`} tone={metrics.apiErrorRatePct > 0 ? 'warn' : 'good'} />
           </div>
           <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5"><div className="flex items-center justify-between mb-4"><div><h2 className="font-bold text-sm">Connected Users</h2><p className="text-xs text-zinc-500">Canonical active social bindings grouped by authenticated identity.</p></div><span className="text-xs text-zinc-400">{metrics.connectedUsers?.length || 0}</span></div><div className="grid md:grid-cols-2 gap-3">{(metrics.connectedUsers || []).map(user => <div key={user.userId} className="p-4 rounded-xl border border-zinc-800 bg-zinc-950/50"><div className="font-semibold text-sm">{user.userName || user.email || 'Connected User'}</div><div className="text-[11px] text-zinc-500">{user.email || 'No profile email'} · {user.connectionCount} connection(s)</div><div className="flex flex-wrap gap-2 mt-3">{(user.connections || []).map((conn: any) => <span key={conn.socialConnectionId} className="px-2 py-1 rounded-lg border border-blue-500/20 bg-blue-500/10 text-blue-300 text-[10px]">{conn.provider}: {conn.accountName}</span>)}</div></div>)}{!metrics.connectedUsers?.length && <div className="text-xs text-zinc-500">No active social bindings.</div>}</div></section>
         </>}
+
+        {tab === 'customers' && <section className="space-y-4"><div className="flex flex-col md:flex-row gap-3 md:items-center justify-between"><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search tenant, owner, email or ID…" className="w-full md:max-w-md px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs" /><div className="text-xs text-zinc-500">{filteredCustomers.length} visible tenants</div></div><div className="overflow-x-auto rounded-2xl border border-zinc-800"><table className="w-full text-xs"><thead className="bg-zinc-900 text-zinc-400"><tr><th className="p-3 text-left">Tenant</th><th className="p-3 text-left">Plan</th><th className="p-3 text-left">Credits</th><th className="p-3 text-left">Knowledge</th><th className="p-3 text-left">Mari</th><th className="p-3 text-left">Social</th><th className="p-3 text-left">Status</th><th className="p-3 text-right">Actions</th></tr></thead><tbody className="divide-y divide-zinc-800">{filteredCustomers.map(customer => { const tenantWidgets = (mariTelemetry?.widgets || []).filter(widget => widget.organizationId === customer.organizationId); const liveWidgets = tenantWidgets.filter(widget => widget.health === 'LIVE').length; return <tr key={customer.organizationId} className="bg-zinc-950/40"><td className="p-3"><div className="font-semibold text-white">{customer.name}</div><div className="font-mono text-[10px] text-zinc-600">{customer.organizationId}</div><div className="text-[10px] text-zinc-500">{customer.ownerEmail || 'No owner email'}</div></td><td className="p-3">{customer.plan}</td><td className="p-3 font-mono">{customer.credits || 0}<div className="text-[10px] text-zinc-600">{customer.creditsConsumed || 0} consumed</div></td><td className="p-3"><Pill text={customer.websiteIngestionStatus || 'NONE'} status={customer.websiteIngestionStatus === 'VERIFIED' ? 'ACTIVE' : 'UNKNOWN'} /></td><td className="p-3"><Pill text={tenantWidgets.length ? `${liveWidgets}/${tenantWidgets.length} LIVE` : 'NONE'} status={liveWidgets ? 'LIVE' : tenantWidgets.length ? tenantWidgets[0].health : 'UNKNOWN'} /></td><td className="p-3"><div className="flex flex-wrap gap-1">{(customer.socialConnections || []).map(connection => <Pill key={connection.id} text={`${connection.provider.toUpperCase()} · ${connection.accountName}`} status={connection.connectionStatus} />)}{!customer.socialConnections?.length && <Pill text="NO CHANNELS" status="DISCONNECTED" />}{Boolean(customer.socialAttentionCount) && <Pill text={`${customer.socialAttentionCount} NEED ATTENTION`} status="DEGRADED" />}</div></td><td className="p-3"><Pill text={customer.status} status={customer.status} /></td><td className="p-3"><div className="flex justify-end gap-2"><button onClick={() => void inspectTenant(customer.organizationId)} className="p-2 rounded-lg border border-zinc-700 bg-zinc-900" title="Inspect"><Eye className="w-3.5 h-3.5" /></button><button onClick={() => setCreditOrg(customer.organizationId)} className="p-2 rounded-lg border border-indigo-500/30 bg-indigo-500/10 text-indigo-300" title="Adjust credits"><Coins className="w-3.5 h-3.5" /></button><button onClick={() => void updateTenantStatus(customer)} className={`px-2 py-1 rounded-lg border text-[10px] font-bold ${customer.status === 'ACTIVE' ? 'border-rose-500/30 text-rose-300' : 'border-emerald-500/30 text-emerald-300'}`}>{customer.status === 'ACTIVE' ? 'Suspend' : 'Reactivate'}</button></div></td></tr>})}{!filteredCustomers.length && <tr><td colSpan={8} className="p-10 text-center text-zinc-500">No matching organizations.</td></tr>}</tbody></table></div><div className="flex items-center gap-2"><input value={inspectReason} onChange={e => setInspectReason(e.target.value)} className="flex-1 max-w-lg px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs" placeholder="Reason recorded when inspecting a tenant" /><span className="text-[10px] text-zinc-600">Inspection is audit logged.</span></div></section>}
+
+        {tab === 'retail' && (
+          <section className="space-y-5">
+            {/* Header & Entitlement Control Card */}
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 space-y-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 font-bold text-xl">
+                    🛒
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-base font-bold text-white">Ralion Retail Pilot Command Centre</h2>
+                      <Pill text={retailData?.entitlement?.status || 'NOT_ENTITLED'} status={retailData?.entitlement?.status || 'UNKNOWN'} />
+                      <span className="px-2 py-0.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-[10px] font-bold">
+                        USD ($) EXCLUSIVE
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-400">
+                      Managed pilot customer: <strong>Proinsight (Prolnsight Consultants)</strong> • Hardware & Building Materials Retail
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => void openRetailWorkspace()}
+                    className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-indigo-600/20 transition-all"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    Open Retail Workspace (Inspection Session)
+                  </button>
+                  <button
+                    onClick={() => void updateRetailEntitlement('ACTIVE')}
+                    disabled={retailData?.entitlement?.status === 'ACTIVE'}
+                    className="px-3 py-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 text-xs font-bold transition-all disabled:opacity-40"
+                  >
+                    Activate
+                  </button>
+                  <button
+                    onClick={() => void updateRetailEntitlement('SUSPENDED')}
+                    disabled={retailData?.entitlement?.status === 'SUSPENDED'}
+                    className="px-3 py-2 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-bold transition-all disabled:opacity-40"
+                  >
+                    Suspend
+                  </button>
+                  <button
+                    onClick={() => void updateRetailEntitlement('EXPIRED')}
+                    disabled={retailData?.entitlement?.status === 'EXPIRED'}
+                    className="px-3 py-2 rounded-lg border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 text-xs font-bold transition-all disabled:opacity-40"
+                  >
+                    Revoke
+                  </button>
+                </div>
+              </div>
+
+              {/* Entitlement & Security Metadata */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 pt-3 border-t border-zinc-800 text-xs">
+                <div>
+                  <span className="text-zinc-500 block text-[10px] uppercase font-bold">Workspace Identifier</span>
+                  <span className="font-mono text-zinc-300 text-[11px]">{retailData?.workspace?.workspaceId || '67074e47-76bb-40e1-ae05-362e9cae8798'}</span>
+                </div>
+                <div>
+                  <span className="text-zinc-500 block text-[10px] uppercase font-bold">Authorized Tier & Mode</span>
+                  <span className="text-zinc-300">{retailData?.entitlement?.tier || 'PILOT'} (Exclusive Customer Sandbox)</span>
+                </div>
+                <div>
+                  <span className="text-zinc-500 block text-[10px] uppercase font-bold">Store Name</span>
+                  <span className="text-zinc-300">{retailData?.settings?.store_name || 'Proinsight Hardware & Building Supplies'}</span>
+                </div>
+                <div>
+                  <span className="text-zinc-500 block text-[10px] uppercase font-bold">Last Status Update</span>
+                  <span className="text-zinc-300">{retailData?.entitlement?.updatedAt ? new Date(retailData.entitlement.updatedAt).toLocaleString() : 'Active Pilot Baseline'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Operational Telemetry Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <Metric
+                title="Catalogue Products"
+                value={retailData?.operationalHealth?.totalProducts || 0}
+                detail={`${retailData?.operationalHealth?.totalStockUnits || 0} physical units on hand`}
+                icon={Package}
+              />
+              <Metric
+                title="POS Sales (Revenue)"
+                value={`$${Number(retailData?.operationalHealth?.totalRevenueUsd || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                detail={`${retailData?.operationalHealth?.completedSalesCount || 0} completed transactions (USD)`}
+                icon={DollarSign}
+              />
+              <Metric
+                title="Quotations"
+                value={retailData?.operationalHealth?.quotationsCount || 0}
+                detail={`${retailData?.operationalHealth?.convertedQuotesCount || 0} converted to sales`}
+                icon={FileText}
+              />
+              <Metric
+                title="Operating Expenses"
+                value={`$${Number(retailData?.operationalHealth?.totalExpensesUsd || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                detail="Non-inventory operational overhead"
+                icon={TrendingDown}
+              />
+            </div>
+
+            {/* Enrolled Staff & Confidential Payroll Redaction */}
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-3">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+                <div>
+                  <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                    <Users className="w-4 h-4 text-indigo-400" />
+                    Enrolled Retail Staff & Role Matrix
+                  </h3>
+                  <p className="text-xs text-zinc-500">
+                    Operational role assignments for Proinsight staff. Confidential salaries and banking records are restricted server-side.
+                  </p>
+                </div>
+                <span className="px-2.5 py-1 rounded-lg border border-indigo-500/20 bg-indigo-500/10 text-indigo-300 text-[10px] font-bold flex items-center gap-1.5">
+                  <Lock className="w-3 h-3" />
+                  CONFIDENTIAL PAYROLL GATED
+                </span>
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border border-zinc-800">
+                <table className="w-full text-xs">
+                  <thead className="bg-zinc-900 text-zinc-400">
+                    <tr>
+                      <th className="p-3 text-left">Staff Member</th>
+                      <th className="p-3 text-left">Job Title</th>
+                      <th className="p-3 text-left">Department</th>
+                      <th className="p-3 text-left">Status</th>
+                      <th className="p-3 text-left">Base Salary</th>
+                      <th className="p-3 text-left">Bank Account</th>
+                      <th className="p-3 text-left">Hire Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800">
+                    {(retailData?.employees || []).map((emp: any) => (
+                      <tr key={emp.id} className="bg-zinc-950/40">
+                        <td className="p-3 font-semibold text-white">{emp.name}</td>
+                        <td className="p-3 text-zinc-300">{emp.jobTitle}</td>
+                        <td className="p-3 text-zinc-400">{emp.department}</td>
+                        <td className="p-3">
+                          <Pill text={emp.employmentStatus} status={emp.employmentStatus === 'ACTIVE' ? 'ACTIVE' : 'DEGRADED'} />
+                        </td>
+                        <td className="p-3 font-mono text-zinc-500 text-[11px] italic">
+                          {emp.baseSalaryMonthly}
+                        </td>
+                        <td className="p-3 font-mono text-zinc-500 text-[11px] italic">
+                          {emp.bankAccount}
+                        </td>
+                        <td className="p-3 text-zinc-400">{emp.hireDate}</td>
+                      </tr>
+                    ))}
+                    {(!retailData?.employees || retailData.employees.length === 0) && (
+                      <tr>
+                        <td colSpan={7} className="p-6 text-center text-zinc-500">
+                          No employees enrolled in Proinsight Retail workspace yet.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        )}
 
         {tab === 'customers' && <section className="space-y-4"><div className="flex flex-col md:flex-row gap-3 md:items-center justify-between"><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search tenant, owner, email or ID…" className="w-full md:max-w-md px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs" /><div className="text-xs text-zinc-500">{filteredCustomers.length} visible tenants</div></div><div className="overflow-x-auto rounded-2xl border border-zinc-800"><table className="w-full text-xs"><thead className="bg-zinc-900 text-zinc-400"><tr><th className="p-3 text-left">Tenant</th><th className="p-3 text-left">Plan</th><th className="p-3 text-left">Credits</th><th className="p-3 text-left">Knowledge</th><th className="p-3 text-left">Mari</th><th className="p-3 text-left">Social</th><th className="p-3 text-left">Status</th><th className="p-3 text-right">Actions</th></tr></thead><tbody className="divide-y divide-zinc-800">{filteredCustomers.map(customer => { const tenantWidgets = (mariTelemetry?.widgets || []).filter(widget => widget.organizationId === customer.organizationId); const liveWidgets = tenantWidgets.filter(widget => widget.health === 'LIVE').length; return <tr key={customer.organizationId} className="bg-zinc-950/40"><td className="p-3"><div className="font-semibold text-white">{customer.name}</div><div className="font-mono text-[10px] text-zinc-600">{customer.organizationId}</div><div className="text-[10px] text-zinc-500">{customer.ownerEmail || 'No owner email'}</div></td><td className="p-3">{customer.plan}</td><td className="p-3 font-mono">{customer.credits || 0}<div className="text-[10px] text-zinc-600">{customer.creditsConsumed || 0} consumed</div></td><td className="p-3"><Pill text={customer.websiteIngestionStatus || 'NONE'} status={customer.websiteIngestionStatus === 'VERIFIED' ? 'ACTIVE' : 'UNKNOWN'} /></td><td className="p-3"><Pill text={tenantWidgets.length ? `${liveWidgets}/${tenantWidgets.length} LIVE` : 'NONE'} status={liveWidgets ? 'LIVE' : tenantWidgets.length ? tenantWidgets[0].health : 'UNKNOWN'} /></td><td className="p-3"><div className="flex flex-wrap gap-1">{(customer.socialConnections || []).map(connection => <Pill key={connection.id} text={`${connection.provider.toUpperCase()} · ${connection.accountName}`} status={connection.connectionStatus} />)}{!customer.socialConnections?.length && <Pill text="NO CHANNELS" status="DISCONNECTED" />}{Boolean(customer.socialAttentionCount) && <Pill text={`${customer.socialAttentionCount} NEED ATTENTION`} status="DEGRADED" />}</div></td><td className="p-3"><Pill text={customer.status} status={customer.status} /></td><td className="p-3"><div className="flex justify-end gap-2"><button onClick={() => void inspectTenant(customer.organizationId)} className="p-2 rounded-lg border border-zinc-700 bg-zinc-900" title="Inspect"><Eye className="w-3.5 h-3.5" /></button><button onClick={() => setCreditOrg(customer.organizationId)} className="p-2 rounded-lg border border-indigo-500/30 bg-indigo-500/10 text-indigo-300" title="Adjust credits"><Coins className="w-3.5 h-3.5" /></button><button onClick={() => void updateTenantStatus(customer)} className={`px-2 py-1 rounded-lg border text-[10px] font-bold ${customer.status === 'ACTIVE' ? 'border-rose-500/30 text-rose-300' : 'border-emerald-500/30 text-emerald-300'}`}>{customer.status === 'ACTIVE' ? 'Suspend' : 'Reactivate'}</button></div></td></tr>})}{!filteredCustomers.length && <tr><td colSpan={8} className="p-10 text-center text-zinc-500">No matching organizations.</td></tr>}</tbody></table></div><div className="flex items-center gap-2"><input value={inspectReason} onChange={e => setInspectReason(e.target.value)} className="flex-1 max-w-lg px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs" placeholder="Reason recorded when inspecting a tenant" /><span className="text-[10px] text-zinc-600">Inspection is audit logged.</span></div></section>}
 

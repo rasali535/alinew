@@ -487,18 +487,87 @@ export class RetailDatabaseService {
   }> {
     const supabase = getPrivilegedSupabase();
 
-    // 1. Calculate financial line totals
+    // 1. Authoritative Server-Side Product Validation & Pricing
+    if (!Array.isArray(params.items) || params.items.length === 0) {
+      return { success: false, error: 'Cart must contain at least one product.' };
+    }
+
+    const productIds = Array.from(new Set(params.items.map((i) => i.productId).filter(Boolean)));
+    if (productIds.length === 0) {
+      return { success: false, error: 'All cart items must have a valid product identifier.' };
+    }
+
+    const { data: dbProducts, error: prodErr } = await supabase
+      .from('retail_products')
+      .select('id, name, sku, purchase_cost, selling_price, min_selling_price, vat_rate, status')
+      .eq('workspace_id', params.workspaceId)
+      .in('id', productIds);
+
+    if (prodErr || !dbProducts) {
+      return { success: false, error: `Failed to retrieve authoritative product data: ${prodErr?.message || 'Not found'}` };
+    }
+
+    const productMap = new Map<string, any>(dbProducts.map((p) => [p.id, p]));
+
     let subtotal = 0;
     let totalCost = 0;
     let taxTotal = 0;
     let discountTotal = 0;
 
-    const itemsPayload = params.items.map((item) => {
-      const lineSubtotal = item.quantity * item.unitPrice;
-      const lineCost = item.quantity * item.unitCost;
-      const lineDiscount = lineSubtotal * ((item.discountRate || 0) / 100);
+    const itemsPayload: any[] = [];
+
+    for (const item of params.items) {
+      const quantity = Number(item.quantity);
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        return {
+          success: false,
+          error: `INVALID_QUANTITY: Line item quantity for product '${item.productName || item.productId}' must be greater than zero.`,
+        };
+      }
+
+      const dbProd = productMap.get(item.productId);
+      if (!dbProd) {
+        return {
+          success: false,
+          error: `PRODUCT_NOT_IN_WORKSPACE: Product '${item.productId}' does not exist in this workspace catalogue.`,
+        };
+      }
+
+      if (dbProd.status !== 'ACTIVE') {
+        return {
+          success: false,
+          error: `PRODUCT_NOT_ACTIVE: Product '${dbProd.name}' (${dbProd.sku}) is inactive and cannot be sold.`,
+        };
+      }
+
+      // Authoritative pricing and cost from database — NEVER trust client-supplied unitPrice or unitCost!
+      const authoritativeUnitPrice = Number(dbProd.selling_price || 0);
+      const authoritativeUnitCost = Number(dbProd.purchase_cost || 0);
+      const minSellingPrice = Number(dbProd.min_selling_price || 0);
+      const taxRate = Number(dbProd.vat_rate || 0);
+
+      const discountRate = Number(item.discountRate || 0);
+      if (!Number.isFinite(discountRate) || discountRate < 0 || discountRate > 100) {
+        return {
+          success: false,
+          error: `INVALID_DISCOUNT: Discount rate (${discountRate}%) must be between 0 and 100%.`,
+        };
+      }
+
+      // Verify that discounted unit price does not breach minimum selling price threshold
+      const discountedUnitPrice = authoritativeUnitPrice * (1 - discountRate / 100);
+      if (minSellingPrice > 0 && discountedUnitPrice < minSellingPrice - 0.001) {
+        return {
+          success: false,
+          error: `DISCOUNT_EXCEEDS_MIN_PRICE: Discounted price ($${discountedUnitPrice.toFixed(2)}) cannot fall below minimum selling price ($${minSellingPrice.toFixed(2)}) for product '${dbProd.name}'.`,
+        };
+      }
+
+      const lineSubtotal = quantity * authoritativeUnitPrice;
+      const lineCost = quantity * authoritativeUnitCost;
+      const lineDiscount = lineSubtotal * (discountRate / 100);
       const taxable = lineSubtotal - lineDiscount;
-      const lineTax = taxable * ((item.taxRate || 0) / 100);
+      const lineTax = taxable * (taxRate / 100);
       const lineTotal = taxable + lineTax;
 
       subtotal += lineSubtotal;
@@ -506,19 +575,19 @@ export class RetailDatabaseService {
       discountTotal += lineDiscount;
       taxTotal += lineTax;
 
-      return {
-        product_id: item.productId,
-        product_name: item.productName,
-        sku: item.sku,
-        quantity: item.quantity,
-        unit_price: item.unitPrice,
-        unit_cost: item.unitCost,
-        tax_rate: item.taxRate || 0,
-        discount_rate: item.discountRate || 0,
+      itemsPayload.push({
+        product_id: dbProd.id,
+        product_name: dbProd.name,
+        sku: dbProd.sku,
+        quantity,
+        unit_price: authoritativeUnitPrice,
+        unit_cost: authoritativeUnitCost,
+        tax_rate: taxRate,
+        discount_rate: discountRate,
         line_total: lineTotal,
         line_cost: lineCost,
-      };
-    });
+      });
+    }
 
     const totalAmount = subtotal - discountTotal + taxTotal;
     const paidAmount = params.payments.reduce((sum, p) => sum + p.amount, 0);
@@ -876,6 +945,88 @@ export class RetailDatabaseService {
 
   static async createQuotation(quote: RetailQuotation, items: RetailQuoteItem[]): Promise<RetailQuotation> {
     const supabase = getPrivilegedSupabase();
+
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new Error('Quotation must contain at least one item.');
+    }
+
+    const productIds = Array.from(new Set(items.map((i) => i.productId).filter(Boolean)));
+    const { data: dbProducts, error: prodErr } = await supabase
+      .from('retail_products')
+      .select('id, name, sku, purchase_cost, selling_price, min_selling_price, vat_rate, status')
+      .eq('workspace_id', quote.workspaceId)
+      .in('id', productIds);
+
+    if (prodErr || !dbProducts) {
+      throw new Error(`Failed to retrieve authoritative product data for quote: ${prodErr?.message || 'Not found'}`);
+    }
+
+    const productMap = new Map<string, any>(dbProducts.map((p) => [p.id, p]));
+
+    let subtotal = 0;
+    let taxTotal = 0;
+    let discountTotal = 0;
+
+    const validatedItems: RetailQuoteItem[] = [];
+
+    for (const it of items) {
+      const quantity = Number(it.quantity);
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        throw new Error(`INVALID_QUANTITY: Line item quantity for product '${it.productName || it.productId}' must be greater than zero.`);
+      }
+
+      const dbProd = productMap.get(it.productId);
+      if (!dbProd) {
+        throw new Error(`PRODUCT_NOT_IN_WORKSPACE: Product '${it.productId}' does not exist in this workspace catalogue.`);
+      }
+
+      // Authoritative cost is ALWAYS fetched from DB — never trust client-supplied cost!
+      const authoritativeUnitCost = Number(dbProd.purchase_cost || 0);
+      const minSellingPrice = Number(dbProd.min_selling_price || 0);
+      const standardSellingPrice = Number(dbProd.selling_price || 0);
+      const unitPrice = Number(it.unitPrice) > 0 ? Number(it.unitPrice) : standardSellingPrice;
+      const taxRate = Number(it.taxRate ?? dbProd.vat_rate ?? 0);
+      const discountRate = Number(it.discountRate || 0);
+
+      if (!Number.isFinite(discountRate) || discountRate < 0 || discountRate > 100) {
+        throw new Error(`INVALID_DISCOUNT: Discount rate must be between 0 and 100%.`);
+      }
+
+      const discountedPrice = unitPrice * (1 - discountRate / 100);
+      if (minSellingPrice > 0 && discountedPrice < minSellingPrice - 0.001) {
+        throw new Error(
+          `DISCOUNT_EXCEEDS_MIN_PRICE: Quotation price ($${discountedPrice.toFixed(2)}) cannot fall below minimum selling price ($${minSellingPrice.toFixed(2)}) for product '${dbProd.name}'.`
+        );
+      }
+
+      const lineSubtotal = quantity * unitPrice;
+      const lineDiscount = lineSubtotal * (discountRate / 100);
+      const taxable = lineSubtotal - lineDiscount;
+      const lineTax = taxable * (taxRate / 100);
+      const lineTotal = taxable + lineTax;
+
+      subtotal += lineSubtotal;
+      discountTotal += lineDiscount;
+      taxTotal += lineTax;
+
+      validatedItems.push({
+        id: it.id || `qi_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        quotationId: quote.id,
+        productId: dbProd.id,
+        productName: dbProd.name,
+        sku: dbProd.sku,
+        description: it.description || dbProd.name,
+        quantity,
+        unitPrice,
+        unitCost: authoritativeUnitCost,
+        discountRate,
+        taxRate,
+        lineTotal,
+      });
+    }
+
+    const totalAmount = subtotal - discountTotal + taxTotal;
+
     const { data: savedQ, error } = await supabase
       .from('retail_quotations')
       .insert({
@@ -889,10 +1040,10 @@ export class RetailDatabaseService {
         customer_email: quote.customerEmail,
         status: quote.status || 'SENT',
         currency: quote.currency || 'USD',
-        subtotal: quote.subtotal,
-        tax_total: quote.taxTotal || 0,
-        discount_total: quote.discountTotal || 0,
-        total_amount: quote.totalAmount,
+        subtotal,
+        tax_total: taxTotal,
+        discount_total: discountTotal,
+        total_amount: totalAmount,
         valid_until: quote.validUntil,
         notes: quote.notes,
         is_pilot_demo: quote.isPilotDemo || false,
@@ -902,7 +1053,7 @@ export class RetailDatabaseService {
 
     if (error) throw new Error(`Quotation insert error: ${error.message}`);
 
-    const quoteItems = items.map((it) => ({
+    const quoteItemsPayload = validatedItems.map((it) => ({
       quotation_id: savedQ.id,
       product_id: it.productId,
       description: it.description,
@@ -914,8 +1065,16 @@ export class RetailDatabaseService {
       line_total: it.lineTotal,
     }));
 
-    await supabase.from('retail_quote_items').insert(quoteItems);
-    return { ...quote, id: savedQ.id, items };
+    await supabase.from('retail_quote_items').insert(quoteItemsPayload);
+    return {
+      ...quote,
+      id: savedQ.id,
+      subtotal,
+      taxTotal,
+      discountTotal,
+      totalAmount,
+      items: validatedItems,
+    };
   }
 
   static async executeAtomicQuoteConversion(params: AtomicQuoteConversionParams): Promise<{

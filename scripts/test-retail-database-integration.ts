@@ -389,6 +389,96 @@ async function main() {
     `, [PROINSIGHT_WORKSPACE_ID, unauthorizedUserId]);
     assert(isUnauthorizedMember.rows.length === 0, 'User without membership is NOT verified in workspace_members');
 
+    // Test 5.11: Server-Side Invariant: Rejection of zero or negative quantity in execute_atomic_retail_sale
+    const validTestProdId = '77777777-7777-7777-7777-777777777777';
+    await client.query(`
+      INSERT INTO public.retail_products (
+        id, organization_id, workspace_id, name, sku, barcode, category, unit_of_measure,
+        selling_price, purchase_cost
+      ) VALUES (
+        $1, $2, $3, 'Test Invariant Product', 'TEST-INV-001', '123456789012', 'Test', 'PIECE',
+        50.00, 30.00
+      ) ON CONFLICT (id) DO NOTHING;
+    `, [validTestProdId, PROINSIGHT_ORG_ID, PROINSIGHT_WORKSPACE_ID]);
+    await client.query(`
+      INSERT INTO public.retail_stock_levels (organization_id, workspace_id, product_id, quantity_on_hand)
+      VALUES ($1, $2, $3, 10);
+    `, [PROINSIGHT_ORG_ID, PROINSIGHT_WORKSPACE_ID, validTestProdId]);
+
+    let negativeQtyError: string | null = null;
+    try {
+      await client.query(`
+        SELECT public.execute_atomic_retail_sale(
+          $1, $2, 'SALE-NEG-QTY', 'INV-NEG-1', 'POS', NULL, 'Test Customer',
+          gen_random_uuid(), 'Cashier', NULL, 'USD', 50, 0, 0, 50, 30,
+          'CASH', 'PAID', NULL, NULL,
+          $3::jsonb, '[]'::jsonb, false
+        );
+      `, [
+        PROINSIGHT_ORG_ID, PROINSIGHT_WORKSPACE_ID,
+        JSON.stringify([{
+          product_id: validTestProdId,
+          product_name: 'Test Invariant Product',
+          sku: 'TEST-INV-001',
+          quantity: -1,
+          unit_price: 50.00,
+          unit_cost: 30.00,
+          tax_rate: 0,
+          discount_rate: 0,
+          line_total: -50.00
+        }])
+      ]);
+    } catch (err: any) {
+      negativeQtyError = err.message;
+    }
+    assert(
+      Boolean(negativeQtyError && negativeQtyError.includes('INVALID_QUANTITY')),
+      'execute_atomic_retail_sale strictly rejects negative or zero item quantities'
+    );
+
+    // Test 5.12: Server-Side Invariant: Rejection of product from foreign workspace
+    const rogueProdId = '66666666-6666-6666-6666-666666666666';
+    await client.query(`
+      INSERT INTO public.retail_products (
+        id, organization_id, workspace_id, name, sku, barcode, category, unit_of_measure,
+        selling_price, purchase_cost
+      ) VALUES (
+        $1, $2, $3, 'Rogue Tenant Product', 'ROGUE-001', '999999999999', 'Rogue', 'PIECE',
+        100.00, 60.00
+      ) ON CONFLICT (id) DO NOTHING;
+    `, [rogueProdId, ROGUE_ORG_ID, ROGUE_WORKSPACE_ID]);
+
+    let rogueProdError: string | null = null;
+    try {
+      await client.query(`
+        SELECT public.execute_atomic_retail_sale(
+          $1, $2, 'SALE-ROGUE-PROD', 'INV-ROGUE-1', 'POS', NULL, 'Test Customer',
+          gen_random_uuid(), 'Cashier', NULL, 'USD', 100, 0, 0, 100, 60,
+          'CASH', 'PAID', NULL, NULL,
+          $3::jsonb, '[]'::jsonb, false
+        );
+      `, [
+        PROINSIGHT_ORG_ID, PROINSIGHT_WORKSPACE_ID,
+        JSON.stringify([{
+          product_id: rogueProdId,
+          product_name: 'Rogue Tenant Product',
+          sku: 'ROGUE-001',
+          quantity: 1,
+          unit_price: 100.00,
+          unit_cost: 60.00,
+          tax_rate: 0,
+          discount_rate: 0,
+          line_total: 100.00
+        }])
+      ]);
+    } catch (err: any) {
+      rogueProdError = err.message;
+    }
+    assert(
+      Boolean(rogueProdError && rogueProdError.includes('PRODUCT_NOT_IN_WORKSPACE')),
+      'execute_atomic_retail_sale strictly rejects products belonging to a different workspace'
+    );
+
     console.log('✅ [5/10] Database-backed tenant entitlement isolation verified.\n');
 
     // Seed test users & cashier
