@@ -23,6 +23,13 @@ export type Permission =
   | 'industry:funeral'
   | 'industry:logistics'
   | 'industry:trade'
+  | 'retail:read'
+  | 'retail:manage'
+  | 'retail:pos'
+  | 'retail:inventory'
+  | 'retail:quotations'
+  | 'retail:expenses'
+  | 'retail:payroll'
   | 'mari:ai_chat'
   | 'mari:ai_actions'
   | 'mari:knowledge_base';
@@ -100,6 +107,13 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'industry:funeral',
     'industry:logistics',
     'industry:trade',
+    'retail:read',
+    'retail:manage',
+    'retail:pos',
+    'retail:inventory',
+    'retail:quotations',
+    'retail:expenses',
+    'retail:payroll',
     'mari:ai_chat',
     'mari:ai_actions',
     'mari:knowledge_base',
@@ -120,6 +134,13 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'industry:funeral',
     'industry:logistics',
     'industry:trade',
+    'retail:read',
+    'retail:manage',
+    'retail:pos',
+    'retail:inventory',
+    'retail:quotations',
+    'retail:expenses',
+    'retail:payroll',
     'mari:ai_chat',
     'mari:ai_actions',
     'mari:knowledge_base',
@@ -136,6 +157,13 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'documents:write',
     'workflows:manage',
     'growth:manage',
+    'retail:read',
+    'retail:manage',
+    'retail:pos',
+    'retail:inventory',
+    'retail:quotations',
+    'retail:expenses',
+    'retail:payroll',
     'mari:ai_chat',
     'mari:ai_actions',
     'mari:knowledge_base',
@@ -150,6 +178,11 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'documents:write',
     'workflows:manage',
     'growth:manage',
+    'retail:read',
+    'retail:pos',
+    'retail:inventory',
+    'retail:quotations',
+    'retail:expenses',
     'mari:ai_chat',
     'mari:ai_actions',
   ],

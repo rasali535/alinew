@@ -44,6 +44,8 @@ export function canAccessModule(user: UserProfile | null, moduleKey: string, ena
       return hasPermission(user, 'industry:logistics');
     case 'trade':
       return hasPermission(user, 'industry:trade');
+    case 'retail':
+      return hasPermission(user, 'retail:read');
     case 'mari':
       return hasPermission(user, 'mari:ai_chat');
     default:
