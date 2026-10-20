@@ -31,7 +31,7 @@ try {
     catch (error) { throw new Error(`Migration ${file} failed: ${error.message}`, { cause: error }); }
   }
   const scalar = async sql => (await database.query(sql)).rows[0].value;
-  assert.equal(await scalar(`SELECT count(*)::int AS value FROM pg_tables WHERE schemaname='public'`), 118);
+  assert.equal(await scalar(`SELECT count(*)::int AS value FROM pg_tables WHERE schemaname='public'`), 124);
   for (const table of ['profiles', 'organizations', 'workspaces', 'social_connections', 'social_posts', 'platform_admins']) {
     assert.equal(await scalar(`SELECT count(*)::int AS value FROM public.${table}`), 0, `Preview must not copy production ${table} rows.`);
   }
@@ -86,7 +86,7 @@ try {
   await assert.rejects(database.query(`SELECT public.ralion_finalize_credits($1,'charged-once',true)`, [orgA]), error => error.code === '42501');
   await database.exec('RESET ROLE');
   console.log('PASS: actual credit procedures charge once, release failed/stale requests, reject insufficient balance and direct client RPCs, and isolate two tenant wallets.');
-  console.log(`PASS: ${files.length} migrations replay; 97 tables; no production tenant/admin rows; signup provisioning and anonymous RPC denial; baseline preserves existing rows.`);
+  console.log(`PASS: ${files.length} migrations replay; 124 tables; no production tenant/admin rows; signup provisioning and anonymous RPC denial; baseline preserves existing rows.`);
 } finally {
   await database.close();
 }

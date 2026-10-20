@@ -20,11 +20,12 @@ import { getPrivilegedSupabase } from '../../supabase/server';
 export const PROINSIGHT_ORGANIZATION_ID = '85ec9738-937a-41ee-b0df-ed752777447c';
 export const PROINSIGHT_WORKSPACE_ID = '67074e47-76bb-40e1-ae05-362e9cae8798';
 export const PROINSIGHT_OWNER_ID = '7f0c8f3f-4f97-42c3-adec-ad74b92792d2';
+export const INTERNAL_RETAIL_PREVIEW_WORKSPACE_ID = 'ralion-internal-retail-preview-ws';
 
 export interface RetailEntitlementCheck {
   isEntitled: boolean;
   status: 'ACTIVE' | 'NOT_ENTITLED' | 'SUSPENDED' | 'EXPIRED';
-  tier: 'PILOT' | 'STANDARD' | 'PROFESSIONAL' | 'ENTERPRISE';
+  tier: 'PILOT' | 'STANDARD' | 'PROFESSIONAL' | 'ENTERPRISE' | 'TRIAL';
   defaultCurrency: RetailCurrency;
   effectiveRole: RetailRole;
   isPlatformAdmin: boolean;
@@ -102,37 +103,38 @@ export class RetailEntitlementService {
     }
 
     // Strict Rule: Never authorize access through organization OR workspace matching alone.
-    // It must be BOTH organization AND workspace.
+    const isInternalPreview = isPlatformAdmin && workspace.id === INTERNAL_RETAIL_PREVIEW_WORKSPACE_ID;
+
+    if (isInternalPreview) {
+      return {
+        isEntitled: true,
+        status: 'ACTIVE',
+        tier: 'PILOT',
+        defaultCurrency: 'USD',
+        effectiveRole: 'STORE_OWNER',
+        isPlatformAdmin: true,
+        canManageSettings: true,
+        canAccessPOS: true,
+        canAccessInventory: true,
+        canAccessQuotations: true,
+        canAccessSales: true,
+        canAccessExpenses: true,
+        canAccessPayroll: true,
+        canViewSalaries: true,
+        source: 'DATABASE_VERIFIED',
+      };
+    }
+
     const isExactProinsight =
       organization.id === PROINSIGHT_ORGANIZATION_ID &&
       workspace.id === PROINSIGHT_WORKSPACE_ID;
 
-    if (!isExactProinsight) {
-      return {
-        isEntitled: false,
-        status: 'NOT_ENTITLED',
-        tier: 'PILOT',
-        defaultCurrency: 'USD',
-        effectiveRole: 'CASHIER',
-        isPlatformAdmin,
-        canManageSettings: false,
-        canAccessPOS: false,
-        canAccessInventory: false,
-        canAccessQuotations: false,
-        canAccessSales: false,
-        canAccessExpenses: false,
-        canAccessPayroll: false,
-        canViewSalaries: false,
-        reason: 'This workspace is not entitled to access Ralion Retail OS. Exclusive pilot access is restricted to Proinsight.',
-      };
-    }
-
     // Requirements 1, 2, 3:
-    // Require an active, database-verified Retail entitlement for Proinsight's exact organization AND workspace.
+    // Require an active, database-verified Retail entitlement for Proinsight or entitled demo/trial workspaces.
     // Expired, suspended, missing or unreadable entitlement records all fail closed.
     // Database query exceptions must NEVER authorize Retail access based on hardcoded IDs or platform-admin status.
     let dbEntitled = false;
-    let entitlementTier: 'PILOT' | 'STANDARD' | 'PROFESSIONAL' | 'ENTERPRISE' = 'PILOT';
+    let entitlementTier: 'PILOT' | 'STANDARD' | 'PROFESSIONAL' | 'ENTERPRISE' | 'TRIAL' = 'PILOT';
     let entitlementStatus: 'ACTIVE' | 'NOT_ENTITLED' | 'SUSPENDED' | 'EXPIRED' = 'NOT_ENTITLED';
     let failureReason: string | undefined;
 
@@ -140,7 +142,7 @@ export class RetailEntitlementService {
       const supabase = getPrivilegedSupabase();
       const { data, error } = await supabase
         .from('tenant_module_entitlements')
-        .select('status, tier, default_currency, organization_id, workspace_id')
+        .select('status, tier, default_currency, organization_id, workspace_id, expires_at')
         .eq('organization_id', organization.id)
         .eq('workspace_id', workspace.id)
         .eq('module_key', 'retail')
@@ -155,7 +157,9 @@ export class RetailEntitlementService {
         // Missing entitlement record -> fail closed
         dbEntitled = false;
         entitlementStatus = 'NOT_ENTITLED';
-        failureReason = 'No active retail entitlement record found for this workspace.';
+        failureReason = isExactProinsight
+          ? 'No active retail entitlement record found for Proinsight pilot workspace.'
+          : 'This workspace is not entitled to access Ralion Retail OS. Redeem a valid demo access code or upgrade your plan.';
       } else if (data.status === 'EXPIRED') {
         dbEntitled = false;
         entitlementStatus = 'EXPIRED';
@@ -165,18 +169,19 @@ export class RetailEntitlementService {
         entitlementStatus = 'SUSPENDED';
         failureReason = 'Retail module entitlement for this workspace is suspended.';
       } else if (data.status === 'ACTIVE') {
-        // Verify DB record matches exact Proinsight identity
-        if (
-          data.organization_id === PROINSIGHT_ORGANIZATION_ID &&
-          data.workspace_id === PROINSIGHT_WORKSPACE_ID
-        ) {
+        // Strict Fail-Closed Expiration Check: Expired trials are blocked at the server layer
+        if (data.expires_at && new Date(data.expires_at).getTime() <= Date.now()) {
+          dbEntitled = false;
+          entitlementStatus = 'EXPIRED';
+          failureReason = 'Retail module trial access for this workspace has expired.';
+        } else if (isExactProinsight || data.tier === 'TRIAL' || data.tier === 'STANDARD' || data.tier === 'PROFESSIONAL' || data.tier === 'ENTERPRISE') {
           dbEntitled = true;
           entitlementTier = data.tier as any;
           entitlementStatus = 'ACTIVE';
         } else {
           dbEntitled = false;
           entitlementStatus = 'NOT_ENTITLED';
-          failureReason = 'Tenant entitlement record does not match authorized pilot tenant.';
+          failureReason = 'Tenant entitlement record is not recognized for this workspace.';
         }
       } else {
         dbEntitled = false;

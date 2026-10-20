@@ -125,6 +125,10 @@ export default function DashboardLayout({
   }, [organization?.id, workspace?.id, user?.uid]);
 
   const isPlatformAdmin = user?.role === 'PLATFORM_ADMIN' || user?.email === 'ali@rasalilabs.com';
+  const isProinsightTenant =
+    organization?.id === '85ec9738-937a-41ee-b0df-ed752777447c' &&
+    workspace?.id === '67074e47-76bb-40e1-ae05-362e9cae8798';
+  const hasRetailEntitlement = isProinsightTenant || isPlatformAdmin;
   const organizationName =
     organization?.name ||
     (user?.displayName
@@ -160,6 +164,7 @@ export default function DashboardLayout({
             orgName={organizationName}
             tier={displayTier}
             isPlatformAdmin={isPlatformAdmin}
+            hasRetailEntitlement={hasRetailEntitlement}
             platformUrl={process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com'}
             isCollapsed={isSidebarCollapsed}
             onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
@@ -181,6 +186,7 @@ export default function DashboardLayout({
                 orgName={organizationName}
                 tier={displayTier}
                 isPlatformAdmin={isPlatformAdmin}
+                hasRetailEntitlement={hasRetailEntitlement}
                 platformUrl={process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com'}
                 isCollapsed={false}
                 onNavigate={handleNavigate}
