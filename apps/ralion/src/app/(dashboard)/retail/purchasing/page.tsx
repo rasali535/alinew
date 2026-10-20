@@ -18,6 +18,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { RetailNavHeader } from '../components/RetailNavHeader';
+import { authFetch } from '@/lib/api-config';
 
 interface Supplier {
   id: string;
@@ -103,9 +104,9 @@ export default function RetailPurchasingPage() {
     try {
       setLoading(true);
       const [resOrders, resSuppliers, resProducts] = await Promise.all([
-        fetch('/api/retail/purchasing/orders'),
-        fetch('/api/retail/suppliers'),
-        fetch('/api/retail/products'),
+        authFetch('/api/retail/purchasing/orders'),
+        authFetch('/api/retail/suppliers'),
+        authFetch('/api/retail/products'),
       ]);
 
       const dataOrders = await resOrders.json();
@@ -129,7 +130,7 @@ export default function RetailPurchasingPage() {
   const handleAddSupplier = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch('/api/retail/suppliers', {
+      const res = await authFetch('/api/retail/suppliers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newSupplier),
@@ -168,7 +169,7 @@ export default function RetailPurchasingPage() {
     }
 
     try {
-      const res = await fetch('/api/retail/purchasing/orders', {
+      const res = await authFetch('/api/retail/purchasing/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newPO),
@@ -218,7 +219,7 @@ export default function RetailPurchasingPage() {
         return;
       }
 
-      const res = await fetch('/api/retail/purchasing/receive', {
+      const res = await authFetch('/api/retail/purchasing/receive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -247,7 +248,7 @@ export default function RetailPurchasingPage() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
       <RetailNavHeader onRefresh={fetchData} />
 
-      <main className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
+      <div role="region" aria-label="Purchasing and Supplier Management" className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
         {notification && (
           <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 flex items-center gap-2 text-emerald-300 text-sm">
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
@@ -611,7 +612,7 @@ export default function RetailPurchasingPage() {
             </div>
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 }

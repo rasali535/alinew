@@ -17,6 +17,7 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 import { RetailNavHeader } from '../components/RetailNavHeader';
+import { authFetch } from '@/lib/api-config';
 
 interface SaleItem {
   id: string;
@@ -62,7 +63,7 @@ export default function RetailSalesPage() {
   const fetchSales = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/retail/sales');
+      const res = await authFetch('/api/retail/sales');
       const data = await res.json();
       if (data.success) {
         setSales(data.sales || []);
@@ -107,7 +108,7 @@ export default function RetailSalesPage() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
       <RetailNavHeader onRefresh={fetchSales} />
 
-      <main className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
+      <div role="region" aria-label="Sales and Invoice Register" className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
         {notification && (
           <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 flex items-center gap-2 text-emerald-300 text-sm">
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
@@ -396,7 +397,7 @@ export default function RetailSalesPage() {
             </div>
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 }

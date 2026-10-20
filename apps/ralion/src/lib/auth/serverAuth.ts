@@ -8,6 +8,7 @@
  */
 
 import 'server-only';
+import crypto from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, User } from '@supabase/supabase-js';
 import { corsJsonResponse } from '../cors';
@@ -340,6 +341,52 @@ export async function resolveRalionAuthContext(
     requestedWorkspaceId = null;
   }
 
+  // Extract optional preview session token from headers, cookies, or query parameters
+  const previewToken =
+    request.headers.get('x-preview-token') ||
+    request.headers.get('x-ralion-preview-token') ||
+    request.cookies.get('ralion_preview_session')?.value ||
+    request.cookies.get('ralion_preview_token')?.value ||
+    request.nextUrl?.searchParams?.get('token') ||
+    null;
+
+  // If a preview session token is presented by an authorized platform administrator,
+  // authoritatively resolve the workspace directly from the verified database preview session record.
+  const isCallerPlatformAdmin = PlatformAdminService.verifyAdminAuthorization(
+    authUser.user_metadata,
+    authUser.email,
+    authUser.app_metadata
+  );
+
+  let verifiedPreviewSession: any = null;
+  if (isCallerPlatformAdmin && previewToken) {
+    try {
+      const tokenHash = crypto.createHash('sha256').update(previewToken.trim()).digest('hex');
+      const { data: dbSession } = await adminClient
+        .from('admin_preview_sessions')
+        .select('id, admin_user_id, admin_email, organization_id, workspace_id, product, status, expires_at, revoked_at')
+        .eq('session_token_hash', tokenHash)
+        .eq('status', 'ACTIVE')
+        .maybeSingle();
+
+      if (
+        dbSession &&
+        dbSession.admin_user_id === authUser.id &&
+        !dbSession.revoked_at &&
+        new Date(dbSession.expires_at).getTime() > Date.now()
+      ) {
+        verifiedPreviewSession = dbSession;
+        // Server selects intended internal workspace from authorized record,
+        // ignoring client-controlled overrides or binding to the preview workspace if none provided.
+        if (!requestedWorkspaceId || requestedWorkspaceId === dbSession.workspace_id) {
+          requestedWorkspaceId = dbSession.workspace_id;
+        }
+      }
+    } catch (previewErr: any) {
+      console.warn('[ServerAuth] Preview session verification check warning:', previewErr?.message);
+    }
+  }
+
   let workspaceRow: any = null;
   let membershipRow: any = null;
 
@@ -616,13 +663,6 @@ export async function resolveRalionAuthContext(
     console.error('[ServerAuth] Platform admin grant lookup exception:', adminGrantErr?.message);
   }
   const isPlatformAdmin = metadataPlatformAdmin && durablePlatformAdmin;
-
-  // Extract optional preview session token from header, cookie, or query parameter
-  const previewToken =
-    request.headers.get('x-preview-token') ||
-    request.cookies.get('ralion_preview_session')?.value ||
-    new URL(request.url).searchParams.get('token') ||
-    null;
 
   const resolvedContext: RalionSessionContext = {
     user: { id: authUser.id, email: authUser.email || '', user_metadata: authUser.user_metadata, app_metadata: authUser.app_metadata },

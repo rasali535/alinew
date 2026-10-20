@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { RetailNavHeader } from './components/RetailNavHeader';
 import { RetailFinancialMetrics } from '@ralion/database';
+import { authFetch } from '@/lib/api-config';
 
 export default function RetailDashboardPage() {
   const [metrics, setMetrics] = useState<RetailFinancialMetrics | null>(null);
@@ -32,7 +33,7 @@ export default function RetailDashboardPage() {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch('/api/retail/dashboard');
+      const res = await authFetch('/api/retail/dashboard');
       if (!res.ok) {
         if (res.status === 403) {
           setError('This workspace is not entitled to access Ralion Retail OS. Exclusive pilot access is reserved for Proinsight.');
@@ -112,7 +113,7 @@ export default function RetailDashboardPage() {
     <div className="flex-1 flex flex-col bg-zinc-950 text-zinc-100 min-h-screen">
       <RetailNavHeader role={role} storeName={storeName} onRefresh={fetchDashboardData} />
 
-      <main className="p-6 max-w-7xl mx-auto w-full space-y-6">
+      <div role="region" aria-label="Hardware Store Performance Center" className="p-6 max-w-7xl mx-auto w-full space-y-6">
         {/* Quick Action Banner */}
         <div className="bg-gradient-to-r from-emerald-950/40 via-zinc-900 to-zinc-900 border border-emerald-500/20 rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4 shadow-sm">
           <div>
@@ -126,28 +127,28 @@ export default function RetailDashboardPage() {
 
           <div className="flex flex-wrap items-center gap-2">
             <Link
-              href="/ralion/retail/pos"
+              href="/retail/pos"
               className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md transition-colors"
             >
               <ShoppingCart className="w-4 h-4" />
               New POS Checkout
             </Link>
             <Link
-              href="/ralion/retail/quotations"
+              href="/retail/quotations"
               className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium flex items-center gap-1.5 transition-colors border border-zinc-700/60"
             >
               <FileText className="w-4 h-4 text-cyan-400" />
               Create Quotation
             </Link>
             <Link
-              href="/ralion/retail/purchasing"
+              href="/retail/purchasing"
               className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium flex items-center gap-1.5 transition-colors border border-zinc-700/60"
             >
               <Truck className="w-4 h-4 text-amber-400" />
               Receive Stock
             </Link>
             <Link
-              href="/ralion/retail/expenses"
+              href="/retail/expenses"
               className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium flex items-center gap-1.5 transition-colors border border-zinc-700/60"
             >
               <PlusCircle className="w-4 h-4 text-rose-400" />
@@ -322,7 +323,7 @@ export default function RetailDashboardPage() {
                   <h3 className="text-sm font-semibold text-zinc-100">Operating Expenses by Category</h3>
                   <p className="text-xs text-zinc-400">Current month non-COGS overhead</p>
                 </div>
-                <Link href="/ralion/retail/expenses" className="text-xs text-emerald-400 hover:underline">
+                <Link href="/retail/expenses" className="text-xs text-emerald-400 hover:underline">
                   Manage
                 </Link>
               </div>
@@ -356,7 +357,7 @@ export default function RetailDashboardPage() {
           <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-5 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold text-zinc-100">Top Selling Hardware Products</h3>
-              <Link href="/ralion/retail/inventory" className="text-xs text-emerald-400 hover:underline">
+              <Link href="/retail/inventory" className="text-xs text-emerald-400 hover:underline">
                 View Inventory
               </Link>
             </div>
@@ -395,7 +396,7 @@ export default function RetailDashboardPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <Link
-                href="/ralion/retail/pos"
+                href="/retail/pos"
                 className="p-3 rounded-xl bg-zinc-800/40 border border-zinc-800 hover:border-emerald-500/40 transition-colors group"
               >
                 <div className="flex items-center justify-between mb-1">
@@ -407,7 +408,7 @@ export default function RetailDashboardPage() {
               </Link>
 
               <Link
-                href="/ralion/retail/inventory"
+                href="/retail/inventory"
                 className="p-3 rounded-xl bg-zinc-800/40 border border-zinc-800 hover:border-emerald-500/40 transition-colors group"
               >
                 <div className="flex items-center justify-between mb-1">
@@ -419,7 +420,7 @@ export default function RetailDashboardPage() {
               </Link>
 
               <Link
-                href="/ralion/retail/quotations"
+                href="/retail/quotations"
                 className="p-3 rounded-xl bg-zinc-800/40 border border-zinc-800 hover:border-emerald-500/40 transition-colors group"
               >
                 <div className="flex items-center justify-between mb-1">
@@ -431,7 +432,7 @@ export default function RetailDashboardPage() {
               </Link>
 
               <Link
-                href="/ralion/retail/payroll"
+                href="/retail/payroll"
                 className="p-3 rounded-xl bg-zinc-800/40 border border-zinc-800 hover:border-emerald-500/40 transition-colors group"
               >
                 <div className="flex items-center justify-between mb-1">
@@ -444,7 +445,7 @@ export default function RetailDashboardPage() {
             </div>
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

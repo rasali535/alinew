@@ -17,6 +17,7 @@ import {
   ShoppingBag,
 } from 'lucide-react';
 import { RetailNavHeader } from '../components/RetailNavHeader';
+import { authFetch } from '@/lib/api-config';
 
 interface QuotationItem {
   product_id: string;
@@ -81,7 +82,7 @@ export default function RetailQuotationsPage() {
   const fetchQuotations = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/retail/quotations');
+      const res = await authFetch('/api/retail/quotations');
       const data = await res.json();
       if (data.success) {
         setQuotations(data.quotations || []);
@@ -95,7 +96,7 @@ export default function RetailQuotationsPage() {
 
   const fetchProducts = async () => {
     try {
-      const res = await fetch('/api/retail/products');
+      const res = await authFetch('/api/retail/products');
       const data = await res.json();
       if (data.success) {
         setProducts(data.products || []);
@@ -178,7 +179,7 @@ export default function RetailQuotationsPage() {
       const validUntil = new Date();
       validUntil.setDate(validUntil.getDate() + validDays);
 
-      const res = await fetch('/api/retail/quotations', {
+      const res = await authFetch('/api/retail/quotations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -215,7 +216,7 @@ export default function RetailQuotationsPage() {
     if (!confirm('Convert this quotation to an active sale and deduct inventory?')) return;
     try {
       setConvertingId(quoteId);
-      const res = await fetch(`/api/retail/quotations/${quoteId}/convert`, {
+      const res = await authFetch(`/api/retail/quotations/${quoteId}/convert`, {
         method: 'POST',
       });
       const data = await res.json();
@@ -246,7 +247,7 @@ export default function RetailQuotationsPage() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
       <RetailNavHeader onRefresh={fetchQuotations} />
 
-      <main className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
+      <div role="region" aria-label="Quotations Management" className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
         {notification && (
           <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 flex items-center gap-2 text-emerald-300 text-sm">
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
@@ -632,7 +633,7 @@ export default function RetailQuotationsPage() {
             </div>
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 }

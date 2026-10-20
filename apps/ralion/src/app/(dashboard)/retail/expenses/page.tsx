@@ -20,6 +20,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { RetailNavHeader } from '../components/RetailNavHeader';
+import { authFetch } from '@/lib/api-config';
 
 interface Expense {
   id: string;
@@ -57,7 +58,7 @@ export default function RetailExpensesPage() {
   const fetchExpenses = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/retail/expenses');
+      const res = await authFetch('/api/retail/expenses');
       const data = await res.json();
       if (data.success) {
         setExpenses(data.expenses || []);
@@ -81,7 +82,7 @@ export default function RetailExpensesPage() {
     }
 
     try {
-      const res = await fetch('/api/retail/expenses', {
+      const res = await authFetch('/api/retail/expenses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newExpense),
@@ -131,7 +132,7 @@ export default function RetailExpensesPage() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
       <RetailNavHeader onRefresh={fetchExpenses} />
 
-      <main className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
+      <div role="region" aria-label="Retail Operating Expenses" className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
         {notification && (
           <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 flex items-center gap-2 text-emerald-300 text-sm">
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
@@ -433,7 +434,7 @@ export default function RetailExpensesPage() {
             </div>
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 }

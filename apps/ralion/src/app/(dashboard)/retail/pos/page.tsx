@@ -20,6 +20,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { RetailNavHeader } from '../components/RetailNavHeader';
+import { authFetch } from '@/lib/api-config';
 import { RetailProduct, RetailCashierShift, RetailSale } from '@ralion/database';
 
 interface CartItem {
@@ -52,8 +53,8 @@ export default function RetailPOSPage() {
     try {
       setLoading(true);
       const [prodRes, shiftRes] = await Promise.all([
-        fetch('/api/retail/products'),
-        fetch('/api/retail/pos/shifts'),
+        authFetch('/api/retail/products'),
+        authFetch('/api/retail/pos/shifts'),
       ]);
 
       const prodData = await prodRes.json();
@@ -116,7 +117,7 @@ export default function RetailPOSPage() {
 
     // Try server lookup
     try {
-      const res = await fetch(`/api/retail/products?barcode=${encodeURIComponent(barcode)}`);
+      const res = await authFetch(`/api/retail/products?barcode=${encodeURIComponent(barcode)}`);
       const data = await res.json();
       if (data.success && data.product) {
         addToCart(data.product);
@@ -187,7 +188,7 @@ export default function RetailPOSPage() {
         idempotencyKey,
       };
 
-      const res = await fetch('/api/retail/pos/checkout', {
+      const res = await authFetch('/api/retail/pos/checkout', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -215,7 +216,7 @@ export default function RetailPOSPage() {
   // Shift Management Handlers
   const handleOpenShift = async () => {
     try {
-      const res = await fetch('/api/retail/pos/shifts', {
+      const res = await authFetch('/api/retail/pos/shifts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -236,7 +237,7 @@ export default function RetailPOSPage() {
   const handleCloseShift = async () => {
     if (!activeShift) return;
     try {
-      const res = await fetch('/api/retail/pos/shifts', {
+      const res = await authFetch('/api/retail/pos/shifts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -272,7 +273,7 @@ export default function RetailPOSPage() {
     <div className="flex-1 flex flex-col bg-zinc-950 text-zinc-100 min-h-screen">
       <RetailNavHeader onRefresh={fetchInitialData} />
 
-      <main className="flex-1 p-4 max-w-7xl mx-auto w-full flex flex-col lg:flex-row gap-4">
+      <div role="region" aria-label="Point of Sale Terminal" className="flex-1 p-4 max-w-7xl mx-auto w-full flex flex-col lg:flex-row gap-4">
         {/* Left Column: Product Catalog & Fast Search */}
         <div className="flex-1 flex flex-col gap-4">
           {/* Barcode & Search Topbar */}
@@ -499,7 +500,7 @@ export default function RetailPOSPage() {
             </div>
           </div>
         </div>
-      </main>
+      </div>
 
       {/* Printable Receipt Modal */}
       {completedSale && (

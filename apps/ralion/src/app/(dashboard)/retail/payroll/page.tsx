@@ -17,6 +17,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { RetailNavHeader } from '../components/RetailNavHeader';
+import { authFetch } from '@/lib/api-config';
 
 interface Employee {
   id: string;
@@ -90,8 +91,8 @@ export default function RetailPayrollPage() {
     try {
       setLoading(true);
       const [resEmp, resPay] = await Promise.all([
-        fetch('/api/retail/employees'),
-        fetch('/api/retail/payroll/runs'),
+        authFetch('/api/retail/employees'),
+        authFetch('/api/retail/payroll/runs'),
       ]);
 
       const dataEmp = await resEmp.json();
@@ -113,7 +114,7 @@ export default function RetailPayrollPage() {
   const handleCreateEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch('/api/retail/employees', {
+      const res = await authFetch('/api/retail/employees', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newEmp),
@@ -136,7 +137,7 @@ export default function RetailPayrollPage() {
     e.preventDefault();
     try {
       setCalculatingPayroll(true);
-      const res = await fetch('/api/retail/payroll/runs', {
+      const res = await authFetch('/api/retail/payroll/runs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -177,7 +178,7 @@ export default function RetailPayrollPage() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
       <RetailNavHeader onRefresh={fetchData} />
 
-      <main className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
+      <div role="region" aria-label="Staff Payroll and Compensation" className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
         {notification && (
           <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 flex items-center gap-2 text-emerald-300 text-sm">
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
@@ -603,7 +604,7 @@ export default function RetailPayrollPage() {
             </div>
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 }

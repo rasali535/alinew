@@ -298,13 +298,43 @@ async function getBrowserSession(forceRefresh = false): Promise<{ access_token: 
   return _sessionPromise;
 }
 
+function extractPreviewToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const queryToken = urlParams.get('token') || urlParams.get('preview_token');
+    if (queryToken && queryToken.trim()) {
+      try { sessionStorage.setItem('ralion_preview_session_token', queryToken.trim()); } catch {}
+      return queryToken.trim();
+    }
+
+    const stored = sessionStorage.getItem('ralion_preview_session_token');
+    if (stored && stored.trim()) return stored.trim();
+
+    const cookies = document.cookie.split(';');
+    for (const c of cookies) {
+      const [key, val] = c.trim().split('=');
+      if ((key === 'ralion_preview_session' || key === 'ralion_preview_token') && val) {
+        return decodeURIComponent(val).trim();
+      }
+    }
+  } catch {}
+  return null;
+}
+
 function appendTenantHints(headers: Record<string, string>, session: any) {
   if (typeof window === 'undefined' || !session) return;
   const metadata = session.user?.user_metadata || {};
   const storedWorkspaceId = window.localStorage?.getItem('ralion_active_workspace_id') || window.localStorage?.getItem('ralion_workspace_id');
   const storedOrgId = window.localStorage?.getItem('ralion_organization_id') || window.localStorage?.getItem('ralion_active_org_id') || window.localStorage?.getItem('ralion_org_id');
 
-  const activeWs = storedWorkspaceId || metadata.workspace_id || null;
+  const urlParams = new URLSearchParams(window.location.search);
+  const previewWs = urlParams.get('ws') || sessionStorage?.getItem('ralion_preview_workspace_id');
+  if (previewWs) {
+    try { sessionStorage.setItem('ralion_preview_workspace_id', previewWs); } catch {}
+  }
+
+  const activeWs = previewWs || storedWorkspaceId || metadata.workspace_id || null;
   const activeOrg = storedOrgId || metadata.organization_id || metadata.org_id || null;
 
   if (activeWs) headers['x-workspace-id'] = activeWs;
@@ -317,6 +347,13 @@ export async function getRalionAuthHeaders(options: { refresh?: boolean } = {}):
 
   if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
   if (session?.user?.id) headers['x-user-id'] = session.user.id;
+  
+  const previewToken = extractPreviewToken();
+  if (previewToken) {
+    headers['x-preview-token'] = previewToken;
+    headers['x-ralion-preview-token'] = previewToken;
+  }
+
   appendTenantHints(headers, session);
 
   return headers;
@@ -336,6 +373,8 @@ function mergeAuthHeaders(initHeaders: HeadersInit | undefined, authHeaders: Rec
   if (!headers.has('x-user-id') && authHeaders['x-user-id']) headers.set('x-user-id', authHeaders['x-user-id']);
   if (!headers.has('x-workspace-id') && authHeaders['x-workspace-id']) headers.set('x-workspace-id', authHeaders['x-workspace-id']);
   if (!headers.has('x-organization-id') && authHeaders['x-organization-id']) headers.set('x-organization-id', authHeaders['x-organization-id']);
+  if (!headers.has('x-preview-token') && authHeaders['x-preview-token']) headers.set('x-preview-token', authHeaders['x-preview-token']);
+  if (!headers.has('x-ralion-preview-token') && authHeaders['x-ralion-preview-token']) headers.set('x-ralion-preview-token', authHeaders['x-ralion-preview-token']);
   return headers;
 }
 

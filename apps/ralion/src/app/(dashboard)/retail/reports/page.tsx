@@ -16,6 +16,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { RetailNavHeader } from '../components/RetailNavHeader';
+import { authFetch } from '@/lib/api-config';
 
 interface FinancialMetrics {
   totalRevenue: number;
@@ -41,7 +42,7 @@ export default function RetailReportsPage() {
   const fetchReports = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/retail/reports?period=${period}`);
+      const res = await authFetch(`/api/retail/reports?period=${period}`);
       const data = await res.json();
       if (data.success && data.metrics) {
         setMetrics(data.metrics);
@@ -99,7 +100,7 @@ export default function RetailReportsPage() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
       <RetailNavHeader onRefresh={fetchReports} />
 
-      <main className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
+      <div role="region" aria-label="Financial BI and Executive Reports" className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-xl font-bold tracking-tight text-zinc-100 flex items-center gap-2">
@@ -334,7 +335,7 @@ export default function RetailReportsPage() {
             </div>
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 }
