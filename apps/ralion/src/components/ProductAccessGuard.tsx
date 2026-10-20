@@ -32,16 +32,6 @@ function getCanonicalLoginUrl(currentHref?: string): string {
   return `https://rasalilabs.com/ralion/login?redirect=${encodeURIComponent(targetHref)}`;
 }
 
-function isLocalWorkspaceBypass(): boolean {
-  if (typeof window === 'undefined') return false;
-  return (
-    window.location.hostname === 'localhost' ||
-    window.location.hostname === '127.0.0.1' ||
-    window.location.protocol === 'file:' ||
-    process.env.NODE_ENV === 'development'
-  );
-}
-
 export const ProductAccessGuard: React.FC<ProductAccessGuardProps> = ({ children }) => {
   const {
     user,
@@ -53,8 +43,7 @@ export const ProductAccessGuard: React.FC<ProductAccessGuardProps> = ({ children
   } = useOrganization();
 
   // OrganizationProvider already performs the canonical /api/auth/context lookup,
-  // including token refresh coalescing and legacy workspace repair. Do not perform
-  // a second Supabase session lookup or subscription query here.
+  // including token refresh coalescing and legacy workspace repair.
   if (isLoading || !isContextResolved) {
     return (
       <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center gap-4 text-white">
@@ -67,12 +56,6 @@ export const ProductAccessGuard: React.FC<ProductAccessGuardProps> = ({ children
         </div>
       </div>
     );
-  }
-
-  // Preserve desktop/local development behavior without adding another network
-  // round trip. Production access remains bound to canonical tenant context.
-  if (isLocalWorkspaceBypass()) {
-    return <>{children}</>;
   }
 
   if (user && organization && workspace) {

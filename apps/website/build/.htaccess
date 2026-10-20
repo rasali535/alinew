@@ -35,6 +35,7 @@ Options -Indexes +FollowSymLinks
 
   # 4. Admin Next.js Sub-application (/admin/...)
   RewriteCond %{REQUEST_URI} ^/admin [NC]
+  RewriteCond %{REQUEST_URI} !^/admin/clients [NC]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteRule ^admin/?.*$ /admin/index.html [L]
 

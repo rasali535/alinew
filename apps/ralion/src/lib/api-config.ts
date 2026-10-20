@@ -304,7 +304,19 @@ function appendTenantHints(headers: Record<string, string>, session: any) {
   const storedWorkspaceId = window.localStorage?.getItem('ralion_active_workspace_id') || window.localStorage?.getItem('ralion_workspace_id');
   const storedOrgId = window.localStorage?.getItem('ralion_organization_id') || window.localStorage?.getItem('ralion_active_org_id') || window.localStorage?.getItem('ralion_org_id');
 
-  const activeWs = storedWorkspaceId || metadata.workspace_id || null;
+  const urlParams = new URLSearchParams(window.location.search);
+  const isPreview = urlParams.get('preview') === 'internal' || (typeof document !== 'undefined' && document.cookie.includes('ralion_preview_session'));
+  const previewWs = urlParams.get('ws');
+
+  // Preview Isolation: When inside an admin preview session, never inject stale regular
+  // organization or workspace IDs from localStorage. The server authoritatively resolves
+  // the dedicated preview sandbox workspace from the cryptographically verified session.
+  if (isPreview) {
+    if (previewWs) headers['x-workspace-id'] = previewWs;
+    return;
+  }
+
+  const activeWs = previewWs || storedWorkspaceId || metadata.workspace_id || null;
   const activeOrg = storedOrgId || metadata.organization_id || metadata.org_id || null;
 
   if (activeWs) headers['x-workspace-id'] = activeWs;
@@ -317,6 +329,7 @@ export async function getRalionAuthHeaders(options: { refresh?: boolean } = {}):
 
   if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
   if (session?.user?.id) headers['x-user-id'] = session.user.id;
+
   appendTenantHints(headers, session);
 
   return headers;
@@ -396,7 +409,12 @@ export async function authFetch(pathOrUrl: string, init?: RequestInit): Promise<
       try {
         const cloned = res.clone();
         const body = await cloned.json();
-        if (body?.code === 'AUTH_TOKEN_INVALID') {
+        if (
+          body?.code === 'AUTH_TOKEN_INVALID' ||
+          body?.code === 'AUTH_TOKEN_MISSING' ||
+          body?.error === 'AUTH_TOKEN_INVALID' ||
+          body?.error === 'AUTH_TOKEN_MISSING'
+        ) {
           shouldRefresh = true;
         }
       } catch {}

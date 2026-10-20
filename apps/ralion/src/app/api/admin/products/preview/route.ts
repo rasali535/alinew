@@ -45,7 +45,6 @@ export async function POST(request: NextRequest) {
       success: true,
       product,
       sessionId: sessionResult.sessionId,
-      sessionToken: sessionResult.sessionToken,
       previewWorkspaceId: sessionResult.workspaceId,
       previewUrl: sessionResult.previewUrl,
       expiresAt: sessionResult.expiresAt,

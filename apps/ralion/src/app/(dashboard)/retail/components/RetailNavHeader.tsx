@@ -21,6 +21,8 @@ import {
   AlertCircle,
 } from 'lucide-react';
 
+import { authFetch } from '@/lib/api-config';
+
 interface RetailNavHeaderProps {
   role?: string;
   storeName?: string;
@@ -36,32 +38,36 @@ export const RetailNavHeader: React.FC<RetailNavHeaderProps> = ({
   const [loadingDemo, setLoadingDemo] = useState(false);
   const [demoMessage, setDemoMessage] = useState<string | null>(null);
   const [isAdminInspection, setIsAdminInspection] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
-      const isParam = urlParams.get('admin_inspect') === 'true';
-      const isCookie = document.cookie.includes('ralion_admin_retail_inspect=true');
+      const isParam = urlParams.get('admin_inspect') === 'true' || urlParams.get('preview') === 'internal';
+      const isCookie = document.cookie.includes('ralion_admin_retail_inspect=true') || document.cookie.includes('ralion_preview_session');
       setIsAdminInspection(isParam || isCookie);
+      if (window.location.search) {
+        setSearchQuery(window.location.search);
+      }
     }
   }, []);
 
   const navLinks = [
-    { label: 'Overview', href: '/ralion/retail', icon: <LayoutDashboard className="w-4 h-4" /> },
-    { label: 'Point of Sale (POS)', href: '/ralion/retail/pos', icon: <ShoppingCart className="w-4 h-4" /> },
-    { label: 'Products & Stock', href: '/ralion/retail/inventory', icon: <Package className="w-4 h-4" /> },
-    { label: 'Quotations', href: '/ralion/retail/quotations', icon: <FileText className="w-4 h-4" /> },
-    { label: 'Sales & Invoices', href: '/ralion/retail/sales', icon: <Receipt className="w-4 h-4" /> },
-    { label: 'Purchasing & Suppliers', href: '/ralion/retail/purchasing', icon: <Truck className="w-4 h-4" /> },
-    { label: 'Expenses', href: '/ralion/retail/expenses', icon: <TrendingDown className="w-4 h-4" /> },
-    { label: 'Employees & Payroll', href: '/ralion/retail/payroll', icon: <Users className="w-4 h-4" /> },
-    { label: 'Reports & BI', href: '/ralion/retail/reports', icon: <BarChart3 className="w-4 h-4" /> },
+    { label: 'Overview', href: '/retail', icon: <LayoutDashboard className="w-4 h-4" /> },
+    { label: 'Point of Sale (POS)', href: '/retail/pos', icon: <ShoppingCart className="w-4 h-4" /> },
+    { label: 'Products & Stock', href: '/retail/inventory', icon: <Package className="w-4 h-4" /> },
+    { label: 'Quotations', href: '/retail/quotations', icon: <FileText className="w-4 h-4" /> },
+    { label: 'Sales & Invoices', href: '/retail/sales', icon: <Receipt className="w-4 h-4" /> },
+    { label: 'Purchasing & Suppliers', href: '/retail/purchasing', icon: <Truck className="w-4 h-4" /> },
+    { label: 'Expenses', href: '/retail/expenses', icon: <TrendingDown className="w-4 h-4" /> },
+    { label: 'Employees & Payroll', href: '/retail/payroll', icon: <Users className="w-4 h-4" /> },
+    { label: 'Reports & BI', href: '/retail/reports', icon: <BarChart3 className="w-4 h-4" /> },
   ];
 
   const handleLoadDemoData = async () => {
     try {
       setLoadingDemo(true);
-      const res = await fetch('/api/retail/demo-data', { method: 'POST' });
+      const res = await authFetch('/api/retail/demo-data', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
         setDemoMessage('Hardware pilot demo dataset loaded in USD ($)!');
@@ -90,12 +96,12 @@ export const RetailNavHeader: React.FC<RetailNavHeaderProps> = ({
               Audited operational inspection session for Proinsight Hardware Workspace (Immutable audit logging active).
             </span>
           </div>
-          <a
+          <Link
             href="/admin"
             className="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-[11px] transition-colors"
           >
             Exit Inspection → Admin Command Centre
-          </a>
+          </Link>
         </div>
       )}
 
@@ -153,11 +159,19 @@ export const RetailNavHeader: React.FC<RetailNavHeaderProps> = ({
       {/* Tab Navigation */}
       <div className="px-6 flex items-center gap-1 overflow-x-auto scrollbar-none py-1.5">
         {navLinks.map((tab) => {
-          const isActive = pathname === tab.href;
+          const cleanCurrent = (pathname || '').replace(/\/+$/, '');
+          const cleanTab = tab.href.replace(/\/+$/, '');
+          const isActive =
+            cleanCurrent === cleanTab ||
+            cleanCurrent === `/ralion${cleanTab}` ||
+            cleanCurrent.replace('/ralion', '') === cleanTab;
+
+          const targetHref = searchQuery ? `${tab.href}${searchQuery}` : tab.href;
+
           return (
             <Link
               key={tab.href}
-              href={tab.href}
+              href={targetHref}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 whitespace-nowrap transition-all ${
                 isActive
                   ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-sm'

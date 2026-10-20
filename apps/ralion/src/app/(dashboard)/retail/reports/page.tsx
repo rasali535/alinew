@@ -16,6 +16,8 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { RetailNavHeader } from '../components/RetailNavHeader';
+import { RetailAccessErrorCard, RetailErrorState } from '../components/RetailAccessErrorCard';
+import { authFetch } from '@/lib/api-config';
 
 interface FinancialMetrics {
   totalRevenue: number;
@@ -37,17 +39,40 @@ export default function RetailReportsPage() {
   const [period, setPeriod] = useState<'today' | '7d' | '30d' | 'all'>('30d');
   const [metrics, setMetrics] = useState<FinancialMetrics | null>(null);
   const [loading, setLoading] = useState(true);
+  const [errorState, setErrorState] = useState<RetailErrorState | null>(null);
 
   const fetchReports = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/retail/reports?period=${period}`);
+      setErrorState(null);
+      const res = await authFetch(`/api/retail/reports?period=${period}`);
+      if (!res.ok) {
+        let errJson: any = null;
+        try { errJson = await res.json(); } catch {}
+        setErrorState({
+          status: res.status,
+          code: errJson?.code || errJson?.error || (res.status === 401 ? 'AUTH_TOKEN_MISSING' : 'FETCH_ERROR'),
+          message: errJson?.message || errJson?.error || `Failed to load reports: HTTP ${res.status}`,
+        });
+        return;
+      }
       const data = await res.json();
       if (data.success && data.metrics) {
         setMetrics(data.metrics);
+      } else {
+        setErrorState({
+          status: 400,
+          code: data.error || 'LOAD_REPORTS_FAILED',
+          message: data.message || data.error || 'Failed to load report metrics.',
+        });
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to load financial reports', e);
+      setErrorState({
+        status: 500,
+        code: 'NETWORK_ERROR',
+        message: e.message || 'Error connecting to retail reporting services.',
+      });
     } finally {
       setLoading(false);
     }
@@ -95,11 +120,20 @@ export default function RetailReportsPage() {
     document.body.removeChild(link);
   };
 
+  if (errorState) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
+        <RetailNavHeader onRefresh={fetchReports} />
+        <RetailAccessErrorCard error={errorState} onRetry={fetchReports} />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
       <RetailNavHeader onRefresh={fetchReports} />
 
-      <main className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
+      <div role="region" aria-label="Financial BI and Executive Reports" className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-xl font-bold tracking-tight text-zinc-100 flex items-center gap-2">
@@ -334,7 +368,7 @@ export default function RetailReportsPage() {
             </div>
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 }

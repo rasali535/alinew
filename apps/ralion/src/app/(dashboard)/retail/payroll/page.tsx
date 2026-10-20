@@ -17,6 +17,8 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { RetailNavHeader } from '../components/RetailNavHeader';
+import { RetailAccessErrorCard, RetailErrorState } from '../components/RetailAccessErrorCard';
+import { authFetch } from '@/lib/api-config';
 
 interface Employee {
   id: string;
@@ -52,6 +54,7 @@ export default function RetailPayrollPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [payrollRuns, setPayrollRuns] = useState<PayrollRun[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorState, setErrorState] = useState<RetailErrorState | null>(null);
   const [search, setSearch] = useState('');
 
   const [showAddEmpModal, setShowAddEmpModal] = useState(false);
@@ -89,18 +92,35 @@ export default function RetailPayrollPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
+      setErrorState(null);
       const [resEmp, resPay] = await Promise.all([
-        fetch('/api/retail/employees'),
-        fetch('/api/retail/payroll/runs'),
+        authFetch('/api/retail/employees'),
+        authFetch('/api/retail/payroll/runs'),
       ]);
+
+      if (!resEmp.ok) {
+        let errJson: any = null;
+        try { errJson = await resEmp.json(); } catch {}
+        setErrorState({
+          status: resEmp.status,
+          code: errJson?.code || errJson?.error || (resEmp.status === 401 ? 'AUTH_TOKEN_MISSING' : 'FETCH_ERROR'),
+          message: errJson?.message || errJson?.error || `Failed to load staff & payroll: HTTP ${resEmp.status}`,
+        });
+        return;
+      }
 
       const dataEmp = await resEmp.json();
       const dataPay = await resPay.json();
 
       if (dataEmp.success) setEmployees(dataEmp.employees || []);
       if (dataPay.success) setPayrollRuns(dataPay.payrollRuns || []);
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to fetch payroll data', e);
+      setErrorState({
+        status: 500,
+        code: 'NETWORK_ERROR',
+        message: e.message || 'Error connecting to retail payroll services.',
+      });
     } finally {
       setLoading(false);
     }
@@ -113,7 +133,7 @@ export default function RetailPayrollPage() {
   const handleCreateEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch('/api/retail/employees', {
+      const res = await authFetch('/api/retail/employees', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newEmp),
@@ -136,7 +156,7 @@ export default function RetailPayrollPage() {
     e.preventDefault();
     try {
       setCalculatingPayroll(true);
-      const res = await fetch('/api/retail/payroll/runs', {
+      const res = await authFetch('/api/retail/payroll/runs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -173,11 +193,20 @@ export default function RetailPayrollPage() {
 
   const totalMonthlyPayroll = employees.reduce((acc, emp) => acc + (emp.base_salary || 0), 0);
 
+  if (errorState) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
+        <RetailNavHeader onRefresh={fetchData} />
+        <RetailAccessErrorCard error={errorState} onRetry={fetchData} />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
       <RetailNavHeader onRefresh={fetchData} />
 
-      <main className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
+      <div role="region" aria-label="Staff Payroll and Compensation" className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
         {notification && (
           <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 flex items-center gap-2 text-emerald-300 text-sm">
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
@@ -603,7 +632,7 @@ export default function RetailPayrollPage() {
             </div>
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 }

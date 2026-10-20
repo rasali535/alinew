@@ -18,6 +18,8 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { RetailNavHeader } from '../components/RetailNavHeader';
+import { RetailAccessErrorCard, RetailErrorState } from '../components/RetailAccessErrorCard';
+import { authFetch } from '@/lib/api-config';
 
 interface RetailProduct {
   id: string;
@@ -50,6 +52,7 @@ interface StockMovement {
 export default function RetailInventoryPage() {
   const [products, setProducts] = useState<RetailProduct[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorState, setErrorState] = useState<RetailErrorState | null>(null);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [filterLowStock, setFilterLowStock] = useState(false);
@@ -86,13 +89,35 @@ export default function RetailInventoryPage() {
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/retail/products');
+      setErrorState(null);
+      const res = await authFetch('/api/retail/products');
+      if (!res.ok) {
+        let errJson: any = null;
+        try { errJson = await res.json(); } catch {}
+        setErrorState({
+          status: res.status,
+          code: errJson?.code || errJson?.error || (res.status === 401 ? 'AUTH_TOKEN_MISSING' : 'FETCH_ERROR'),
+          message: errJson?.message || errJson?.error || `Failed to load inventory: HTTP ${res.status}`,
+        });
+        return;
+      }
       const data = await res.json();
       if (data.success && data.products) {
         setProducts(data.products);
+      } else {
+        setErrorState({
+          status: 400,
+          code: data.error || 'LOAD_PRODUCTS_FAILED',
+          message: data.message || data.error || 'Failed to load products.',
+        });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to fetch products', err);
+      setErrorState({
+        status: 500,
+        code: 'NETWORK_ERROR',
+        message: err.message || 'Error connecting to retail inventory services.',
+      });
     } finally {
       setLoading(false);
     }
@@ -107,7 +132,7 @@ export default function RetailInventoryPage() {
     setShowHistoryModal(true);
     setLoadingMovements(true);
     try {
-      const res = await fetch(`/api/retail/inventory/movements?productId=${product.id}`);
+      const res = await authFetch(`/api/retail/inventory/movements?productId=${product.id}`);
       const data = await res.json();
       if (data.success) {
         setMovements(data.movements || []);
@@ -122,7 +147,7 @@ export default function RetailInventoryPage() {
   const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch('/api/retail/products', {
+      const res = await authFetch('/api/retail/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newProduct),
@@ -156,7 +181,7 @@ export default function RetailInventoryPage() {
     e.preventDefault();
     if (!selectedProduct) return;
     try {
-      const res = await fetch('/api/retail/inventory/adjust', {
+      const res = await authFetch('/api/retail/inventory/adjust', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -192,11 +217,20 @@ export default function RetailInventoryPage() {
     return matchesSearch && matchesCategory && matchesLowStock;
   });
 
+  if (errorState) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
+        <RetailNavHeader onRefresh={fetchProducts} />
+        <RetailAccessErrorCard error={errorState} onRetry={fetchProducts} />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
       <RetailNavHeader onRefresh={fetchProducts} />
 
-      <main className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
+      <div role="region" aria-label="Retail Inventory" className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
         {/* Banner notification */}
         {actionSuccess && (
           <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 flex items-center gap-2 text-emerald-300 text-sm animate-fade-in">
@@ -696,7 +730,7 @@ export default function RetailInventoryPage() {
             </div>
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 }

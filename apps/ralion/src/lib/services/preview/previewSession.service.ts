@@ -419,8 +419,8 @@ export class PreviewSessionService {
     });
 
     const previewUrl = params.product === 'retail'
-      ? `/ralion/retail?preview=internal&ws=${workspaceId}&token=${rawSessionToken}`
-      : `/industry/trade?preview=internal&ws=${workspaceId}&token=${rawSessionToken}`;
+      ? `/ralion/retail?preview=internal&ws=${workspaceId}`
+      : `/ralion/industry/trade?preview=internal&ws=${workspaceId}`;
 
     return {
       sessionId: session.id,

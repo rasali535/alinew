@@ -124,6 +124,7 @@ const rootHtaccess = `DirectoryIndex index.html
 
   # 4. Admin Next.js Sub-application (/admin/...)
   RewriteCond %{REQUEST_URI} ^/admin [NC]
+  RewriteCond %{REQUEST_URI} !^/admin/clients [NC]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule ^admin/?.*$ /admin/index.html [L]

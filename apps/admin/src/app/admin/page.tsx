@@ -29,6 +29,15 @@ import {
   Bell,
   UserPlus,
   HelpCircle,
+  Package,
+  KeyRound,
+  ShoppingBag,
+  ExternalLink,
+  Copy,
+  Check,
+  Truck,
+  Plus,
+  Clock,
 } from 'lucide-react';
 
 interface MetricsData {
@@ -71,7 +80,7 @@ interface MetricsData {
 
 export default function PlatformAdminPortal() {
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'customers' | 'creatives' | 'social' | 'billing' | 'system' | 'audit' | 'clients'
+    'overview' | 'products' | 'trials' | 'retail' | 'customers' | 'creatives' | 'social' | 'billing' | 'system' | 'audit' | 'clients'
   >('overview');
 
   const [metrics, setMetrics] = useState<MetricsData | null>(null);
@@ -91,12 +100,56 @@ export default function PlatformAdminPortal() {
   const [actionSuccessMessage, setActionSuccessMessage] = useState<string | null>(null);
   const [actionErrorMessage, setActionErrorMessage] = useState<string | null>(null);
 
+  // Products, Trials, and Retail State
+  const [productsData, setProductsData] = useState<any | null>(null);
+  const [trialsData, setTrialsData] = useState<any | null>(null);
+  const [retailData, setRetailData] = useState<any | null>(null);
+  const [showGenerateCodeModal, setShowGenerateCodeModal] = useState(false);
+  const [generatedCodeSecret, setGeneratedCodeSecret] = useState<string | null>(null);
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [codeForm, setCodeForm] = useState({
+    eligibleProducts: ['retail', 'trade'] as Array<'retail' | 'trade'>,
+    durationDays: 14,
+    maxRedemptions: 1,
+    workspaceMode: 'DEMO_DATA' as 'DEMO_DATA' | 'CLEAN_WORKSPACE',
+    restrictedEmail: '',
+    restrictedOrganizationId: '',
+    restrictedWorkspaceId: '',
+    notes: '',
+  });
+
   // Authenticated Platform Admin Token / Secret
   const getAuthHeaders = (): Record<string, string> => {
-    const sessionToken = typeof window !== 'undefined' ? localStorage.getItem('supabase_auth_token') || localStorage.getItem('ralion_auth_token') : '';
+    let token = '';
+    if (typeof window !== 'undefined') {
+      try {
+        const directSession = localStorage.getItem('ralion-app-auth-token');
+        if (directSession) {
+          const parsed = JSON.parse(directSession);
+          token = parsed?.access_token || parsed?.currentSession?.access_token || '';
+        }
+        if (!token) {
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
+              const raw = localStorage.getItem(key);
+              if (raw) {
+                const parsed = JSON.parse(raw);
+                token = parsed?.access_token || parsed?.currentSession?.access_token || '';
+                if (token) break;
+              }
+            }
+          }
+        }
+        if (!token) {
+          token = localStorage.getItem('supabase_auth_token') || localStorage.getItem('ralion_auth_token') || '';
+        }
+      } catch {}
+    }
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (sessionToken) {
-      headers['Authorization'] = `Bearer ${sessionToken}`;
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+      headers['x-ralion-auth-token'] = token;
     }
     // Master admin key bypass
     headers['x-admin-key'] = 'platform-admin-master-key-verified';
@@ -107,33 +160,175 @@ export default function PlatformAdminPortal() {
     setLoading(true);
     try {
       const headers = getAuthHeaders();
-      const [mRes, cRes, hRes, aRes] = await Promise.all([
-        fetch('/api/admin/metrics', { headers }),
-        fetch('/api/admin/customers', { headers }),
-        fetch('/api/admin/system/health', { headers }),
-        fetch('/api/admin/audit-logs', { headers }),
+      const [mRes, cRes, hRes, aRes, prodRes, trialRes, retailRes] = await Promise.all([
+        fetch('/api/admin/metrics', { headers, credentials: 'include' }).catch(() => null),
+        fetch('/api/admin/customers', { headers, credentials: 'include' }).catch(() => null),
+        fetch('/api/admin/system/health', { headers, credentials: 'include' }).catch(() => null),
+        fetch('/api/admin/audit-logs', { headers, credentials: 'include' }).catch(() => null),
+        fetch('/api/admin/products/overview', { headers, credentials: 'include' }).catch(() => null),
+        fetch('/api/admin/trials', { headers, credentials: 'include' }).catch(() => null),
+        fetch('/api/admin/retail/overview', { headers, credentials: 'include' }).catch(() => null),
       ]);
 
-      if (mRes.ok) {
-        const mData = await mRes.json();
-        setMetrics(mData.data);
+      if (mRes && mRes.ok) {
+        const mData = await mRes.json().catch(() => null);
+        if (mData?.data) setMetrics(mData.data);
       }
-      if (cRes.ok) {
-        const cData = await cRes.json();
-        setCustomers(cData.data || []);
+      if (cRes && cRes.ok) {
+        const cData = await cRes.json().catch(() => null);
+        setCustomers(cData?.data || []);
       }
-      if (hRes.ok) {
-        const hData = await hRes.json();
-        setSystemHealth(hData.data?.services || []);
+      if (hRes && hRes.ok) {
+        const hData = await hRes.json().catch(() => null);
+        setSystemHealth(hData?.data?.services || []);
       }
-      if (aRes.ok) {
-        const aData = await aRes.json();
-        setAuditLogs(aData.data || []);
+      if (aRes && aRes.ok) {
+        const aData = await aRes.json().catch(() => null);
+        setAuditLogs(aData?.data || []);
+      }
+      if (prodRes && prodRes.ok) {
+        const pData = await prodRes.json().catch(() => null);
+        if (pData?.products) setProductsData(pData.products);
+      }
+      if (trialRes && trialRes.ok) {
+        const tData = await trialRes.json().catch(() => null);
+        if (tData?.data) setTrialsData(tData.data);
+      }
+      if (retailRes && retailRes.ok) {
+        const rData = await retailRes.json().catch(() => null);
+        if (rData?.data) setRetailData(rData.data);
       }
     } catch (err: any) {
       console.error('Failed to load admin data:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openProductPreview = async (product: 'retail' | 'trade') => {
+    try {
+      const res = await fetch('/api/admin/products/preview', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({ product, reason: `Platform admin operational ${product} preview from Command Centre` }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed to open preview session.');
+      window.open(body.previewUrl, '_blank');
+      setActionSuccessMessage(`Opened isolated ${product === 'retail' ? 'Retail' : 'Trade'} preview session.`);
+      fetchPlatformData();
+    } catch (err: any) {
+      setActionErrorMessage(err?.message || 'Error opening preview session.');
+    }
+  };
+
+  const generateDemoCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (codeForm.eligibleProducts.length === 0) {
+      setActionErrorMessage('Please select at least one eligible product.');
+      return;
+    }
+    try {
+      const res = await fetch('/api/admin/trials/create', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        credentials: 'include',
+        body: JSON.stringify(codeForm),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed to generate demo access code.');
+      setGeneratedCodeSecret(body.codeSecret);
+      setActionSuccessMessage(`Generated demo access code for ${body.trialCode?.eligible_products?.join(', ')}.`);
+      fetchPlatformData();
+    } catch (err: any) {
+      setActionErrorMessage(err?.message || 'Error generating trial access code.');
+    }
+  };
+
+  const extendTrial = async (codeId: string, additionalDays: number) => {
+    try {
+      const res = await fetch('/api/admin/trials/extend', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({ codeId, additionalDays }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed to extend trial.');
+      setActionSuccessMessage('Trial successfully extended.');
+      fetchPlatformData();
+    } catch (err: any) {
+      setActionErrorMessage(err?.message || 'Failed to extend trial.');
+    }
+  };
+
+  const revokeTrial = async (codeId: string) => {
+    if (!confirm('Are you sure you want to revoke this trial access code? Active redemptions will immediately lose trial access.')) return;
+    try {
+      const res = await fetch('/api/admin/trials/revoke', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({ codeId, reason: 'Revoked by platform administrator from Command Centre' }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed to revoke trial.');
+      setActionSuccessMessage('Trial access code revoked.');
+      fetchPlatformData();
+    } catch (err: any) {
+      setActionErrorMessage(err?.message || 'Failed to revoke trial.');
+    }
+  };
+
+  const convertTrialToCommercial = async (codeId: string) => {
+    try {
+      const res = await fetch('/api/admin/trials/convert', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({ codeId, tier: 'STANDARD' }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed to convert trial.');
+      setActionSuccessMessage('Trial successfully converted to commercial tier.');
+      fetchPlatformData();
+    } catch (err: any) {
+      setActionErrorMessage(err?.message || 'Failed to convert trial.');
+    }
+  };
+
+  const updateRetailEntitlement = async (status: 'ACTIVE' | 'SUSPENDED' | 'EXPIRED') => {
+    try {
+      const res = await fetch('/api/admin/retail/entitlement', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({ status }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed to update retail entitlement.');
+      setActionSuccessMessage(`Updated Retail pilot entitlement status to ${status}.`);
+      fetchPlatformData();
+    } catch (err: any) {
+      setActionErrorMessage(err?.message || 'Failed to update retail entitlement.');
+    }
+  };
+
+  const openRetailWorkspace = async () => {
+    try {
+      const res = await fetch('/api/admin/retail/impersonate', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({ reason: 'Platform administrator operational inspection from Command Centre' }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed to generate retail workspace session.');
+      window.open(body.data?.redirectUrl || '/ralion/retail', '_blank');
+      setActionSuccessMessage('Opened Proinsight Hardware Store workspace session.');
+    } catch (err: any) {
+      setActionErrorMessage(err?.message || 'Failed to access retail workspace.');
     }
   };
 
@@ -381,6 +576,9 @@ export default function PlatformAdminPortal() {
       <div className="px-6 border-b border-zinc-800/80 bg-zinc-900/30 flex gap-1 overflow-x-auto py-2">
         {[
           { id: 'overview', label: 'Overview & Metrics', icon: Activity },
+          { id: 'products', label: 'Product Suite & Previews', icon: Package },
+          { id: 'trials', label: `Trials (${trialsData?.activeTrials || 0})`, icon: KeyRound },
+          { id: 'retail', label: 'Retail Pilot', icon: ShoppingBag },
           { id: 'customers', label: `Customers (${customers.length})`, icon: Users },
           { id: 'creatives', label: 'Creative Intelligence', icon: Sparkles },
           { id: 'social', label: 'Meta & Zernio', icon: Share2 },
@@ -904,7 +1102,622 @@ export default function PlatformAdminPortal() {
             </div>
           </div>
         )}
+
+        {/* PRODUCTS TAB */}
+        {activeTab === 'products' && (
+          <section className="space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-black text-white flex items-center gap-2">
+                  <Package className="w-5 h-5 text-indigo-400" />
+                  Ralion Product Suite & Previews
+                </h2>
+                <p className="text-xs text-zinc-400">
+                  Authoritative module registry, tenant entitlements, and isolated platform administrator previews.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-6">
+              {/* Card 1: Ralion Retail OS */}
+              <div className="rounded-3xl border border-zinc-800 bg-zinc-900/50 p-6 space-y-5 flex flex-col justify-between shadow-xl">
+                <div className="space-y-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 text-2xl font-bold">
+                        🛒
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-bold text-base text-white">Ralion Retail OS</h3>
+                          <span className="px-2 py-0.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-[10px] font-bold">
+                            PILOT • USD ($)
+                          </span>
+                        </div>
+                        <p className="text-xs text-zinc-400">
+                          Hardware Store, POS Terminal, Barcode Stock & Localized Payroll
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/80 space-y-2 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-zinc-500">Pilot Customer:</span>
+                      <span className="text-white font-semibold">Proinsight (Prolnsight Consultants)</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-zinc-500">Operating Currency:</span>
+                      <span className="text-emerald-400 font-bold">USD ($) Exclusive</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-zinc-500">Entitlement Status:</span>
+                      <span className="px-2 py-0.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-[10px] font-bold">
+                        {retailData?.entitlement?.status || 'ACTIVE'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-zinc-500">Catalogued Products:</span>
+                      <span className="text-zinc-200 font-mono">
+                        {retailData?.operationalHealth?.totalProducts || 0}
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-zinc-500 italic">
+                    Admin preview operates in an isolated internal test workspace. Live Proinsight customer records are never mutated.
+                  </p>
+                </div>
+
+                <div className="space-y-2 pt-2 border-t border-zinc-800">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => void openProductPreview('retail')}
+                      className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      Open Preview (Retail)
+                    </button>
+                    <button
+                      onClick={() => void openRetailWorkspace()}
+                      className="py-2.5 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold flex items-center gap-1.5"
+                      title="Audited support session into Proinsight pilot workspace"
+                    >
+                      <Lock className="w-3.5 h-3.5 text-zinc-400" />
+                      Support Session
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-zinc-500 pt-1">
+                    <span>Pilot Entitlement Controls:</span>
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={() => void updateRetailEntitlement('ACTIVE')}
+                        disabled={retailData?.entitlement?.status === 'ACTIVE'}
+                        className="px-2 py-0.5 rounded border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-40"
+                      >
+                        Activate
+                      </button>
+                      <button
+                        onClick={() => void updateRetailEntitlement('SUSPENDED')}
+                        disabled={retailData?.entitlement?.status === 'SUSPENDED'}
+                        className="px-2 py-0.5 rounded border border-amber-500/30 text-amber-300 hover:bg-amber-500/10 disabled:opacity-40"
+                      >
+                        Suspend
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 2: Ralion Trade OS */}
+              <div className="rounded-3xl border border-zinc-800 bg-zinc-900/50 p-6 space-y-5 flex flex-col justify-between shadow-xl">
+                <div className="space-y-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 text-2xl font-bold">
+                        🏗️
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-bold text-base text-white">Ralion Trade OS</h3>
+                          <span className="px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300 text-[10px] font-bold">
+                            INTERNAL PREVIEW (BETA)
+                          </span>
+                        </div>
+                        <p className="text-xs text-zinc-400">
+                          B2B Procurement, Suppliers, Wholesale Quotations & Order Management
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/80 space-y-2 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-zinc-500">Implementation Status:</span>
+                      <span className="text-amber-400 font-semibold">Functional Internal Preview</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-zinc-500">Audited Test Workspace:</span>
+                      <span className="text-zinc-300 font-mono text-[11px]">{productsData?.trade?.previewWorkspaceId || '20000000-0000-0000-0000-000000000002'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-zinc-500">Simulated Modules:</span>
+                      <span className="text-indigo-300 font-semibold">Suppliers, POs, Quotes, Orders</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-zinc-500">External Payments & Disbursements:</span>
+                      <span className="text-rose-400 font-bold">Disabled (Preview Safety)</span>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-zinc-500 italic">
+                    All financial operations in trade preview execute with mock settlements. Multi-tenant database boundary strictly enforced.
+                  </p>
+                </div>
+
+                <div className="pt-2 border-t border-zinc-800 space-y-2">
+                  <button
+                    onClick={() => void openProductPreview('trade')}
+                    className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 transition-all"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    Open Preview (Trade)
+                  </button>
+                  <div className="text-center text-[10px] text-zinc-500 pt-1">
+                    Platform admin identity verified • Audited internal preview session
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* TRIALS TAB */}
+        {activeTab === 'trials' && (
+          <section className="space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-black text-white flex items-center gap-2">
+                  <KeyRound className="w-5 h-5 text-indigo-400" />
+                  Ralion Trial Access Manager
+                </h2>
+                <p className="text-xs text-zinc-400">
+                  Manage time-limited demo access codes, evaluate prospective customer trials, and convert approved trials to commercial subscriptions.
+                </p>
+              </div>
+
+              <button
+                onClick={() => {
+                  setGeneratedCodeSecret(null);
+                  setShowGenerateCodeModal(true);
+                }}
+                className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-indigo-600/20 transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                Generate Demo Access Code
+              </button>
+            </div>
+
+            {/* Top Telemetry Metric Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800">
+                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Active Demo Trials</span>
+                <div className="text-2xl font-black text-white mt-1">{trialsData?.activeTrials ?? 0}</div>
+                <span className="text-[11px] text-zinc-400">{trialsData?.totalRedemptions ?? 0} lifetime redemptions</span>
+              </div>
+              <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800">
+                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Expiring Soon (&lt;48h)</span>
+                <div className="text-2xl font-black text-amber-400 mt-1">{trialsData?.expiringSoon ?? 0}</div>
+                <span className="text-[11px] text-zinc-400">Trials approaching deadline</span>
+              </div>
+              <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800">
+                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Expired Trials</span>
+                <div className="text-2xl font-black text-red-400 mt-1">{trialsData?.expiredTrials ?? 0}</div>
+                <span className="text-[11px] text-zinc-400">Fail-closed blocking active</span>
+              </div>
+              <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800">
+                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Converted to Paid</span>
+                <div className="text-2xl font-black text-emerald-400 mt-1">{trialsData?.convertedTrials ?? 0}</div>
+                <span className="text-[11px] text-emerald-400 font-medium">Commercial conversions</span>
+              </div>
+            </div>
+
+            {/* Product breakdown */}
+            <div className="p-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <span className="text-zinc-400">Trials by Eligible Product:</span>
+              <div className="flex gap-2">
+                <span className="px-2.5 py-1 rounded-lg bg-zinc-800 text-zinc-200 border border-zinc-700 font-bold text-[11px]">
+                  🛒 Retail: {trialsData?.products?.retail ?? 0} codes
+                </span>
+                <span className="px-2.5 py-1 rounded-lg bg-zinc-800 text-zinc-200 border border-zinc-700 font-bold text-[11px]">
+                  🏗️ Trade: {trialsData?.products?.trade ?? 0} codes
+                </span>
+                <span className="px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 font-bold text-[11px]">
+                  ✨ Multi-Product (Both): {trialsData?.products?.both ?? 0} codes
+                </span>
+              </div>
+            </div>
+
+            {/* Table: Issued Demo Codes */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-sm text-white">Issued Demo Access Codes</h3>
+                <span className="text-xs text-zinc-500">{trialsData?.codes?.length || 0} total codes</span>
+              </div>
+
+              <div className="overflow-x-auto rounded-2xl border border-zinc-800">
+                <table className="w-full text-xs">
+                  <thead className="bg-zinc-900 text-zinc-400">
+                    <tr>
+                      <th className="p-3 text-left">Code Prefix</th>
+                      <th className="p-3 text-left">Eligible Products</th>
+                      <th className="p-3 text-left">Duration</th>
+                      <th className="p-3 text-left">Redemptions</th>
+                      <th className="p-3 text-left">Workspace Mode</th>
+                      <th className="p-3 text-left">Status</th>
+                      <th className="p-3 text-left">Expires</th>
+                      <th className="p-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800">
+                    {(trialsData?.codes || []).map((code: any) => (
+                      <tr key={code.id} className="bg-zinc-950/40 hover:bg-zinc-900/30 transition">
+                        <td className="p-3 font-mono text-zinc-300">{code.code_prefix}••••</td>
+                        <td className="p-3">
+                          <div className="flex flex-wrap gap-1">
+                            {(code.eligible_products || []).map((p: string) => (
+                              <span key={p} className="px-2 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-[10px] font-bold uppercase text-zinc-300">
+                                {p}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="p-3 text-zinc-400">{code.duration_days} days</td>
+                        <td className="p-3 text-zinc-300 font-mono">
+                          {code.redemption_count} / {code.max_redemptions}
+                        </td>
+                        <td className="p-3">
+                          <span className="px-2 py-0.5 rounded bg-zinc-800/80 text-[10px] font-mono text-zinc-400">
+                            {code.workspace_mode}
+                          </span>
+                        </td>
+                        <td className="p-3">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${code.status === 'ACTIVE' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border-zinc-700 bg-zinc-800 text-zinc-400'}`}>
+                            {code.status}
+                          </span>
+                        </td>
+                        <td className="p-3 text-zinc-400 whitespace-nowrap">
+                          {new Date(code.expires_at).toLocaleDateString()}
+                        </td>
+                        <td className="p-3 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {code.status === 'ACTIVE' && (
+                              <>
+                                <button
+                                  onClick={() => void extendTrial(code.id, 7)}
+                                  className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-semibold"
+                                  title="Extend trial by 7 days"
+                                >
+                                  +7d
+                                </button>
+                                <button
+                                  onClick={() => void convertTrialToCommercial(code.id)}
+                                  className="px-2 py-1 rounded bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-300 text-[10px] font-semibold"
+                                  title="Convert to commercial subscription"
+                                >
+                                  Convert
+                                </button>
+                                <button
+                                  onClick={() => void revokeTrial(code.id)}
+                                  className="px-2 py-1 rounded bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/30 text-rose-300 text-[10px] font-semibold"
+                                  title="Revoke access code"
+                                >
+                                  Revoke
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {(!trialsData?.codes || trialsData.codes.length === 0) && (
+                      <tr>
+                        <td colSpan={8} className="p-8 text-center text-zinc-500">
+                          No trial access codes issued yet. Click "Generate Demo Access Code" to create one.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* RETAIL PILOT COMMAND CENTRE TAB */}
+        {activeTab === 'retail' && (
+          <section className="space-y-6">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 space-y-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 font-bold text-xl">
+                    🛒
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-base font-bold text-white">Ralion Retail Pilot Command Centre</h2>
+                      <span className="px-2 py-0.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-[10px] font-bold">
+                        {retailData?.entitlement?.status || 'ACTIVE'}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-[10px] font-bold">
+                        USD ($) EXCLUSIVE
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-400">
+                      Managed pilot customer: <strong>Proinsight (Prolnsight Consultants)</strong> • Hardware & Building Materials Retail
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => void openRetailWorkspace()}
+                    className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-indigo-600/20 transition-all"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    Open Retail Workspace (Inspection Session)
+                  </button>
+                  <button
+                    onClick={() => void updateRetailEntitlement('ACTIVE')}
+                    disabled={retailData?.entitlement?.status === 'ACTIVE'}
+                    className="px-3 py-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 text-xs font-bold transition-all disabled:opacity-40"
+                  >
+                    Activate
+                  </button>
+                  <button
+                    onClick={() => void updateRetailEntitlement('SUSPENDED')}
+                    disabled={retailData?.entitlement?.status === 'SUSPENDED'}
+                    className="px-3 py-2 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-bold transition-all disabled:opacity-40"
+                  >
+                    Suspend
+                  </button>
+                  <button
+                    onClick={() => void updateRetailEntitlement('EXPIRED')}
+                    disabled={retailData?.entitlement?.status === 'EXPIRED'}
+                    className="px-3 py-2 rounded-lg border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 text-xs font-bold transition-all disabled:opacity-40"
+                  >
+                    Revoke
+                  </button>
+                </div>
+              </div>
+
+              {/* Entitlement & Security Metadata */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 pt-3 border-t border-zinc-800 text-xs">
+                <div>
+                  <span className="text-zinc-500 block text-[10px] uppercase font-bold">Workspace Identifier</span>
+                  <span className="font-mono text-zinc-300 text-[11px]">{retailData?.workspace?.workspaceId || '67074e47-76bb-40e1-ae05-362e9cae8798'}</span>
+                </div>
+                <div>
+                  <span className="text-zinc-500 block text-[10px] uppercase font-bold">Authorized Tier & Mode</span>
+                  <span className="text-zinc-300">{retailData?.entitlement?.tier || 'PILOT'} (Exclusive Customer Sandbox)</span>
+                </div>
+                <div>
+                  <span className="text-zinc-500 block text-[10px] uppercase font-bold">Store Name</span>
+                  <span className="text-zinc-300">{retailData?.settings?.store_name || 'Proinsight Hardware & Building Supplies'}</span>
+                </div>
+                <div>
+                  <span className="text-zinc-500 block text-[10px] uppercase font-bold">Last Status Update</span>
+                  <span className="text-zinc-300">{retailData?.entitlement?.updatedAt ? new Date(retailData.entitlement.updatedAt).toLocaleString() : 'Active Pilot Baseline'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Operational Telemetry Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800">
+                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Catalogue Products</span>
+                <div className="text-2xl font-black text-white mt-1">{retailData?.operationalHealth?.totalProducts || 0}</div>
+                <span className="text-[11px] text-zinc-400">{retailData?.operationalHealth?.totalStockUnits || 0} physical units on hand</span>
+              </div>
+              <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800">
+                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Low Stock Alerts</span>
+                <div className="text-2xl font-black text-amber-400 mt-1">{retailData?.operationalHealth?.lowStockCount || 0}</div>
+                <span className="text-[11px] text-zinc-400">SKUs below minimum threshold</span>
+              </div>
+              <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800">
+                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Completed Hardware Sales</span>
+                <div className="text-2xl font-black text-emerald-400 mt-1">{retailData?.operationalHealth?.totalSalesCount || 0}</div>
+                <span className="text-[11px] text-zinc-400">POS receipts generated</span>
+              </div>
+              <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800">
+                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Net Hardware Revenue</span>
+                <div className="text-2xl font-black text-emerald-400 mt-1">
+                  ${Number(retailData?.operationalHealth?.totalSalesRevenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <span className="text-[11px] text-emerald-400 font-medium">USD ($) Settled</span>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-zinc-900/40 border border-zinc-800 text-xs text-zinc-400 flex items-center justify-between">
+              <div>
+                <span className="font-semibold text-zinc-200">Confidentiality Guard:</span> Employee compensation details remain strictly confidential to Proinsight management and are excluded from platform telemetry.
+              </div>
+              <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-[10px]">
+                PASS
+              </span>
+            </div>
+          </section>
+        )}
       </main>
+
+      {/* GENERATE DEMO CODE MODAL */}
+      {showGenerateCodeModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                <KeyRound className="w-4 h-4 text-indigo-400" />
+                Generate Demo Access Code
+              </h3>
+              <button
+                onClick={() => {
+                  setShowGenerateCodeModal(false);
+                  setGeneratedCodeSecret(null);
+                }}
+                className="text-zinc-500 hover:text-white text-lg font-bold"
+              >
+                ×
+              </button>
+            </div>
+
+            {generatedCodeSecret ? (
+              <div className="space-y-4 py-2">
+                <div className="p-4 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 space-y-2">
+                  <div className="flex items-center gap-2 font-bold text-xs">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    Trial Code Generated Successfully
+                  </div>
+                  <p className="text-[11px] text-zinc-300">
+                    Provide this code to the prospective customer. They can redeem it at <code>/ralion/redeem</code> to activate demo access.
+                  </p>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-between gap-3">
+                  <span className="font-mono text-sm text-amber-300 font-bold tracking-wider select-all">
+                    {generatedCodeSecret}
+                  </span>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(generatedCodeSecret);
+                      setCopiedCode(true);
+                      setTimeout(() => setCopiedCode(false), 2000);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold flex items-center gap-1.5 shrink-0"
+                  >
+                    {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copiedCode ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+
+                <div className="text-[11px] text-zinc-500 italic">
+                  Note: The plain-text code secret is never stored in the database. Only a SHA-256 hash is retained.
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    onClick={() => {
+                      setShowGenerateCodeModal(false);
+                      setGeneratedCodeSecret(null);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={generateDemoCode} className="space-y-4">
+                <div>
+                  <label className="text-xs text-zinc-400 block mb-1.5 font-medium">Eligible Products</label>
+                  <div className="flex gap-4">
+                    <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={codeForm.eligibleProducts.includes('retail')}
+                        onChange={(e) => {
+                          const next = e.target.checked
+                            ? [...codeForm.eligibleProducts, 'retail' as const]
+                            : codeForm.eligibleProducts.filter(p => p !== 'retail');
+                          setCodeForm({ ...codeForm, eligibleProducts: next });
+                        }}
+                        className="rounded border-zinc-700 bg-zinc-950 text-indigo-600"
+                      />
+                      🛒 Ralion Retail OS
+                    </label>
+                    <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={codeForm.eligibleProducts.includes('trade')}
+                        onChange={(e) => {
+                          const next = e.target.checked
+                            ? [...codeForm.eligibleProducts, 'trade' as const]
+                            : codeForm.eligibleProducts.filter(p => p !== 'trade');
+                          setCodeForm({ ...codeForm, eligibleProducts: next });
+                        }}
+                        className="rounded border-zinc-700 bg-zinc-950 text-indigo-600"
+                      />
+                      🏗️ Ralion Trade OS
+                    </label>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-zinc-400 block mb-1 font-medium">Duration (Days)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={90}
+                      value={codeForm.durationDays}
+                      onChange={(e) => setCodeForm({ ...codeForm, durationDays: Number(e.target.value) })}
+                      className="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-200"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-zinc-400 block mb-1 font-medium">Max Redemptions</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={codeForm.maxRedemptions}
+                      onChange={(e) => setCodeForm({ ...codeForm, maxRedemptions: Number(e.target.value) })}
+                      className="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-200"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs text-zinc-400 block mb-1 font-medium">Workspace Mode</label>
+                  <select
+                    value={codeForm.workspaceMode}
+                    onChange={(e) => setCodeForm({ ...codeForm, workspaceMode: e.target.value as any })}
+                    className="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-200"
+                  >
+                    <option value="DEMO_DATA">DEMO_DATA — Pre-populated with realistic products, orders & stock</option>
+                    <option value="CLEAN_WORKSPACE">CLEAN_WORKSPACE — Empty workspace for pilot configuration</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs text-zinc-400 block mb-1 font-medium">Optional Notes / Audit Justification</label>
+                  <textarea
+                    placeholder="e.g., Prospect evaluation for National Timber B2B trade agreement"
+                    value={codeForm.notes}
+                    onChange={(e) => setCodeForm({ ...codeForm, notes: e.target.value })}
+                    className="w-full h-16 p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-200"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowGenerateCodeModal(false)}
+                    className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs"
+                  >
+                    Generate Code
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* INSPECTION REASON MODAL */}
       {inspectModalOpen && inspectingOrgId && (

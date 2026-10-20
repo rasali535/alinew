@@ -288,18 +288,13 @@ async function terminateInvalidSession(failedAccessToken?: string): Promise<void
 }
 
 export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const initialSnapshotRef = useRef<CachedContextSnapshot | null>(null);
-  if (initialSnapshotRef.current === null && typeof window !== 'undefined') {
-    initialSnapshotRef.current = readCachedContextSnapshot();
-  }
-  const initialSnapshot = initialSnapshotRef.current;
-  const [user, setUser] = useState<UserProfile | null>(() => initialSnapshot?.user || null);
-  const [organization, setOrganization] = useState<Organization | null>(() => initialSnapshot?.organization || null);
-  const [workspace, setWorkspace] = useState<WorkspaceContextSummary | null>(() => initialSnapshot?.workspace || null);
-  const [activeBranch, setActiveBranch] = useState<Branch | null>(() => initialSnapshot?.activeBranch || null);
-  const [isLoading, setIsLoading] = useState(() => !initialSnapshot);
-  const [isContextResolved, setIsContextResolved] = useState(() => Boolean(initialSnapshot));
-  const hasOptimisticContextRef = useRef(Boolean(initialSnapshot));
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [organization, setOrganization] = useState<Organization | null>(null);
+  const [workspace, setWorkspace] = useState<WorkspaceContextSummary | null>(null);
+  const [activeBranch, setActiveBranch] = useState<Branch | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isContextResolved, setIsContextResolved] = useState(false);
+  const hasOptimisticContextRef = useRef(false);
   // isResolvingRef guards setIsLoading(true) from running after unmount
   const isResolvingRef = useRef(false);
 
@@ -477,6 +472,18 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, [clearResolvedContext]);
 
   useEffect(() => {
+    // Rehydrate cached snapshot safely after initial hydration pass
+    const snapshot = readCachedContextSnapshot();
+    if (snapshot) {
+      setUser(snapshot.user);
+      setOrganization(snapshot.organization);
+      setWorkspace(snapshot.workspace);
+      setActiveBranch(snapshot.activeBranch);
+      setIsLoading(false);
+      setIsContextResolved(true);
+      hasOptimisticContextRef.current = true;
+    }
+
     // Resolve once on mount from the current getSession() result — no forced refresh.
     resolveAuthoritativeContext();
 

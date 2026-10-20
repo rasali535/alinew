@@ -8,6 +8,7 @@
  */
 
 import 'server-only';
+import crypto from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, User } from '@supabase/supabase-js';
 import { corsJsonResponse } from '../cors';
@@ -315,7 +316,7 @@ export async function resolveRalionAuthContext(
   const requestedWorkspaceRaw = request.headers.get('x-workspace-id');
   const requestedOrgRaw = request.headers.get('x-organization-id');
   let requestedWorkspaceId = requestedWorkspaceRaw ? canonicalUuid(requestedWorkspaceRaw) : null;
-  const requestedOrgId = requestedOrgRaw ? canonicalUuid(requestedOrgRaw) : null;
+  let requestedOrgId = requestedOrgRaw ? canonicalUuid(requestedOrgRaw) : null;
 
   if (requestedWorkspaceRaw && !requestedWorkspaceId) {
     return {
@@ -338,6 +339,101 @@ export async function resolveRalionAuthContext(
 
   if (requestedWorkspaceId && requestedOrgId && requestedWorkspaceId === requestedOrgId) {
     requestedWorkspaceId = null;
+  }
+
+  // Extract optional preview session token strictly from secure HttpOnly cookies (or server-to-server headers)
+  const previewToken =
+    request.cookies.get('ralion_preview_session')?.value ||
+    request.cookies.get('ralion_preview_token')?.value ||
+    request.headers.get('x-preview-token') ||
+    request.headers.get('x-ralion-preview-token') ||
+    null;
+
+  // If a preview session token is presented by an authorized platform administrator,
+  // authoritatively resolve the workspace directly from the verified database preview session record.
+  const isCallerPlatformAdmin = PlatformAdminService.verifyAdminAuthorization(
+    authUser.user_metadata,
+    authUser.email,
+    authUser.app_metadata
+  );
+
+  let verifiedPreviewSession: any = null;
+  if (isCallerPlatformAdmin && previewToken) {
+    try {
+      const tokenHash = crypto.createHash('sha256').update(previewToken.trim()).digest('hex');
+      const { data: dbSession } = await adminClient
+        .from('admin_preview_sessions')
+        .select('id, admin_user_id, admin_email, organization_id, workspace_id, product, status, expires_at, revoked_at')
+        .eq('session_token_hash', tokenHash)
+        .eq('status', 'ACTIVE')
+        .maybeSingle();
+
+      if (
+        dbSession &&
+        dbSession.admin_user_id === authUser.id &&
+        !dbSession.revoked_at &&
+        new Date(dbSession.expires_at).getTime() > Date.now()
+      ) {
+        // Query parameters represent explicit user/client navigation intent
+        const queryWs = request.nextUrl?.searchParams?.get('ws');
+        const queryOrg = request.nextUrl?.searchParams?.get('org') || request.nextUrl?.searchParams?.get('organizationId');
+
+        if (queryWs && canonicalUuid(queryWs) !== dbSession.workspace_id) {
+          return {
+            status: 'FORBIDDEN',
+            context: null,
+            errorCode: 'PREVIEW_WORKSPACE_MISMATCH',
+            errorMessage: 'Preview session token cannot be combined with a different workspace.',
+            httpStatus: 403,
+          };
+        }
+        if (queryOrg && canonicalUuid(queryOrg) !== dbSession.organization_id) {
+          return {
+            status: 'FORBIDDEN',
+            context: null,
+            errorCode: 'PREVIEW_ORGANIZATION_MISMATCH',
+            errorMessage: 'Preview session token cannot be combined with a different organization.',
+            httpStatus: 403,
+          };
+        }
+
+        // Anti-Tampering: If an explicit non-preview workspace or organization header was provided
+        // and caller is NOT in explicit preview navigation, reject attempts to combine with conflicting tenant.
+        // When in explicit preview navigation (?preview=internal or preview cookie session), the server
+        // authoritatively binds to the session's sandbox workspace without letting stale localStorage
+        // tenant hints cause a false-positive mismatch.
+        const isExplicitPreview =
+          request.nextUrl?.searchParams?.get('preview') === 'internal' ||
+          request.headers.get('x-preview-mode') === 'internal';
+
+        if (!isExplicitPreview) {
+          if (requestedWorkspaceId && requestedWorkspaceId !== dbSession.workspace_id) {
+            return {
+              status: 'FORBIDDEN',
+              context: null,
+              errorCode: 'PREVIEW_WORKSPACE_MISMATCH',
+              errorMessage: 'Preview session token cannot be combined with a different workspace.',
+              httpStatus: 403,
+            };
+          }
+          if (requestedOrgId && requestedOrgId !== dbSession.organization_id) {
+            return {
+              status: 'FORBIDDEN',
+              context: null,
+              errorCode: 'PREVIEW_ORGANIZATION_MISMATCH',
+              errorMessage: 'Preview session token cannot be combined with a different organization.',
+              httpStatus: 403,
+            };
+          }
+        }
+
+        verifiedPreviewSession = dbSession;
+        requestedWorkspaceId = dbSession.workspace_id;
+        requestedOrgId = dbSession.organization_id;
+      }
+    } catch (previewErr: any) {
+      console.warn('[ServerAuth] Preview session verification check warning:', previewErr?.message);
+    }
   }
 
   let workspaceRow: any = null;
@@ -616,13 +712,6 @@ export async function resolveRalionAuthContext(
     console.error('[ServerAuth] Platform admin grant lookup exception:', adminGrantErr?.message);
   }
   const isPlatformAdmin = metadataPlatformAdmin && durablePlatformAdmin;
-
-  // Extract optional preview session token from header, cookie, or query parameter
-  const previewToken =
-    request.headers.get('x-preview-token') ||
-    request.cookies.get('ralion_preview_session')?.value ||
-    new URL(request.url).searchParams.get('token') ||
-    null;
 
   const resolvedContext: RalionSessionContext = {
     user: { id: authUser.id, email: authUser.email || '', user_metadata: authUser.user_metadata, app_metadata: authUser.app_metadata },

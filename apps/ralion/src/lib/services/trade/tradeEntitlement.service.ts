@@ -123,6 +123,25 @@ export class TradeEntitlementService {
         };
       }
 
+      // Anti-Cross-Product Bleed: Ensure preview session is explicitly for Trade OS
+      if (validation.session?.product !== 'trade') {
+        return {
+          isEntitled: false,
+          status: 'NOT_ENTITLED',
+          tier: 'TRIAL',
+          defaultCurrency: 'USD',
+          effectiveRole: 'VIEWER',
+          isPlatformAdmin: true,
+          canManageSuppliers: false,
+          canCreatePurchaseOrders: false,
+          canApprovePurchaseOrders: false,
+          canManageQuotations: false,
+          canManageOrders: false,
+          canViewFinancials: false,
+          reason: `Trade OS preview rejected: Active preview session is for ${validation.session?.product || 'another product'}, not trade.`,
+        };
+      }
+
       // Check database entitlement for the internal preview workspace
       const supabase = getPrivilegedSupabase();
       const { data: entData, error: entError } = await supabase
