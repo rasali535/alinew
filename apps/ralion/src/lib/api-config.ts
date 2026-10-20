@@ -305,7 +305,16 @@ function appendTenantHints(headers: Record<string, string>, session: any) {
   const storedOrgId = window.localStorage?.getItem('ralion_organization_id') || window.localStorage?.getItem('ralion_active_org_id') || window.localStorage?.getItem('ralion_org_id');
 
   const urlParams = new URLSearchParams(window.location.search);
+  const isPreview = urlParams.get('preview') === 'internal' || (typeof document !== 'undefined' && document.cookie.includes('ralion_preview_session'));
   const previewWs = urlParams.get('ws');
+
+  // Preview Isolation: When inside an admin preview session, never inject stale regular
+  // organization or workspace IDs from localStorage. The server authoritatively resolves
+  // the dedicated preview sandbox workspace from the cryptographically verified session.
+  if (isPreview) {
+    if (previewWs) headers['x-workspace-id'] = previewWs;
+    return;
+  }
 
   const activeWs = previewWs || storedWorkspaceId || metadata.workspace_id || null;
   const activeOrg = storedOrgId || metadata.organization_id || metadata.org_id || null;

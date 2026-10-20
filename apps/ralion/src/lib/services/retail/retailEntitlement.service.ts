@@ -160,6 +160,27 @@ export class RetailEntitlementService {
         };
       }
 
+      // Anti-Cross-Product Bleed: Ensure preview session is explicitly for Retail OS
+      if (validation.session?.product !== 'retail') {
+        return {
+          isEntitled: false,
+          status: 'NOT_ENTITLED',
+          tier: 'PILOT',
+          defaultCurrency: 'USD',
+          effectiveRole: 'CASHIER',
+          isPlatformAdmin: true,
+          canManageSettings: false,
+          canAccessPOS: false,
+          canAccessInventory: false,
+          canAccessQuotations: false,
+          canAccessSales: false,
+          canAccessExpenses: false,
+          canAccessPayroll: false,
+          canViewSalaries: false,
+          reason: `Retail OS preview rejected: Active preview session is for ${validation.session?.product || 'another product'}, not retail.`,
+        };
+      }
+
       // Check database entitlement for the internal preview workspace
       const supabase = getPrivilegedSupabase();
       const { data: entData, error: entError } = await supabase

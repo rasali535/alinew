@@ -119,6 +119,23 @@ async function runVerification() {
     serverAuthContent.includes("request.cookies.get('ralion_preview_session')"),
     'serverAuth strictly validates preview tokens from HttpOnly cookies and rejects URL tokens'
   );
+  assert(
+    apiConfigContent.includes('isPreview') &&
+    apiConfigContent.includes("if (isPreview)"),
+    'api-config isolates preview session context and prevents stale localStorage tenant hints from polluting headers'
+  );
+  assert(
+    serverAuthContent.includes('isExplicitPreview') &&
+    serverAuthContent.includes('requestedWorkspaceId = dbSession.workspace_id'),
+    'serverAuth establishes an authoritative server-verified preview context without false-positive mismatches'
+  );
+
+  const tradeEntitlementPath = path.join(ralionRoot, 'src', 'lib', 'services', 'trade', 'tradeEntitlement.service.ts');
+  const tradeEntitlementContent = fs.readFileSync(tradeEntitlementPath, 'utf8');
+  assert(
+    tradeEntitlementContent.includes("validation.session?.product !== 'trade'"),
+    'TradeEntitlementService rejects retail preview tokens from authorizing Trade OS'
+  );
 
   // -------------------------------------------------------------------------
   // 3. Authenticated Proinsight owner -> correct Retail workspace

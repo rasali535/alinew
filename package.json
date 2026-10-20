@@ -59,7 +59,8 @@
     "security:billing-card-vault": "node ./scripts/security/verify-billing-card-vault-primary.js",
     "security:r2-storage": "node ./scripts/security/verify-r2-hybrid-storage.js",
     "security:session-r2-social": "node ./scripts/security/verify-session-r2-social-stability.js",
-    "security:oauth-connection-state": "node ./scripts/security/verify-oauth-connection-state.js"
+    "security:oauth-connection-state": "node ./scripts/security/verify-oauth-connection-state.js",
+    "test:oauth-migration": "node ./scripts/test-oauth-migration-safe-backfill.js"
   },
   "overrides": {
     "react": "^19.0.0",

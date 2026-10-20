@@ -374,8 +374,11 @@ export async function resolveRalionAuthContext(
         !dbSession.revoked_at &&
         new Date(dbSession.expires_at).getTime() > Date.now()
       ) {
-        // Anti-Tampering: Reject attempts to combine a valid preview token with a different organization or workspace
-        if (requestedWorkspaceId && requestedWorkspaceId !== dbSession.workspace_id) {
+        // Query parameters represent explicit user/client navigation intent
+        const queryWs = request.nextUrl?.searchParams?.get('ws');
+        const queryOrg = request.nextUrl?.searchParams?.get('org') || request.nextUrl?.searchParams?.get('organizationId');
+
+        if (queryWs && canonicalUuid(queryWs) !== dbSession.workspace_id) {
           return {
             status: 'FORBIDDEN',
             context: null,
@@ -384,7 +387,7 @@ export async function resolveRalionAuthContext(
             httpStatus: 403,
           };
         }
-        if (requestedOrgId && requestedOrgId !== dbSession.organization_id) {
+        if (queryOrg && canonicalUuid(queryOrg) !== dbSession.organization_id) {
           return {
             status: 'FORBIDDEN',
             context: null,
@@ -393,8 +396,40 @@ export async function resolveRalionAuthContext(
             httpStatus: 403,
           };
         }
+
+        // Anti-Tampering: If an explicit non-preview workspace or organization header was provided
+        // and caller is NOT in explicit preview navigation, reject attempts to combine with conflicting tenant.
+        // When in explicit preview navigation (?preview=internal or preview cookie session), the server
+        // authoritatively binds to the session's sandbox workspace without letting stale localStorage
+        // tenant hints cause a false-positive mismatch.
+        const isExplicitPreview =
+          request.nextUrl?.searchParams?.get('preview') === 'internal' ||
+          request.headers.get('x-preview-mode') === 'internal';
+
+        if (!isExplicitPreview) {
+          if (requestedWorkspaceId && requestedWorkspaceId !== dbSession.workspace_id) {
+            return {
+              status: 'FORBIDDEN',
+              context: null,
+              errorCode: 'PREVIEW_WORKSPACE_MISMATCH',
+              errorMessage: 'Preview session token cannot be combined with a different workspace.',
+              httpStatus: 403,
+            };
+          }
+          if (requestedOrgId && requestedOrgId !== dbSession.organization_id) {
+            return {
+              status: 'FORBIDDEN',
+              context: null,
+              errorCode: 'PREVIEW_ORGANIZATION_MISMATCH',
+              errorMessage: 'Preview session token cannot be combined with a different organization.',
+              httpStatus: 403,
+            };
+          }
+        }
+
         verifiedPreviewSession = dbSession;
         requestedWorkspaceId = dbSession.workspace_id;
+        requestedOrgId = dbSession.organization_id;
       }
     } catch (previewErr: any) {
       console.warn('[ServerAuth] Preview session verification check warning:', previewErr?.message);

@@ -34,18 +34,79 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_social_connections_workspace_user_provider
 --    extra_meta until every environment has this migration.
 -- ---------------------------------------------------------------------------
 ALTER TABLE public.social_account_tokens
-  ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES public.organizations(id) ON DELETE CASCADE,
-  ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES public.workspaces(id) ON DELETE CASCADE;
+  ADD COLUMN IF NOT EXISTS organization_id UUID,
+  ADD COLUMN IF NOT EXISTS workspace_id UUID;
 
-UPDATE public.social_account_tokens
-SET workspace_id = (extra_meta->>'workspaceId')::uuid
-WHERE workspace_id IS NULL
-  AND COALESCE(extra_meta->>'workspaceId', '') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$';
+-- 3a. If extra_meta->>'workspaceId' is already a valid workspace in public.workspaces, adopt it
+UPDATE public.social_account_tokens sat
+SET workspace_id = (sat.extra_meta->>'workspaceId')::uuid
+WHERE sat.workspace_id IS NULL
+  AND COALESCE(sat.extra_meta->>'workspaceId', '') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+  AND EXISTS (SELECT 1 FROM public.workspaces w WHERE w.id = (sat.extra_meta->>'workspaceId')::uuid);
 
-UPDATE public.social_account_tokens
-SET organization_id = (extra_meta->>'organizationId')::uuid
-WHERE organization_id IS NULL
-  AND COALESCE(extra_meta->>'organizationId', '') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$';
+-- 3b. Resolve workspace_id from workspaces owned by the user
+UPDATE public.social_account_tokens sat
+SET workspace_id = (
+  SELECT w.id FROM public.workspaces w
+  WHERE w.owner_id = sat.user_id
+  ORDER BY w.created_at ASC
+  LIMIT 1
+)
+WHERE sat.workspace_id IS NULL;
+
+-- 3c. Resolve workspace_id from workspace_memberships
+UPDATE public.social_account_tokens sat
+SET workspace_id = (
+  SELECT wm.workspace_id FROM public.workspace_members wm
+  WHERE wm.user_id = sat.user_id
+  ORDER BY wm.joined_at ASC
+  LIMIT 1
+)
+WHERE sat.workspace_id IS NULL;
+
+-- 3d. If extra_meta->>'organizationId' is already a valid organization in public.organizations, adopt it
+UPDATE public.social_account_tokens sat
+SET organization_id = (sat.extra_meta->>'organizationId')::uuid
+WHERE sat.organization_id IS NULL
+  AND COALESCE(sat.extra_meta->>'organizationId', '') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+  AND EXISTS (SELECT 1 FROM public.organizations o WHERE o.id = (sat.extra_meta->>'organizationId')::uuid);
+
+-- 3e. Derive organization_id from the resolved workspace_id's organization_id
+UPDATE public.social_account_tokens sat
+SET organization_id = w.organization_id
+FROM public.workspaces w
+WHERE sat.workspace_id = w.id
+  AND sat.organization_id IS NULL;
+
+-- 3f. Fallback: resolve organization_id from organizations owned by user
+UPDATE public.social_account_tokens sat
+SET organization_id = (
+  SELECT o.id FROM public.organizations o
+  WHERE o.owner_id = sat.user_id
+  ORDER BY o.created_at ASC
+  LIMIT 1
+)
+WHERE sat.organization_id IS NULL;
+
+-- 3g. Enforce foreign key constraints safely now that references are backfilled
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'social_account_tokens_organization_id_fkey'
+  ) THEN
+    ALTER TABLE public.social_account_tokens
+      ADD CONSTRAINT social_account_tokens_organization_id_fkey
+      FOREIGN KEY (organization_id) REFERENCES public.organizations(id) ON DELETE CASCADE;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'social_account_tokens_workspace_id_fkey'
+  ) THEN
+    ALTER TABLE public.social_account_tokens
+      ADD CONSTRAINT social_account_tokens_workspace_id_fkey
+      FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
+  END IF;
+END $$;
 
 ALTER TABLE public.social_account_tokens
   DROP CONSTRAINT IF EXISTS social_account_tokens_user_id_provider_key;
