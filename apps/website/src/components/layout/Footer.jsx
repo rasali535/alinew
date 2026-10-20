@@ -123,6 +123,9 @@ const Footer = () => {
               <Link to="/work" className="text-white/70 hover:text-brand-gold transition-colors">
                 Selected Work
               </Link>
+              <Link to="/clients" className="text-white/70 hover:text-brand-gold transition-colors">
+                Our Clients
+              </Link>
               <Link to="/contact" className="text-white/70 hover:text-brand-gold transition-colors">
                 Contact & Inquiries
               </Link>

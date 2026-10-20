@@ -1,0 +1,116 @@
+import React, { useState, useEffect } from 'react';
+import SEO from '../components/common/SEO';
+import { getPublishedClients } from '../lib/clientsService';
+import { Sparkles, Calendar, ShieldCheck } from 'lucide-react';
+
+const Clients = () => {
+  const [clients, setClients] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadClients() {
+      try {
+        const data = await getPublishedClients();
+        if (isMounted) {
+          setClients(data);
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error('Failed to load published clients:', err);
+        if (isMounted) setLoading(false);
+      }
+    }
+    loadClients();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  return (
+    <div className="pt-28 pb-24 bg-[#121212] text-white min-h-screen">
+      <SEO
+        title="Our Clients | Ras Ali Labs"
+        description="Explore the genuine organizations and trusted partners Ras Ali Labs has worked with across technology, television production, media, and digital platforms."
+        keywords="Ras Ali Labs clients, Botswana software clients, film production clients, enterprise technology partners Botswana, Pula Pitch, Melody Gospel, Pameltex, Lebville Boutique"
+        canonical="https://rasalilabs.com/clients"
+      />
+
+      <div className="max-w-7xl mx-auto px-6 lg:px-12">
+        {/* Header Section */}
+        <div className="max-w-3xl mb-16 md:mb-20">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-gold/10 border border-brand-gold/25 text-brand-gold text-xs font-bold uppercase tracking-wider mb-5">
+            <Sparkles size={14} /> Proven Relationships
+          </div>
+          <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-white mb-4 leading-tight">
+            Our Clients
+          </h1>
+          <p className="text-xl md:text-2xl text-white/70 font-light tracking-wide">
+            Trusted relationships. Meaningful work.
+          </p>
+          <div className="w-16 h-1 bg-brand-gold mt-6 rounded-full"></div>
+        </div>
+
+        {/* Loading State */}
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+              <div
+                key={i}
+                className="bg-[#181818] border border-white/10 rounded-3xl p-8 flex flex-col items-center justify-between h-72 animate-pulse"
+              >
+                <div className="w-36 h-24 bg-white/5 rounded-2xl"></div>
+                <div className="w-20 h-5 bg-white/5 rounded-full"></div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          /* Client Logos Grid */
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
+            {clients.map((client) => (
+              <div
+                key={client.id}
+                className="group relative bg-[#181818] hover:bg-[#1f1f1f] border border-white/10 hover:border-brand-gold/50 rounded-3xl p-8 flex flex-col items-center justify-between h-72 transition-all duration-300 shadow-xl hover:shadow-2xl hover:shadow-brand-gold/5 transform hover:-translate-y-1.5"
+              >
+                {/* Logo Display Canvas: strictly preserves logo aspect ratio with object-contain */}
+                <div className="w-full flex-1 flex items-center justify-center p-4">
+                  <div className="w-full h-32 flex items-center justify-center rounded-2xl bg-black/20 p-3 group-hover:bg-black/30 transition-colors">
+                    <img
+                      src={client.logo_url}
+                      alt={`${client.name} Official Logo`}
+                      loading="lazy"
+                      className="max-h-24 max-w-full object-contain filter grayscale group-hover:grayscale-0 transition-all duration-300 drop-shadow-md"
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = '/assets/images/logo.png';
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Verified Year / Year Range beneath logo */}
+                <div className="pt-4 border-t border-white/10 w-full flex items-center justify-center">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold tracking-wider uppercase text-white/70 group-hover:text-brand-gold transition-colors font-mono">
+                    <Calendar size={13} className="text-brand-gold/70 group-hover:text-brand-gold" />
+                    {client.work_year}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Verification & Trust Footnote */}
+        <div className="mt-20 pt-10 border-t border-white/10 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-white/50">
+          <div className="flex items-center gap-2">
+            <ShieldCheck size={16} className="text-emerald-400" />
+            <span>All corporate client logos and engagement dates are verified by Ras Ali Labs (Pty) Ltd.</span>
+          </div>
+          <span className="text-white/40">Gaborone, Botswana</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Clients;
