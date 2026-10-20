@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { requireRalionContext } from '@/lib/auth/serverAuth';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
-import { TrialAccessService } from '@/lib/services/trial/trialAccess.service';
+import { TrialAccessService, TrialRateLimiter } from '@/lib/services/trial/trialAccess.service';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +27,20 @@ export async function POST(request: NextRequest) {
 
     const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined;
     const userAgent = request.headers.get('user-agent') || undefined;
+
+    // Rate limit check: max 5 redemption attempts per minute per IP / user
+    const rateKey = ipAddress || context.user.id;
+    const rateCheck = TrialRateLimiter.checkRedemptionLimit(rateKey, 5, 60000);
+    if (!rateCheck.allowed) {
+      return corsJsonResponse(
+        {
+          success: false,
+          error: `Rate limit exceeded: Too many redemption attempts. Please retry after ${Math.ceil(rateCheck.retryAfterMs / 1000)} seconds.`,
+        },
+        { status: 429 },
+        request
+      );
+    }
 
     const result = await TrialAccessService.redeemTrialCode({
       rawCode: code.trim(),

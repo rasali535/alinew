@@ -4,7 +4,7 @@
  *
  * Enforces authoritative database-backed entitlement for Ralion Trade OS.
  * Supports:
- * - Platform Admin dedicated internal preview workspace ('ralion-internal-trade-preview-ws')
+ * - Platform Admin dedicated internal preview workspace ('20000000-0000-0000-0000-000000000002')
  * - Customer trial entitlements redeemed via Trial Access Manager
  * - Commercial customer entitlements
  * - Fail-closed expiration verification at server and DB layers
@@ -13,8 +13,13 @@
 import { NextRequest } from 'next/server';
 import { RalionSessionContext } from '../../auth/serverAuth';
 import { getPrivilegedSupabase } from '../../supabase/server';
+import {
+  PreviewSessionService,
+  INTERNAL_PREVIEW_ORGANIZATION_ID,
+  INTERNAL_TRADE_PREVIEW_WORKSPACE_ID,
+} from '../preview/previewSession.service';
 
-export const INTERNAL_TRADE_PREVIEW_WORKSPACE_ID = 'ralion-internal-trade-preview-ws';
+export { INTERNAL_TRADE_PREVIEW_WORKSPACE_ID };
 
 export type TradeRole =
   | 'TRADE_DIRECTOR'
@@ -48,7 +53,8 @@ export class TradeEntitlementService {
    */
   static async verifyEntitlement(
     context: RalionSessionContext | null,
-    requiredRole?: TradeRole
+    requiredRole?: TradeRole,
+    options?: { previewToken?: string }
   ): Promise<TradeEntitlementCheck> {
     if (!context || !context.workspace || !context.organization) {
       return {
@@ -70,9 +76,81 @@ export class TradeEntitlementService {
 
     const { organization, workspace, membership, isPlatformAdmin, user } = context;
 
-    // Internal preview workspace check for platform administrators
-    const isInternalPreview = isPlatformAdmin && workspace.id === INTERNAL_TRADE_PREVIEW_WORKSPACE_ID;
+    // Requirement 3: Enforce strict preview session verification.
+    // NEVER grant TRADE_DIRECTOR merely because workspace identifier matches a preview string.
+    const isInternalPreview = workspace.id === INTERNAL_TRADE_PREVIEW_WORKSPACE_ID;
     if (isInternalPreview) {
+      if (!isPlatformAdmin) {
+        return {
+          isEntitled: false,
+          status: 'NOT_ENTITLED',
+          tier: 'TRIAL',
+          defaultCurrency: 'USD',
+          effectiveRole: 'VIEWER',
+          isPlatformAdmin: false,
+          canManageSuppliers: false,
+          canCreatePurchaseOrders: false,
+          canApprovePurchaseOrders: false,
+          canManageQuotations: false,
+          canManageOrders: false,
+          canViewFinancials: false,
+          reason: 'Access to internal preview workspaces is strictly restricted to platform administrators.',
+        };
+      }
+
+      const previewToken = options?.previewToken || (context as any).previewToken;
+      const validation = await PreviewSessionService.validatePreviewSession(
+        previewToken,
+        workspace.id,
+        user.id
+      );
+
+      if (!validation.valid) {
+        return {
+          isEntitled: false,
+          status: validation.error === 'PREVIEW_SESSION_EXPIRED' ? 'EXPIRED' : 'NOT_ENTITLED',
+          tier: 'TRIAL',
+          defaultCurrency: 'USD',
+          effectiveRole: 'VIEWER',
+          isPlatformAdmin: true,
+          canManageSuppliers: false,
+          canCreatePurchaseOrders: false,
+          canApprovePurchaseOrders: false,
+          canManageQuotations: false,
+          canManageOrders: false,
+          canViewFinancials: false,
+          reason: `Internal preview session rejected: ${validation.error || 'Server-authorized session required'}.`,
+        };
+      }
+
+      // Check database entitlement for the internal preview workspace
+      const supabase = getPrivilegedSupabase();
+      const { data: entData, error: entError } = await supabase
+        .from('tenant_module_entitlements')
+        .select('status, tier, default_currency, expires_at')
+        .eq('organization_id', INTERNAL_PREVIEW_ORGANIZATION_ID)
+        .eq('workspace_id', INTERNAL_TRADE_PREVIEW_WORKSPACE_ID)
+        .eq('module_key', 'trade')
+        .maybeSingle();
+
+      if (entError || !entData || entData.status !== 'ACTIVE') {
+        return {
+          isEntitled: false,
+          status: 'NOT_ENTITLED',
+          tier: 'TRIAL',
+          defaultCurrency: 'USD',
+          effectiveRole: 'VIEWER',
+          isPlatformAdmin: true,
+          canManageSuppliers: false,
+          canCreatePurchaseOrders: false,
+          canApprovePurchaseOrders: false,
+          canManageQuotations: false,
+          canManageOrders: false,
+          canViewFinancials: false,
+          reason: 'Internal preview workspace lacks an active database entitlement record.',
+        };
+      }
+
       return {
         isEntitled: true,
         status: 'ACTIVE',
@@ -87,7 +165,7 @@ export class TradeEntitlementService {
         canManageQuotations: true,
         canManageOrders: true,
         canViewFinancials: true,
-        source: 'INTERNAL_PREVIEW',
+        source: 'DATABASE_VERIFIED',
       };
     }
 

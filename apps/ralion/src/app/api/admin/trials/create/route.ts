@@ -1,15 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyPlatformAdminRequest } from '@/lib/auth/adminAuth';
-import { TrialAccessService } from '@/lib/services/trial/trialAccess.service';
+import { TrialAccessService, TrialRateLimiter } from '@/lib/services/trial/trialAccess.service';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   const auth = await verifyPlatformAdminRequest(request);
-  if (!auth.authorized) {
+  if (!auth.authorized || !auth.user) {
     return NextResponse.json(
       { success: false, error: auth.error || 'Unauthorized: Platform administrator privilege required.' },
       { status: auth.statusCode || 403 }
+    );
+  }
+
+  // Rate limit check: max 10 code generations per minute per platform admin
+  const rateKey = auth.user.id;
+  const rateCheck = TrialRateLimiter.checkCreationLimit(rateKey, 10, 60000);
+  if (!rateCheck.allowed) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: `Rate limit exceeded: Too many code generations. Please retry after ${Math.ceil(rateCheck.retryAfterMs / 1000)} seconds.`,
+      },
+      { status: 429 }
     );
   }
 

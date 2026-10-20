@@ -3,6 +3,10 @@ import { verifyPlatformAdminRequest } from '@/lib/auth/adminAuth';
 import { getPrivilegedSupabase } from '@/lib/supabase/server';
 import { PROINSIGHT_ORGANIZATION_ID, PROINSIGHT_WORKSPACE_ID } from '@/lib/services/retail/retailEntitlement.service';
 import { TradeDatabaseService } from '@/lib/services/trade/tradeDatabase.service';
+import {
+  INTERNAL_RETAIL_PREVIEW_WORKSPACE_ID,
+  INTERNAL_TRADE_PREVIEW_WORKSPACE_ID,
+} from '@/lib/services/preview/previewSession.service';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,7 +63,7 @@ export async function GET(request: NextRequest) {
         totalSalesVolume,
       },
       previewAvailable: true,
-      previewWorkspaceId: 'ralion-internal-retail-preview-ws',
+      previewWorkspaceId: INTERNAL_RETAIL_PREVIEW_WORKSPACE_ID,
     };
 
     // 2. Fetch Ralion Trade status & Internal Preview Health
@@ -74,7 +78,7 @@ export async function GET(request: NextRequest) {
       label: 'Functional Internal Preview (Beta — Not Production Ready)',
       metrics: tradeOverview,
       previewAvailable: true,
-      previewWorkspaceId: 'ralion-internal-trade-preview-ws',
+      previewWorkspaceId: INTERNAL_TRADE_PREVIEW_WORKSPACE_ID,
     };
 
     return NextResponse.json({

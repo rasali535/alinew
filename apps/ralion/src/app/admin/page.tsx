@@ -639,7 +639,7 @@ export default function PlatformAdminPortal() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-zinc-500">Audited Test Workspace:</span>
-                      <span className="text-zinc-300 font-mono">ralion-internal-trade-preview-ws</span>
+                      <span className="text-zinc-300 font-mono text-[11px]">{productsData?.trade?.previewWorkspaceId || '20000000-0000-0000-0000-000000000002'}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-zinc-500">Simulated Modules:</span>
