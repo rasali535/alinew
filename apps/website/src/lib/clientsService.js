@@ -3,24 +3,30 @@
  * Enforces:
  * 1. Public client cards display ONLY official logos and verified year/years of completed work.
  * 2. Strict segregation: Confirmed Ras Ali Labs clients vs Ralion OS subscribers vs Demo users.
- * 3. Only verified clients with explicit publication authorization are exposed to public endpoints.
- * 4. Records lacking verified logos or project dates are held in 'NEEDS_REVIEW' / draft state.
+ * 3. Only database records that are verified, authorized, and actively published are returned.
+ * 4. Fail-closed: No localStorage persistence or fallback mock data in production retrieval.
+ * 5. Durable storage: Logo uploads use Supabase Storage; no base64 fallback.
  */
 
 import { supabase } from './supabase';
 
-export const VERIFIED_BASELINE_CLIENTS = [
+/**
+ * Discovered client candidates catalog (Reference only).
+ * All discovered clients are held in DRAFT or NEEDS_REVIEW in the database
+ * until explicitly authorized and approved by an administrator.
+ */
+export const DISCOVERED_CLIENT_CANDIDATES = [
   {
     id: 'c1000000-0000-0000-0000-000000000001',
     name: 'Pula Pitch',
     logo_url: '/assets/images/pula-pitch-logo.jpg',
     work_year: '2024',
     display_order: 1,
-    is_published: true,
+    is_published: false,
     verified_relationship: true,
-    authorized_logo_use: true,
-    status: 'PUBLISHED',
-    notes: '13-episode Botswana television series with lead videography, set design, pre-production and post-production.'
+    authorized_logo_use: false,
+    status: 'DRAFT',
+    notes: '13-episode Botswana television series with lead videography, set design, pre-production and post-production. Awaiting admin logo use signoff and publishing approval.'
   },
   {
     id: 'c1000000-0000-0000-0000-000000000002',
@@ -28,11 +34,11 @@ export const VERIFIED_BASELINE_CLIENTS = [
     logo_url: '/assets/images/melody-logo.jpg',
     work_year: '2015–2022',
     display_order: 2,
-    is_published: true,
+    is_published: false,
     verified_relationship: true,
-    authorized_logo_use: true,
-    status: 'PUBLISHED',
-    notes: 'Long-running gospel television production with music direction, sound engineering, rehearsal and performance planning.'
+    authorized_logo_use: false,
+    status: 'DRAFT',
+    notes: 'Long-running gospel television production with music direction, sound engineering, rehearsal and performance planning. Awaiting admin logo use signoff and publishing approval.'
   },
   {
     id: 'c1000000-0000-0000-0000-000000000003',
@@ -40,11 +46,11 @@ export const VERIFIED_BASELINE_CLIENTS = [
     logo_url: '/assets/images/pameltex-logo.png',
     work_year: '2023',
     display_order: 3,
-    is_published: true,
+    is_published: false,
     verified_relationship: true,
-    authorized_logo_use: true,
-    status: 'PUBLISHED',
-    notes: 'Industrial digital platform at pameltex.com, responsive corporate platform with product information architecture.'
+    authorized_logo_use: false,
+    status: 'DRAFT',
+    notes: 'Industrial digital platform at pameltex.com, responsive corporate platform with product information architecture. Awaiting admin logo use signoff and publishing approval.'
   },
   {
     id: 'c1000000-0000-0000-0000-000000000004',
@@ -52,11 +58,11 @@ export const VERIFIED_BASELINE_CLIENTS = [
     logo_url: '/assets/images/lebville-logo.png',
     work_year: '2024',
     display_order: 4,
-    is_published: true,
+    is_published: false,
     verified_relationship: true,
-    authorized_logo_use: true,
-    status: 'PUBLISHED',
-    notes: 'Fashion boutique storefront and responsive e-commerce platform at lebvilleboutique.com.'
+    authorized_logo_use: false,
+    status: 'DRAFT',
+    notes: 'Fashion boutique storefront and responsive e-commerce platform at lebvilleboutique.com. Awaiting admin logo use signoff and publishing approval.'
   },
   {
     id: 'c1000000-0000-0000-0000-000000000005',
@@ -64,11 +70,11 @@ export const VERIFIED_BASELINE_CLIENTS = [
     logo_url: '/assets/images/eagle-touch-logo.png',
     work_year: '2023–2024',
     display_order: 5,
-    is_published: true,
+    is_published: false,
     verified_relationship: true,
-    authorized_logo_use: true,
-    status: 'PUBLISHED',
-    notes: 'Victoria Falls travel and tourism website at eagletouchtours.com.'
+    authorized_logo_use: false,
+    status: 'DRAFT',
+    notes: 'Victoria Falls travel and tourism website at eagletouchtours.com. Awaiting admin logo use signoff and publishing approval.'
   },
   {
     id: 'c1000000-0000-0000-0000-000000000006',
@@ -76,11 +82,11 @@ export const VERIFIED_BASELINE_CLIENTS = [
     logo_url: '/assets/images/bb-travel-logo.jpg',
     work_year: '2023–2024',
     display_order: 6,
-    is_published: true,
+    is_published: false,
     verified_relationship: true,
-    authorized_logo_use: true,
-    status: 'PUBLISHED',
-    notes: 'Victoria Falls activities and travel services platform at bbtraveltours.com.'
+    authorized_logo_use: false,
+    status: 'DRAFT',
+    notes: 'Victoria Falls activities and travel services platform at bbtraveltours.com. Awaiting admin logo use signoff and publishing approval.'
   },
   {
     id: 'c1000000-0000-0000-0000-000000000007',
@@ -88,11 +94,11 @@ export const VERIFIED_BASELINE_CLIENTS = [
     logo_url: '/assets/images/peregrine-logo.png',
     work_year: '2024',
     display_order: 7,
-    is_published: true,
+    is_published: false,
     verified_relationship: true,
-    authorized_logo_use: true,
-    status: 'PUBLISHED',
-    notes: 'Tours and safari digital platform delivering travel services presentation and destination experiences.'
+    authorized_logo_use: false,
+    status: 'DRAFT',
+    notes: 'Tours and safari digital platform delivering travel services presentation and destination experiences. Awaiting admin logo use signoff and publishing approval.'
   },
   {
     id: 'c1000000-0000-0000-0000-000000000008',
@@ -108,84 +114,50 @@ export const VERIFIED_BASELINE_CLIENTS = [
   }
 ];
 
-const LOCAL_STORAGE_KEY = 'rasalilabs_clients_portfolio_store';
-
-function getLocalStore() {
-  if (typeof window === 'undefined') return [...VERIFIED_BASELINE_CLIENTS];
-  try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (!raw) {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(VERIFIED_BASELINE_CLIENTS));
-      return [...VERIFIED_BASELINE_CLIENTS];
-    }
-    return JSON.parse(raw);
-  } catch (err) {
-    return [...VERIFIED_BASELINE_CLIENTS];
-  }
-}
-
-function setLocalStore(clients) {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(clients));
-  } catch (err) {
-    console.warn('[ClientsService] Failed to persist to localStorage:', err);
-  }
-}
-
 /**
  * Fetch published, authorized clients for the public portfolio.
- * Public cards display ONLY logo and year.
+ * Strict fail-closed: Queries database only.
+ * No localStorage fallback, no automatic republishing of mock data.
  */
 export async function getPublishedClients() {
-  try {
-    const { data, error } = await supabase
-      .from('clients_portfolio')
-      .select('id, name, logo_url, work_year, display_order')
-      .eq('is_published', true)
-      .eq('authorized_logo_use', true)
-      .eq('status', 'PUBLISHED')
-      .order('display_order', { ascending: true });
+  const { data, error } = await supabase
+    .from('clients_portfolio')
+    .select('id, name, logo_url, work_year, display_order')
+    .eq('is_published', true)
+    .eq('authorized_logo_use', true)
+    .eq('verified_relationship', true)
+    .eq('status', 'PUBLISHED')
+    .order('display_order', { ascending: true });
 
-    if (error || !data || data.length === 0) {
-      // Fallback to verified local/baseline data
-      const local = getLocalStore().filter(
-        c => c.is_published && c.authorized_logo_use && c.status === 'PUBLISHED'
-      );
-      return local.sort((a, b) => a.display_order - b.display_order);
-    }
-
-    return data;
-  } catch (err) {
-    console.warn('[ClientsService] Remote query failed, using verified baseline:', err);
-    return getLocalStore()
-      .filter(c => c.is_published && c.authorized_logo_use && c.status === 'PUBLISHED')
-      .sort((a, b) => a.display_order - b.display_order);
+  if (error) {
+    console.error('[ClientsService] Database query error fetching published clients:', error);
+    throw new Error(`Database unavailable: ${error.message || 'Failed to fetch public clients'}`);
   }
+
+  return data || [];
 }
 
 /**
  * Fetch all client entries (drafts, review, published) for authorized administrators.
+ * Strict fail-closed: Queries database only.
  */
 export async function getAllClientsForAdmin() {
-  try {
-    const { data, error } = await supabase
-      .from('clients_portfolio')
-      .select('*')
-      .order('display_order', { ascending: true });
+  const { data, error } = await supabase
+    .from('clients_portfolio')
+    .select('*')
+    .order('display_order', { ascending: true });
 
-    if (error || !data || data.length === 0) {
-      return getLocalStore().sort((a, b) => a.display_order - b.display_order);
-    }
-
-    return data;
-  } catch (err) {
-    return getLocalStore().sort((a, b) => a.display_order - b.display_order);
+  if (error) {
+    console.error('[ClientsService] Database error fetching admin clients:', error);
+    throw new Error(`Database error: ${error.message || 'Failed to fetch clients list'}`);
   }
+
+  return data || [];
 }
 
 /**
  * Save / Create a new client entry.
+ * Direct database write. Reports actual database success or failure.
  */
 export async function createClientEntry(clientData) {
   const newClient = {
@@ -207,36 +179,28 @@ export async function createClientEntry(clientData) {
   if (!newClient.logo_url) throw new Error('Logo asset reference or URL is required.');
   if (!newClient.work_year) throw new Error('Verified year or year range is required.');
 
-  // Check if publishing without explicit authorization
+  // Strict invariant: cannot be published without explicit logo authorization
   if (newClient.is_published && !newClient.authorized_logo_use) {
     throw new Error('Public logo authorization must be confirmed before publishing.');
   }
 
-  try {
-    const { data, error } = await supabase
-      .from('clients_portfolio')
-      .insert(newClient)
-      .select()
-      .single();
+  const { data, error } = await supabase
+    .from('clients_portfolio')
+    .insert(newClient)
+    .select()
+    .single();
 
-    if (!error && data) {
-      const local = getLocalStore();
-      setLocalStore([...local, data]);
-      return data;
-    }
-  } catch (err) {
-    console.warn('[ClientsService] Remote insert failed, persisting locally:', err);
+  if (error) {
+    console.error('[ClientsService] Database error inserting client:', error);
+    throw new Error(`Failed to create client entry in database: ${error.message}`);
   }
 
-  // Local fallback
-  const local = getLocalStore();
-  const updated = [...local, newClient];
-  setLocalStore(updated);
-  return newClient;
+  return data;
 }
 
 /**
  * Update an existing client entry.
+ * Direct database update. Reports actual database success or failure.
  */
 export async function updateClientEntry(id, updates) {
   const payload = {
@@ -253,54 +217,45 @@ export async function updateClientEntry(id, updates) {
     payload.status = payload.is_published && payload.authorized_logo_use ? 'PUBLISHED' : (payload.status || 'DRAFT');
   }
 
-  try {
-    const { data, error } = await supabase
-      .from('clients_portfolio')
-      .update(payload)
-      .eq('id', id)
-      .select()
-      .single();
+  const { data, error } = await supabase
+    .from('clients_portfolio')
+    .update(payload)
+    .eq('id', id)
+    .select()
+    .single();
 
-    if (!error && data) {
-      const local = getLocalStore();
-      setLocalStore(local.map(c => (c.id === id ? data : c)));
-      return data;
-    }
-  } catch (err) {
-    console.warn('[ClientsService] Remote update failed, persisting locally:', err);
+  if (error) {
+    console.error('[ClientsService] Database error updating client:', error);
+    throw new Error(`Failed to update client entry in database: ${error.message}`);
   }
 
-  // Local fallback
-  const local = getLocalStore();
-  const updated = local.map(c => (c.id === id ? { ...c, ...payload } : c));
-  setLocalStore(updated);
-  return updated.find(c => c.id === id);
+  return data;
 }
 
 /**
  * Remove a client entry.
+ * Direct database delete. Reports actual database success or failure.
  */
 export async function deleteClientEntry(id) {
-  try {
-    const { error } = await supabase
-      .from('clients_portfolio')
-      .delete()
-      .eq('id', id);
+  const { error } = await supabase
+    .from('clients_portfolio')
+    .delete()
+    .eq('id', id);
 
-    if (error) console.warn('[ClientsService] Remote delete notice:', error);
-  } catch (err) {
-    console.warn('[ClientsService] Remote delete error:', err);
+  if (error) {
+    console.error('[ClientsService] Database error deleting client:', error);
+    throw new Error(`Failed to delete client entry from database: ${error.message}`);
   }
 
-  const local = getLocalStore();
-  setLocalStore(local.filter(c => c.id !== id));
   return true;
 }
 
 /**
  * Validate and upload a client logo image.
- * Supported formats: PNG, JPG, JPEG, SVG, WEBP
- * Maximum size: 5MB
+ * Uses durable Supabase Storage bucket 'client-logos'.
+ * Supported formats: PNG, JPG, JPEG, SVG, WEBP.
+ * Maximum size: 5MB.
+ * Fails closed on error: NO base64 data URL substitution.
  */
 export async function uploadClientLogo(file) {
   if (!file) throw new Error('No file provided.');
@@ -317,32 +272,29 @@ export async function uploadClientLogo(file) {
 
   const safeFileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
 
-  try {
-    const { data, error } = await supabase.storage
-      .from('client-logos')
-      .upload(`logos/${safeFileName}`, file, {
-        cacheControl: '3600',
-        upsert: false
-      });
+  const { data, error } = await supabase.storage
+    .from('client-logos')
+    .upload(`logos/${safeFileName}`, file, {
+      cacheControl: '3600',
+      upsert: false
+    });
 
-    if (!error && data?.path) {
-      const { data: publicUrlData } = supabase.storage
-        .from('client-logos')
-        .getPublicUrl(data.path);
-
-      if (publicUrlData?.publicUrl) {
-        return publicUrlData.publicUrl;
-      }
-    }
-  } catch (err) {
-    console.warn('[ClientsService] Storage upload failed, creating base64 data URL:', err);
+  if (error) {
+    console.error('[ClientsService] Storage upload failed:', error);
+    throw new Error(`Durable logo upload failed: ${error.message || 'Unable to store file'}`);
   }
 
-  // In-memory data URL fallback for local/offline preview
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error('Failed to read image file.'));
-    reader.readAsDataURL(file);
-  });
+  if (!data?.path) {
+    throw new Error('Storage upload failed: No storage object path returned.');
+  }
+
+  const { data: publicUrlData } = supabase.storage
+    .from('client-logos')
+    .getPublicUrl(data.path);
+
+  if (!publicUrlData?.publicUrl) {
+    throw new Error('Failed to resolve durable storage public URL for uploaded logo.');
+  }
+
+  return publicUrlData.publicUrl;
 }

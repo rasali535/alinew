@@ -60,7 +60,7 @@ const AdminClients = () => {
       setClients(data);
     } catch (err) {
       console.error('Failed to load admin clients:', err);
-      setErrorMsg('Failed to fetch clients from database.');
+      setErrorMsg(err.message || 'Failed to fetch clients from database.');
     } finally {
       setLoading(false);
     }
@@ -203,7 +203,7 @@ const AdminClients = () => {
       setSuccessMsg('Client entry removed successfully.');
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err) {
-      setErrorMsg('Failed to delete client entry.');
+      setErrorMsg(err.message || 'Failed to delete client entry.');
     }
   };
 

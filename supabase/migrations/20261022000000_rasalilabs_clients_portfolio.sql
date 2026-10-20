@@ -1,5 +1,5 @@
 -- Migration: 20261022000000_rasalilabs_clients_portfolio.sql
--- Description: Ras Ali Labs Clients Portfolio schema, Row Level Security, and verified client records.
+-- Description: Ras Ali Labs Clients Portfolio schema, Row Level Security, storage policies, and initial draft records.
 
 CREATE TABLE IF NOT EXISTS public.clients_portfolio (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -24,8 +24,12 @@ CREATE INDEX IF NOT EXISTS idx_clients_portfolio_published_order
 CREATE INDEX IF NOT EXISTS idx_clients_portfolio_status 
   ON public.clients_portfolio (status);
 
+-- Drop previous function signature if it took arguments to eliminate user-ID oracle attacks
+DROP FUNCTION IF EXISTS public.is_platform_admin(UUID);
+
 -- Helper security definer function to check platform admin status safely from RLS policies
-CREATE OR REPLACE FUNCTION public.is_platform_admin(check_user_id UUID DEFAULT auth.uid())
+-- Takes NO arguments; strictly checks auth.uid() to eliminate arbitrary user-ID oracle attacks
+CREATE OR REPLACE FUNCTION public.is_platform_admin()
 RETURNS BOOLEAN
 LANGUAGE sql
 STABLE
@@ -34,20 +38,20 @@ SET search_path = public
 AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.platform_admins
-    WHERE user_id = COALESCE(check_user_id, auth.uid())
+    WHERE user_id = auth.uid()
       AND status = 'ACTIVE'
   );
 $$;
 
 -- Harden function execution privileges: ANON must NEVER have execute on security definer functions
-REVOKE ALL ON FUNCTION public.is_platform_admin(UUID) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.is_platform_admin(UUID) TO authenticated, service_role;
+REVOKE ALL ON FUNCTION public.is_platform_admin() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.is_platform_admin() TO authenticated, service_role;
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.clients_portfolio ENABLE ROW LEVEL SECURITY;
 
 -- 1. Public Anonymous & Authenticated Read Policy:
--- Public can ONLY view published client records where authorized_logo_use is explicitly true.
+-- Public can ONLY view published client records where authorized_logo_use is explicitly true and relationship is verified.
 -- No draft, archived, or review records are exposed.
 DO $$
 BEGIN
@@ -79,7 +83,7 @@ BEGIN
       ON public.clients_portfolio
       FOR SELECT
       TO authenticated
-      USING (public.is_platform_admin(auth.uid()));
+      USING (public.is_platform_admin());
   END IF;
 END $$;
 
@@ -96,7 +100,7 @@ BEGIN
       ON public.clients_portfolio
       FOR INSERT
       TO authenticated
-      WITH CHECK (public.is_platform_admin(auth.uid()));
+      WITH CHECK (public.is_platform_admin());
   END IF;
 
   IF NOT EXISTS (
@@ -109,7 +113,7 @@ BEGIN
       ON public.clients_portfolio
       FOR UPDATE
       TO authenticated
-      USING (public.is_platform_admin(auth.uid()));
+      USING (public.is_platform_admin());
   END IF;
 
   IF NOT EXISTS (
@@ -122,7 +126,7 @@ BEGIN
       ON public.clients_portfolio
       FOR DELETE
       TO authenticated
-      USING (public.is_platform_admin(auth.uid()));
+      USING (public.is_platform_admin());
   END IF;
 END $$;
 
@@ -136,16 +140,83 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('client-logos', 'client-logos', true)
 ON CONFLICT (id) DO NOTHING;
 
--- Seed verified baseline clients
+-- Storage policies for 'client-logos' bucket:
+-- Public can read client logos; only verified platform admins can upload, replace, or delete.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables 
+    WHERE table_schema = 'storage' AND table_name = 'objects'
+  ) THEN
+    GRANT USAGE ON SCHEMA storage TO anon, authenticated;
+    GRANT SELECT ON TABLE storage.objects TO anon;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE storage.objects TO authenticated;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_policies 
+      WHERE schemaname = 'storage' 
+        AND tablename = 'objects' 
+        AND policyname = 'Public read client logos'
+    ) THEN
+      CREATE POLICY "Public read client logos"
+        ON storage.objects
+        FOR SELECT
+        TO anon, authenticated
+        USING (bucket_id = 'client-logos');
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_policies 
+      WHERE schemaname = 'storage' 
+        AND tablename = 'objects' 
+        AND policyname = 'Platform admins upload client logos'
+    ) THEN
+      CREATE POLICY "Platform admins upload client logos"
+        ON storage.objects
+        FOR INSERT
+        TO authenticated
+        WITH CHECK (bucket_id = 'client-logos' AND public.is_platform_admin());
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_policies 
+      WHERE schemaname = 'storage' 
+        AND tablename = 'objects' 
+        AND policyname = 'Platform admins update client logos'
+    ) THEN
+      CREATE POLICY "Platform admins update client logos"
+        ON storage.objects
+        FOR UPDATE
+        TO authenticated
+        USING (bucket_id = 'client-logos' AND public.is_platform_admin())
+        WITH CHECK (bucket_id = 'client-logos' AND public.is_platform_admin());
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_policies 
+      WHERE schemaname = 'storage' 
+        AND tablename = 'objects' 
+        AND policyname = 'Platform admins delete client logos'
+    ) THEN
+      CREATE POLICY "Platform admins delete client logos"
+        ON storage.objects
+        FOR DELETE
+        TO authenticated
+        USING (bucket_id = 'client-logos' AND public.is_platform_admin());
+    END IF;
+  END IF;
+END $$;
+
+-- Seed discovered clients: ALL initially DRAFT or NEEDS_REVIEW, unpublished, unauthorized pending administrative approval
 INSERT INTO public.clients_portfolio (id, name, logo_url, work_year, display_order, is_published, verified_relationship, authorized_logo_use, status, notes)
 VALUES
-  ('c1000000-0000-0000-0000-000000000001', 'Pula Pitch', '/assets/images/pula-pitch-logo.jpg', '2024', 1, true, true, true, 'PUBLISHED', '13-episode Botswana television series with lead videography, set design, pre-production and post-production.'),
-  ('c1000000-0000-0000-0000-000000000002', 'The Melody Gospel TV Show', '/assets/images/melody-logo.jpg', '2015–2022', 2, true, true, true, 'PUBLISHED', 'Long-running gospel television production with music direction, sound engineering, rehearsal and performance planning.'),
-  ('c1000000-0000-0000-0000-000000000003', 'Pameltex', '/assets/images/pameltex-logo.png', '2023', 3, true, true, true, 'PUBLISHED', 'Industrial digital platform at pameltex.com, responsive corporate platform with product information architecture.'),
-  ('c1000000-0000-0000-0000-000000000004', 'Lebville Boutique', '/assets/images/lebville-logo.png', '2024', 4, true, true, true, 'PUBLISHED', 'Fashion boutique storefront and responsive e-commerce platform at lebvilleboutique.com.'),
-  ('c1000000-0000-0000-0000-000000000005', 'Eagle Touch Tours', '/assets/images/eagle-touch-logo.png', '2023–2024', 5, true, true, true, 'PUBLISHED', 'Victoria Falls travel and tourism website at eagletouchtours.com.'),
-  ('c1000000-0000-0000-0000-000000000006', 'BB Travel Tours', '/assets/images/bb-travel-logo.jpg', '2023–2024', 6, true, true, true, 'PUBLISHED', 'Victoria Falls activities and travel services platform at bbtraveltours.com.'),
-  ('c1000000-0000-0000-0000-000000000007', 'Peregrine Tours and Safaris', '/assets/images/peregrine-logo.png', '2024', 7, true, true, true, 'PUBLISHED', 'Tours and safari digital platform delivering travel services presentation and destination experiences.'),
+  ('c1000000-0000-0000-0000-000000000001', 'Pula Pitch', '/assets/images/pula-pitch-logo.jpg', '2024', 1, false, true, false, 'DRAFT', '13-episode Botswana television series with lead videography, set design, pre-production and post-production. Awaiting admin logo use signoff and publishing approval.'),
+  ('c1000000-0000-0000-0000-000000000002', 'The Melody Gospel TV Show', '/assets/images/melody-logo.jpg', '2015–2022', 2, false, true, false, 'DRAFT', 'Long-running gospel television production with music direction, sound engineering, rehearsal and performance planning. Awaiting admin logo use signoff and publishing approval.'),
+  ('c1000000-0000-0000-0000-000000000003', 'Pameltex', '/assets/images/pameltex-logo.png', '2023', 3, false, true, false, 'DRAFT', 'Industrial digital platform at pameltex.com, responsive corporate platform with product information architecture. Awaiting admin logo use signoff and publishing approval.'),
+  ('c1000000-0000-0000-0000-000000000004', 'Lebville Boutique', '/assets/images/lebville-logo.png', '2024', 4, false, true, false, 'DRAFT', 'Fashion boutique storefront and responsive e-commerce platform at lebvilleboutique.com. Awaiting admin logo use signoff and publishing approval.'),
+  ('c1000000-0000-0000-0000-000000000005', 'Eagle Touch Tours', '/assets/images/eagle-touch-logo.png', '2023–2024', 5, false, true, false, 'DRAFT', 'Victoria Falls travel and tourism website at eagletouchtours.com. Awaiting admin logo use signoff and publishing approval.'),
+  ('c1000000-0000-0000-0000-000000000006', 'BB Travel Tours', '/assets/images/bb-travel-logo.jpg', '2023–2024', 6, false, true, false, 'DRAFT', 'Victoria Falls activities and travel services platform at bbtraveltours.com. Awaiting admin logo use signoff and publishing approval.'),
+  ('c1000000-0000-0000-0000-000000000007', 'Peregrine Tours and Safaris', '/assets/images/peregrine-logo.png', '2024', 7, false, true, false, 'DRAFT', 'Tours and safari digital platform delivering travel services presentation and destination experiences. Awaiting admin logo use signoff and publishing approval.'),
   ('c1000000-0000-0000-0000-000000000008', 'Safari Butler', '/assets/images/safari-butler-logo.jpg', 'Year Unverified', 8, false, true, false, 'NEEDS_REVIEW', 'Logo asset in repo; requires verification of completion date and public display authorization before publishing.')
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,

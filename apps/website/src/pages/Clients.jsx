@@ -1,38 +1,46 @@
 import React, { useState, useEffect } from 'react';
 import SEO from '../components/common/SEO';
 import { getPublishedClients } from '../lib/clientsService';
-import { Sparkles, Calendar, ShieldCheck } from 'lucide-react';
+import { Sparkles, Calendar, ShieldCheck, AlertCircle, RefreshCw } from 'lucide-react';
 
 const Clients = () => {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [failedLogos, setFailedLogos] = useState(new Set());
+
+  const loadClients = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await getPublishedClients();
+      setClients(data || []);
+    } catch (err) {
+      console.error('Failed to load published clients:', err);
+      // Fail closed: never display unverified or stale cached clients
+      setError('Unable to load client portfolio at this time. Please check your connection or try again later.');
+      setClients([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    let isMounted = true;
-    async function loadClients() {
-      try {
-        const data = await getPublishedClients();
-        if (isMounted) {
-          setClients(data);
-          setLoading(false);
-        }
-      } catch (err) {
-        console.error('Failed to load published clients:', err);
-        if (isMounted) setLoading(false);
-      }
-    }
     loadClients();
-    return () => {
-      isMounted = false;
-    };
   }, []);
+
+  const handleImageError = (clientId) => {
+    // Strictly do NOT substitute the Ras Ali Labs logo when a client logo fails to load.
+    // Track failed logos to avoid displaying broken or misleading imagery.
+    setFailedLogos((prev) => new Set([...prev, clientId]));
+  };
 
   return (
     <div className="pt-28 pb-24 bg-[#121212] text-white min-h-screen">
       <SEO
         title="Our Clients | Ras Ali Labs"
-        description="Explore the genuine organizations and trusted partners Ras Ali Labs has worked with across technology, television production, media, and digital platforms."
-        keywords="Ras Ali Labs clients, Botswana software clients, film production clients, enterprise technology partners Botswana, Pula Pitch, Melody Gospel, Pameltex, Lebville Boutique"
+        description="Explore verified client organizations Ras Ali Labs has partnered with across media production, enterprise software, and digital platform engineering."
+        keywords="Ras Ali Labs clients, Botswana software clients, film production clients, enterprise technology partners Botswana"
         canonical="https://rasalilabs.com/clients"
       />
 
@@ -64,39 +72,74 @@ const Clients = () => {
               </div>
             ))}
           </div>
+        ) : error ? (
+          /* Fail-Closed Error State */
+          <div className="bg-red-500/10 border border-red-500/25 rounded-3xl p-10 text-center max-w-xl mx-auto my-12 shadow-xl">
+            <AlertCircle className="mx-auto text-red-400 mb-4" size={36} />
+            <h2 className="text-xl font-bold text-white mb-2">Portfolio Temporarily Unavailable</h2>
+            <p className="text-white/60 text-sm mb-6 leading-relaxed">{error}</p>
+            <button
+              onClick={loadClients}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition-colors"
+            >
+              <RefreshCw size={14} /> Retry Connection
+            </button>
+          </div>
+        ) : clients.length === 0 ? (
+          /* Empty / Scheduled Verification State */
+          <div className="bg-[#181818] border border-white/10 rounded-3xl p-12 text-center max-w-xl mx-auto my-12">
+            <ShieldCheck className="mx-auto text-brand-gold/70 mb-4" size={40} />
+            <h2 className="text-xl font-bold text-white mb-2">Client Portfolio Verification</h2>
+            <p className="text-white/60 text-sm leading-relaxed">
+              Client records and logo usage authorizations are currently undergoing scheduled administrative review.
+              Verified partner entries will be published here upon administrative signoff.
+            </p>
+          </div>
         ) : (
-          /* Client Logos Grid */
+          /* Public Client Cards: STRICTLY displays ONLY official logo and verified year label */
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
-            {clients.map((client) => (
-              <div
-                key={client.id}
-                className="group relative bg-[#181818] hover:bg-[#1f1f1f] border border-white/10 hover:border-brand-gold/50 rounded-3xl p-8 flex flex-col items-center justify-between h-72 transition-all duration-300 shadow-xl hover:shadow-2xl hover:shadow-brand-gold/5 transform hover:-translate-y-1.5"
-              >
-                {/* Logo Display Canvas: strictly preserves logo aspect ratio with object-contain */}
-                <div className="w-full flex-1 flex items-center justify-center p-4">
-                  <div className="w-full h-32 flex items-center justify-center rounded-2xl bg-black/20 p-3 group-hover:bg-black/30 transition-colors">
-                    <img
-                      src={client.logo_url}
-                      alt={`${client.name} Official Logo`}
-                      loading="lazy"
-                      className="max-h-24 max-w-full object-contain filter grayscale group-hover:grayscale-0 transition-all duration-300 drop-shadow-md"
-                      onError={(e) => {
-                        e.target.onerror = null;
-                        e.target.src = '/assets/images/logo.png';
-                      }}
-                    />
+            {clients.map((client) => {
+              const hasFailed = failedLogos.has(client.id);
+
+              return (
+                <div
+                  key={client.id}
+                  className="group relative bg-[#181818] hover:bg-[#1f1f1f] border border-white/10 hover:border-brand-gold/50 rounded-3xl p-8 flex flex-col items-center justify-between h-72 transition-all duration-300 shadow-xl hover:shadow-2xl hover:shadow-brand-gold/5 transform hover:-translate-y-1.5"
+                >
+                  {/* Logo Display Canvas: strictly preserves logo aspect ratio with object-contain */}
+                  <div className="w-full flex-1 flex items-center justify-center p-4">
+                    <div className="w-full h-32 flex items-center justify-center rounded-2xl bg-black/20 p-3 group-hover:bg-black/30 transition-colors">
+                      {hasFailed ? (
+                        <div className="text-center px-2">
+                          <p className="text-xs font-medium text-white/50 tracking-wide uppercase">
+                            {client.name}
+                          </p>
+                          <span className="text-[10px] text-white/30 font-mono block mt-1">
+                            [Logo asset unavailable]
+                          </span>
+                        </div>
+                      ) : (
+                        <img
+                          src={client.logo_url}
+                          alt={`${client.name} Official Logo`}
+                          loading="lazy"
+                          className="max-h-24 max-w-full object-contain filter grayscale group-hover:grayscale-0 transition-all duration-300 drop-shadow-md"
+                          onError={() => handleImageError(client.id)}
+                        />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Verified Year / Year Range beneath logo */}
+                  <div className="pt-4 border-t border-white/10 w-full flex items-center justify-center">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold tracking-wider uppercase text-white/70 group-hover:text-brand-gold transition-colors font-mono">
+                      <Calendar size={13} className="text-brand-gold/70 group-hover:text-brand-gold" />
+                      {client.work_year}
+                    </span>
                   </div>
                 </div>
-
-                {/* Verified Year / Year Range beneath logo */}
-                <div className="pt-4 border-t border-white/10 w-full flex items-center justify-center">
-                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold tracking-wider uppercase text-white/70 group-hover:text-brand-gold transition-colors font-mono">
-                    <Calendar size={13} className="text-brand-gold/70 group-hover:text-brand-gold" />
-                    {client.work_year}
-                  </span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
