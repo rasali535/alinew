@@ -304,8 +304,17 @@ function extractPreviewToken(): string | null {
     const urlParams = new URLSearchParams(window.location.search);
     const queryToken = urlParams.get('token') || urlParams.get('preview_token');
     if (queryToken && queryToken.trim()) {
-      try { sessionStorage.setItem('ralion_preview_session_token', queryToken.trim()); } catch {}
-      return queryToken.trim();
+      const cleanToken = queryToken.trim();
+      try { sessionStorage.setItem('ralion_preview_session_token', cleanToken); } catch {}
+      // Anti-Leak: Strip preview token from browser URL bar and history to prevent exposure in logs/referrers
+      if (typeof window !== 'undefined' && window.history?.replaceState) {
+        urlParams.delete('token');
+        urlParams.delete('preview_token');
+        const cleanQuery = urlParams.toString();
+        const cleanUrl = window.location.pathname + (cleanQuery ? `?${cleanQuery}` : '') + window.location.hash;
+        window.history.replaceState(null, '', cleanUrl);
+      }
+      return cleanToken;
     }
 
     const stored = sessionStorage.getItem('ralion_preview_session_token');

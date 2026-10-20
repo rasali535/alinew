@@ -90,6 +90,18 @@ async function runVerification() {
     previewServiceContent.includes('PREVIEW_SESSION_DURATION_MS = 60 * 60 * 1000'),
     'Preview session targets dedicated sandbox workspace with strict expiration'
   );
+  assert(
+    serverAuthContent.includes('PREVIEW_WORKSPACE_MISMATCH') &&
+    serverAuthContent.includes('PREVIEW_ORGANIZATION_MISMATCH'),
+    'Server strictly rejects combining valid preview token with mismatched workspace or organization'
+  );
+  const apiConfigPath = path.join(ralionRoot, 'src', 'lib', 'api-config.ts');
+  const apiConfigContent = fs.readFileSync(apiConfigPath, 'utf8');
+  assert(
+    apiConfigContent.includes('window.history?.replaceState') &&
+    apiConfigContent.includes("urlParams.delete('token')"),
+    'Preview session token sanitized from browser URL bar and history on load'
+  );
 
   // -------------------------------------------------------------------------
   // 3. Authenticated Proinsight owner -> correct Retail workspace
@@ -198,8 +210,7 @@ async function runVerification() {
   // 8. All Retail subpages -> no repeated 401 responses
   // -------------------------------------------------------------------------
   console.log(cyan('\n8. Testing All Retail Subpages API Token & Header Forwarding...'));
-  const apiConfigPath = path.join(ralionRoot, 'src', 'lib', 'api-config.ts');
-  const apiConfigContent = fs.readFileSync(apiConfigPath, 'utf8');
+  // apiConfigContent already read above
 
   assert(
     apiConfigContent.includes('authFetch') &&

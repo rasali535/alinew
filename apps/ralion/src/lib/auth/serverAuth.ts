@@ -375,12 +375,27 @@ export async function resolveRalionAuthContext(
         !dbSession.revoked_at &&
         new Date(dbSession.expires_at).getTime() > Date.now()
       ) {
-        verifiedPreviewSession = dbSession;
-        // Server selects intended internal workspace from authorized record,
-        // ignoring client-controlled overrides or binding to the preview workspace if none provided.
-        if (!requestedWorkspaceId || requestedWorkspaceId === dbSession.workspace_id) {
-          requestedWorkspaceId = dbSession.workspace_id;
+        // Anti-Tampering: Reject attempts to combine a valid preview token with a different organization or workspace
+        if (requestedWorkspaceId && requestedWorkspaceId !== dbSession.workspace_id) {
+          return {
+            status: 'FORBIDDEN',
+            context: null,
+            errorCode: 'PREVIEW_WORKSPACE_MISMATCH',
+            errorMessage: 'Preview session token cannot be combined with a different workspace.',
+            httpStatus: 403,
+          };
         }
+        if (requestedOrgId && requestedOrgId !== dbSession.organization_id) {
+          return {
+            status: 'FORBIDDEN',
+            context: null,
+            errorCode: 'PREVIEW_ORGANIZATION_MISMATCH',
+            errorMessage: 'Preview session token cannot be combined with a different organization.',
+            httpStatus: 403,
+          };
+        }
+        verifiedPreviewSession = dbSession;
+        requestedWorkspaceId = dbSession.workspace_id;
       }
     } catch (previewErr: any) {
       console.warn('[ServerAuth] Preview session verification check warning:', previewErr?.message);
