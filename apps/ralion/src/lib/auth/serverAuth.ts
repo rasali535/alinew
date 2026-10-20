@@ -316,7 +316,7 @@ export async function resolveRalionAuthContext(
   const requestedWorkspaceRaw = request.headers.get('x-workspace-id');
   const requestedOrgRaw = request.headers.get('x-organization-id');
   let requestedWorkspaceId = requestedWorkspaceRaw ? canonicalUuid(requestedWorkspaceRaw) : null;
-  const requestedOrgId = requestedOrgRaw ? canonicalUuid(requestedOrgRaw) : null;
+  let requestedOrgId = requestedOrgRaw ? canonicalUuid(requestedOrgRaw) : null;
 
   if (requestedWorkspaceRaw && !requestedWorkspaceId) {
     return {
