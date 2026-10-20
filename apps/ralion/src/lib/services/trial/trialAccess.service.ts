@@ -60,6 +60,44 @@ export interface ConvertTrialParams {
   notes?: string;
 }
 
+export class TrialRateLimiter {
+  private static redemptionAttempts: Map<string, { count: number; resetAt: number }> = new Map();
+  private static creationAttempts: Map<string, { count: number; resetAt: number }> = new Map();
+
+  static checkRedemptionLimit(key: string, maxAttempts = 5, windowMs = 60000): { allowed: boolean; retryAfterMs: number } {
+    const now = Date.now();
+    const entry = this.redemptionAttempts.get(key);
+    if (!entry || entry.resetAt <= now) {
+      this.redemptionAttempts.set(key, { count: 1, resetAt: now + windowMs });
+      return { allowed: true, retryAfterMs: 0 };
+    }
+    if (entry.count >= maxAttempts) {
+      return { allowed: false, retryAfterMs: entry.resetAt - now };
+    }
+    entry.count += 1;
+    return { allowed: true, retryAfterMs: 0 };
+  }
+
+  static checkCreationLimit(key: string, maxAttempts = 10, windowMs = 60000): { allowed: boolean; retryAfterMs: number } {
+    const now = Date.now();
+    const entry = this.creationAttempts.get(key);
+    if (!entry || entry.resetAt <= now) {
+      this.creationAttempts.set(key, { count: 1, resetAt: now + windowMs });
+      return { allowed: true, retryAfterMs: 0 };
+    }
+    if (entry.count >= maxAttempts) {
+      return { allowed: false, retryAfterMs: entry.resetAt - now };
+    }
+    entry.count += 1;
+    return { allowed: true, retryAfterMs: 0 };
+  }
+
+  static reset() {
+    this.redemptionAttempts.clear();
+    this.creationAttempts.clear();
+  }
+}
+
 export class TrialAccessService {
   /**
    * Generates a cryptographically random access code format: RT-XXXX-XXXX-XXXX

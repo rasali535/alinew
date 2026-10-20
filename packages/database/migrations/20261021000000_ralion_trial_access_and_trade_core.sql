@@ -52,6 +52,28 @@ CREATE INDEX IF NOT EXISTS idx_trial_redemptions_ws ON public.trial_code_redempt
 CREATE INDEX IF NOT EXISTS idx_trial_redemptions_user ON public.trial_code_redemptions(user_id);
 CREATE INDEX IF NOT EXISTS idx_trial_redemptions_code ON public.trial_code_redemptions(code_id);
 
+-- Admin Preview Sessions: Short-lived server-authorized preview sessions for platform administrators
+CREATE TABLE IF NOT EXISTS public.admin_preview_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_token_hash TEXT NOT NULL UNIQUE,
+    admin_user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    admin_email TEXT NOT NULL,
+    organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+    workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+    product TEXT NOT NULL CHECK (product IN ('retail', 'trade')),
+    status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'EXPIRED', 'REVOKED')),
+    expires_at TIMESTAMPTZ NOT NULL,
+    revoked_at TIMESTAMPTZ,
+    ip_address TEXT,
+    user_agent TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_preview_sessions_token_hash ON public.admin_preview_sessions(session_token_hash);
+CREATE INDEX IF NOT EXISTS idx_preview_sessions_admin ON public.admin_preview_sessions(admin_user_id);
+CREATE INDEX IF NOT EXISTS idx_preview_sessions_ws ON public.admin_preview_sessions(workspace_id);
+
 -- Add expires_at column to tenant_module_entitlements if not present
 ALTER TABLE public.tenant_module_entitlements ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
 
@@ -242,6 +264,21 @@ BEGIN
     -- 8. Provision entitlements for all eligible products atomically
     FOREACH v_product IN ARRAY v_code.eligible_products
     LOOP
+        -- Safety Rule: Code redemption cannot overwrite an existing active paid entitlement (PILOT, STANDARD, PROFESSIONAL, ENTERPRISE)
+        IF EXISTS (
+            SELECT 1 FROM public.tenant_module_entitlements
+            WHERE workspace_id = p_workspace_id
+              AND module_key = v_product
+              AND status = 'ACTIVE'
+              AND tier IN ('PILOT', 'STANDARD', 'PROFESSIONAL', 'ENTERPRISE')
+              AND (expires_at IS NULL OR expires_at > NOW())
+        ) THEN
+            RAISE EXCEPTION 'CANNOT_OVERWRITE_ACTIVE_PAID_ENTITLEMENT: Workspace % already has an active % entitlement for %.',
+                p_workspace_id,
+                (SELECT tier FROM public.tenant_module_entitlements WHERE workspace_id = p_workspace_id AND module_key = v_product),
+                v_product;
+        END IF;
+
         INSERT INTO public.tenant_module_entitlements (
             organization_id, workspace_id, module_key, status, tier, default_currency, expires_at, created_at, updated_at
         ) VALUES (
@@ -273,6 +310,7 @@ $$;
 
 ALTER TABLE public.trial_access_codes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.trial_code_redemptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.admin_preview_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.trade_purchase_orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.trade_po_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.trade_quotations ENABLE ROW LEVEL SECURITY;
@@ -284,6 +322,7 @@ DECLARE
     tbls text[] := ARRAY[
         'trial_access_codes',
         'trial_code_redemptions',
+        'admin_preview_sessions',
         'trade_purchase_orders',
         'trade_po_items',
         'trade_quotations',

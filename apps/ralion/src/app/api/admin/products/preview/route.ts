@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyPlatformAdminRequest } from '@/lib/auth/adminAuth';
-import { getPrivilegedSupabase } from '@/lib/supabase/server';
-import { PROINSIGHT_ORGANIZATION_ID } from '@/lib/services/retail/retailEntitlement.service';
+import { PreviewSessionService } from '@/lib/services/preview/previewSession.service';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   const auth = await verifyPlatformAdminRequest(request);
-  if (!auth.authorized) {
+  if (!auth.authorized || !auth.user) {
     return NextResponse.json(
       { success: false, error: auth.error || 'Unauthorized: Platform administrator privilege required.' },
       { status: auth.statusCode || 403 }
@@ -27,42 +26,42 @@ export async function POST(request: NextRequest) {
 
     const justification = reason && typeof reason === 'string' && reason.trim().length >= 5
       ? reason.trim()
-      : 'Platform administrator operational inspection from Command Centre';
+      : `Platform administrator operational inspection for Ralion ${product}`;
 
-    const supabase = getPrivilegedSupabase();
+    const ipAddress = request.headers.get('x-forwarded-for') || undefined;
+    const userAgent = request.headers.get('user-agent') || undefined;
 
-    // Isolated internal test workspaces
-    const previewWorkspaceId = product === 'retail'
-      ? 'ralion-internal-retail-preview-ws'
-      : 'ralion-internal-trade-preview-ws';
-
-    const previewUrl = product === 'retail'
-      ? `/ralion/retail?preview=internal&ws=${previewWorkspaceId}`
-      : `/industry/trade?preview=internal&ws=${previewWorkspaceId}`;
-
-    // Append to immutable platform admin audit log
-    await supabase.from('audit_logs').insert({
-      organization_id: PROINSIGHT_ORGANIZATION_ID,
-      user_id: auth.user!.id,
-      action: `ADMIN_PREVIEW_${product.toUpperCase()}`,
-      module: 'PLATFORM_ADMIN',
-      metadata: {
-        product,
-        previewWorkspaceId,
-        previewUrl,
-        reason: justification,
-        adminEmail: auth.user!.email,
-        timestamp: new Date().toISOString(),
-      },
+    // Create server-authorized preview session bound to this platform admin and dedicated preview workspace
+    const sessionResult = await PreviewSessionService.createPreviewSession({
+      adminUserId: auth.user.id,
+      adminEmail: auth.user.email,
+      product,
+      reason: justification,
+      ipAddress,
+      userAgent,
     });
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       product,
-      previewWorkspaceId,
-      previewUrl,
+      sessionId: sessionResult.sessionId,
+      sessionToken: sessionResult.sessionToken,
+      previewWorkspaceId: sessionResult.workspaceId,
+      previewUrl: sessionResult.previewUrl,
+      expiresAt: sessionResult.expiresAt,
       message: `Audited preview session generated for Ralion ${product === 'retail' ? 'Retail' : 'Trade'}.`,
     });
+
+    // Set secure HTTP-only cookie for session persistence across preview navigation
+    response.cookies.set('ralion_preview_session', sessionResult.sessionToken, {
+      httpOnly: true,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 3600, // 1 hour
+      secure: process.env.NODE_ENV === 'production',
+    });
+
+    return response;
   } catch (err: any) {
     console.error('[AdminProductsPreviewAPI] Error:', err);
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
