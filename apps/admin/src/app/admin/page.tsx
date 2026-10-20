@@ -71,7 +71,7 @@ interface MetricsData {
 
 export default function PlatformAdminPortal() {
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'customers' | 'creatives' | 'social' | 'billing' | 'system' | 'audit'
+    'overview' | 'customers' | 'creatives' | 'social' | 'billing' | 'system' | 'audit' | 'clients'
   >('overview');
 
   const [metrics, setMetrics] = useState<MetricsData | null>(null);
@@ -387,6 +387,7 @@ export default function PlatformAdminPortal() {
           { id: 'billing', label: 'Billing & Credits', icon: CreditCard },
           { id: 'system', label: 'System Health', icon: Server },
           { id: 'audit', label: `Audit Trail (${auditLogs.length})`, icon: FileText },
+          { id: 'clients', label: 'Clients Portfolio', icon: Building2 },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -848,6 +849,58 @@ export default function PlatformAdminPortal() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* CLIENTS PORTFOLIO TAB */}
+        {activeTab === 'clients' && (
+          <div className="space-y-6">
+            <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div>
+                <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-amber-400" /> Ras Ali Labs Corporate Clients Portfolio
+                </h3>
+                <p className="text-xs text-zinc-400 mt-1">
+                  Manage verified organizational clients, official logos, verified engagement years, and public display status.
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <a
+                  href="/clients"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200 border border-zinc-700/50 flex items-center gap-2 transition"
+                >
+                  <Eye className="w-3.5 h-3.5 text-zinc-400" /> View Public Page
+                </a>
+                <a
+                  href="/admin/clients"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold flex items-center gap-2 shadow-lg shadow-amber-500/20 transition"
+                >
+                  <Sliders className="w-3.5 h-3.5" /> Open Full Clients Manager
+                </a>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800">
+                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Published Portfolio</span>
+                <div className="text-2xl font-black text-white mt-1">7 Clients</div>
+                <span className="text-[11px] text-emerald-400 font-medium">Verified & Live at /clients</span>
+              </div>
+              <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800">
+                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Pending Review</span>
+                <div className="text-2xl font-black text-amber-400 mt-1">1 Entry</div>
+                <span className="text-[11px] text-zinc-400">Safari Butler (Awaiting Year Verification)</span>
+              </div>
+              <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800">
+                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Data Governance</span>
+                <div className="text-2xl font-black text-indigo-400 mt-1">Enforced</div>
+                <span className="text-[11px] text-zinc-400">Strict RLS & Authorized Logo Checks</span>
+              </div>
             </div>
           </div>
         )}

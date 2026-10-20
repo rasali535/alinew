@@ -180,6 +180,13 @@ const Header = () => {
                   >
                     <UserCheck size={14} className="text-emerald-400" /> Account Settings
                   </Link>
+                  <Link
+                    to="/admin/clients"
+                    onClick={() => setIsUserDropdownOpen(false)}
+                    className="flex items-center gap-2 px-3 py-2 text-xs text-white/80 hover:text-white hover:bg-white/10 rounded-xl transition-colors"
+                  >
+                    <Building2 size={14} className="text-brand-gold" /> Clients Admin
+                  </Link>
                   <button
                     onClick={() => {
                       signOut();

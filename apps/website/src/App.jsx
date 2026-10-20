@@ -39,6 +39,8 @@ import MusicAudioService from './pages/MusicAudioService';
 import AIAutomationService from './pages/AIAutomationService';
 import Work from './pages/Work';
 import ProjectDetails from './pages/ProjectDetails';
+import Clients from './pages/Clients';
+import AdminClients from './pages/AdminClients';
 import AILabs from './pages/AILabs';
 import Booking from './pages/Booking';
 import Contact from './pages/Contact';
@@ -100,6 +102,8 @@ function App() {
                 <Route path="/services/ai-automation" element={<AIAutomationService />} />
                 <Route path="/work" element={<Work />} />
                 <Route path="/work/:id" element={<ProjectDetails />} />
+                <Route path="/clients" element={<Clients />} />
+                <Route path="/admin/clients" element={<AdminClients />} />
                 <Route path="/contact" element={<Contact />} />
                 <Route path="/request-demo" element={<RequestDemo />} />
                 <Route path="/booking" element={<Booking />} />

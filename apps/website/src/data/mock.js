@@ -32,6 +32,7 @@ export const navLinks = [
   { name: 'Ralion OS', href: '/products/ralion-os' },
   { name: 'Mari AI', href: '/mari-ai' },
   { name: 'Our Work', href: '/work' },
+  { name: 'Our Clients', href: '/clients' },
   { name: 'About', href: '/about' },
   { name: 'Contact', href: '/contact' }
 ];
