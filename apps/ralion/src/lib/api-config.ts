@@ -435,7 +435,12 @@ export async function authFetch(pathOrUrl: string, init?: RequestInit): Promise<
       try {
         const cloned = res.clone();
         const body = await cloned.json();
-        if (body?.code === 'AUTH_TOKEN_INVALID') {
+        if (
+          body?.code === 'AUTH_TOKEN_INVALID' ||
+          body?.code === 'AUTH_TOKEN_MISSING' ||
+          body?.error === 'AUTH_TOKEN_INVALID' ||
+          body?.error === 'AUTH_TOKEN_MISSING'
+        ) {
           shouldRefresh = true;
         }
       } catch {}

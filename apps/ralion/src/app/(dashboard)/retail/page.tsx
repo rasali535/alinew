@@ -19,6 +19,7 @@ import {
   PlusCircle,
 } from 'lucide-react';
 import { RetailNavHeader } from './components/RetailNavHeader';
+import { RetailAccessErrorCard, RetailErrorState } from './components/RetailAccessErrorCard';
 import { RetailFinancialMetrics } from '@ralion/database';
 import { authFetch } from '@/lib/api-config';
 
@@ -27,19 +28,38 @@ export default function RetailDashboardPage() {
   const [role, setRole] = useState('Store Owner');
   const [storeName, setStoreName] = useState('Proinsight Hardware & Building Supplies');
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [errorState, setErrorState] = useState<RetailErrorState | null>(null);
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      setError(null);
+      setErrorState(null);
       const res = await authFetch('/api/retail/dashboard');
       if (!res.ok) {
-        if (res.status === 403) {
-          setError('This workspace is not entitled to access Ralion Retail OS. Exclusive pilot access is reserved for Proinsight.');
+        let errJson: any = null;
+        try { errJson = await res.json(); } catch {}
+        if (res.status === 401) {
+          setErrorState({
+            status: 401,
+            code: errJson?.code || errJson?.error || 'AUTH_TOKEN_MISSING',
+            message: errJson?.message || 'Authentication required to access Ralion Retail OS.',
+          });
           return;
         }
-        throw new Error(`Failed to load retail data: HTTP ${res.status}`);
+        if (res.status === 403) {
+          setErrorState({
+            status: 403,
+            code: errJson?.code || errJson?.error || 'RETAIL_MODULE_NOT_ENTITLED',
+            message: errJson?.message || 'This workspace is not entitled to access Ralion Retail OS. Exclusive pilot access is reserved for Proinsight.',
+          });
+          return;
+        }
+        setErrorState({
+          status: res.status,
+          code: errJson?.code || 'FETCH_ERROR',
+          message: errJson?.message || errJson?.error || `Failed to load retail data: HTTP ${res.status}`,
+        });
+        return;
       }
       const data = await res.json();
       if (data.success) {
@@ -51,10 +71,18 @@ export default function RetailDashboardPage() {
           setStoreName(data.settings.storeName);
         }
       } else {
-        setError(data.error || 'Failed to load dashboard metrics.');
+        setErrorState({
+          status: 400,
+          code: data.error || 'DASHBOARD_LOAD_FAILED',
+          message: data.message || data.error || 'Failed to load dashboard metrics.',
+        });
       }
     } catch (e: any) {
-      setError(e.message || 'Error connecting to retail services.');
+      setErrorState({
+        status: 500,
+        code: 'NETWORK_ERROR',
+        message: e.message || 'Error connecting to retail services.',
+      });
     } finally {
       setLoading(false);
     }
@@ -86,25 +114,11 @@ export default function RetailDashboardPage() {
     );
   }
 
-  if (error) {
+  if (errorState) {
     return (
       <div className="flex-1 flex flex-col bg-zinc-950 text-zinc-100 min-h-screen">
         <RetailNavHeader role={role} storeName={storeName} onRefresh={fetchDashboardData} />
-        <div className="flex-1 flex items-center justify-center p-8">
-          <div className="max-w-md w-full bg-zinc-900 border border-red-500/30 rounded-2xl p-6 text-center shadow-xl">
-            <div className="w-12 h-12 rounded-full bg-red-500/10 text-red-400 flex items-center justify-center mx-auto mb-4">
-              <AlertTriangle className="w-6 h-6" />
-            </div>
-            <h2 className="text-lg font-semibold text-zinc-100 mb-2">Access Restricted</h2>
-            <p className="text-sm text-zinc-400 mb-6">{error}</p>
-            <button
-              onClick={fetchDashboardData}
-              className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium transition-colors"
-            >
-              Retry Verification
-            </button>
-          </div>
-        </div>
+        <RetailAccessErrorCard error={errorState} onRetry={fetchDashboardData} />
       </div>
     );
   }

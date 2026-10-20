@@ -18,6 +18,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { RetailNavHeader } from '../components/RetailNavHeader';
+import { RetailAccessErrorCard, RetailErrorState } from '../components/RetailAccessErrorCard';
 import { authFetch } from '@/lib/api-config';
 
 interface Supplier {
@@ -69,6 +70,7 @@ export default function RetailPurchasingPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorState, setErrorState] = useState<RetailErrorState | null>(null);
   const [search, setSearch] = useState('');
 
   // Modals
@@ -103,11 +105,23 @@ export default function RetailPurchasingPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
+      setErrorState(null);
       const [resOrders, resSuppliers, resProducts] = await Promise.all([
         authFetch('/api/retail/purchasing/orders'),
         authFetch('/api/retail/suppliers'),
         authFetch('/api/retail/products'),
       ]);
+
+      if (!resOrders.ok) {
+        let errJson: any = null;
+        try { errJson = await resOrders.json(); } catch {}
+        setErrorState({
+          status: resOrders.status,
+          code: errJson?.code || errJson?.error || (resOrders.status === 401 ? 'AUTH_TOKEN_MISSING' : 'FETCH_ERROR'),
+          message: errJson?.message || errJson?.error || `Failed to load purchasing orders: HTTP ${resOrders.status}`,
+        });
+        return;
+      }
 
       const dataOrders = await resOrders.json();
       const dataSuppliers = await resSuppliers.json();
@@ -116,8 +130,13 @@ export default function RetailPurchasingPage() {
       if (dataOrders.success) setOrders(dataOrders.orders || []);
       if (dataSuppliers.success) setSuppliers(dataSuppliers.suppliers || []);
       if (dataProducts.success) setProducts(dataProducts.products || []);
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to fetch purchasing data', e);
+      setErrorState({
+        status: 500,
+        code: 'NETWORK_ERROR',
+        message: e.message || 'Error connecting to retail purchasing services.',
+      });
     } finally {
       setLoading(false);
     }
@@ -243,6 +262,15 @@ export default function RetailPurchasingPage() {
       setReceivingLoading(false);
     }
   };
+
+  if (errorState) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
+        <RetailNavHeader onRefresh={fetchData} />
+        <RetailAccessErrorCard error={errorState} onRetry={fetchData} />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">

@@ -20,6 +20,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { RetailNavHeader } from '../components/RetailNavHeader';
+import { RetailAccessErrorCard, RetailErrorState } from '../components/RetailAccessErrorCard';
 import { authFetch } from '@/lib/api-config';
 
 interface Expense {
@@ -38,6 +39,7 @@ interface Expense {
 export default function RetailExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorState, setErrorState] = useState<RetailErrorState | null>(null);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
 
@@ -58,13 +60,35 @@ export default function RetailExpensesPage() {
   const fetchExpenses = async () => {
     try {
       setLoading(true);
+      setErrorState(null);
       const res = await authFetch('/api/retail/expenses');
+      if (!res.ok) {
+        let errJson: any = null;
+        try { errJson = await res.json(); } catch {}
+        setErrorState({
+          status: res.status,
+          code: errJson?.code || errJson?.error || (res.status === 401 ? 'AUTH_TOKEN_MISSING' : 'FETCH_ERROR'),
+          message: errJson?.message || errJson?.error || `Failed to load operating expenses: HTTP ${res.status}`,
+        });
+        return;
+      }
       const data = await res.json();
       if (data.success) {
         setExpenses(data.expenses || []);
+      } else {
+        setErrorState({
+          status: 400,
+          code: data.error || 'LOAD_EXPENSES_FAILED',
+          message: data.message || data.error || 'Failed to load expenses.',
+        });
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to fetch expenses', e);
+      setErrorState({
+        status: 500,
+        code: 'NETWORK_ERROR',
+        message: e.message || 'Error connecting to retail expenses services.',
+      });
     } finally {
       setLoading(false);
     }
@@ -127,6 +151,15 @@ export default function RetailExpensesPage() {
     const matchesCategory = selectedCategory === 'all' || e.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
+
+  if (errorState) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
+        <RetailNavHeader onRefresh={fetchExpenses} />
+        <RetailAccessErrorCard error={errorState} onRetry={fetchExpenses} />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">

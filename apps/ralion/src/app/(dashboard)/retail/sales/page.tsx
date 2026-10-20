@@ -17,6 +17,7 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 import { RetailNavHeader } from '../components/RetailNavHeader';
+import { RetailAccessErrorCard, RetailErrorState } from '../components/RetailAccessErrorCard';
 import { authFetch } from '@/lib/api-config';
 
 interface SaleItem {
@@ -49,6 +50,7 @@ interface Sale {
 export default function RetailSalesPage() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorState, setErrorState] = useState<RetailErrorState | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [paymentFilter, setPaymentFilter] = useState('all');
@@ -63,13 +65,35 @@ export default function RetailSalesPage() {
   const fetchSales = async () => {
     try {
       setLoading(true);
+      setErrorState(null);
       const res = await authFetch('/api/retail/sales');
+      if (!res.ok) {
+        let errJson: any = null;
+        try { errJson = await res.json(); } catch {}
+        setErrorState({
+          status: res.status,
+          code: errJson?.code || errJson?.error || (res.status === 401 ? 'AUTH_TOKEN_MISSING' : 'FETCH_ERROR'),
+          message: errJson?.message || errJson?.error || `Failed to load sales register: HTTP ${res.status}`,
+        });
+        return;
+      }
       const data = await res.json();
       if (data.success) {
         setSales(data.sales || []);
+      } else {
+        setErrorState({
+          status: 400,
+          code: data.error || 'LOAD_SALES_FAILED',
+          message: data.message || data.error || 'Failed to load sales.',
+        });
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to fetch sales', e);
+      setErrorState({
+        status: 500,
+        code: 'NETWORK_ERROR',
+        message: e.message || 'Error connecting to retail sales services.',
+      });
     } finally {
       setLoading(false);
     }
@@ -103,6 +127,15 @@ export default function RetailSalesPage() {
   const handlePrint = () => {
     window.print();
   };
+
+  if (errorState) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
+        <RetailNavHeader onRefresh={fetchSales} />
+        <RetailAccessErrorCard error={errorState} onRetry={fetchSales} />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
