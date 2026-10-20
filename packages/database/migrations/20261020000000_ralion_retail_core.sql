@@ -595,6 +595,21 @@ BEGIN
         v_product_name := COALESCE(v_item->>'product_name', 'Item');
         v_sku := COALESCE(v_item->>'sku', '');
 
+        -- Server-Side Invariant: Validate positive quantity
+        IF v_quantity <= 0 OR v_quantity IS NULL THEN
+            RAISE EXCEPTION 'INVALID_QUANTITY: Item quantity must be greater than zero for product % (SKU %)',
+                v_product_name, v_sku;
+        END IF;
+
+        -- Server-Side Invariant: Validate product belongs to this workspace
+        IF NOT EXISTS (
+            SELECT 1 FROM public.retail_products
+            WHERE id = v_product_id AND workspace_id = p_workspace_id
+        ) THEN
+            RAISE EXCEPTION 'PRODUCT_NOT_IN_WORKSPACE: Product % does not belong to workspace %',
+                v_product_id, p_workspace_id;
+        END IF;
+
         -- Acquire exclusive row-level lock on stock level for this product in this workspace
         SELECT id, quantity_on_hand INTO v_stock_id, v_current_stock
         FROM public.retail_stock_levels

@@ -35,6 +35,16 @@ export const RetailNavHeader: React.FC<RetailNavHeaderProps> = ({
   const pathname = usePathname();
   const [loadingDemo, setLoadingDemo] = useState(false);
   const [demoMessage, setDemoMessage] = useState<string | null>(null);
+  const [isAdminInspection, setIsAdminInspection] = useState(false);
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const isParam = urlParams.get('admin_inspect') === 'true';
+      const isCookie = document.cookie.includes('ralion_admin_retail_inspect=true');
+      setIsAdminInspection(isParam || isCookie);
+    }
+  }, []);
 
   const navLinks = [
     { label: 'Overview', href: '/ralion/retail', icon: <LayoutDashboard className="w-4 h-4" /> },
@@ -69,6 +79,26 @@ export const RetailNavHeader: React.FC<RetailNavHeaderProps> = ({
 
   return (
     <div className="bg-zinc-900/90 border-b border-zinc-800 sticky top-0 z-30 backdrop-blur-md">
+      {/* Platform Administrator Inspection Banner */}
+      {isAdminInspection && (
+        <div className="bg-indigo-950/95 border-b border-indigo-700/60 px-6 py-2 flex flex-wrap items-center justify-between gap-3 text-xs text-indigo-200">
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-bold border border-indigo-500/30 text-[10px]">
+              🛡️ PLATFORM ADMIN INSPECTION
+            </span>
+            <span>
+              Audited operational inspection session for Proinsight Hardware Workspace (Immutable audit logging active).
+            </span>
+          </div>
+          <a
+            href="/admin"
+            className="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-[11px] transition-colors"
+          >
+            Exit Inspection → Admin Command Centre
+          </a>
+        </div>
+      )}
+
       {/* Top Bar */}
       <div className="px-6 py-3 flex flex-wrap items-center justify-between gap-4 border-b border-zinc-800/60">
         <div className="flex items-center gap-3">
