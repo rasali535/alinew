@@ -17,8 +17,8 @@ const Clients = () => {
       setClients(data || []);
     } catch (err) {
       console.error('Failed to load published clients:', err);
-      // Fail closed: never display unverified or stale cached clients
-      setError('Unable to load client portfolio at this time. Please check your connection or try again later.');
+      // Strictly surface database connection problems; never silently treat as empty
+      setError(err.message || 'Database connection error: Unable to load client portfolio at this time.');
       setClients([]);
     } finally {
       setLoading(false);
@@ -73,11 +73,11 @@ const Clients = () => {
             ))}
           </div>
         ) : error ? (
-          /* Fail-Closed Error State */
+          /* Fail-Closed Database Error State: Clearly reported rather than silently treated as empty */
           <div className="bg-red-500/10 border border-red-500/25 rounded-3xl p-10 text-center max-w-xl mx-auto my-12 shadow-xl">
             <AlertCircle className="mx-auto text-red-400 mb-4" size={36} />
-            <h2 className="text-xl font-bold text-white mb-2">Portfolio Temporarily Unavailable</h2>
-            <p className="text-white/60 text-sm mb-6 leading-relaxed">{error}</p>
+            <h2 className="text-xl font-bold text-white mb-2">Portfolio Database Error</h2>
+            <p className="text-white/60 text-sm mb-6 leading-relaxed font-mono text-xs">{error}</p>
             <button
               onClick={loadClients}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition-colors"
@@ -86,7 +86,7 @@ const Clients = () => {
             </button>
           </div>
         ) : clients.length === 0 ? (
-          /* Empty / Scheduled Verification State */
+          /* Legitimate Empty / Scheduled Verification State (DB reachable, but 0 published clients) */
           <div className="bg-[#181818] border border-white/10 rounded-3xl p-12 text-center max-w-xl mx-auto my-12">
             <ShieldCheck className="mx-auto text-brand-gold/70 mb-4" size={40} />
             <h2 className="text-xl font-bold text-white mb-2">Client Portfolio Verification</h2>

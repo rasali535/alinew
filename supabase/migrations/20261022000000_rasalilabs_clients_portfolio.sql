@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS public.clients_portfolio (
 -- Indexes for efficient ordering and status lookups
 CREATE INDEX IF NOT EXISTS idx_clients_portfolio_published_order 
   ON public.clients_portfolio (display_order ASC) 
-  WHERE is_published = true AND authorized_logo_use = true;
+  WHERE is_published = true AND authorized_logo_use = true AND verified_relationship = true;
 
 CREATE INDEX IF NOT EXISTS idx_clients_portfolio_status 
   ON public.clients_portfolio (status);
@@ -51,22 +51,25 @@ GRANT EXECUTE ON FUNCTION public.is_platform_admin() TO authenticated, service_r
 ALTER TABLE public.clients_portfolio ENABLE ROW LEVEL SECURITY;
 
 -- 1. Public Anonymous & Authenticated Read Policy:
--- Public can ONLY view published client records where authorized_logo_use is explicitly true and relationship is verified.
--- No draft, archived, or review records are exposed.
+-- Public can ONLY view published client records where authorized_logo_use is explicitly true,
+-- the client relationship is verified, and the record is PUBLISHED.
+-- No draft, archived, unverified, or review records are exposed.
 DO $$
 BEGIN
-  IF NOT EXISTS (
+  IF EXISTS (
     SELECT 1 FROM pg_policies 
     WHERE schemaname = 'public' 
       AND tablename = 'clients_portfolio' 
       AND policyname = 'Public read published authorized clients'
   ) THEN
-    CREATE POLICY "Public read published authorized clients"
-      ON public.clients_portfolio
-      FOR SELECT
-      TO anon, authenticated
-      USING (is_published = true AND authorized_logo_use = true AND status = 'PUBLISHED');
+    DROP POLICY "Public read published authorized clients" ON public.clients_portfolio;
   END IF;
+
+  CREATE POLICY "Public read published authorized clients"
+    ON public.clients_portfolio
+    FOR SELECT
+    TO anon, authenticated
+    USING (is_published = true AND authorized_logo_use = true AND verified_relationship = true AND status = 'PUBLISHED');
 END $$;
 
 -- 2. Platform Admin Read Policy:

@@ -120,6 +120,10 @@ export const DISCOVERED_CLIENT_CANDIDATES = [
  * No localStorage fallback, no automatic republishing of mock data.
  */
 export async function getPublishedClients() {
+  if (!supabase || typeof supabase.from !== 'function') {
+    throw new Error('Database connection unconfigured: Supabase client unavailable.');
+  }
+
   const { data, error } = await supabase
     .from('clients_portfolio')
     .select('id, name, logo_url, work_year, display_order')
@@ -131,7 +135,7 @@ export async function getPublishedClients() {
 
   if (error) {
     console.error('[ClientsService] Database query error fetching published clients:', error);
-    throw new Error(`Database unavailable: ${error.message || 'Failed to fetch public clients'}`);
+    throw new Error(`Database query error: ${error.message || 'Failed to fetch public clients'}`);
   }
 
   return data || [];

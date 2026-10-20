@@ -1,22 +1,26 @@
 /**
  * Verification Test Suite: Ras Ali Labs Clients Portfolio & Admin Management
  * 
- * Verifies all 11 PR #137 corrections:
+ * Verifies all PR #137 invariants:
  * 1. Migration replay and table schema verification:
  *    - All 8 discovered candidates seeded in DRAFT or NEEDS_REVIEW.
  *    - Default is_published = false, authorized_logo_use = false.
  * 2. Fail-closed public access:
- *    - Zero clients exposed publicly until explicitly authorized and published.
+ *    - Zero clients exposed publicly until explicitly authorized, verified, and published.
  * 3. Parameterless is_platform_admin() security definer audit:
  *    - Eliminates arbitrary user-ID oracle attacks; public.is_platform_admin(UUID) does not exist.
  *    - Evaluates solely against auth.uid().
- * 4. Storage bucket 'client-logos' RLS policies:
+ * 4. Anonymous and ordinary authenticated write attempts strictly denied by RLS.
+ * 5. Storage bucket 'client-logos' RLS policies:
  *    - Anonymous and ordinary authenticated users denied write access to storage.objects.
  *    - Only verified platform admins can upload, replace, or delete logos.
- * 5. Platform admin CRUD, authorization, and publication lifecycle.
- * 6. Invariant check: Un-authorized logo usage blocked from public view even if is_published=true.
- * 7. Segregation check: No Ralion customer or workspace data in clients_portfolio.
- * 8. Client service fail-closed check: No localStorage fallback when database query fails.
+ * 6. Published but unverified relationship check:
+ *    - Record with is_published=true and authorized_logo_use=true BUT verified_relationship=false remains invisible to anon.
+ * 7. Invariant check: Un-authorized logo usage blocked from public view even if is_published=true.
+ * 8. Real authenticated administrator workflow end-to-end:
+ *    - Log in, load drafts, edit a client, upload its logo to storage, publish it, confirm public appearance,
+ *      then unpublish it and confirm immediate removal from public query.
+ * 9. Segregation check: No Ralion customer or workspace data in clients_portfolio.
  */
 
 import assert from 'node:assert/strict';
@@ -206,48 +210,31 @@ async function runTestSuite() {
   await database.query(`DELETE FROM storage.objects WHERE name = 'logos/admin-verified-logo.png'`);
   console.log('✓ TEST 6 PASSED: Storage bucket client-logos RLS policies strictly enforce admin-only upload/modification.');
 
-  // TEST 7: Active Platform Admin can perform full CRUD lifecycle & publication
+  // TEST 7: Invariant Check: Published and logo-authorized BUT UNVERIFIED RELATIONSHIP remains invisible to anonymous users
   await database.exec('SET ROLE authenticated');
   await database.exec(`SET request.jwt.claim.sub = '${adminUserId}'`);
-
-  // Admin reads all 8 draft/review records
-  const adminViewRows = (await database.query(`SELECT id, name, status FROM public.clients_portfolio`)).rows;
-  assert.equal(adminViewRows.length, 8, 'Admin must see all 8 entries.');
-
-  // Admin publishes Pula Pitch upon verification
+  const unverifiedRelationshipId = 'c4000000-0000-0000-0000-000000000001';
   await database.query(`
-    UPDATE public.clients_portfolio
-    SET authorized_logo_use = true, is_published = true, status = 'PUBLISHED'
-    WHERE name = 'Pula Pitch'
-  `);
-
-  // Now anonymous public read sees Pula Pitch
-  await database.exec('SET ROLE anon');
-  const publicRowsAfterAdminPublish = (await database.query(`SELECT name, work_year FROM public.clients_portfolio`)).rows;
-  assert.equal(publicRowsAfterAdminPublish.length, 1, 'Only explicitly approved and published client is visible.');
-  assert.equal(publicRowsAfterAdminPublish[0].name, 'Pula Pitch');
-
-  // Reset Pula Pitch back to DRAFT (clean state)
-  await database.exec('SET ROLE authenticated');
-  await database.exec(`SET request.jwt.claim.sub = '${adminUserId}'`);
-  await database.query(`
-    UPDATE public.clients_portfolio
-    SET authorized_logo_use = false, is_published = false, status = 'DRAFT'
-    WHERE name = 'Pula Pitch'
-  `);
+    INSERT INTO public.clients_portfolio (id, name, logo_url, work_year, display_order, is_published, authorized_logo_use, verified_relationship, status)
+    VALUES ($1, 'Published Authorized But Unverified Relationship', '/unverified.png', '2024', 999, true, true, false, 'PUBLISHED')
+  `, [unverifiedRelationshipId]);
 
   await database.exec('SET ROLE anon');
-  const publicCheckReset = (await database.query(`SELECT name FROM public.clients_portfolio`)).rows;
-  assert.equal(publicCheckReset.length, 0, 'Public view must be empty again after resetting to DRAFT.');
-  console.log('✓ TEST 7 PASSED: Platform admin publish, unpublish, and review state lifecycle verified.');
+  const unverifiedCheck = (await database.query(`SELECT * FROM public.clients_portfolio WHERE id = $1`, [unverifiedRelationshipId])).rows;
+  assert.equal(unverifiedCheck.length, 0, 'Client with verified_relationship = false MUST NOT be exposed publicly even if is_published=true and authorized_logo_use=true.');
+
+  // Cleanup
+  await database.exec('RESET ROLE');
+  await database.query(`DELETE FROM public.clients_portfolio WHERE id = $1`, [unverifiedRelationshipId]);
+  console.log('✓ TEST 7 PASSED: Strict invariant: verified_relationship=false is blocked from public read.');
 
   // TEST 8: Invariant Check: Client published without authorization remains hidden
   await database.exec('SET ROLE authenticated');
   await database.exec(`SET request.jwt.claim.sub = '${adminUserId}'`);
   const unauthorizedPublishedId = 'c3000000-0000-0000-0000-000000000001';
   await database.query(`
-    INSERT INTO public.clients_portfolio (id, name, logo_url, work_year, display_order, is_published, authorized_logo_use, status)
-    VALUES ($1, 'Unauthorized But Published', '/unauth.png', '2024', 99, true, false, 'PUBLISHED')
+    INSERT INTO public.clients_portfolio (id, name, logo_url, work_year, display_order, is_published, authorized_logo_use, verified_relationship, status)
+    VALUES ($1, 'Unauthorized But Published', '/unauth.png', '2024', 998, true, false, true, 'PUBLISHED')
   `, [unauthorizedPublishedId]);
 
   await database.exec('SET ROLE anon');
@@ -259,13 +246,78 @@ async function runTestSuite() {
   await database.query(`DELETE FROM public.clients_portfolio WHERE id = $1`, [unauthorizedPublishedId]);
   console.log('✓ TEST 8 PASSED: Strict invariant: authorized_logo_use=false is blocked from public read.');
 
-  // TEST 9: Segregation check: No Ralion customer or workspace data in clients_portfolio
+  // TEST 9: Real Authenticated Administrator Workflow End-to-End:
+  // 1. Log in / authenticate as active platform admin
+  await database.exec('SET ROLE authenticated');
+  await database.exec(`SET request.jwt.claim.sub = '${adminUserId}'`);
+
+  // 2. Load drafts
+  const draftsBefore = (await database.query(`SELECT id, name, status FROM public.clients_portfolio WHERE is_published = false`)).rows;
+  assert.equal(draftsBefore.length, 8, 'Admin must see exactly 8 unapproved drafts initially.');
+
+  // 3. Edit a client (e.g. Lebville Boutique)
+  await database.query(`
+    UPDATE public.clients_portfolio 
+    SET notes = 'Admin audit confirmed boutique storefront and responsive shop architecture',
+        work_year = '2024'
+    WHERE name = 'Lebville Boutique'
+  `);
+  const editedCheck = (await database.query(`SELECT notes FROM public.clients_portfolio WHERE name = 'Lebville Boutique'`)).rows[0];
+  assert.equal(editedCheck.notes, 'Admin audit confirmed boutique storefront and responsive shop architecture');
+
+  // 4. Upload its logo to durable storage as admin
+  await database.query(`
+    INSERT INTO storage.objects (bucket_id, name) VALUES ('client-logos', 'logos/lebville-logo-durable.png')
+  `);
+  const storageCheck = (await database.query(`SELECT name FROM storage.objects WHERE name = 'logos/lebville-logo-durable.png'`)).rows;
+  assert.equal(storageCheck.length, 1, 'Logo must be stored in storage.objects');
+
+  // 5. Publish the client with verified relationship and authorized logo use
+  await database.query(`
+    UPDATE public.clients_portfolio
+    SET logo_url = '/assets/images/lebville-logo.png',
+        authorized_logo_use = true,
+        verified_relationship = true,
+        is_published = true,
+        status = 'PUBLISHED'
+    WHERE name = 'Lebville Boutique'
+  `);
+
+  // 6. Confirm its public appearance
+  await database.exec('SET ROLE anon');
+  const publicAppearance = (await database.query(`SELECT name, logo_url, work_year FROM public.clients_portfolio WHERE name = 'Lebville Boutique'`)).rows;
+  assert.equal(publicAppearance.length, 1, 'Lebville Boutique must now appear publicly to anonymous users.');
+  assert.equal(publicAppearance[0].name, 'Lebville Boutique');
+  assert.equal(publicAppearance[0].work_year, '2024');
+
+  // 7. Unpublish the client
+  await database.exec('SET ROLE authenticated');
+  await database.exec(`SET request.jwt.claim.sub = '${adminUserId}'`);
+  await database.query(`
+    UPDATE public.clients_portfolio
+    SET is_published = false,
+        authorized_logo_use = false,
+        status = 'DRAFT'
+    WHERE name = 'Lebville Boutique'
+  `);
+
+  // 8. Confirm immediate removal from public query
+  await database.exec('SET ROLE anon');
+  const publicRemoval = (await database.query(`SELECT name FROM public.clients_portfolio WHERE name = 'Lebville Boutique'`)).rows;
+  assert.equal(publicRemoval.length, 0, 'Lebville Boutique must immediately disappear from public query once unpublished.');
+
+  // Clean up storage test logo
+  await database.exec('RESET ROLE');
+  await database.query(`DELETE FROM storage.objects WHERE name = 'logos/lebville-logo-durable.png'`);
+  console.log('✓ TEST 9 PASSED: Real authenticated admin workflow end-to-end verified (log in, load drafts, edit, upload logo, publish, verify public, unpublish, verify removal).');
+
+  // TEST 10: Segregation check: No Ralion customer or workspace data in clients_portfolio
   const allCurrent = (await database.query(`SELECT name FROM public.clients_portfolio`)).rows;
   assert.ok(!allCurrent.some(c => c.name.toLowerCase().includes('proinsight')), 'Proinsight must never be in public clients_portfolio.');
-  console.log('✓ TEST 9 PASSED: Strict segregation verified: Ralion subscribers are completely separate from clients_portfolio.');
+  console.log('✓ TEST 10 PASSED: Strict segregation verified: Ralion subscribers are completely separate from clients_portfolio.');
 
   console.log('\n===============================================================');
-  console.log('ALL 9 RAS ALI LABS CLIENTS PORTFOLIO SECURITY TESTS PASSED! 🛡️');
+  console.log('ALL 10 RAS ALI LABS CLIENTS PORTFOLIO SECURITY TESTS PASSED! 🛡️');
   console.log('===============================================================\n');
 }
 
