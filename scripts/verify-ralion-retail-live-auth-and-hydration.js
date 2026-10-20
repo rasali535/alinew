@@ -95,12 +95,29 @@ async function runVerification() {
     serverAuthContent.includes('PREVIEW_ORGANIZATION_MISMATCH'),
     'Server strictly rejects combining valid preview token with mismatched workspace or organization'
   );
+  const previewRoutePath = path.join(ralionRoot, 'src', 'app', 'api', 'admin', 'products', 'preview', 'route.ts');
+  const previewRouteContent = fs.readFileSync(previewRoutePath, 'utf8');
+  assert(
+    !previewRouteContent.includes('sessionToken: sessionResult.sessionToken') &&
+    previewRouteContent.includes("response.cookies.set('ralion_preview_session'"),
+    'Preview route omits raw token from JSON response and sets secure HttpOnly cookie'
+  );
+  assert(
+    !previewServiceContent.includes('&token=${rawSessionToken}') &&
+    previewServiceContent.includes('ws=${workspaceId}'),
+    'PreviewSessionService omits raw session tokens from preview URLs'
+  );
   const apiConfigPath = path.join(ralionRoot, 'src', 'lib', 'api-config.ts');
   const apiConfigContent = fs.readFileSync(apiConfigPath, 'utf8');
   assert(
-    apiConfigContent.includes('window.history?.replaceState') &&
-    apiConfigContent.includes("urlParams.delete('token')"),
-    'Preview session token sanitized from browser URL bar and history on load'
+    !apiConfigContent.includes('ralion_preview_session_token') &&
+    !apiConfigContent.includes('extractPreviewToken'),
+    'api-config does not extract or cache preview tokens in client sessionStorage'
+  );
+  assert(
+    !serverAuthContent.includes("previewToken = request.nextUrl") &&
+    serverAuthContent.includes("request.cookies.get('ralion_preview_session')"),
+    'serverAuth strictly validates preview tokens from HttpOnly cookies and rejects URL tokens'
   );
 
   // -------------------------------------------------------------------------
@@ -214,9 +231,8 @@ async function runVerification() {
 
   assert(
     apiConfigContent.includes('authFetch') &&
-    apiConfigContent.includes('getRalionAuthHeaders') &&
-    apiConfigContent.includes('extractPreviewToken'),
-    'authFetch dynamically resolves Ralion base URL (/ralion) and attaches bearer & preview headers'
+    apiConfigContent.includes('getRalionAuthHeaders'),
+    'authFetch dynamically resolves Ralion base URL (/ralion) and forwards bearer auth and HttpOnly credentials'
   );
 
   let allPagesUseAuthFetch = true;

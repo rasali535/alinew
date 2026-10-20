@@ -341,13 +341,12 @@ export async function resolveRalionAuthContext(
     requestedWorkspaceId = null;
   }
 
-  // Extract optional preview session token from headers, cookies, or query parameters
+  // Extract optional preview session token strictly from secure HttpOnly cookies (or server-to-server headers)
   const previewToken =
-    request.headers.get('x-preview-token') ||
-    request.headers.get('x-ralion-preview-token') ||
     request.cookies.get('ralion_preview_session')?.value ||
     request.cookies.get('ralion_preview_token')?.value ||
-    request.nextUrl?.searchParams?.get('token') ||
+    request.headers.get('x-preview-token') ||
+    request.headers.get('x-ralion-preview-token') ||
     null;
 
   // If a preview session token is presented by an authorized platform administrator,
