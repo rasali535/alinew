@@ -235,7 +235,7 @@ export default function TradeInternalPreviewPage() {
         <div>
           <div className="flex items-center gap-2">
             <Building2 className="w-6 h-6 text-indigo-400" />
-            <h1 className="text-2xl font-black">Ralion Trade OS</h1>
+            <h1 className="text-2xl font-black">Trade</h1>
             <span className="px-2 py-0.5 rounded-full border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 text-[10px] font-bold">
               B2B Wholesale & Procurement
             </span>

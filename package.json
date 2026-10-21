@@ -28,6 +28,7 @@
     "test:retail:contract": "node ./scripts/verify-retail-contract-alignment.js",
     "test:retail:live-auth": "node ./scripts/verify-ralion-retail-live-auth-and-hydration.js",
     "test:retail:integration": "node ./scripts/test-retail-database-integration.js",
+    "test:navigation": "node ./scripts/verify-navigation-and-admin-restructure.js",
     "test:admin:retail": "node ./scripts/verify-admin-retail-command-centre.js",
     "test:canonical-page-resolution": "node ./scripts/verify-canonical-page-resolution-and-deduplication.js",
     "test:mari-widget": "node ./scripts/verify-mari-widget-contract.js",

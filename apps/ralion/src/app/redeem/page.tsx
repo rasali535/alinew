@@ -70,7 +70,7 @@ export default function DemoCodeRedeemPage() {
           </div>
           <h1 className="text-2xl font-black tracking-tight text-white">Redeem Product Demo Access</h1>
           <p className="text-xs text-zinc-400">
-            Enter your time-limited demo access code to unlock Ralion Retail OS and Ralion Trade OS trial entitlements.
+            Enter your time-limited demo access code to unlock Retail and Trade trial entitlements.
           </p>
         </div>
 

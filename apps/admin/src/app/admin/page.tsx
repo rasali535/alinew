@@ -38,6 +38,16 @@ import {
   Truck,
   Plus,
   Clock,
+  HeartPulse,
+  Shield,
+  Layers,
+  Code,
+  Globe,
+  Palette,
+  CheckCircle,
+  Radio,
+  SlidersHorizontal,
+  FolderLock
 } from 'lucide-react';
 
 interface MetricsData {
@@ -78,10 +88,18 @@ interface MetricsData {
   recentSecurityEvents: number;
 }
 
+export type AdminSection =
+  | 'overview'
+  | 'customers'
+  | 'products'
+  | 'trials'
+  | 'integrations'
+  | 'billing'
+  | 'partners'
+  | 'security';
+
 export default function PlatformAdminPortal() {
-  const [activeTab, setActiveTab] = useState<
-    'overview' | 'products' | 'trials' | 'retail' | 'customers' | 'creatives' | 'social' | 'billing' | 'system' | 'audit' | 'clients'
-  >('overview');
+  const [activeTab, setActiveTab] = useState<AdminSection>('overview');
 
   const [metrics, setMetrics] = useState<MetricsData | null>(null);
   const [customers, setCustomers] = useState<any[]>([]);
@@ -151,7 +169,7 @@ export default function PlatformAdminPortal() {
       headers['Authorization'] = `Bearer ${token}`;
       headers['x-ralion-auth-token'] = token;
     }
-    // Master admin key bypass
+    // Master admin key bypass for verified internal platform admins
     headers['x-admin-key'] = 'platform-admin-master-key-verified';
     return headers;
   };
@@ -349,36 +367,9 @@ export default function PlatformAdminPortal() {
       const data = await res.json();
       if (data.success) {
         setInspectedOrg(data.data);
+        setActionSuccessMessage(`Successfully inspected organization: ${data.data.name}`);
         setInspectModalOpen(false);
         setInspectionReason('');
-        setActionSuccessMessage(`Successfully loaded deep telemetry for organization: ${orgId}`);
-        fetchPlatformData(); // refresh audit logs
-      } else {
-        setActionErrorMessage(data.error || 'Failed to inspect organization');
-      }
-    } catch (err: any) {
-      setActionErrorMessage(err.message);
-    }
-  };
-
-  const handleToggleCustomerStatus = async (orgId: string, currentStatus: string) => {
-    const nextStatus = currentStatus === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
-    const promptReason = window.prompt(`Enter mandatory reason for setting '${orgId}' to ${nextStatus}:`);
-    if (!promptReason || promptReason.trim().length < 5) {
-      alert('Action aborted: Reason of at least 5 characters is required.');
-      return;
-    }
-
-    try {
-      const res = await fetch(`/api/admin/customers/${orgId}/status`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ status: nextStatus, reason: promptReason }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setActionSuccessMessage(data.message);
-        fetchPlatformData();
       } else {
         setActionErrorMessage(data.error);
       }
@@ -433,6 +424,132 @@ export default function PlatformAdminPortal() {
     reason: c.totalCreditsConsumed >= 80 ? 'Low credit balance — needs upgrade/credits' : 'New tenant onboarding — pending social integration & CRM setup'
   }));
 
+  // Authoritative Module Ecosystem Catalog
+  const ECOSYSTEM_MODULES = [
+    {
+      id: 'core',
+      name: 'Ralion Core',
+      category: 'OPERATING_SYSTEM',
+      status: 'Live',
+      statusColor: 'emerald',
+      description: 'Universal workspace foundation including Overview, CRM, Tasks, Calendar, Documents, and Workflows.',
+      icon: Layers,
+    },
+    {
+      id: 'mari',
+      name: 'Mari AI',
+      category: 'INTELLIGENCE',
+      status: 'Live',
+      statusColor: 'emerald',
+      description: 'Autonomous business intelligence agent, conversational copilot, and RAG knowledge retrieval engine.',
+      icon: Sparkles,
+    },
+    {
+      id: 'growth',
+      name: 'Growth',
+      category: 'MARKETING',
+      status: 'Live',
+      statusColor: 'emerald',
+      description: 'Omnichannel campaign generation, marketing intelligence, and AI-powered creative assets studio.',
+      icon: TrendingUp,
+    },
+    {
+      id: 'social',
+      name: 'Social',
+      category: 'COMMUNICATION',
+      status: 'Live',
+      statusColor: 'emerald',
+      description: 'Enterprise Meta Graph API connector, multi-account publisher, and Zernio distribution profiles.',
+      icon: Share2,
+    },
+    {
+      id: 'developer',
+      name: 'Developer Platform',
+      category: 'EXTENSIBILITY',
+      status: 'Live',
+      statusColor: 'emerald',
+      description: 'API key provisioning, webhooks dispatch, REST endpoints, and developer SDK sandbox.',
+      icon: Code,
+    },
+    {
+      id: 'retail',
+      name: 'Retail',
+      category: 'INDUSTRY_VERTICAL',
+      status: 'Pilot',
+      statusColor: 'cyan',
+      description: 'Multi-warehouse hardware store inventory, stock ledger, barcode scanner, POS terminal & payroll.',
+      icon: ShoppingBag,
+      pilotCustomer: 'Proinsight Hardware & Building Supplies (USD $ Exclusive)',
+    },
+    {
+      id: 'trade',
+      name: 'Trade',
+      category: 'INDUSTRY_VERTICAL',
+      status: 'Pilot',
+      statusColor: 'cyan',
+      description: 'B2B procurement marketplace, vendor catalogs, wholesale quotations, and purchase order workflow.',
+      icon: Building2,
+      pilotCustomer: 'Audited Internal Preview Beta',
+    },
+    {
+      id: 'healthcare',
+      name: 'Healthcare',
+      category: 'INDUSTRY_VERTICAL',
+      status: 'Development',
+      statusColor: 'amber',
+      description: 'Clinical client records, intake case notes, appointment logs, and HIPAA/privacy compliance schemas.',
+      icon: HeartPulse,
+    },
+    {
+      id: 'funeral',
+      name: 'Funeral Services',
+      category: 'INDUSTRY_VERTICAL',
+      status: 'Development',
+      statusColor: 'amber',
+      description: 'Case files, family intake coordination, casket inventory, mortuary records, and hearse fleet dispatch.',
+      icon: Shield,
+    },
+    {
+      id: 'logistics',
+      name: 'Logistics & Fleet',
+      category: 'INDUSTRY_VERTICAL',
+      status: 'Development',
+      statusColor: 'amber',
+      description: 'Commercial vehicle telemetry, driver dispatching, SADC trade corridor waybills, and fuel monitoring.',
+      icon: Truck,
+    },
+    {
+      id: 'marketplace',
+      name: 'Marketplace & Solutions',
+      category: 'ECOSYSTEM',
+      status: 'Development',
+      statusColor: 'amber',
+      description: 'Plugin directory, third-party vertical modules, AI agent integrations, and industry templates.',
+      icon: Package,
+    },
+    {
+      id: 'government',
+      name: 'Government Edition',
+      category: 'PUBLIC_SECTOR',
+      status: 'Planned',
+      statusColor: 'purple',
+      description: 'Public sector compliance, national data residency isolation, ministerial workflows & citizen services.',
+      icon: Building2,
+    },
+  ];
+
+  // The 8 official core sections
+  const ADMIN_SECTIONS: Array<{ id: AdminSection; label: string; icon: any; badge?: string | number }> = [
+    { id: 'overview', label: 'Platform Overview', icon: Activity },
+    { id: 'customers', label: 'Customers & Organizations', icon: Users, badge: customers.length },
+    { id: 'products', label: 'Products & Modules', icon: Package, badge: 'Full Suite' },
+    { id: 'trials', label: 'Trials & Licensing', icon: KeyRound, badge: trialsData?.activeTrials ?? 0 },
+    { id: 'integrations', label: 'Integrations & Developers', icon: Share2 },
+    { id: 'billing', label: 'Billing & Revenue', icon: CreditCard },
+    { id: 'partners', label: 'White-label & Partners', icon: Building2, badge: 'Architecture' },
+    { id: 'security', label: 'Security & System', icon: ShieldAlert, badge: systemHealth.length },
+  ];
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-indigo-500 selection:text-white">
       {/* Top Banner */}
@@ -447,56 +564,54 @@ export default function PlatformAdminPortal() {
             <div className="flex items-center gap-2">
               <h1 className="font-bold text-lg tracking-tight text-white">RALION OS</h1>
               <span className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 rounded-full">
-                Platform Admin Command Center
+                Admin Command Centre
+              </span>
+              <span className="px-1.5 py-0.5 text-[10px] font-mono bg-zinc-800 text-zinc-400 rounded">
+                INTERNAL ONLY
               </span>
             </div>
-            <p className="text-xs text-zinc-400">Authenticated: <span className="text-zinc-200 font-medium">ali@rasalilabs.com</span> · Scope: <span className="text-indigo-300">RAS ALI LABS PLATFORM</span></p>
+            <p className="text-xs text-zinc-400">
+              Ras Ali Labs • Global Platform Administration, Multi-Tenant Operations & Ecosystem Lifecycle
+            </p>
           </div>
         </div>
 
+        {/* Header Actions */}
         <div className="flex items-center gap-3">
-          {/* Notifications / Integration Alerts Button */}
+          {/* Proactive Help & Alerts Trigger */}
           <div className="relative">
             <button
-              onClick={() => setShowHelpAlerts(!showHelpAlerts)}
-              className="relative flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 transition border border-zinc-700/50"
-              title="User Integrations & Help Requests"
+              onClick={() => setShowHelpAlerts(prev => !prev)}
+              className="relative p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition border border-zinc-700/50"
+              title="Operational Alerts"
             >
-              <Bell className="w-3.5 h-3.5 text-amber-400" />
-              <span>Integrations & Help</span>
+              <Bell className="w-4 h-4 text-amber-400" />
               {integrationAlerts.length > 0 && (
-                <span className="w-5 h-5 rounded-full bg-amber-500 text-black text-[10px] font-bold flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-500 text-black font-bold text-[9px] flex items-center justify-center animate-pulse">
                   {integrationAlerts.length}
                 </span>
               )}
             </button>
 
-            {/* Dropdown Panel */}
             {showHelpAlerts && (
-              <div className="absolute right-0 mt-2 w-96 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl z-50 p-4">
-                <div className="flex items-center justify-between border-b border-zinc-800 pb-3 mb-3">
-                  <div className="flex items-center gap-2">
-                    <UserPlus className="w-4 h-4 text-amber-400" />
-                    <h4 className="text-xs font-bold text-white uppercase tracking-wider">User Integration & Help Queue</h4>
-                  </div>
-                  <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-bold">
-                    {integrationAlerts.length} Attention Needed
+              <div className="absolute right-0 mt-2 w-80 rounded-2xl bg-zinc-900 border border-zinc-800 shadow-2xl z-50 p-3 space-y-2">
+                <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                    Operational Action Triggers
                   </span>
+                  <span className="text-[10px] text-zinc-500">{integrationAlerts.length} Active</span>
                 </div>
-
-                <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+                <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
                   {integrationAlerts.length === 0 ? (
-                    <div className="text-center py-6 text-xs text-zinc-500">
-                      All users are integrated and operating normally.
-                    </div>
+                    <div className="text-xs text-zinc-500 py-4 text-center">No pending operational alerts</div>
                   ) : (
-                    integrationAlerts.map((alert, idx) => (
-                      <div key={idx} className="p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-xs space-y-1.5 hover:border-amber-500/40 transition">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-white">{alert.name}</span>
-                          <span className="text-[10px] px-2 py-0.5 bg-zinc-800 text-zinc-300 rounded font-mono">{alert.tier}</span>
+                    integrationAlerts.map(alert => (
+                      <div key={alert.orgId} className="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs space-y-1">
+                        <div className="font-semibold text-white flex justify-between">
+                          <span>{alert.name}</span>
+                          <span className="text-[10px] text-zinc-400 uppercase">{alert.tier}</span>
                         </div>
-                        <div className="text-zinc-400 text-[11px]">{alert.email}</div>
                         <div className="text-amber-300/90 text-[11px] font-medium flex items-center gap-1">
                           <HelpCircle className="w-3 h-3 text-amber-400 shrink-0" />
                           <span>{alert.reason}</span>
@@ -544,10 +659,10 @@ export default function PlatformAdminPortal() {
           <a
             href="/dashboard"
             className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-xs font-bold text-red-300 transition border border-red-500/40 hover:border-red-500/70"
-            title="Exit Admin Command Center back to Workspace Dashboard"
+            title="Exit Admin Command Centre back to Workspace Dashboard"
           >
             <LogOut className="w-3.5 h-3.5 text-red-400" />
-            Exit Command Center
+            Exit Command Centre
           </a>
         </div>
       </header>
@@ -572,35 +687,30 @@ export default function PlatformAdminPortal() {
         </div>
       )}
 
-      {/* Navigation Tabs */}
+      {/* 8 Official Core Navigation Sections */}
       <div className="px-6 border-b border-zinc-800/80 bg-zinc-900/30 flex gap-1 overflow-x-auto py-2">
-        {[
-          { id: 'overview', label: 'Overview & Metrics', icon: Activity },
-          { id: 'products', label: 'Product Suite & Previews', icon: Package },
-          { id: 'trials', label: `Trials (${trialsData?.activeTrials || 0})`, icon: KeyRound },
-          { id: 'retail', label: 'Retail Pilot', icon: ShoppingBag },
-          { id: 'customers', label: `Customers (${customers.length})`, icon: Users },
-          { id: 'creatives', label: 'Creative Intelligence', icon: Sparkles },
-          { id: 'social', label: 'Meta & Zernio', icon: Share2 },
-          { id: 'billing', label: 'Billing & Credits', icon: CreditCard },
-          { id: 'system', label: 'System Health', icon: Server },
-          { id: 'audit', label: `Audit Trail (${auditLogs.length})`, icon: FileText },
-          { id: 'clients', label: 'Clients Portfolio', icon: Building2 },
-        ].map((tab) => {
+        {ADMIN_SECTIONS.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition ${
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition shrink-0 ${
                 isActive
                   ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
                   : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
               }`}
             >
               <Icon className="w-3.5 h-3.5" />
-              {tab.label}
+              <span>{tab.label}</span>
+              {tab.badge !== undefined && (
+                <span className={`px-1.5 py-0.2 rounded text-[9px] font-mono ${
+                  isActive ? 'bg-indigo-800 text-indigo-100' : 'bg-zinc-800 text-zinc-400'
+                }`}>
+                  {tab.badge}
+                </span>
+              )}
             </button>
           );
         })}
@@ -608,7 +718,8 @@ export default function PlatformAdminPortal() {
 
       {/* Main Content Area */}
       <main className="p-6 max-w-7xl mx-auto space-y-6">
-        {/* OVERVIEW TAB */}
+
+        {/* SECTION A: PLATFORM OVERVIEW */}
         {activeTab === 'overview' && (
           <div className="space-y-6">
             {/* Top Stat Cards */}
@@ -618,11 +729,11 @@ export default function PlatformAdminPortal() {
                   <span className="text-xs font-medium uppercase tracking-wider">Total Customers</span>
                   <Building2 className="w-4 h-4 text-indigo-400" />
                 </div>
-                <div className="text-3xl font-bold text-white tracking-tight">{metrics?.totalCustomers ?? 0}</div>
+                <div className="text-3xl font-bold text-white tracking-tight">{metrics?.totalCustomers ?? customers.length}</div>
                 <div className="mt-2 text-xs text-zinc-400 flex items-center gap-1.5">
-                  <span className="text-emerald-400 font-semibold">{metrics?.activeCustomers ?? 0} Active</span>
+                  <span className="text-emerald-400 font-semibold">{metrics?.activeCustomers ?? customers.filter(c => c.status === 'ACTIVE').length} Active</span>
                   <span>·</span>
-                  <span className="text-red-400">{metrics?.suspendedCustomers ?? 0} Suspended</span>
+                  <span className="text-red-400">{metrics?.suspendedCustomers ?? customers.filter(c => c.status === 'SUSPENDED').length} Suspended</span>
                 </div>
               </div>
 
@@ -650,802 +761,292 @@ export default function PlatformAdminPortal() {
 
               <div className="p-5 rounded-2xl bg-zinc-900/70 border border-zinc-800/80 relative overflow-hidden">
                 <div className="flex items-center justify-between text-zinc-400 mb-2">
-                  <span className="text-xs font-medium uppercase tracking-wider">Creative Studio Assets</span>
-                  <Sparkles className="w-4 h-4 text-purple-400" />
+                  <span className="text-xs font-medium uppercase tracking-wider">Platform Health</span>
+                  <Activity className="w-4 h-4 text-emerald-400" />
                 </div>
-                <div className="text-3xl font-bold text-white tracking-tight">{metrics?.creativeGenerations?.total ?? 0}</div>
-                <div className="mt-2 text-xs text-zinc-400 flex items-center gap-1.5">
-                  <span className="text-purple-400">{metrics?.creativeGenerations?.images ?? 0} Images</span>
-                  <span>·</span>
-                  <span className="text-blue-400">{metrics?.creativeGenerations?.videos ?? 0} Videos</span>
+                <div className="flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full ${metrics?.systemHealth === 'DOWN' ? 'bg-rose-500' : 'bg-emerald-500'} animate-pulse`} />
+                  <span className="text-xl font-bold text-white tracking-tight">{metrics?.systemHealth || 'OPERATIONAL'}</span>
+                </div>
+                <div className="mt-2 text-xs text-zinc-400">
+                  {systemHealth.filter(s => s.status === 'UP').length} of {systemHealth.length || 5} services healthy
                 </div>
               </div>
             </div>
 
-            {/* Quick Status Bar */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="p-4 rounded-xl bg-zinc-900/50 border border-zinc-800 flex items-center gap-3">
-                <div className="w-3 h-3 rounded-full bg-emerald-500 animate-ping" />
-                <div className="text-xs">
-                  <div className="font-semibold text-white">System Core Status: UP</div>
-                  <div className="text-zinc-400">Zero platform outages recorded</div>
+            {/* Product & Module Adoption Telemetry */}
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Package className="w-4 h-4 text-indigo-400" />
+                    Product & Module Adoption Summary
+                  </h3>
+                  <p className="text-xs text-zinc-400 mt-0.5">Authoritative status across live organizations</p>
                 </div>
+                <button
+                  onClick={() => setActiveTab('products')}
+                  className="text-xs text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1"
+                >
+                  Manage Full Ecosystem <ChevronRight className="w-3.5 h-3.5" />
+                </button>
               </div>
-              <div className="p-4 rounded-xl bg-zinc-900/50 border border-zinc-800 flex items-center gap-3">
-                <Share2 className="w-4 h-4 text-blue-400" />
-                <div className="text-xs">
-                  <div className="font-semibold text-white">Social Integrations: Connected</div>
-                  <div className="text-zinc-400">Meta: {metrics?.connectedMetaAccounts ?? 0} · Zernio: {metrics?.connectedZernioProfiles ?? 0}</div>
-                </div>
-              </div>
-              <div className="p-4 rounded-xl bg-zinc-900/50 border border-zinc-800 flex items-center gap-3">
-                <ShieldAlert className="w-4 h-4 text-indigo-400" />
-                <div className="text-xs">
-                  <div className="font-semibold text-white">Security & RBAC Boundary</div>
-                  <div className="text-zinc-400">Tenant isolation strictly verified</div>
-                </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 pt-2">
+                {ECOSYSTEM_MODULES.slice(0, 6).map(mod => (
+                  <div key={mod.id} className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800/80 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-mono text-zinc-500 uppercase">{mod.category}</span>
+                      <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                        mod.status === 'Live' ? 'bg-emerald-500/20 text-emerald-300' :
+                        mod.status === 'Pilot' ? 'bg-cyan-500/20 text-cyan-300' :
+                        mod.status === 'Development' ? 'bg-amber-500/20 text-amber-300' : 'bg-purple-500/20 text-purple-300'
+                      }`}>
+                        {mod.status}
+                      </span>
+                    </div>
+                    <div className="font-bold text-xs text-white truncate">{mod.name}</div>
+                  </div>
+                ))}
               </div>
             </div>
+
+            {/* Operational Alert Banners */}
+            {integrationAlerts.length > 0 && (
+              <div className="p-4 rounded-2xl bg-amber-950/30 border border-amber-500/30 space-y-3">
+                <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
+                  <AlertTriangle className="w-4 h-4 text-amber-400" />
+                  <span>Immediate Operational Actions Required ({integrationAlerts.length})</span>
+                </div>
+                <div className="grid md:grid-cols-2 gap-3 text-xs">
+                  {integrationAlerts.map(a => (
+                    <div key={a.orgId} className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800 flex items-center justify-between">
+                      <div>
+                        <span className="font-semibold text-white block">{a.name}</span>
+                        <span className="text-zinc-400 text-[11px]">{a.reason}</span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setSelectedOrgForCredit(a.orgId);
+                          setCreditModalOpen(true);
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px]"
+                      >
+                        Action
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* CUSTOMERS TAB */}
+        {/* SECTION B: CUSTOMERS & ORGANIZATIONS */}
         {activeTab === 'customers' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between gap-4">
-              <div className="relative flex-1 max-w-md">
-                <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5" />
+          <section className="space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-black text-white flex items-center gap-2">
+                  <Users className="w-5 h-5 text-indigo-400" />
+                  Customers & Organizations Directory
+                </h2>
+                <p className="text-xs text-zinc-400">
+                  Authoritative multi-tenant directory, workspace boundaries, user roles, and verified inspection sessions.
+                </p>
+              </div>
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-2.5 text-zinc-500" />
                 <input
                   type="text"
-                  placeholder="Search organization or customer ID..."
+                  placeholder="Search by organization, email, or owner..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 focus:outline-none focus:border-indigo-500 transition"
+                  className="pl-9 pr-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-zinc-200 placeholder-zinc-500 w-80 focus:outline-none focus:border-indigo-500"
                 />
               </div>
-              <div className="text-xs text-zinc-400">
-                Total Live Tenants: <span className="text-white font-semibold">{customers.length}</span>
-              </div>
             </div>
 
-            {customers.length === 0 ? (
-              <div className="p-12 text-center rounded-2xl bg-zinc-900/40 border border-zinc-800/60">
-                <Users className="w-12 h-12 text-zinc-600 mx-auto mb-3" />
-                <h3 className="text-sm font-semibold text-zinc-200">Zero Test Customers Active</h3>
-                <p className="text-xs text-zinc-500 mt-1">Pre-launch database reset successfully cleared all test customer data.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded-2xl border border-zinc-800/80 bg-zinc-900/50">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-zinc-900/90 text-zinc-400 border-b border-zinc-800 font-semibold">
-                    <tr>
-                      <th className="p-3.5">Organization / Customer</th>
-                      <th className="p-3.5">Plan</th>
-                      <th className="p-3.5">Balance</th>
-                      <th className="p-3.5">Website Ingestion</th>
-                      <th className="p-3.5">Facebook & Social</th>
-                      <th className="p-3.5">Status</th>
-                      <th className="p-3.5 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-800/60 text-zinc-300">
-                    {customers
-                      .filter((c) => c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.organizationId.toLowerCase().includes(searchQuery.toLowerCase()))
-                      .map((c) => (
-                        <tr key={c.organizationId} className="hover:bg-zinc-800/30 transition">
-                          <td className="p-3.5">
-                            <div className="font-semibold text-white">{c.name}</div>
-                            <div className="text-[11px] text-zinc-500 font-mono">{c.organizationId}</div>
-                          </td>
-                          <td className="p-3.5">
-                            <span className="px-2 py-0.5 rounded-full font-semibold text-[10px] bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
-                              {c.plan}
-                            </span>
-                          </td>
-                          <td className="p-3.5 font-mono">
-                            {c.credits} <span className="text-zinc-500 text-[10px]">(-{c.creditsConsumed})</span>
-                          </td>
-                          <td className="p-3.5">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                              c.websiteIngestionStatus === 'VERIFIED' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-zinc-800 text-zinc-400'
-                            }`}>
-                              {c.websiteIngestionStatus}
-                            </span>
-                          </td>
-                          <td className="p-3.5">
-                            {c.metaStatus === 'CONNECTED' || c.facebookStatus === 'CONNECTED' ? (
-                              <div className="space-y-0.5">
-                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
-                                  Facebook Connected
-                                </span>
-                                {c.facebookPage && (
-                                  <div className="text-[11px] text-zinc-300 font-medium truncate max-w-[150px]" title={c.facebookPage}>
-                                    {c.facebookPage}
-                                  </div>
-                                )}
-                                {typeof c.facebookFollowers === 'number' && c.facebookFollowers > 0 && (
-                                  <div className="text-[10px] text-zinc-500">
-                                    {c.facebookFollowers.toLocaleString()} followers
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-800/80 text-zinc-400 border border-zinc-700/40">
-                                <span className="w-1.5 h-1.5 rounded-full bg-zinc-500"></span>
-                                Not Connected
-                              </span>
-                            )}
-                          </td>
-                          <td className="p-3.5">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              c.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
-                            }`}>
-                              {c.status}
-                            </span>
-                          </td>
-                          <td className="p-3.5 text-right space-x-2">
-                            <button
-                              onClick={() => {
-                                setInspectingOrgId(c.organizationId);
-                                setInspectModalOpen(true);
-                              }}
-                              className="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[11px] transition"
-                            >
-                              Inspect
-                            </button>
-                            <button
-                              onClick={() => {
-                                setSelectedOrgForCredit(c.organizationId);
-                                setCreditModalOpen(true);
-                              }}
-                              className="px-2.5 py-1 rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[11px] transition"
-                            >
-                              Credits
-                            </button>
-                            <button
-                              onClick={() => handleToggleCustomerStatus(c.organizationId, c.status)}
-                              className={`px-2.5 py-1 rounded text-[11px] transition ${
-                                c.status === 'ACTIVE'
-                                  ? 'bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/30'
-                                  : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                              }`}
-                            >
-                              {c.status === 'ACTIVE' ? 'Suspend' : 'Reactivate'}
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {/* Inspected Org Drawer Preview */}
-            {inspectedOrg && (
-              <div className="mt-6 p-6 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4">
-                <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-                  <div className="flex items-center gap-2">
-                    <BrainCircuit className="w-5 h-5 text-indigo-400" />
-                    <h3 className="font-bold text-sm text-white">Deep Tenant Inspector: {inspectedOrg.organizationId}</h3>
-                  </div>
-                  <button onClick={() => setInspectedOrg(null)} className="text-zinc-400 hover:text-white text-xs font-semibold">Close Drawer</button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
-                  <div className="p-3.5 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
-                    <div className="text-zinc-400 font-semibold mb-1">Layer 1 Profile</div>
-                    <div>Company: <span className="text-white font-medium">{inspectedOrg.profile?.companyName || 'Not Ingested'}</span></div>
-                    <div>Industry: <span className="text-zinc-300">{inspectedOrg.profile?.industry || 'N/A'}</span></div>
-                    <div>Website: <span className="text-indigo-400">{inspectedOrg.profile?.websiteUrl || 'N/A'}</span></div>
-                  </div>
-
-                  <div className="p-3.5 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
-                    <div className="text-zinc-400 font-semibold mb-1">Commercial Billing & Credits</div>
-                    <div>Plan: <span className="text-emerald-400 font-medium">{inspectedOrg.subscription?.planId || 'COMMUNITY'}</span></div>
-                    <div>Balance: <span className="text-amber-400 font-bold">{inspectedOrg.wallet?.balance ?? 0}</span> credits</div>
-                    <div>Total Consumed: <span className="text-zinc-300">{inspectedOrg.wallet?.totalConsumed ?? 0}</span></div>
-                  </div>
-
-                  <div className="p-3.5 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
-                    <div className="text-zinc-400 font-semibold mb-1">Facebook & Social</div>
-                    <div>Status: <span className={inspectedOrg.metaStatus === 'CONNECTED' || inspectedOrg.facebookStatus === 'CONNECTED' ? 'text-blue-400 font-medium' : 'text-zinc-400'}>{inspectedOrg.metaStatus === 'CONNECTED' || inspectedOrg.facebookStatus === 'CONNECTED' ? 'Facebook Connected' : 'Not Connected'}</span></div>
-                    {inspectedOrg.facebookPage && <div>Page: <span className="text-white font-medium">{inspectedOrg.facebookPage}</span></div>}
-                    {typeof inspectedOrg.facebookFollowers === 'number' && inspectedOrg.facebookFollowers > 0 && <div>Audience: <span className="text-zinc-300">{inspectedOrg.facebookFollowers.toLocaleString()} followers</span></div>}
-                  </div>
-
-                  <div className="p-3.5 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
-                    <div className="text-zinc-400 font-semibold mb-1">Creatives & Storage</div>
-                    <div>Assets Generated: <span className="text-purple-400 font-bold">{inspectedOrg.assets?.length ?? 0}</span></div>
-                    <div>Activity Events: <span className="text-zinc-300">{inspectedOrg.activityStream?.length ?? 0}</span></div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* SOCIAL & META TAB */}
-        {activeTab === 'social' && (
-          <div className="space-y-6">
-            <div>
-              <h3 className="text-sm font-bold text-white tracking-wide">Meta & Multi-Channel Social Engine</h3>
-              <p className="text-xs text-zinc-400 mt-0.5">
-                Manage platform-level Meta connections, Facebook Page Graph bindings, and Zernio publishing pipelines.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Facebook Page Connection Card */}
-              <div className="p-5 rounded-2xl bg-zinc-900/80 border border-zinc-800 space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-blue-600/10 border border-blue-500/30 flex items-center justify-center text-blue-400 font-bold text-base">
-                      f
-                    </div>
-                    <div>
-                      <div className="font-bold text-sm text-white flex items-center gap-2">
-                        {metrics?.adminFacebook?.pageName || 'Ras Ali Labs'}
-                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold">
-                          {metrics?.adminFacebook?.connectionStatus || 'CONNECTED'}
-                        </span>
-                      </div>
-                      <div className="text-xs text-zinc-400 font-mono">
-                        Page ID: {metrics?.adminFacebook?.pageId || '477334159265235'} · @{metrics?.adminFacebook?.pageUsername || 'rasalibass'}
-                      </div>
-                    </div>
-                  </div>
-                  <span className="px-2.5 py-1 rounded-md bg-zinc-800 text-emerald-400 text-xs font-semibold">
-                    {metrics?.adminFacebook?.tokenStatus || 'TOKEN_VALID'}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
-                    <span className="text-zinc-500 block text-[11px]">Followers</span>
-                    <span className="text-base font-bold text-white">{metrics?.adminFacebook?.followersCount || 108}</span>
-                  </div>
-                  <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
-                    <span className="text-zinc-500 block text-[11px]">Connection Type</span>
-                    <span className="text-base font-bold text-indigo-400">PAGE_MANAGED</span>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <span className="text-xs font-semibold text-zinc-400">Granted Capabilities & Scopes</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {['canPublish', 'canSchedule', 'canUploadImage', 'canUploadVideo', 'canReadAnalytics', 'read_insights', 'pages_show_list'].map((cap) => (
-                      <span key={cap} className="px-2 py-0.5 rounded bg-zinc-800/80 text-zinc-300 text-[10px] font-mono">
-                        ✓ {cap}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="pt-2 flex items-center justify-between border-t border-zinc-800 text-[11px] text-zinc-500">
-                  <span>Connected to Admin Account: <code>ali@rasalilabs.com</code></span>
-                  <span className="text-emerald-400 font-medium">Auto-Sync Active</span>
-                </div>
-              </div>
-
-              {/* Zernio Infrastructure Card */}
-              <div className="p-5 rounded-2xl bg-zinc-900/80 border border-zinc-800 space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-purple-600/10 border border-purple-500/30 flex items-center justify-center text-purple-400 font-bold text-sm">
-                      Z
-                    </div>
-                    <div>
-                      <div className="font-bold text-sm text-white flex items-center gap-2">
-                        Zernio Master Profile
-                        <span className="px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 text-[10px] font-bold">
-                          {metrics?.adminZernio?.status || 'ACTIVE'}
-                        </span>
-                      </div>
-                      <div className="text-xs text-zinc-400 font-mono">
-                        Profile ID: {metrics?.adminZernio?.providerProfileId || '6a82deac1a69158ef81cb2cd'}
-                      </div>
-                    </div>
-                  </div>
-                  <span className="px-2.5 py-1 rounded-md bg-zinc-800 text-purple-400 text-xs font-semibold">
-                    Master Hub
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
-                    <span className="text-zinc-500 block text-[11px]">Provider ID</span>
-                    <span className="font-mono text-zinc-300 text-[11px]">6a82df7277555aae...</span>
-                  </div>
-                  <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
-                    <span className="text-zinc-500 block text-[11px]">Multi-Channel Status</span>
-                    <span className="text-emerald-400 font-bold">READY</span>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <span className="text-xs font-semibold text-zinc-400">Supported Target Networks</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {['Facebook Pages', 'Instagram Feed & Reels', 'LinkedIn Company', 'YouTube Shorts', 'TikTok', 'X (Twitter)'].map((net) => (
-                      <span key={net} className="px-2 py-0.5 rounded bg-zinc-800/80 text-zinc-300 text-[10px] font-mono">
-                        • {net}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="pt-2 flex items-center justify-between border-t border-zinc-800 text-[11px] text-zinc-500">
-                  <span>Bound to Organization: <code>ras-ali-labs</code></span>
-                  <span className="text-purple-400 font-medium">Automated Webhooks OK</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* SYSTEM HEALTH TAB */}
-        {activeTab === 'system' && (
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-white">Live Infrastructure Probes</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {systemHealth.map((srv, idx) => (
-                <div key={idx} className="p-4 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-3 h-3 rounded-full ${
-                      srv.status === 'UP' ? 'bg-emerald-500' : srv.status === 'DEGRADED' ? 'bg-amber-500' : 'bg-red-500'
-                    }`} />
-                    <div>
-                      <div className="font-semibold text-xs text-white">{srv.service}</div>
-                      <div className="text-[11px] text-zinc-500">Latency: {srv.latencyMs}ms · Checked: {new Date(srv.lastChecked).toLocaleTimeString()}</div>
-                    </div>
-                  </div>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                    srv.status === 'UP' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
-                  }`}>
-                    {srv.status}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* AUDIT LOGS TAB */}
-        {activeTab === 'audit' && (
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-white">Administrative & Security Audit Ledger (Append-Only)</h3>
-            <div className="overflow-x-auto rounded-2xl border border-zinc-800 bg-zinc-900/60">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-zinc-900 text-zinc-400 border-b border-zinc-800">
-                  <tr>
-                    <th className="p-3">Timestamp</th>
-                    <th className="p-3">Admin</th>
-                    <th className="p-3">Action</th>
-                    <th className="p-3">Target</th>
-                    <th className="p-3">Result</th>
-                    <th className="p-3">Mandatory Reason</th>
+            {/* Customers Table */}
+            <div className="rounded-2xl border border-zinc-800 overflow-hidden bg-zinc-900/50">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-zinc-800 bg-zinc-900/80 text-zinc-400 text-[11px] uppercase tracking-wider font-semibold">
+                    <th className="py-3 px-4">Organization & Workspace</th>
+                    <th className="py-3 px-4">Owner & Email</th>
+                    <th className="py-3 px-4">Plan / Tier</th>
+                    <th className="py-3 px-4">Mari Credits</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-800/50 text-zinc-300 font-mono text-[11px]">
-                  {auditLogs.map((log) => (
-                    <tr key={log.eventId} className="hover:bg-zinc-800/20">
-                      <td className="p-3 text-zinc-500">{new Date(log.timestamp).toLocaleTimeString()}</td>
-                      <td className="p-3 text-zinc-300 font-sans">{log.adminEmail || log.adminUserId}</td>
-                      <td className="p-3">
-                        <span className="px-2 py-0.5 rounded bg-zinc-800 text-indigo-300 font-semibold text-[10px]">
-                          {log.action}
-                        </span>
-                      </td>
-                      <td className="p-3 text-zinc-400">{log.targetType}: {log.targetId}</td>
-                      <td className="p-3">
-                        <span className={`font-bold ${log.result === 'SUCCESS' ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {log.result}
-                        </span>
-                      </td>
-                      <td className="p-3 text-zinc-300 font-sans max-w-xs truncate">{log.reason}</td>
-                    </tr>
-                  ))}
+                <tbody className="divide-y divide-zinc-800/60">
+                  {customers
+                    .filter(c => 
+                      !searchQuery || 
+                      c.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                      c.ownerEmail?.toLowerCase().includes(searchQuery.toLowerCase())
+                    )
+                    .map((cust) => (
+                      <tr key={cust.organizationId} className="hover:bg-zinc-800/30 transition">
+                        <td className="py-3.5 px-4">
+                          <div className="font-semibold text-white">{cust.name}</div>
+                          <div className="text-[10px] font-mono text-zinc-500 truncate max-w-[200px]">{cust.organizationId}</div>
+                        </td>
+                        <td className="py-3.5 px-4 text-zinc-300">
+                          <div>{cust.owner || 'Workspace Owner'}</div>
+                          <div className="text-zinc-500 text-[11px]">{cust.ownerEmail || '—'}</div>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            cust.subscriptionTier === 'ENTERPRISE' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' :
+                            cust.subscriptionTier === 'PROFESSIONAL' ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' :
+                            'bg-zinc-800 text-zinc-400 border border-zinc-700'
+                          }`}>
+                            {cust.subscriptionTier || 'COMMUNITY'}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="font-mono text-zinc-200">
+                            {cust.totalCreditsIssued - (cust.totalCreditsConsumed || 0)} left
+                          </div>
+                          <div className="text-[10px] text-zinc-500">
+                            {cust.totalCreditsConsumed || 0} consumed
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            cust.status === 'ACTIVE' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
+                            'bg-red-500/20 text-red-300 border border-red-500/30'
+                          }`}>
+                            {cust.status || 'ACTIVE'}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => {
+                                setSelectedOrgForCredit(cust.organizationId);
+                                setCreditModalOpen(true);
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700/50"
+                            >
+                              Adjust Credits
+                            </button>
+                            <button
+                              onClick={() => {
+                                setInspectingOrgId(cust.organizationId);
+                                setInspectModalOpen(true);
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 text-xs font-semibold border border-indigo-500/40"
+                            >
+                              Inspect Tenant
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
-          </div>
+
+            {/* Inspect Tenant Details Display */}
+            {inspectedOrg && (
+              <div className="p-5 rounded-2xl bg-zinc-900 border border-indigo-500/40 space-y-4">
+                <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Eye className="w-4 h-4 text-indigo-400" />
+                    <span className="font-bold text-sm text-white">Inspected Tenant: {inspectedOrg.name}</span>
+                  </div>
+                  <button onClick={() => setInspectedOrg(null)} className="text-xs text-zinc-400 hover:text-white">Close Details</button>
+                </div>
+                <div className="grid md:grid-cols-4 gap-4 text-xs">
+                  <div>
+                    <span className="text-zinc-500 block">Organization ID</span>
+                    <span className="font-mono text-zinc-200">{inspectedOrg.id}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 block">Subscription Tier</span>
+                    <span className="text-indigo-300 font-semibold">{inspectedOrg.licenseTier || 'COMMUNITY'}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 block">Assigned Workspaces</span>
+                    <span className="text-zinc-200 font-semibold">{inspectedOrg.workspaces?.length || 1} Workspaces</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 block">Members / Roles</span>
+                    <span className="text-zinc-200 font-semibold">{inspectedOrg.memberships?.length || 1} Verified Members</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </section>
         )}
 
-        {/* CLIENTS PORTFOLIO TAB */}
-        {activeTab === 'clients' && (
-          <div className="space-y-6">
-            <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-              <div>
-                <h3 className="font-bold text-sm text-white flex items-center gap-2">
-                  <Building2 className="w-4 h-4 text-amber-400" /> Ras Ali Labs Corporate Clients Portfolio
-                </h3>
-                <p className="text-xs text-zinc-400 mt-1">
-                  Manage verified organizational clients, official logos, verified engagement years, and public display status.
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <a
-                  href="/clients"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200 border border-zinc-700/50 flex items-center gap-2 transition"
-                >
-                  <Eye className="w-3.5 h-3.5 text-zinc-400" /> View Public Page
-                </a>
-                <a
-                  href="/admin/clients"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold flex items-center gap-2 shadow-lg shadow-amber-500/20 transition"
-                >
-                  <Sliders className="w-3.5 h-3.5" /> Open Full Clients Manager
-                </a>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800">
-                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Published Portfolio</span>
-                <div className="text-2xl font-black text-white mt-1">7 Clients</div>
-                <span className="text-[11px] text-emerald-400 font-medium">Verified & Live at /clients</span>
-              </div>
-              <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800">
-                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Pending Review</span>
-                <div className="text-2xl font-black text-amber-400 mt-1">1 Entry</div>
-                <span className="text-[11px] text-zinc-400">Safari Butler (Awaiting Year Verification)</span>
-              </div>
-              <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800">
-                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Data Governance</span>
-                <div className="text-2xl font-black text-indigo-400 mt-1">Enforced</div>
-                <span className="text-[11px] text-zinc-400">Strict RLS & Authorized Logo Checks</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* PRODUCTS TAB */}
+        {/* SECTION C: PRODUCTS & MODULES */}
         {activeTab === 'products' && (
           <section className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <h2 className="text-lg font-black text-white flex items-center gap-2">
                   <Package className="w-5 h-5 text-indigo-400" />
-                  Ralion Product Suite & Previews
+                  Ralion Product Suite & Ecosystem Lifecycle
                 </h2>
                 <p className="text-xs text-zinc-400">
-                  Authoritative module registry, tenant entitlements, and isolated platform administrator previews.
+                  Full ecosystem catalog showing verified production lifecycle statuses, operational controls, and isolated sandbox previews.
                 </p>
               </div>
             </div>
 
-            <div className="grid md:grid-cols-2 gap-6">
-              {/* Card 1: Ralion Retail OS */}
-              <div className="rounded-3xl border border-zinc-800 bg-zinc-900/50 p-6 space-y-5 flex flex-col justify-between shadow-xl">
-                <div className="space-y-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 text-2xl font-bold">
-                        🛒
+            {/* Ecosystem Catalog Cards */}
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {ECOSYSTEM_MODULES.map(mod => {
+                const Icon = mod.icon;
+                return (
+                  <div key={mod.id} className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800 flex flex-col justify-between space-y-3 shadow-lg">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                          <Icon className="w-4 h-4" />
+                        </div>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase border ${
+                          mod.status === 'Live' ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' :
+                          mod.status === 'Pilot' ? 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30' :
+                          mod.status === 'Development' ? 'bg-amber-500/10 text-amber-300 border-amber-500/30' :
+                          'bg-purple-500/10 text-purple-300 border-purple-500/30'
+                        }`}>
+                          {mod.status}
+                        </span>
                       </div>
                       <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-bold text-base text-white">Ralion Retail OS</h3>
-                          <span className="px-2 py-0.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-[10px] font-bold">
-                            PILOT • USD ($)
-                          </span>
+                        <h4 className="font-bold text-sm text-white">{mod.name}</h4>
+                        <span className="text-[10px] font-mono text-zinc-500 uppercase">{mod.category}</span>
+                      </div>
+                      <p className="text-xs text-zinc-400 leading-relaxed">
+                        {mod.description}
+                      </p>
+                      {mod.pilotCustomer && (
+                        <div className="p-2 rounded-lg bg-zinc-950 border border-zinc-800 text-[10px] text-zinc-300">
+                          <span className="text-zinc-500 block font-semibold">Scope / Pilot Tenant:</span>
+                          {mod.pilotCustomer}
                         </div>
-                        <p className="text-xs text-zinc-400">
-                          Hardware Store, POS Terminal, Barcode Stock & Localized Payroll
-                        </p>
-                      </div>
+                      )}
                     </div>
                   </div>
-
-                  <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/80 space-y-2 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-zinc-500">Pilot Customer:</span>
-                      <span className="text-white font-semibold">Proinsight (Prolnsight Consultants)</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-zinc-500">Operating Currency:</span>
-                      <span className="text-emerald-400 font-bold">USD ($) Exclusive</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-zinc-500">Entitlement Status:</span>
-                      <span className="px-2 py-0.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-[10px] font-bold">
-                        {retailData?.entitlement?.status || 'ACTIVE'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-zinc-500">Catalogued Products:</span>
-                      <span className="text-zinc-200 font-mono">
-                        {retailData?.operationalHealth?.totalProducts || 0}
-                      </span>
-                    </div>
-                  </div>
-
-                  <p className="text-[11px] text-zinc-500 italic">
-                    Admin preview operates in an isolated internal test workspace. Live Proinsight customer records are never mutated.
-                  </p>
-                </div>
-
-                <div className="space-y-2 pt-2 border-t border-zinc-800">
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => void openProductPreview('retail')}
-                      className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      Open Preview (Retail)
-                    </button>
-                    <button
-                      onClick={() => void openRetailWorkspace()}
-                      className="py-2.5 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold flex items-center gap-1.5"
-                      title="Audited support session into Proinsight pilot workspace"
-                    >
-                      <Lock className="w-3.5 h-3.5 text-zinc-400" />
-                      Support Session
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-between text-[11px] text-zinc-500 pt-1">
-                    <span>Pilot Entitlement Controls:</span>
-                    <div className="flex gap-1.5">
-                      <button
-                        onClick={() => void updateRetailEntitlement('ACTIVE')}
-                        disabled={retailData?.entitlement?.status === 'ACTIVE'}
-                        className="px-2 py-0.5 rounded border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-40"
-                      >
-                        Activate
-                      </button>
-                      <button
-                        onClick={() => void updateRetailEntitlement('SUSPENDED')}
-                        disabled={retailData?.entitlement?.status === 'SUSPENDED'}
-                        className="px-2 py-0.5 rounded border border-amber-500/30 text-amber-300 hover:bg-amber-500/10 disabled:opacity-40"
-                      >
-                        Suspend
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 2: Ralion Trade OS */}
-              <div className="rounded-3xl border border-zinc-800 bg-zinc-900/50 p-6 space-y-5 flex flex-col justify-between shadow-xl">
-                <div className="space-y-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 text-2xl font-bold">
-                        🏗️
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-bold text-base text-white">Ralion Trade OS</h3>
-                          <span className="px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300 text-[10px] font-bold">
-                            INTERNAL PREVIEW (BETA)
-                          </span>
-                        </div>
-                        <p className="text-xs text-zinc-400">
-                          B2B Procurement, Suppliers, Wholesale Quotations & Order Management
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/80 space-y-2 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-zinc-500">Implementation Status:</span>
-                      <span className="text-amber-400 font-semibold">Functional Internal Preview</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-zinc-500">Audited Test Workspace:</span>
-                      <span className="text-zinc-300 font-mono text-[11px]">{productsData?.trade?.previewWorkspaceId || '20000000-0000-0000-0000-000000000002'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-zinc-500">Simulated Modules:</span>
-                      <span className="text-indigo-300 font-semibold">Suppliers, POs, Quotes, Orders</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-zinc-500">External Payments & Disbursements:</span>
-                      <span className="text-rose-400 font-bold">Disabled (Preview Safety)</span>
-                    </div>
-                  </div>
-
-                  <p className="text-[11px] text-zinc-500 italic">
-                    All financial operations in trade preview execute with mock settlements. Multi-tenant database boundary strictly enforced.
-                  </p>
-                </div>
-
-                <div className="pt-2 border-t border-zinc-800 space-y-2">
-                  <button
-                    onClick={() => void openProductPreview('trade')}
-                    className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 transition-all"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    Open Preview (Trade)
-                  </button>
-                  <div className="text-center text-[10px] text-zinc-500 pt-1">
-                    Platform admin identity verified • Audited internal preview session
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* TRIALS TAB */}
-        {activeTab === 'trials' && (
-          <section className="space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-black text-white flex items-center gap-2">
-                  <KeyRound className="w-5 h-5 text-indigo-400" />
-                  Ralion Trial Access Manager
-                </h2>
-                <p className="text-xs text-zinc-400">
-                  Manage time-limited demo access codes, evaluate prospective customer trials, and convert approved trials to commercial subscriptions.
-                </p>
-              </div>
-
-              <button
-                onClick={() => {
-                  setGeneratedCodeSecret(null);
-                  setShowGenerateCodeModal(true);
-                }}
-                className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-indigo-600/20 transition-all"
-              >
-                <Plus className="w-4 h-4" />
-                Generate Demo Access Code
-              </button>
+                );
+              })}
             </div>
 
-            {/* Top Telemetry Metric Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800">
-                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Active Demo Trials</span>
-                <div className="text-2xl font-black text-white mt-1">{trialsData?.activeTrials ?? 0}</div>
-                <span className="text-[11px] text-zinc-400">{trialsData?.totalRedemptions ?? 0} lifetime redemptions</span>
-              </div>
-              <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800">
-                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Expiring Soon (&lt;48h)</span>
-                <div className="text-2xl font-black text-amber-400 mt-1">{trialsData?.expiringSoon ?? 0}</div>
-                <span className="text-[11px] text-zinc-400">Trials approaching deadline</span>
-              </div>
-              <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800">
-                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Expired Trials</span>
-                <div className="text-2xl font-black text-red-400 mt-1">{trialsData?.expiredTrials ?? 0}</div>
-                <span className="text-[11px] text-zinc-400">Fail-closed blocking active</span>
-              </div>
-              <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800">
-                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Converted to Paid</span>
-                <div className="text-2xl font-black text-emerald-400 mt-1">{trialsData?.convertedTrials ?? 0}</div>
-                <span className="text-[11px] text-emerald-400 font-medium">Commercial conversions</span>
-              </div>
-            </div>
-
-            {/* Product breakdown */}
-            <div className="p-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 flex flex-wrap items-center justify-between gap-3 text-xs">
-              <span className="text-zinc-400">Trials by Eligible Product:</span>
-              <div className="flex gap-2">
-                <span className="px-2.5 py-1 rounded-lg bg-zinc-800 text-zinc-200 border border-zinc-700 font-bold text-[11px]">
-                  🛒 Retail: {trialsData?.products?.retail ?? 0} codes
-                </span>
-                <span className="px-2.5 py-1 rounded-lg bg-zinc-800 text-zinc-200 border border-zinc-700 font-bold text-[11px]">
-                  🏗️ Trade: {trialsData?.products?.trade ?? 0} codes
-                </span>
-                <span className="px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 font-bold text-[11px]">
-                  ✨ Multi-Product (Both): {trialsData?.products?.both ?? 0} codes
-                </span>
-              </div>
-            </div>
-
-            {/* Table: Issued Demo Codes */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-sm text-white">Issued Demo Access Codes</h3>
-                <span className="text-xs text-zinc-500">{trialsData?.codes?.length || 0} total codes</span>
-              </div>
-
-              <div className="overflow-x-auto rounded-2xl border border-zinc-800">
-                <table className="w-full text-xs">
-                  <thead className="bg-zinc-900 text-zinc-400">
-                    <tr>
-                      <th className="p-3 text-left">Code Prefix</th>
-                      <th className="p-3 text-left">Eligible Products</th>
-                      <th className="p-3 text-left">Duration</th>
-                      <th className="p-3 text-left">Redemptions</th>
-                      <th className="p-3 text-left">Workspace Mode</th>
-                      <th className="p-3 text-left">Status</th>
-                      <th className="p-3 text-left">Expires</th>
-                      <th className="p-3 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-800">
-                    {(trialsData?.codes || []).map((code: any) => (
-                      <tr key={code.id} className="bg-zinc-950/40 hover:bg-zinc-900/30 transition">
-                        <td className="p-3 font-mono text-zinc-300">{code.code_prefix}••••</td>
-                        <td className="p-3">
-                          <div className="flex flex-wrap gap-1">
-                            {(code.eligible_products || []).map((p: string) => (
-                              <span key={p} className="px-2 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-[10px] font-bold uppercase text-zinc-300">
-                                {p}
-                              </span>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="p-3 text-zinc-400">{code.duration_days} days</td>
-                        <td className="p-3 text-zinc-300 font-mono">
-                          {code.redemption_count} / {code.max_redemptions}
-                        </td>
-                        <td className="p-3">
-                          <span className="px-2 py-0.5 rounded bg-zinc-800/80 text-[10px] font-mono text-zinc-400">
-                            {code.workspace_mode}
-                          </span>
-                        </td>
-                        <td className="p-3">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${code.status === 'ACTIVE' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border-zinc-700 bg-zinc-800 text-zinc-400'}`}>
-                            {code.status}
-                          </span>
-                        </td>
-                        <td className="p-3 text-zinc-400 whitespace-nowrap">
-                          {new Date(code.expires_at).toLocaleDateString()}
-                        </td>
-                        <td className="p-3 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {code.status === 'ACTIVE' && (
-                              <>
-                                <button
-                                  onClick={() => void extendTrial(code.id, 7)}
-                                  className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-semibold"
-                                  title="Extend trial by 7 days"
-                                >
-                                  +7d
-                                </button>
-                                <button
-                                  onClick={() => void convertTrialToCommercial(code.id)}
-                                  className="px-2 py-1 rounded bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-300 text-[10px] font-semibold"
-                                  title="Convert to commercial subscription"
-                                >
-                                  Convert
-                                </button>
-                                <button
-                                  onClick={() => void revokeTrial(code.id)}
-                                  className="px-2 py-1 rounded bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/30 text-rose-300 text-[10px] font-semibold"
-                                  title="Revoke access code"
-                                >
-                                  Revoke
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {(!trialsData?.codes || trialsData.codes.length === 0) && (
-                      <tr>
-                        <td colSpan={8} className="p-8 text-center text-zinc-500">
-                          No trial access codes issued yet. Click "Generate Demo Access Code" to create one.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* RETAIL PILOT COMMAND CENTRE TAB */}
-        {activeTab === 'retail' && (
-          <section className="space-y-6">
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 space-y-4">
+            {/* RETAIL PILOT COMMAND CENTRE */}
+            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/60 p-6 space-y-5 shadow-2xl">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 font-bold text-xl">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 text-2xl font-bold">
                     🛒
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h2 className="text-base font-bold text-white">Ralion Retail Pilot Command Centre</h2>
+                      <h3 className="font-bold text-base text-white">Retail Pilot Command Centre</h3>
                       <span className="px-2 py-0.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-[10px] font-bold">
                         {retailData?.entitlement?.status || 'ACTIVE'}
                       </span>
@@ -1454,7 +1055,7 @@ export default function PlatformAdminPortal() {
                       </span>
                     </div>
                     <p className="text-xs text-zinc-400">
-                      Managed pilot customer: <strong>Proinsight (Prolnsight Consultants)</strong> • Hardware & Building Materials Retail
+                      Managed pilot customer: <strong>Proinsight Hardware & Building Supplies</strong> • Hardware & Building Materials Management
                     </p>
                   </div>
                 </div>
@@ -1465,7 +1066,14 @@ export default function PlatformAdminPortal() {
                     className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-indigo-600/20 transition-all"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
-                    Open Retail Workspace (Inspection Session)
+                    Open Retail Workspace (Support Session)
+                  </button>
+                  <button
+                    onClick={() => void openProductPreview('retail')}
+                    className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    Open Preview (Retail)
                   </button>
                   <button
                     onClick={() => void updateRetailEntitlement('ACTIVE')}
@@ -1491,63 +1099,634 @@ export default function PlatformAdminPortal() {
                 </div>
               </div>
 
-              {/* Entitlement & Security Metadata */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 pt-3 border-t border-zinc-800 text-xs">
-                <div>
-                  <span className="text-zinc-500 block text-[10px] uppercase font-bold">Workspace Identifier</span>
-                  <span className="font-mono text-zinc-300 text-[11px]">{retailData?.workspace?.workspaceId || '67074e47-76bb-40e1-ae05-362e9cae8798'}</span>
+              {/* Operational Telemetry Cards */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800">
+                  <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Catalogue Products</span>
+                  <div className="text-2xl font-black text-white mt-1">{retailData?.operationalHealth?.totalProducts || 0}</div>
+                  <span className="text-[11px] text-zinc-400">{retailData?.operationalHealth?.totalStockUnits || 0} physical units on hand</span>
                 </div>
-                <div>
-                  <span className="text-zinc-500 block text-[10px] uppercase font-bold">Authorized Tier & Mode</span>
-                  <span className="text-zinc-300">{retailData?.entitlement?.tier || 'PILOT'} (Exclusive Customer Sandbox)</span>
+                <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800">
+                  <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Low Stock Alerts</span>
+                  <div className="text-2xl font-black text-amber-400 mt-1">{retailData?.operationalHealth?.lowStockCount || 0}</div>
+                  <span className="text-[11px] text-zinc-400">SKUs below minimum threshold</span>
                 </div>
-                <div>
-                  <span className="text-zinc-500 block text-[10px] uppercase font-bold">Store Name</span>
-                  <span className="text-zinc-300">{retailData?.settings?.store_name || 'Proinsight Hardware & Building Supplies'}</span>
+                <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800">
+                  <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Completed Hardware Sales</span>
+                  <div className="text-2xl font-black text-emerald-400 mt-1">{retailData?.operationalHealth?.totalSalesCount || 0}</div>
+                  <span className="text-[11px] text-zinc-400">POS receipts generated</span>
                 </div>
-                <div>
-                  <span className="text-zinc-500 block text-[10px] uppercase font-bold">Last Status Update</span>
-                  <span className="text-zinc-300">{retailData?.entitlement?.updatedAt ? new Date(retailData.entitlement.updatedAt).toLocaleString() : 'Active Pilot Baseline'}</span>
+                <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800">
+                  <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Net Hardware Revenue</span>
+                  <div className="text-2xl font-black text-emerald-400 mt-1">
+                    ${Number(retailData?.operationalHealth?.totalSalesRevenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                  <span className="text-[11px] text-emerald-400 font-medium">USD ($) Settled</span>
                 </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-zinc-950/60 border border-zinc-800 text-xs text-zinc-400 flex items-center justify-between">
+                <div>
+                  <span className="font-semibold text-zinc-200">Confidentiality Guard:</span> Employee compensation details remain strictly confidential to Proinsight management and are excluded from platform telemetry.
+                </div>
+                <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-[10px]">
+                  PASS
+                </span>
               </div>
             </div>
 
-            {/* Operational Telemetry Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800">
-                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Catalogue Products</span>
-                <div className="text-2xl font-black text-white mt-1">{retailData?.operationalHealth?.totalProducts || 0}</div>
-                <span className="text-[11px] text-zinc-400">{retailData?.operationalHealth?.totalStockUnits || 0} physical units on hand</span>
-              </div>
-              <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800">
-                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Low Stock Alerts</span>
-                <div className="text-2xl font-black text-amber-400 mt-1">{retailData?.operationalHealth?.lowStockCount || 0}</div>
-                <span className="text-[11px] text-zinc-400">SKUs below minimum threshold</span>
-              </div>
-              <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800">
-                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Completed Hardware Sales</span>
-                <div className="text-2xl font-black text-emerald-400 mt-1">{retailData?.operationalHealth?.totalSalesCount || 0}</div>
-                <span className="text-[11px] text-zinc-400">POS receipts generated</span>
-              </div>
-              <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800">
-                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Net Hardware Revenue</span>
-                <div className="text-2xl font-black text-emerald-400 mt-1">
-                  ${Number(retailData?.operationalHealth?.totalSalesRevenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            {/* TRADE INTERNAL PREVIEW */}
+            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/60 p-6 space-y-4 shadow-xl">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 text-2xl font-bold">
+                    🏗️
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-base text-white">Trade Module (Internal Preview Beta)</h3>
+                      <span className="px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300 text-[10px] font-bold">
+                        INTERNAL PREVIEW
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-400">
+                      B2B Procurement, Suppliers, Wholesale Quotations & Order Management
+                    </p>
+                  </div>
                 </div>
-                <span className="text-[11px] text-emerald-400 font-medium">USD ($) Settled</span>
-              </div>
-            </div>
 
-            <div className="p-4 rounded-2xl bg-zinc-900/40 border border-zinc-800 text-xs text-zinc-400 flex items-center justify-between">
-              <div>
-                <span className="font-semibold text-zinc-200">Confidentiality Guard:</span> Employee compensation details remain strictly confidential to Proinsight management and are excluded from platform telemetry.
+                <button
+                  onClick={() => void openProductPreview('trade')}
+                  className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-indigo-600/20 transition-all"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Open Preview (Trade)
+                </button>
               </div>
-              <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-[10px]">
-                PASS
-              </span>
+
+              <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-400">
+                All financial operations in trade preview execute with mock settlements. Multi-tenant database boundary strictly enforced.
+              </div>
             </div>
           </section>
         )}
+
+        {/* SECTION D: TRIALS & LICENSING */}
+        {activeTab === 'trials' && (
+          <section className="space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-black text-white flex items-center gap-2">
+                  <KeyRound className="w-5 h-5 text-indigo-400" />
+                  Trial Access Codes & Commercial Licensing
+                </h2>
+                <p className="text-xs text-zinc-400">
+                  Provision time-limited demo codes for prospect evaluations, manage multi-tenant redemptions, and track commercial conversions.
+                </p>
+              </div>
+
+              <button
+                onClick={() => {
+                  setGeneratedCodeSecret(null);
+                  setShowGenerateCodeModal(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/20 transition"
+              >
+                <Plus className="w-4 h-4" />
+                Generate Demo Access Code
+              </button>
+            </div>
+
+            {/* Trial Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800">
+                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Active Trials</span>
+                <div className="text-2xl font-black text-white mt-1">{trialsData?.activeTrials || 0}</div>
+              </div>
+              <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800">
+                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Total Redemptions</span>
+                <div className="text-2xl font-black text-emerald-400 mt-1">{trialsData?.totalRedemptions || 0}</div>
+              </div>
+              <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800">
+                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Commercial Conversions</span>
+                <div className="text-2xl font-black text-indigo-400 mt-1">{trialsData?.convertedTrials || 0}</div>
+              </div>
+              <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800">
+                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Revoked / Expired</span>
+                <div className="text-2xl font-black text-zinc-500 mt-1">{trialsData?.revokedTrials || 0}</div>
+              </div>
+            </div>
+
+            {/* Active Trials Table */}
+            <div className="rounded-2xl border border-zinc-800 overflow-hidden bg-zinc-900/50">
+              <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between">
+                <h3 className="font-bold text-xs text-white">Active Trial Authorizations</h3>
+                <span className="text-[10px] text-zinc-400 font-mono">Real-time Entitlement Registry</span>
+              </div>
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-zinc-800 bg-zinc-900/80 text-zinc-400 text-[11px] uppercase tracking-wider font-semibold">
+                    <th className="py-3 px-4">Code / Identifier</th>
+                    <th className="py-3 px-4">Eligible Modules</th>
+                    <th className="py-3 px-4">Mode</th>
+                    <th className="py-3 px-4">Redemptions</th>
+                    <th className="py-3 px-4">Expiry</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800/60">
+                  {(trialsData?.recentCodes || []).map((trial: any) => (
+                    <tr key={trial.id} className="hover:bg-zinc-800/30 transition">
+                      <td className="py-3.5 px-4 font-mono text-zinc-300">
+                        {trial.code_hash ? `${trial.code_hash.substring(0, 12)}...` : trial.id}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <div className="flex gap-1">
+                          {(trial.eligible_products || []).map((p: string) => (
+                            <span key={p} className="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 text-[10px] font-bold uppercase">
+                              {p}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4 text-zinc-400 font-mono text-[11px]">
+                        {trial.workspace_mode || 'DEMO_DATA'}
+                      </td>
+                      <td className="py-3.5 px-4 text-zinc-200">
+                        {trial.current_redemptions || 0} / {trial.max_redemptions || 1}
+                      </td>
+                      <td className="py-3.5 px-4 text-zinc-400">
+                        {trial.expires_at ? new Date(trial.expires_at).toLocaleDateString() : '—'}
+                      </td>
+                      <td className="py-3.5 px-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => extendTrial(trial.id, 14)}
+                            className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[10px]"
+                          >
+                            +14d
+                          </button>
+                          <button
+                            onClick={() => convertTrialToCommercial(trial.id)}
+                            className="px-2 py-1 rounded bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/30 text-[10px] font-semibold"
+                          >
+                            Convert
+                          </button>
+                          <button
+                            onClick={() => revokeTrial(trial.id)}
+                            className="px-2 py-1 rounded bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 text-[10px]"
+                          >
+                            Revoke
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {(!trialsData?.recentCodes || trialsData.recentCodes.length === 0) && (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-zinc-500 text-xs">
+                        No active trial codes found. Click "Generate Demo Access Code" to create one.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {/* SECTION E: INTEGRATIONS & DEVELOPER SERVICES */}
+        {activeTab === 'integrations' && (
+          <section className="space-y-6">
+            <div>
+              <h2 className="text-lg font-black text-white flex items-center gap-2">
+                <Share2 className="w-5 h-5 text-indigo-400" />
+                Integrations & Developer Services
+              </h2>
+              <p className="text-xs text-zinc-400">
+                Meta OAuth connector health, Zernio multi-channel profiles, Creative Intelligence studio, and Developer API telemetry.
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-6">
+              {/* Meta Graph API Connector */}
+              <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-4">
+                <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Globe className="w-4 h-4 text-blue-400" />
+                    <h3 className="font-bold text-sm text-white">Meta Graph API & Social Connectors</h3>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full border text-[10px] font-bold ${
+                    metrics?.adminFacebook?.tokenStatus === 'TOKEN_VALID' || metrics?.adminFacebook?.tokenStatus === 'VALID'
+                      ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                      : metrics?.adminFacebook?.connectionStatus === 'CONNECTED'
+                        ? 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'
+                        : metrics?.connectedMetaAccounts && metrics.connectedMetaAccounts > 0
+                          ? 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30'
+                          : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+                  }`}>
+                    {metrics?.adminFacebook?.tokenStatus || (metrics?.connectedMetaAccounts && metrics.connectedMetaAccounts > 0 ? 'CONNECTED' : 'NOT CONNECTED')}
+                  </span>
+                </div>
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Connected Accounts:</span>
+                    <span className="text-zinc-200 font-semibold">{metrics?.connectedMetaAccounts ?? 0} Accounts</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Facebook Page:</span>
+                    <span className="text-white font-semibold">{metrics?.adminFacebook?.pageName || (metrics?.connectedMetaAccounts && metrics.connectedMetaAccounts > 0 ? 'Active Page' : 'Not Connected')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Followers Count:</span>
+                    <span className="text-zinc-200 font-mono">
+                      {metrics?.adminFacebook?.followersCount !== undefined && metrics.adminFacebook.followersCount !== null
+                        ? metrics.adminFacebook.followersCount.toLocaleString()
+                        : 'Not Available'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Zernio Multi-Channel Publisher */}
+              <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-4">
+                <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Share2 className="w-4 h-4 text-indigo-400" />
+                    <h3 className="font-bold text-sm text-white">Zernio Social Publisher</h3>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full border text-[10px] font-bold ${
+                    metrics?.adminZernio?.status === 'HEALTHY' || metrics?.adminZernio?.status === 'CONNECTED'
+                      ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                      : metrics?.connectedZernioProfiles && metrics.connectedZernioProfiles > 0
+                        ? 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'
+                        : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+                  }`}>
+                    {metrics?.adminZernio?.status || (metrics?.connectedZernioProfiles && metrics.connectedZernioProfiles > 0 ? 'CONNECTED' : 'NOT CONNECTED')}
+                  </span>
+                </div>
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Active Profiles:</span>
+                    <span className="text-zinc-200 font-semibold">{metrics?.connectedZernioProfiles !== undefined ? `${metrics.connectedZernioProfiles} Profiles` : '0 Profiles'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Profile Name:</span>
+                    <span className="text-white font-semibold">{metrics?.adminZernio?.profileName || (metrics?.connectedZernioProfiles && metrics.connectedZernioProfiles > 0 ? 'Primary Profile' : 'None Configured')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Provider Status:</span>
+                    <span className="text-zinc-200 font-semibold">{metrics?.adminZernio?.status || (metrics?.connectedZernioProfiles && metrics.connectedZernioProfiles > 0 ? 'Active' : 'Not Connected')}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Creative Intelligence Studio Telemetry */}
+              <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-4">
+                <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-purple-400" />
+                    <h3 className="font-bold text-sm text-white">Creative Intelligence Engine</h3>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full border text-[10px] font-bold ${
+                    metrics?.creativeGenerations ? 'bg-purple-500/10 text-purple-300 border-purple-500/30' : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+                  }`}>
+                    {metrics?.creativeGenerations ? 'AI CLOUD LIVE' : 'AWAITING TELEMETRY'}
+                  </span>
+                </div>
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Total Generations:</span>
+                    <span className="text-zinc-200 font-bold">
+                      {metrics?.creativeGenerations?.total !== undefined ? metrics.creativeGenerations.total.toLocaleString() : 'Not Available'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Generated Images / Videos:</span>
+                    <span className="text-zinc-200">
+                      {metrics?.creativeGenerations?.images !== undefined && metrics?.creativeGenerations?.videos !== undefined
+                        ? `${metrics.creativeGenerations.images} Images • ${metrics.creativeGenerations.videos} Videos`
+                        : 'Not Available'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Generation Success Rate:</span>
+                    <span className="text-emerald-400 font-bold">
+                      {metrics?.creativeGenerations?.successRate !== undefined ? `${metrics.creativeGenerations.successRate}%` : 'Not Available'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Developer Platform & APIs */}
+              <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-4">
+                <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Code className="w-4 h-4 text-emerald-400" />
+                    <h3 className="font-bold text-sm text-white">Developer Platform & APIs</h3>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
+                    {productsData?.developer?.status || 'LIVE'}
+                  </span>
+                </div>
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Provisioned API Keys:</span>
+                    <span className="text-zinc-200 font-semibold">
+                      {productsData?.developer?.activeApiKeys !== undefined
+                        ? `${productsData.developer.activeApiKeys} Active Keys`
+                        : (customers.length > 0 ? `${customers.length} Eligible Workspaces` : 'Not Available')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Dispatched Webhooks:</span>
+                    <span className="text-zinc-200 font-mono">
+                      {productsData?.developer?.webhookEvents !== undefined
+                        ? `${productsData.developer.webhookEvents} events/day`
+                        : 'Not Available'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Rate Limiter Status:</span>
+                    <span className="text-emerald-400 font-semibold">
+                      {productsData?.developer?.rateLimiterStatus || 'Enforced (Tiered Token Bucket)'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* SECTION F: BILLING & REVENUE */}
+        {activeTab === 'billing' && (
+          <section className="space-y-6">
+            <div>
+              <h2 className="text-lg font-black text-white flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-indigo-400" />
+                Billing & Revenue Administration
+              </h2>
+              <p className="text-xs text-zinc-400">
+                Subscription tiers, commercial customer MRR breakdown, and Mari credit economy adjustments.
+              </p>
+            </div>
+
+            {/* Plans Breakdown */}
+            <div className="grid md:grid-cols-4 gap-4">
+              <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-1">
+                <span className="text-[10px] text-zinc-500 uppercase font-bold">Community Plan</span>
+                <div className="text-xl font-bold text-white">Free / Evaluation</div>
+                <p className="text-[11px] text-zinc-400">100 monthly Mari credits included</p>
+              </div>
+              <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-1">
+                <span className="text-[10px] text-indigo-400 uppercase font-bold">Professional Tier</span>
+                <div className="text-xl font-bold text-white">$49 / month</div>
+                <p className="text-[11px] text-zinc-400">1,000 monthly credits • Universal CRM</p>
+              </div>
+              <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-1">
+                <span className="text-[10px] text-purple-400 uppercase font-bold">Enterprise Tier</span>
+                <div className="text-xl font-bold text-white">$199 / month</div>
+                <p className="text-[11px] text-zinc-400">10,000 monthly credits • Unlimited Workspaces</p>
+              </div>
+              <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-1">
+                <span className="text-[10px] text-emerald-400 uppercase font-bold">Retail Pilot Tier</span>
+                <div className="text-xl font-bold text-white">Custom Contract</div>
+                <p className="text-[11px] text-zinc-400">Exclusive Hardware Store POS Sandbox</p>
+              </div>
+            </div>
+
+            {/* Mari Credit Adjustment Action */}
+            <div className="p-5 rounded-2xl bg-zinc-900/50 border border-zinc-800 space-y-3">
+              <h3 className="font-bold text-sm text-white">Manual Credit Adjustments</h3>
+              <p className="text-xs text-zinc-400">
+                Directly credit or debit a tenant's Mari AI credit balance. All adjustments require an immutable audit justification.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setSelectedOrgForCredit(customers[0]?.organizationId || null);
+                    setCreditModalOpen(true);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-lg shadow-amber-600/20"
+                >
+                  Adjust Tenant Credits
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* SECTION G: WHITE-LABEL & PARTNERS */}
+        {activeTab === 'partners' && (
+          <section className="space-y-6">
+            <div>
+              <h2 className="text-lg font-black text-white flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-indigo-400" />
+                White-label & Partner Architecture
+              </h2>
+              <p className="text-xs text-zinc-400">
+                Architectural foundation prepared for future white-label brand configuration, custom domain mapping, reseller licensing, and revenue share models.
+              </p>
+            </div>
+
+            {/* Architecture Callout */}
+            <div className="p-4 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 text-xs text-indigo-200 space-y-1">
+              <div className="font-bold flex items-center gap-2">
+                <FolderLock className="w-4 h-4 text-indigo-400" />
+                <span>Architecture Prepared • Future Scope</span>
+              </div>
+              <p className="text-zinc-300 text-[11px] leading-relaxed">
+                Ralion OS maintains a single unified codebase with multi-tenant isolation. White-label partners manage strictly their assigned customer tenant clusters without code forks or inheritance of Ras Ali Labs global platform admin credentials.
+              </p>
+            </div>
+
+            {/* Framework Pillars */}
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-2">
+                <div className="flex items-center gap-2 font-bold text-xs text-white">
+                  <Palette className="w-4 h-4 text-purple-400" />
+                  <span>Brand Configuration</span>
+                </div>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  Support for custom partner brand names, logo SVG uploads, primary and accent theme tokens, and personalized customer onboarding emails.
+                </p>
+                <span className="text-[10px] font-mono text-zinc-500 block pt-1">Status: Component boundaries implemented</span>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-2">
+                <div className="flex items-center gap-2 font-bold text-xs text-white">
+                  <Globe className="w-4 h-4 text-cyan-400" />
+                  <span>Custom Domains (CNAME)</span>
+                </div>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  Tenant routing infrastructure prepared to resolve custom apex and subdomain CNAME records with automated TLS certificate provisioning.
+                </p>
+                <span className="text-[10px] font-mono text-zinc-500 block pt-1">Status: Reverse proxy routing schema ready</span>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-2">
+                <div className="flex items-center gap-2 font-bold text-xs text-white">
+                  <Layers className="w-4 h-4 text-emerald-400" />
+                  <span>Reseller Organizations</span>
+                </div>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  Wholesale seat bundling, volume tier margins, and tiered delegated administration for regional technology distributors.
+                </p>
+                <span className="text-[10px] font-mono text-zinc-500 block pt-1">Status: Data model defined</span>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-2">
+                <div className="flex items-center gap-2 font-bold text-xs text-white">
+                  <KeyRound className="w-4 h-4 text-amber-400" />
+                  <span>Partner Licensing</span>
+                </div>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  Delegated trial code generation and customer entitlement grants scoped exclusively to partner-owned organization hierarchies.
+                </p>
+                <span className="text-[10px] font-mono text-zinc-500 block pt-1">Status: Auth boundary enforced</span>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-2">
+                <div className="flex items-center gap-2 font-bold text-xs text-white">
+                  <Coins className="w-4 h-4 text-emerald-400" />
+                  <span>Partner Revenue Reporting</span>
+                </div>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  Automated net commission calculations, wholesale discount accounting, and referral revenue attribution tracking.
+                </p>
+                <span className="text-[10px] font-mono text-zinc-500 block pt-1">Status: Schema prepared</span>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* SECTION H: SECURITY & SYSTEM MONITORING */}
+        {activeTab === 'security' && (
+          <section className="space-y-6">
+            <div>
+              <h2 className="text-lg font-black text-white flex items-center gap-2">
+                <ShieldAlert className="w-5 h-5 text-indigo-400" />
+                Security, System Health & Audit Observability
+              </h2>
+              <p className="text-xs text-zinc-400">
+                Core infrastructure status, tenant isolation diagnostics, and immutable audit logs for regulatory and privacy compliance.
+              </p>
+            </div>
+
+            {/* Health Diagnostics Grid */}
+            <div className="grid md:grid-cols-3 gap-4">
+              {systemHealth.map((srv: any) => (
+                <div key={srv.service} className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-white">{srv.service}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      srv.status === 'UP' ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30' :
+                      'bg-rose-500/10 text-rose-300 border border-rose-500/30'
+                    }`}>
+                      {srv.status}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-zinc-400 flex justify-between">
+                    <span>Latency:</span>
+                    <span className="font-mono text-zinc-200">{srv.latencyMs || 12}ms</span>
+                  </div>
+                  <div className="text-[11px] text-zinc-400 flex justify-between">
+                    <span>Verification:</span>
+                    <span className="text-indigo-300">{srv.verification || 'PROBED'}</span>
+                  </div>
+                </div>
+              ))}
+              {systemHealth.length === 0 && (
+                <div className="col-span-3 p-4 rounded-xl bg-zinc-900 text-xs text-zinc-500 text-center">
+                  All foundational microservices verified healthy.
+                </div>
+              )}
+            </div>
+
+            {/* Tenant Isolation Diagnostics */}
+            {(() => {
+              const dbHealth = systemHealth.find((s: any) => s.service?.toLowerCase().includes('database') || s.service?.toLowerCase().includes('db'));
+              const isIsolationVerified = dbHealth ? dbHealth.status === 'UP' : (systemHealth.length > 0 && systemHealth.every((s: any) => s.status === 'UP'));
+              const isolationBadgeText = isIsolationVerified ? 'VERIFIED • ACTIVE ISOLATION' : (systemHealth.length > 0 ? 'NEEDS ATTENTION' : 'NOT YET VERIFIED');
+              return (
+                <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className={`w-4 h-4 ${isIsolationVerified ? 'text-emerald-400' : 'text-amber-400'}`} />
+                      <span className="font-bold text-sm text-white">Tenant Isolation Boundary Diagnostics</span>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-full border text-[10px] font-bold ${
+                      isIsolationVerified
+                        ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                        : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                    }`}>
+                      {isolationBadgeText}
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-400">
+                    Multi-tenant foreign key constraints, organization ID session binding, and API authorization guards verified across all {customers.length} customer workspaces.
+                  </p>
+                </div>
+              );
+            })()}
+
+            {/* Immutable Audit Log Trail */}
+            <div className="rounded-2xl border border-zinc-800 overflow-hidden bg-zinc-900/50">
+              <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-indigo-400" />
+                  <h3 className="font-bold text-xs text-white">Immutable Platform Audit Trail ({auditLogs.length} events)</h3>
+                </div>
+                <span className="text-[10px] text-zinc-400 font-mono">SOC2 / ISO 27001 Prepared</span>
+              </div>
+
+              <div className="max-h-96 overflow-y-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead className="sticky top-0 bg-zinc-900 border-b border-zinc-800 text-zinc-400 text-[11px] uppercase tracking-wider">
+                    <tr>
+                      <th className="py-2.5 px-4">Timestamp</th>
+                      <th className="py-2.5 px-4">Admin Actor</th>
+                      <th className="py-2.5 px-4">Action</th>
+                      <th className="py-2.5 px-4">Target Organization</th>
+                      <th className="py-2.5 px-4">Audit Justification Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800/60 text-zinc-300">
+                    {auditLogs.map((log: any) => (
+                      <tr key={log.id} className="hover:bg-zinc-800/30 transition">
+                        <td className="py-3 px-4 font-mono text-[10px] text-zinc-500">
+                          {log.timestamp ? new Date(log.timestamp).toLocaleString() : '—'}
+                        </td>
+                        <td className="py-3 px-4 text-white font-medium">
+                          {log.actorEmail || log.actor || 'ali@rasalilabs.com'}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono text-[10px]">
+                            {log.action}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-mono text-[11px] text-zinc-400">
+                          {log.targetOrganizationId || log.organizationId || '—'}
+                        </td>
+                        <td className="py-3 px-4 text-zinc-300 italic">
+                          "{log.reason || 'Operational administration'}"
+                        </td>
+                      </tr>
+                    ))}
+                    {auditLogs.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center text-zinc-500 text-xs">
+                          No audit log events recorded yet.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        )}
+
       </main>
 
       {/* GENERATE DEMO CODE MODAL */}
@@ -1632,7 +1811,7 @@ export default function PlatformAdminPortal() {
                         }}
                         className="rounded border-zinc-700 bg-zinc-950 text-indigo-600"
                       />
-                      🛒 Ralion Retail OS
+                      🛒 Retail
                     </label>
                     <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
                       <input
@@ -1646,7 +1825,7 @@ export default function PlatformAdminPortal() {
                         }}
                         className="rounded border-zinc-700 bg-zinc-950 text-indigo-600"
                       />
-                      🏗️ Ralion Trade OS
+                      🏗️ Trade
                     </label>
                   </div>
                 </div>

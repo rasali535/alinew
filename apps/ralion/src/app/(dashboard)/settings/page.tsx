@@ -14,7 +14,7 @@ export default function SettingsPage() {
   const isRasAli = activeOrgId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf';
 
   const [enabledPlugins, setEnabledPlugins] = useState<string[]>(['health', 'funeral', 'logistics', 'trade']);
-  const [activeTab, setActiveTab] = useState<'KNOWLEDGE' | 'PLUGINS' | 'ROLES' | 'BRANCHES' | 'SECURITY'>('KNOWLEDGE');
+  const [activeTab, setActiveTab] = useState<'KNOWLEDGE' | 'PLUGINS' | 'ROLES' | 'BRANCHES' | 'SECURITY' | 'DEVELOPER'>('KNOWLEDGE');
   const [isDesktopEnv, setIsDesktopEnv] = useState(false);
   const [deviceId, setDeviceId] = useState('RALION-HW-HASH-2026-BW-882109');
   const [updateState, setUpdateState] = useState<any>({ status: 'idle', currentVersion: '', availableVersion: null, percent: 0, message: 'Ready to check for updates.' });
@@ -158,13 +158,13 @@ export default function SettingsPage() {
         </div>
 
         <div className="flex bg-zinc-900 p-1 rounded-xl border border-zinc-800">
-          {(['KNOWLEDGE', 'PLUGINS', 'ROLES', 'BRANCHES', 'SECURITY'] as const).map((tab) => (
+          {(['KNOWLEDGE', 'PLUGINS', 'ROLES', 'BRANCHES', 'SECURITY', 'DEVELOPER'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${activeTab === tab ? 'bg-blue-600 text-white' : 'text-zinc-400'}`}
             >
-              {tab === 'KNOWLEDGE' ? 'Business Knowledge' : tab}
+              {tab === 'KNOWLEDGE' ? 'Business Knowledge' : tab === 'DEVELOPER' ? 'Developer Access' : tab}
             </button>
           ))}
         </div>
@@ -443,6 +443,65 @@ export default function SettingsPage() {
                 <Link href="/ralion/settings/ai-privacy">
                   <Button variant="primary" size="sm">Configure AI Runtime</Button>
                 </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Developer Access & Mari API Keys Tab */}
+      {activeTab === 'DEVELOPER' && (
+        <div className="space-y-6">
+          <Card className="bg-zinc-900 border-zinc-800 p-6 shadow-xl">
+            <CardHeader className="p-0 pb-4 border-b border-zinc-800 flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base text-white flex items-center gap-2">
+                  <Key className="w-5 h-5 text-indigo-400" /> Mari Intelligence API Keys & Developer Platform
+                </CardTitle>
+                <Badge variant="primary">Workspace Developer Scoped</Badge>
+              </div>
+              <CardDescription className="text-xs text-zinc-400">
+                Generate and manage tenant-scoped API credentials to integrate Mari business intelligence, knowledge vector search, and webhooks into your custom backends.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0 pt-6 space-y-4">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-2">
+                  <h4 className="font-bold text-white text-xs flex items-center gap-2">
+                    <Key className="w-4 h-4 text-purple-400" /> API Keys & Authorization
+                  </h4>
+                  <p className="text-xs text-zinc-400 leading-relaxed">
+                    View active API keys, provision new scoped secret keys, and monitor monthly request and credit quotas.
+                  </p>
+                  <div className="pt-2">
+                    <Link href="/ralion/developer">
+                      <Button variant="primary" size="sm" className="font-bold text-xs">
+                        Open API Key Manager
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-2">
+                  <h4 className="font-bold text-white text-xs flex items-center gap-2">
+                    <Globe className="w-4 h-4 text-cyan-400" /> Embeddable Website Widget
+                  </h4>
+                  <p className="text-xs text-zinc-400 leading-relaxed">
+                    Configure customer-facing website chat widgets, domain whitelisting, and autonomous business leads capture.
+                  </p>
+                  <div className="pt-2">
+                    <Link href="/ralion/developer/widgets">
+                      <Button variant="outline" size="sm" className="font-bold text-xs">
+                        Configure Website Widget
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-indigo-950/30 border border-indigo-500/20 text-xs text-indigo-300">
+                <span className="font-bold block">Authorization Boundary:</span>
+                API key provisioning, rotation, and revocation are strictly enforced by server-side authorization. Only Organization Owners and Administrators can manage API keys for this workspace.
               </div>
             </CardContent>
           </Card>
