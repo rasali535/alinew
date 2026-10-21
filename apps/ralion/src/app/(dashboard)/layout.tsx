@@ -128,7 +128,16 @@ export default function DashboardLayout({
   const isProinsightTenant =
     organization?.id === '85ec9738-937a-41ee-b0df-ed752777447c' &&
     workspace?.id === '67074e47-76bb-40e1-ae05-362e9cae8798';
-  const hasRetailEntitlement = isProinsightTenant || isPlatformAdmin;
+  const enabledModules: string[] = Array.isArray(organization?.enabledModules)
+    ? organization.enabledModules
+    : ((organization as any)?.settings?.modules || []);
+  const hasRetailEntitlement = isProinsightTenant || isPlatformAdmin || enabledModules.includes('retail');
+  const hasTradeEntitlement = isPlatformAdmin || enabledModules.includes('trade');
+  const orgBranding = organization?.branding ? {
+    brandName: organization.name,
+    logoUrl: organization.branding.logoUrl,
+    accentColor: organization.branding.accentColor,
+  } : undefined;
   const organizationName =
     organization?.name ||
     (user?.displayName
@@ -165,6 +174,9 @@ export default function DashboardLayout({
             tier={displayTier}
             isPlatformAdmin={isPlatformAdmin}
             hasRetailEntitlement={hasRetailEntitlement}
+            hasTradeEntitlement={hasTradeEntitlement}
+            entitledModules={enabledModules}
+            branding={orgBranding}
             platformUrl={process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com'}
             isCollapsed={isSidebarCollapsed}
             onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
@@ -187,6 +199,9 @@ export default function DashboardLayout({
                 tier={displayTier}
                 isPlatformAdmin={isPlatformAdmin}
                 hasRetailEntitlement={hasRetailEntitlement}
+                hasTradeEntitlement={hasTradeEntitlement}
+                entitledModules={enabledModules}
+                branding={orgBranding}
                 platformUrl={process.env.NEXT_PUBLIC_RASALI_PLATFORM_URL || 'https://rasalilabs.com'}
                 isCollapsed={false}
                 onNavigate={handleNavigate}
