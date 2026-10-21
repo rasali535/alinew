@@ -15,6 +15,10 @@ import {
   AlertCircle,
   RefreshCw,
   ShoppingBag,
+  MessageSquare,
+  Paperclip,
+  Check,
+  ExternalLink,
 } from 'lucide-react';
 import { RetailNavHeader } from '../components/RetailNavHeader';
 import { RetailAccessErrorCard, RetailErrorState } from '../components/RetailAccessErrorCard';
@@ -51,6 +55,14 @@ export default function RetailQuotationsPage() {
   const [errorState, setErrorState] = useState<RetailErrorState | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+
+  // Sub-navigation & WhatsApp RFQ Inbox
+  const [activeTab, setActiveTab] = useState<'QUOTES' | 'WHATSAPP_RFQ'>('QUOTES');
+  const [rfqDrafts, setRfqDrafts] = useState<any[]>([]);
+  const [rfqLoading, setRfqLoading] = useState(false);
+  const [rfqFilter, setRfqFilter] = useState<'ALL' | 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED'>('ALL');
+  const [actioningRfqId, setActioningRfqId] = useState<string | null>(null);
+  const [selectedRfqDraft, setSelectedRfqDraft] = useState<any | null>(null);
 
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -116,9 +128,49 @@ export default function RetailQuotationsPage() {
     }
   };
 
+  const fetchRfqDrafts = async () => {
+    try {
+      setRfqLoading(true);
+      const res = await authFetch('/api/whatsapp/rfq');
+      const data = await res.json();
+      if (data.success) {
+        setRfqDrafts(data.drafts || []);
+      }
+    } catch (e) {
+      console.error('Failed to fetch WhatsApp RFQ drafts', e);
+    } finally {
+      setRfqLoading(false);
+    }
+  };
+
+  const handleReviewRfq = async (draftId: string, action: 'APPROVE' | 'REJECT', customerPhone?: string, quoteNumber?: string) => {
+    try {
+      setActioningRfqId(draftId);
+      const res = await authFetch('/api/whatsapp/rfq', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ draftId, action, customerPhone, quoteNumber }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setNotification(`WhatsApp RFQ draft ${action === 'APPROVE' ? 'approved & dispatched' : 'rejected'}.`);
+        setTimeout(() => setNotification(null), 4000);
+        fetchRfqDrafts();
+        fetchQuotations();
+      } else {
+        alert(data.error || 'Failed to update RFQ draft');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error reviewing RFQ draft');
+    } finally {
+      setActioningRfqId(null);
+    }
+  };
+
   useEffect(() => {
     fetchQuotations();
     fetchProducts();
+    fetchRfqDrafts();
   }, []);
 
   const handleAddItem = (productId: string) => {
@@ -306,155 +358,503 @@ export default function RetailQuotationsPage() {
           </div>
         )}
 
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-bold tracking-tight text-zinc-100 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-emerald-400" />
-              Contractor & Customer Quotations
-            </h2>
-            <p className="text-sm text-zinc-400">
-              Generate binding building-material quotes, estimate contractor packages, and convert directly to sales in USD ($).
-            </p>
-          </div>
+        {/* Sub-Navigation Tabs */}
+        <div className="flex border-b border-zinc-800 gap-2">
+          <button
+            onClick={() => setActiveTab('QUOTES')}
+            className={`flex items-center gap-2 px-4 py-3 font-semibold text-sm border-b-2 transition ${
+              activeTab === 'QUOTES'
+                ? 'border-emerald-500 text-emerald-400'
+                : 'border-transparent text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            Quotations Registry
+            <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-zinc-800 text-zinc-300">
+              {quotations.length}
+            </span>
+          </button>
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={fetchQuotations}
-              className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800 transition"
-              title="Refresh"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-sm flex items-center gap-2 transition shadow-sm"
-            >
-              <Plus className="w-4 h-4" />
-              New Quotation
-            </button>
-          </div>
+          <button
+            onClick={() => setActiveTab('WHATSAPP_RFQ')}
+            className={`flex items-center gap-2 px-4 py-3 font-semibold text-sm border-b-2 transition ${
+              activeTab === 'WHATSAPP_RFQ'
+                ? 'border-emerald-500 text-emerald-400'
+                : 'border-transparent text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <MessageSquare className="w-4 h-4" />
+            WhatsApp RFQ Inbox
+            {rfqDrafts.filter((d: any) => d.status === 'PENDING_REVIEW').length > 0 ? (
+              <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse">
+                {rfqDrafts.filter((d: any) => d.status === 'PENDING_REVIEW').length} PENDING
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-zinc-800 text-zinc-400">
+                {rfqDrafts.length}
+              </span>
+            )}
+          </button>
         </div>
 
-        {/* Filters */}
-        <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 backdrop-blur-sm">
-          <div className="flex-1 min-w-[240px] relative">
-            <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search by quote # or customer name..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl pl-9 pr-4 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-emerald-500/50"
-            />
-          </div>
+        {activeTab === 'QUOTES' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-bold tracking-tight text-zinc-100 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-emerald-400" />
+                  Contractor & Customer Quotations
+                </h2>
+                <p className="text-sm text-zinc-400">
+                  Generate binding building-material quotes, estimate contractor packages, and convert directly to sales in USD ($).
+                </p>
+              </div>
 
-          <div className="flex items-center gap-2">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="bg-zinc-950/80 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-300 focus:outline-none focus:border-emerald-500/50"
-            >
-              <option value="all">All Statuses</option>
-              <option value="draft">Draft</option>
-              <option value="sent">Sent</option>
-              <option value="accepted">Accepted</option>
-              <option value="converted">Converted to Sale</option>
-              <option value="expired">Expired</option>
-            </select>
-          </div>
-        </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={fetchQuotations}
+                  className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800 transition"
+                  title="Refresh"
+                >
+                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                </button>
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-sm flex items-center gap-2 transition shadow-sm"
+                >
+                  <Plus className="w-4 h-4" />
+                  New Quotation
+                </button>
+              </div>
+            </div>
 
-        {/* Quotes Table */}
-        <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden backdrop-blur-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-zinc-800 text-xs font-semibold text-zinc-400 uppercase tracking-wider bg-zinc-950/40">
-                  <th className="py-3.5 px-4">Quote #</th>
-                  <th className="py-3.5 px-4">Customer</th>
-                  <th className="py-3.5 px-4 text-right">Grand Total (USD)</th>
-                  <th className="py-3.5 px-4 text-center">Status</th>
-                  <th className="py-3.5 px-4">Valid Until</th>
-                  <th className="py-3.5 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-800/60">
-                {loading ? (
-                  <tr>
-                    <td colSpan={6} className="py-12 text-center text-zinc-500">
-                      <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-emerald-500" />
-                      Loading quotations...
-                    </td>
-                  </tr>
-                ) : filteredQuotes.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="py-12 text-center text-zinc-500">
-                      No quotations recorded. Click "New Quotation" to create one.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredQuotes.map((q) => (
-                    <tr key={q.id} className="hover:bg-zinc-800/30 transition-colors">
-                      <td className="py-3.5 px-4 font-mono font-medium text-emerald-400">
-                        {q.quotation_number || q.quoteNumber || '—'}
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <div className="font-medium text-zinc-100">{q.customer_name || q.customerName}</div>
-                        {(q.customer_phone || q.customerPhone) && (
-                          <div className="text-xs text-zinc-400">{q.customer_phone || q.customerPhone}</div>
-                        )}
-                      </td>
-                      <td className="py-3.5 px-4 text-right font-mono font-bold text-zinc-100">
-                        {formatPrice(q.grand_total ?? q.totalAmount)}
-                      </td>
-                      <td className="py-3.5 px-4 text-center">
-                        <span
-                          className={`px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${
-                            q.status === 'converted'
-                              ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                              : q.status === 'accepted'
-                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                              : q.status === 'expired'
-                              ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                              : 'bg-zinc-800 text-zinc-300 border border-zinc-700/60'
-                          }`}
-                        >
-                          {q.status}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-xs text-zinc-400">
-                        {q.valid_until ? new Date(q.valid_until).toLocaleDateString() : '—'}
-                      </td>
-                      <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => {
-                              setSelectedQuote(q);
-                              setShowDetailModal(true);
-                            }}
-                            className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 transition"
-                          >
-                            View
-                          </button>
-                          {q.status !== 'converted' && (
-                            <button
-                              onClick={() => handleConvertToSale(q.id)}
-                              disabled={convertingId === q.id}
-                              className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition flex items-center gap-1 disabled:opacity-50"
-                            >
-                              <ShoppingBag className="w-3.5 h-3.5" />
-                              {convertingId === q.id ? 'Converting...' : 'Convert to Sale'}
-                            </button>
-                          )}
-                        </div>
-                      </td>
+            {/* Filters */}
+            <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 backdrop-blur-sm">
+              <div className="flex-1 min-w-[240px] relative">
+                <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search by quote # or customer name..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl pl-9 pr-4 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-emerald-500/50"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="bg-zinc-950/80 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-300 focus:outline-none focus:border-emerald-500/50"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="draft">Draft</option>
+                  <option value="sent">Sent</option>
+                  <option value="accepted">Accepted</option>
+                  <option value="converted">Converted to Sale</option>
+                  <option value="expired">Expired</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Quotes Table */}
+            <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden backdrop-blur-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-zinc-800 text-xs font-semibold text-zinc-400 uppercase tracking-wider bg-zinc-950/40">
+                      <th className="py-3.5 px-4">Quote #</th>
+                      <th className="py-3.5 px-4">Customer</th>
+                      <th className="py-3.5 px-4 text-right">Grand Total (USD)</th>
+                      <th className="py-3.5 px-4 text-center">Status</th>
+                      <th className="py-3.5 px-4">Valid Until</th>
+                      <th className="py-3.5 px-4 text-right">Actions</th>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800/60">
+                    {loading ? (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center text-zinc-500">
+                          <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-emerald-500" />
+                          Loading quotations...
+                        </td>
+                      </tr>
+                    ) : filteredQuotes.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center text-zinc-500">
+                          No quotations recorded. Click "New Quotation" to create one.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredQuotes.map((q) => (
+                        <tr key={q.id} className="hover:bg-zinc-800/30 transition-colors">
+                          <td className="py-3.5 px-4 font-mono font-medium text-emerald-400">
+                            {q.quotation_number || q.quoteNumber || '—'}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <div className="font-medium text-zinc-100">{q.customer_name || q.customerName}</div>
+                            {(q.customer_phone || q.customerPhone) && (
+                              <div className="text-xs text-zinc-400">{q.customer_phone || q.customerPhone}</div>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-mono font-bold text-zinc-100">
+                            {formatPrice(q.grand_total ?? q.totalAmount)}
+                          </td>
+                          <td className="py-3.5 px-4 text-center">
+                            <span
+                              className={`px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${
+                                q.status === 'converted'
+                                  ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                  : q.status === 'accepted'
+                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                  : q.status === 'expired'
+                                  ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                                  : 'bg-zinc-800 text-zinc-300 border border-zinc-700/60'
+                              }`}
+                            >
+                              {q.status}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-xs text-zinc-400">
+                            {q.valid_until ? new Date(q.valid_until).toLocaleDateString() : '—'}
+                          </td>
+                          <td className="py-3.5 px-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => {
+                                  setSelectedQuote(q);
+                                  setShowDetailModal(true);
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 transition"
+                              >
+                                View
+                              </button>
+                              {q.status !== 'converted' && (
+                                <button
+                                  onClick={() => handleConvertToSale(q.id)}
+                                  disabled={convertingId === q.id}
+                                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition flex items-center gap-1 disabled:opacity-50"
+                                >
+                                  <ShoppingBag className="w-3.5 h-3.5" />
+                                  {convertingId === q.id ? 'Converting...' : 'Convert to Sale'}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* WHATSAPP RFQ INBOX TAB */}
+        {activeTab === 'WHATSAPP_RFQ' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5 text-emerald-400" />
+                  WhatsApp RFQ Inbox & Quotation Requests
+                </h2>
+                <p className="text-sm text-zinc-400">
+                  Customer quotation requests submitted through Central WhatsApp (<code className="text-emerald-400 font-mono">+1 202 908 7457</code>). Mari extracts requested materials and matches live inventory.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={fetchRfqDrafts}
+                  className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800 transition"
+                  title="Refresh RFQs"
+                >
+                  <RefreshCw className={`w-4 h-4 ${rfqLoading ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+            </div>
+
+            {/* Filter Pills */}
+            <div className="flex flex-wrap items-center gap-2">
+              {(['ALL', 'PENDING_REVIEW', 'APPROVED', 'REJECTED'] as const).map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setRfqFilter(status)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
+                    rfqFilter === status
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                  }`}
+                >
+                  {status === 'ALL' && `All (${rfqDrafts.length})`}
+                  {status === 'PENDING_REVIEW' && `Pending Review (${rfqDrafts.filter((d: any) => d.status === 'PENDING_REVIEW').length})`}
+                  {status === 'APPROVED' && `Approved (${rfqDrafts.filter((d: any) => d.status === 'APPROVED').length})`}
+                  {status === 'REJECTED' && `Rejected (${rfqDrafts.filter((d: any) => d.status === 'REJECTED').length})`}
+                </button>
+              ))}
+            </div>
+
+            {/* RFQ Drafts Table */}
+            <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden backdrop-blur-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-zinc-800 text-xs font-semibold text-zinc-400 uppercase tracking-wider bg-zinc-950/40">
+                      <th className="py-3.5 px-4">Received</th>
+                      <th className="py-3.5 px-4">Customer WhatsApp</th>
+                      <th className="py-3.5 px-4">Customer Enquiry</th>
+                      <th className="py-3.5 px-4">Mari Extracted Items</th>
+                      <th className="py-3.5 px-4 text-center">Status</th>
+                      <th className="py-3.5 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800/60">
+                    {rfqLoading ? (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center text-zinc-500">
+                          <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-emerald-500" />
+                          Loading WhatsApp quotation requests...
+                        </td>
+                      </tr>
+                    ) : rfqDrafts.filter((d: any) => rfqFilter === 'ALL' || d.status === rfqFilter).length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center text-zinc-500">
+                          No WhatsApp quotation requests found matching the selected filter.
+                        </td>
+                      </tr>
+                    ) : (
+                      rfqDrafts
+                        .filter((d: any) => rfqFilter === 'ALL' || d.status === rfqFilter)
+                        .map((draft: any) => {
+                          const items = Array.isArray(draft.extracted_items) ? draft.extracted_items : [];
+                          return (
+                            <tr key={draft.id} className="hover:bg-zinc-800/30 transition-colors">
+                              <td className="py-3.5 px-4 text-xs text-zinc-400 whitespace-nowrap">
+                                {draft.created_at ? new Date(draft.created_at).toLocaleString() : '—'}
+                              </td>
+                              <td className="py-3.5 px-4 font-mono font-medium text-emerald-400">
+                                {draft.customer_phone || '—'}
+                              </td>
+                              <td className="py-3.5 px-4 max-w-xs">
+                                <p className="text-xs text-zinc-200 line-clamp-2">
+                                  {draft.source_text || 'Customer inquiry'}
+                                </p>
+                                {draft.media_url && (
+                                  <a
+                                    href={draft.media_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300 mt-1"
+                                  >
+                                    <Paperclip className="w-3 h-3" />
+                                    View Attachment
+                                  </a>
+                                )}
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <div className="space-y-1">
+                                  {items.slice(0, 3).map((it: any, i: number) => (
+                                    <div key={i} className="text-xs flex items-center gap-2">
+                                      <span className="font-semibold text-zinc-200">{it.quantity}x {it.product_name}</span>
+                                      <span className="text-zinc-500 font-mono text-[11px]">${it.unit_price}</span>
+                                      <span className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${
+                                        it.in_stock ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'
+                                      }`}>
+                                        {it.in_stock ? 'In Stock' : 'Low/Backorder'}
+                                      </span>
+                                    </div>
+                                  ))}
+                                  {items.length > 3 && (
+                                    <div className="text-[11px] text-zinc-500 font-medium">
+                                      +{items.length - 3} more items
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                                <span
+                                  className={`px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${
+                                    draft.status === 'APPROVED'
+                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                      : draft.status === 'REJECTED'
+                                      ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                                      : 'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse'
+                                  }`}
+                                >
+                                  {draft.status || 'PENDING_REVIEW'}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4 text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                  <button
+                                    onClick={() => setSelectedRfqDraft(draft)}
+                                    className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 transition"
+                                  >
+                                    Inspect
+                                  </button>
+                                  {draft.status === 'PENDING_REVIEW' && (
+                                    <>
+                                      <button
+                                        onClick={() => handleReviewRfq(draft.id, 'APPROVE', draft.customer_phone, draft.quotation_id)}
+                                        disabled={actioningRfqId === draft.id}
+                                        className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition flex items-center gap-1 disabled:opacity-50"
+                                      >
+                                        <Check className="w-3.5 h-3.5" />
+                                        Approve & Send
+                                      </button>
+                                      <button
+                                        onClick={() => handleReviewRfq(draft.id, 'REJECT')}
+                                        disabled={actioningRfqId === draft.id}
+                                        className="px-2 py-1 rounded-lg bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 text-xs transition disabled:opacity-50"
+                                      >
+                                        Reject
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* RFQ INSPECTION MODAL */}
+        {selectedRfqDraft && (
+          <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+              <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5 text-emerald-400" />
+                  <h3 className="font-bold text-base text-white">WhatsApp RFQ Enquiry Details</h3>
+                </div>
+                <button
+                  onClick={() => setSelectedRfqDraft(null)}
+                  className="text-zinc-500 hover:text-zinc-300 p-1"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4 overflow-y-auto flex-1 pr-1 text-sm">
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800">
+                    <span className="text-zinc-500 uppercase font-mono font-bold text-[10px]">Customer WhatsApp</span>
+                    <div className="font-bold text-white text-sm font-mono mt-0.5">{selectedRfqDraft.customer_phone}</div>
+                  </div>
+                  <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800">
+                    <span className="text-zinc-500 uppercase font-mono font-bold text-[10px]">Draft Status</span>
+                    <div className="font-bold text-amber-400 mt-0.5">{selectedRfqDraft.status}</div>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 space-y-1">
+                  <span className="text-zinc-500 uppercase font-mono font-bold text-[10px]">Original Customer Message</span>
+                  <p className="text-xs text-zinc-200 whitespace-pre-wrap">{selectedRfqDraft.source_text || 'No text content.'}</p>
+                  {selectedRfqDraft.media_url && (
+                    <div className="pt-2">
+                      <a
+                        href={selectedRfqDraft.media_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 underline font-medium"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        Open Attached Image / PDF Document
+                      </a>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <span className="text-zinc-400 font-semibold text-xs uppercase tracking-wider">
+                    Mari Extracted Catalogue Items
+                  </span>
+                  <div className="border border-zinc-800 rounded-xl overflow-hidden">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-zinc-950 border-b border-zinc-800 text-zinc-400">
+                        <tr>
+                          <th className="py-2 px-3">Item</th>
+                          <th className="py-2 px-3 text-center">Qty</th>
+                          <th className="py-2 px-3 text-right">Unit Price</th>
+                          <th className="py-2 px-3 text-center">Stock</th>
+                          <th className="py-2 px-3 text-right">Line Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-800/60">
+                        {(Array.isArray(selectedRfqDraft.extracted_items) ? selectedRfqDraft.extracted_items : []).map(
+                          (it: any, i: number) => (
+                            <tr key={i}>
+                              <td className="py-2 px-3 font-medium text-white">{it.product_name}</td>
+                              <td className="py-2 px-3 text-center text-zinc-300 font-mono">{it.quantity}</td>
+                              <td className="py-2 px-3 text-right text-zinc-300 font-mono">${it.unit_price}</td>
+                              <td className="py-2 px-3 text-center">
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                                  it.in_stock ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'
+                                }`}>
+                                  {it.in_stock ? 'In Stock' : 'Low/Backorder'}
+                                </span>
+                              </td>
+                              <td className="py-2 px-3 text-right text-emerald-400 font-mono font-bold">${it.line_total}</td>
+                            </tr>
+                          )
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800 text-xs text-zinc-400">
+                  <strong className="text-zinc-200">Financial Integrity Guard:</strong> Approving this quotation dispatches the official quote to the customer via WhatsApp but does NOT deduct physical inventory until the customer accepts and payment is confirmed.
+                </div>
+              </div>
+
+              <div className="border-t border-zinc-800 pt-3 flex items-center justify-end gap-2">
+                <button
+                  onClick={() => setSelectedRfqDraft(null)}
+                  className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 transition"
+                >
+                  Close
+                </button>
+                {selectedRfqDraft.status === 'PENDING_REVIEW' && (
+                  <>
+                    <button
+                      onClick={async () => {
+                        await handleReviewRfq(selectedRfqDraft.id, 'REJECT');
+                        setSelectedRfqDraft(null);
+                      }}
+                      className="px-4 py-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 text-xs font-semibold transition"
+                    >
+                      Reject Enquiry
+                    </button>
+                    <button
+                      onClick={async () => {
+                        await handleReviewRfq(
+                          selectedRfqDraft.id,
+                          'APPROVE',
+                          selectedRfqDraft.customer_phone,
+                          selectedRfqDraft.quotation_id
+                        );
+                        setSelectedRfqDraft(null);
+                      }}
+                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      Approve & Dispatch via WhatsApp
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* CREATE QUOTE MODAL */}
         {showCreateModal && (

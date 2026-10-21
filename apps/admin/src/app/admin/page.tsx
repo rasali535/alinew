@@ -47,7 +47,9 @@ import {
   CheckCircle,
   Radio,
   SlidersHorizontal,
-  FolderLock
+  FolderLock,
+  MessageSquare,
+  Phone
 } from 'lucide-react';
 
 interface MetricsData {
@@ -1558,6 +1560,67 @@ export default function PlatformAdminPortal() {
                     <span className="text-emerald-400 font-semibold">
                       {productsData?.developer?.rateLimiterStatus || 'Enforced (Tiered Token Bucket)'}
                     </span>
+                  </div>
+                </div>
+              </div>
+              {/* Central Ralion WhatsApp Gateway (via Zernio) */}
+              <div className="col-span-1 md:col-span-2 p-5 rounded-2xl bg-zinc-900/60 border border-amber-500/30 space-y-4 shadow-xl shadow-amber-950/10">
+                <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4 text-amber-400" />
+                    <h3 className="font-bold text-sm text-white">Central Ralion WhatsApp Gateway (via Zernio)</h3>
+                    <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30 text-[10px] font-mono font-bold">
+                      SANDBOX EVALUATION
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 font-bold text-[10px] flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                      SANDBOX SENDER • PRE-MERGE PILOT
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+                  <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800/80">
+                    <span className="text-[10px] text-zinc-500 uppercase font-mono font-bold">Evaluation Sender</span>
+                    <div className="text-sm font-bold text-white mt-1 flex items-center gap-1.5">
+                      <Phone className="w-3.5 h-3.5 text-amber-400" />
+                      +1 (202) 908-7457
+                    </div>
+                    <span className="text-[10px] text-amber-300/80">Zernio Shared Sandbox Number</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800/80">
+                    <span className="text-[10px] text-zinc-500 uppercase font-mono font-bold">Zernio Account ID</span>
+                    <div className="text-xs font-mono font-bold text-indigo-300 mt-1 truncate" title="6a180a034c7f364ffded3c9c">
+                      6a180a034c7f364ffded3c9c
+                    </div>
+                    <span className="text-[10px] text-zinc-400">Sandbox Phone ID: 1060430523830897</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800/80">
+                    <span className="text-[10px] text-zinc-500 uppercase font-mono font-bold">Conversation Routing</span>
+                    <div className="text-xs font-bold text-emerald-300 mt-1">
+                      3 Modes Authoritative
+                    </div>
+                    <span className="text-[10px] text-zinc-400">Mode A (Public), B (User), C (RFQ)</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800/80">
+                    <span className="text-[10px] text-zinc-500 uppercase font-mono font-bold">Pilot Safety Gate</span>
+                    <div className="text-xs font-bold text-amber-300 mt-1">
+                      WHATSAPP_PILOT_ALLOWLIST
+                    </div>
+                    <span className="text-[10px] text-zinc-400">Restricted evaluate mode</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 text-[11px] text-zinc-400 border-t border-zinc-800/60">
+                  <div className="flex items-center gap-3">
+                    <span><strong className="text-zinc-200">Webhook Route:</strong> <code className="text-emerald-400 font-mono">/api/webhooks/zernio</code></span>
+                    <span><strong className="text-zinc-200">Signature:</strong> <code className="text-indigo-400 font-mono">HMAC-SHA256 (Raw Body)</code></span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-zinc-300">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Social publishing & tenant accounts strictly isolated</span>
                   </div>
                 </div>
               </div>
