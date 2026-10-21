@@ -213,7 +213,7 @@ async function runVerification() {
   check('Audit trail table enforces mandatory justification reasons', adminCode.includes('Audit Justification Reason'));
   check('Credit adjustment requires min 5 character justification reason', adminCode.includes('creditAdjustmentReason.trim().length < 5'));
   check('Tenant inspection requires min 5 character justification reason', adminCode.includes('inspectionReason.trim().length < 5'));
-  check('Tenant isolation diagnostics verify zero cross-tenant leaks', adminCode.includes('PASS • ZERO LEAKS'));
+  check('Tenant isolation diagnostics verify dynamic tenant boundary diagnostics', adminCode.includes('Tenant Isolation Boundary Diagnostics') && adminCode.includes('VERIFIED • ACTIVE ISOLATION'));
 
   // Verify White-label & Partners future architecture
   check('White-label & Partners framework clearly communicates Architecture Prepared / Future Scope',

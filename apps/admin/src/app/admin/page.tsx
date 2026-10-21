@@ -1316,8 +1316,16 @@ export default function PlatformAdminPortal() {
                     <Globe className="w-4 h-4 text-blue-400" />
                     <h3 className="font-bold text-sm text-white">Meta Graph API & Social Connectors</h3>
                   </div>
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
-                    TOKEN VALID
+                  <span className={`px-2 py-0.5 rounded-full border text-[10px] font-bold ${
+                    metrics?.adminFacebook?.tokenStatus === 'TOKEN_VALID' || metrics?.adminFacebook?.tokenStatus === 'VALID'
+                      ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                      : metrics?.adminFacebook?.connectionStatus === 'CONNECTED'
+                        ? 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'
+                        : metrics?.connectedMetaAccounts && metrics.connectedMetaAccounts > 0
+                          ? 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30'
+                          : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+                  }`}>
+                    {metrics?.adminFacebook?.tokenStatus || (metrics?.connectedMetaAccounts && metrics.connectedMetaAccounts > 0 ? 'CONNECTED' : 'NOT CONNECTED')}
                   </span>
                 </div>
                 <div className="space-y-2 text-xs">
@@ -1327,11 +1335,15 @@ export default function PlatformAdminPortal() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-zinc-500">Facebook Page:</span>
-                    <span className="text-white font-semibold">{metrics?.adminFacebook?.pageName || 'Ras Ali Labs Official'}</span>
+                    <span className="text-white font-semibold">{metrics?.adminFacebook?.pageName || (metrics?.connectedMetaAccounts && metrics.connectedMetaAccounts > 0 ? 'Active Page' : 'Not Connected')}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-zinc-500">Followers Count:</span>
-                    <span className="text-zinc-200 font-mono">{metrics?.adminFacebook?.followersCount || 1240}</span>
+                    <span className="text-zinc-200 font-mono">
+                      {metrics?.adminFacebook?.followersCount !== undefined && metrics.adminFacebook.followersCount !== null
+                        ? metrics.adminFacebook.followersCount.toLocaleString()
+                        : 'Not Available'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1343,22 +1355,28 @@ export default function PlatformAdminPortal() {
                     <Share2 className="w-4 h-4 text-indigo-400" />
                     <h3 className="font-bold text-sm text-white">Zernio Social Publisher</h3>
                   </div>
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
-                    CONNECTED
+                  <span className={`px-2 py-0.5 rounded-full border text-[10px] font-bold ${
+                    metrics?.adminZernio?.status === 'HEALTHY' || metrics?.adminZernio?.status === 'CONNECTED'
+                      ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                      : metrics?.connectedZernioProfiles && metrics.connectedZernioProfiles > 0
+                        ? 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'
+                        : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+                  }`}>
+                    {metrics?.adminZernio?.status || (metrics?.connectedZernioProfiles && metrics.connectedZernioProfiles > 0 ? 'CONNECTED' : 'NOT CONNECTED')}
                   </span>
                 </div>
                 <div className="space-y-2 text-xs">
                   <div className="flex justify-between">
                     <span className="text-zinc-500">Active Profiles:</span>
-                    <span className="text-zinc-200 font-semibold">{metrics?.connectedZernioProfiles ?? 1} Profiles</span>
+                    <span className="text-zinc-200 font-semibold">{metrics?.connectedZernioProfiles !== undefined ? `${metrics.connectedZernioProfiles} Profiles` : '0 Profiles'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-zinc-500">Profile Name:</span>
-                    <span className="text-white font-semibold">{metrics?.adminZernio?.profileName || 'Ras Ali Labs Master Broadcast'}</span>
+                    <span className="text-white font-semibold">{metrics?.adminZernio?.profileName || (metrics?.connectedZernioProfiles && metrics.connectedZernioProfiles > 0 ? 'Primary Profile' : 'None Configured')}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-zinc-500">Provider Status:</span>
-                    <span className="text-emerald-400 font-semibold">{metrics?.adminZernio?.status || 'HEALTHY'}</span>
+                    <span className="text-zinc-200 font-semibold">{metrics?.adminZernio?.status || (metrics?.connectedZernioProfiles && metrics.connectedZernioProfiles > 0 ? 'Active' : 'Not Connected')}</span>
                   </div>
                 </div>
               </div>
@@ -1370,22 +1388,32 @@ export default function PlatformAdminPortal() {
                     <Sparkles className="w-4 h-4 text-purple-400" />
                     <h3 className="font-bold text-sm text-white">Creative Intelligence Engine</h3>
                   </div>
-                  <span className="px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/30 text-[10px] font-bold">
-                    AI CLOUD LIVE
+                  <span className={`px-2 py-0.5 rounded-full border text-[10px] font-bold ${
+                    metrics?.creativeGenerations ? 'bg-purple-500/10 text-purple-300 border-purple-500/30' : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+                  }`}>
+                    {metrics?.creativeGenerations ? 'AI CLOUD LIVE' : 'AWAITING TELEMETRY'}
                   </span>
                 </div>
                 <div className="space-y-2 text-xs">
                   <div className="flex justify-between">
                     <span className="text-zinc-500">Total Generations:</span>
-                    <span className="text-zinc-200 font-bold">{metrics?.creativeGenerations?.total || 148}</span>
+                    <span className="text-zinc-200 font-bold">
+                      {metrics?.creativeGenerations?.total !== undefined ? metrics.creativeGenerations.total.toLocaleString() : 'Not Available'}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-zinc-500">Generated Images / Videos:</span>
-                    <span className="text-zinc-200">{metrics?.creativeGenerations?.images || 112} Images • {metrics?.creativeGenerations?.videos || 36} Videos</span>
+                    <span className="text-zinc-200">
+                      {metrics?.creativeGenerations?.images !== undefined && metrics?.creativeGenerations?.videos !== undefined
+                        ? `${metrics.creativeGenerations.images} Images • ${metrics.creativeGenerations.videos} Videos`
+                        : 'Not Available'}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-zinc-500">Generation Success Rate:</span>
-                    <span className="text-emerald-400 font-bold">{metrics?.creativeGenerations?.successRate || 98.4}%</span>
+                    <span className="text-emerald-400 font-bold">
+                      {metrics?.creativeGenerations?.successRate !== undefined ? `${metrics.creativeGenerations.successRate}%` : 'Not Available'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1398,21 +1426,31 @@ export default function PlatformAdminPortal() {
                     <h3 className="font-bold text-sm text-white">Developer Platform & APIs</h3>
                   </div>
                   <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
-                    REST v1.2 LIVE
+                    {productsData?.developer?.status || 'LIVE'}
                   </span>
                 </div>
                 <div className="space-y-2 text-xs">
                   <div className="flex justify-between">
                     <span className="text-zinc-500">Provisioned API Keys:</span>
-                    <span className="text-zinc-200 font-semibold">12 Active Tenant Keys</span>
+                    <span className="text-zinc-200 font-semibold">
+                      {productsData?.developer?.activeApiKeys !== undefined
+                        ? `${productsData.developer.activeApiKeys} Active Keys`
+                        : (customers.length > 0 ? `${customers.length} Eligible Workspaces` : 'Not Available')}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-zinc-500">Dispatched Webhooks:</span>
-                    <span className="text-zinc-200 font-mono">1,420 events/day</span>
+                    <span className="text-zinc-200 font-mono">
+                      {productsData?.developer?.webhookEvents !== undefined
+                        ? `${productsData.developer.webhookEvents} events/day`
+                        : 'Not Available'}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-zinc-500">Rate Limiter Status:</span>
-                    <span className="text-emerald-400 font-semibold">Enforced (Tiered Token Bucket)</span>
+                    <span className="text-emerald-400 font-semibold">
+                      {productsData?.developer?.rateLimiterStatus || 'Enforced (Tiered Token Bucket)'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1606,20 +1644,31 @@ export default function PlatformAdminPortal() {
             </div>
 
             {/* Tenant Isolation Diagnostics */}
-            <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-emerald-400" />
-                  <span className="font-bold text-sm text-white">Tenant Isolation Boundary Diagnostics</span>
+            {(() => {
+              const dbHealth = systemHealth.find((s: any) => s.service?.toLowerCase().includes('database') || s.service?.toLowerCase().includes('db'));
+              const isIsolationVerified = dbHealth ? dbHealth.status === 'UP' : (systemHealth.length > 0 && systemHealth.every((s: any) => s.status === 'UP'));
+              const isolationBadgeText = isIsolationVerified ? 'VERIFIED • ACTIVE ISOLATION' : (systemHealth.length > 0 ? 'NEEDS ATTENTION' : 'NOT YET VERIFIED');
+              return (
+                <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className={`w-4 h-4 ${isIsolationVerified ? 'text-emerald-400' : 'text-amber-400'}`} />
+                      <span className="font-bold text-sm text-white">Tenant Isolation Boundary Diagnostics</span>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-full border text-[10px] font-bold ${
+                      isIsolationVerified
+                        ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                        : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                    }`}>
+                      {isolationBadgeText}
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-400">
+                    Multi-tenant foreign key constraints, organization ID session binding, and API authorization guards verified across all {customers.length} customer workspaces.
+                  </p>
                 </div>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
-                  PASS • ZERO LEAKS
-                </span>
-              </div>
-              <p className="text-xs text-zinc-400">
-                Multi-tenant foreign key constraints, organization ID session binding, and API authorization guards verified across all {customers.length} customer workspaces.
-              </p>
-            </div>
+              );
+            })()}
 
             {/* Immutable Audit Log Trail */}
             <div className="rounded-2xl border border-zinc-800 overflow-hidden bg-zinc-900/50">
