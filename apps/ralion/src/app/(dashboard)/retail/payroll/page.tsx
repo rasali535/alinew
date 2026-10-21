@@ -19,40 +19,20 @@ import {
 import { RetailNavHeader } from '../components/RetailNavHeader';
 import { RetailAccessErrorCard, RetailErrorState } from '../components/RetailAccessErrorCard';
 import { authFetch } from '@/lib/api-config';
-
-interface Employee {
-  id: string;
-  first_name: string;
-  last_name: string;
-  email?: string;
-  phone?: string;
-  job_title: string;
-  department: string;
-  employment_type: string;
-  base_salary: number | null;
-  salary_frequency: string;
-  hire_date: string;
-  is_active: boolean;
-}
-
-interface PayrollRun {
-  id: string;
-  pay_period_start: string;
-  pay_period_end: string;
-  total_gross_pay: number;
-  total_deductions: number;
-  total_net_pay: number;
-  currency: string;
-  employee_count: number;
-  status: 'draft' | 'approved' | 'paid_manual';
-  notes?: string;
-  created_at: string;
-}
+import {
+  normalizeEmployees,
+  normalizePayrollRuns,
+  formatPrice,
+  safeLowerCase,
+  safeReplace,
+  type NormalizedEmployee,
+  type NormalizedPayrollRun,
+} from '@/lib/retail/adapters';
 
 export default function RetailPayrollPage() {
   const [activeTab, setActiveTab] = useState<'employees' | 'payroll'>('employees');
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [payrollRuns, setPayrollRuns] = useState<PayrollRun[]>([]);
+  const [employees, setEmployees] = useState<NormalizedEmployee[]>([]);
+  const [payrollRuns, setPayrollRuns] = useState<NormalizedPayrollRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorState, setErrorState] = useState<RetailErrorState | null>(null);
   const [search, setSearch] = useState('');
@@ -112,8 +92,8 @@ export default function RetailPayrollPage() {
       const dataEmp = await resEmp.json();
       const dataPay = await resPay.json();
 
-      if (dataEmp.success) setEmployees(dataEmp.employees || []);
-      if (dataPay.success) setPayrollRuns(dataPay.payrollRuns || []);
+      if (dataEmp.success) setEmployees(normalizeEmployees(dataEmp.employees));
+      if (dataPay.success) setPayrollRuns(normalizePayrollRuns(dataPay.payrollRuns));
     } catch (e: any) {
       console.error('Failed to fetch payroll data', e);
       setErrorState({
@@ -133,10 +113,28 @@ export default function RetailPayrollPage() {
   const handleCreateEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const canonicalEmpPayload = {
+        firstName: newEmp.first_name,
+        first_name: newEmp.first_name,
+        lastName: newEmp.last_name,
+        last_name: newEmp.last_name,
+        email: newEmp.email,
+        phone: newEmp.phone,
+        jobTitle: newEmp.job_title,
+        job_title: newEmp.job_title,
+        department: newEmp.department,
+        employmentType: newEmp.employment_type,
+        employment_type: newEmp.employment_type,
+        baseSalary: Number(newEmp.base_salary) || 0,
+        base_salary: Number(newEmp.base_salary) || 0,
+        hireDate: newEmp.hire_date,
+        hire_date: newEmp.hire_date,
+      };
+
       const res = await authFetch('/api/retail/employees', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newEmp),
+        body: JSON.stringify(canonicalEmpPayload),
       });
       const data = await res.json();
       if (data.success) {
@@ -169,7 +167,8 @@ export default function RetailPayrollPage() {
       const data = await res.json();
       if (data.success) {
         setShowRunPayrollModal(false);
-        setNotification(`Monthly payroll run generated: $${data.payrollRun?.total_net_pay?.toFixed(2) || '0.00'} USD calculated.`);
+        const netWagesFormatted = formatPrice(data.payrollRun?.total_net_pay ?? data.payrollRun?.totalNetPay);
+        setNotification(`Monthly payroll run generated: ${netWagesFormatted} calculated.`);
         setTimeout(() => setNotification(null), 4500);
         fetchData();
       } else {
@@ -183,15 +182,17 @@ export default function RetailPayrollPage() {
   };
 
   const filteredEmployees = employees.filter((emp) => {
-    const fullName = `${emp.first_name} ${emp.last_name}`.toLowerCase();
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    const fullName = `${emp.first_name || emp.firstName || ''} ${emp.last_name || emp.lastName || ''}`.toLowerCase();
     return (
-      fullName.includes(search.toLowerCase()) ||
-      emp.job_title.toLowerCase().includes(search.toLowerCase()) ||
-      emp.department.toLowerCase().includes(search.toLowerCase())
+      fullName.includes(q) ||
+      safeLowerCase(emp.job_title || emp.jobTitle).includes(q) ||
+      safeLowerCase(emp.department).includes(q)
     );
   });
 
-  const totalMonthlyPayroll = employees.reduce((acc, emp) => acc + (emp.base_salary || 0), 0);
+  const totalMonthlyPayroll = employees.reduce((acc, emp) => acc + (emp.base_salary ?? emp.baseSalary ?? 0), 0);
 
   if (errorState) {
     return (
@@ -336,23 +337,23 @@ export default function RetailPayrollPage() {
                       filteredEmployees.map((emp) => (
                         <tr key={emp.id} className="hover:bg-zinc-800/30 transition-colors">
                           <td className="py-3 px-4 font-medium text-zinc-100">
-                            {emp.first_name} {emp.last_name}
+                            {emp.first_name || emp.firstName || '—'} {emp.last_name || emp.lastName || ''}
                             {emp.email && (
                               <div className="text-xs text-zinc-500 font-mono mt-0.5">{emp.email}</div>
                             )}
                           </td>
-                          <td className="py-3 px-4 text-zinc-300">{emp.job_title}</td>
+                          <td className="py-3 px-4 text-zinc-300">{emp.job_title || emp.jobTitle || 'Staff'}</td>
                           <td className="py-3 px-4">
                             <span className="px-2.5 py-0.5 rounded-full text-xs bg-zinc-800 text-zinc-300 border border-zinc-700/60">
-                              {emp.department}
+                              {emp.department || 'General'}
                             </span>
                           </td>
                           <td className="py-3 px-4 text-xs capitalize text-zinc-400 font-mono">
-                            {emp.employment_type.replace('_', ' ')}
+                            {safeReplace(emp.employment_type || emp.employmentType, '_', ' ')}
                           </td>
                           <td className="py-3 px-4 text-right font-mono font-bold">
-                            {emp.base_salary !== null ? (
-                              <span className="text-emerald-400">${emp.base_salary.toFixed(2)}/mo</span>
+                            {(emp.base_salary !== null && emp.base_salary !== undefined) ? (
+                              <span className="text-emerald-400">{formatPrice(emp.base_salary)}/mo</span>
                             ) : (
                               <span className="text-zinc-500 flex items-center justify-end gap-1 text-xs">
                                 <Lock className="w-3 h-3" /> Confidential
@@ -407,26 +408,26 @@ export default function RetailPayrollPage() {
                     payrollRuns.map((run) => (
                       <tr key={run.id} className="hover:bg-zinc-800/30 transition-colors">
                         <td className="py-3.5 px-4 font-medium text-zinc-200">
-                          {new Date(run.pay_period_start).toLocaleDateString()} — {new Date(run.pay_period_end).toLocaleDateString()}
+                          {run.pay_period_start ? new Date(run.pay_period_start).toLocaleDateString() : '—'} — {run.pay_period_end ? new Date(run.pay_period_end).toLocaleDateString() : '—'}
                           {run.notes && (
                             <div className="text-xs text-zinc-500 font-sans mt-0.5">{run.notes}</div>
                           )}
                         </td>
                         <td className="py-3.5 px-4 text-center font-mono text-zinc-300">
-                          {run.employee_count} staff
+                          {run.employee_count ?? run.employeeCount ?? 0} staff
                         </td>
                         <td className="py-3.5 px-4 text-right font-mono text-zinc-400">
-                          ${run.total_gross_pay.toFixed(2)}
+                          {formatPrice(run.total_gross_pay ?? run.totalGrossPay)}
                         </td>
                         <td className="py-3.5 px-4 text-right font-mono text-zinc-400">
-                          -${run.total_deductions.toFixed(2)}
+                          -{formatPrice(run.total_deductions ?? run.totalDeductions)}
                         </td>
                         <td className="py-3.5 px-4 text-right font-mono font-bold text-emerald-400">
-                          ${run.total_net_pay.toFixed(2)}
+                          {formatPrice(run.total_net_pay ?? run.totalNetPay)}
                         </td>
                         <td className="py-3.5 px-4 text-center">
                           <span className="px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                            {run.status.replace('_', ' ')}
+                            {safeReplace(run.status, '_', ' ')}
                           </span>
                         </td>
                       </tr>

@@ -50,44 +50,75 @@ export async function POST(request: NextRequest) {
       return corsJsonResponse({ success: false, error: scopeCheck.error }, { status: 403 }, request);
     }
 
-    if (!body.supplierId || !Array.isArray(body.items) || body.items.length === 0) {
+    if (!body || typeof body !== 'object') {
+      return corsJsonResponse({ success: false, error: 'Invalid JSON request body.' }, { status: 400 }, request);
+    }
+
+    const supplierId = body.supplierId || body.supplier_id;
+    const supplierName = body.supplierName || body.supplier_name;
+    const expectedDate = body.expectedDate || body.expected_delivery;
+    const rawItems = Array.isArray(body.items) ? body.items : [];
+
+    if (!supplierId || rawItems.length === 0) {
       return corsJsonResponse({ success: false, error: 'Supplier ID and at least one item are required.' }, { status: 400 }, request);
     }
 
     const poId = body.id || `po_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const poNumber = body.poNumber || `PO-${Date.now().toString().slice(-6)}`;
+    const poNumber = body.poNumber || body.order_number || body.po_number || `PO-${Date.now().toString().slice(-6)}`;
 
     let totalAmount = 0;
-    const poItems: RetailPoItem[] = body.items.map((it: any) => {
-      const lineTotal = Number(it.quantityOrdered) * Number(it.unitCost);
+    const poItems: RetailPoItem[] = [];
+
+    for (const it of rawItems) {
+      const quantityOrdered = Number(it.quantityOrdered ?? it.quantity ?? it.quantity_ordered ?? 1);
+      const unitCostRaw = it.unitCost !== undefined ? it.unitCost : it.unit_cost;
+
+      if (
+        unitCostRaw === undefined ||
+        unitCostRaw === null ||
+        typeof unitCostRaw === 'boolean' ||
+        isNaN(Number(unitCostRaw)) ||
+        !Number.isFinite(Number(unitCostRaw)) ||
+        Number(unitCostRaw) < 0
+      ) {
+        return corsJsonResponse(
+          { success: false, error: `Invalid unitCost for PO item: must be a valid non-negative number.` },
+          { status: 400 },
+          request
+        );
+      }
+
+      const unitCost = Number(unitCostRaw);
+      const lineTotal = quantityOrdered * unitCost;
       totalAmount += lineTotal;
-      return {
+
+      poItems.push({
         id: `poi_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
         purchaseOrderId: poId,
-        productId: it.productId,
-        productName: it.productName,
-        sku: it.sku,
-        quantityOrdered: Number(it.quantityOrdered) || 1,
+        productId: it.productId || it.product_id,
+        productName: it.productName || it.product_name || 'Hardware Item',
+        sku: it.sku || 'SKU-PO',
+        quantityOrdered,
         quantityReceived: 0,
-        unitCost: Number(it.unitCost) || 0,
+        unitCost,
         lineTotal,
-      };
-    });
+      });
+    }
 
     const po: RetailPurchaseOrder = {
       id: poId,
       organizationId: context.organization.id,
       workspaceId: context.workspace.id,
       poNumber,
-      supplierId: body.supplierId,
-      supplierName: body.supplierName,
+      supplierId,
+      supplierName,
       status: body.status || 'SUBMITTED',
       currency: 'USD',
       totalAmount,
       notes: body.notes,
-      expectedDate: body.expectedDate,
+      expectedDate,
       createdBy: context.user.id,
-      isPilotDemo: Boolean(body.isPilotDemo),
+      isPilotDemo: Boolean(body.isPilotDemo || body.is_pilot_demo),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };

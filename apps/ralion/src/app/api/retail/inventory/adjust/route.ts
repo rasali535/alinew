@@ -27,23 +27,46 @@ export async function POST(request: NextRequest) {
       return corsJsonResponse({ success: false, error: scopeCheck.error }, { status: 403 }, request);
     }
 
-    const { productId, quantityChange, movementType, reason } = body;
+    if (!body || typeof body !== 'object') {
+      return corsJsonResponse({ success: false, error: 'Invalid JSON request body.' }, { status: 400 }, request);
+    }
 
-    if (!productId || quantityChange === undefined || !movementType || !reason) {
+    const productId = body.productId || body.product_id;
+    const quantityChangeRaw = body.quantityChange !== undefined
+      ? body.quantityChange
+      : (body.quantityDelta !== undefined ? body.quantityDelta : body.quantity_change);
+    const movementType = body.movementType || body.movement_type || 'COUNT_ADJUSTMENT';
+    const reason = (body.reason || body.notes || 'Physical inventory audit').toString().trim();
+
+    if (!productId || quantityChangeRaw === undefined || quantityChangeRaw === null) {
       return corsJsonResponse(
-        { success: false, error: 'Missing required adjustment fields: productId, quantityChange, movementType, reason.' },
+        { success: false, error: 'Missing required adjustment fields: productId and quantityChange.' },
         { status: 400 },
         request
       );
     }
 
+    if (
+      typeof quantityChangeRaw === 'boolean' ||
+      isNaN(Number(quantityChangeRaw)) ||
+      !Number.isFinite(Number(quantityChangeRaw))
+    ) {
+      return corsJsonResponse(
+        { success: false, error: 'quantityChange must be a valid finite number.' },
+        { status: 400 },
+        request
+      );
+    }
+
+    const quantityChange = Number(quantityChangeRaw);
+
     const result = await RetailDatabaseService.adjustStock({
       organizationId: context.organization.id,
       workspaceId: context.workspace.id,
       productId,
-      quantityChange: Number(quantityChange),
+      quantityChange,
       movementType,
-      reason: reason.trim(),
+      reason,
       userId: context.user.id,
     });
 

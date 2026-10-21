@@ -19,43 +19,23 @@ import {
 import { RetailNavHeader } from '../components/RetailNavHeader';
 import { RetailAccessErrorCard, RetailErrorState } from '../components/RetailAccessErrorCard';
 import { authFetch } from '@/lib/api-config';
-
-interface SaleItem {
-  id: string;
-  product_name: string;
-  quantity: number;
-  unit_price: number;
-  discount_amount: number;
-  tax_amount: number;
-  line_total: number;
-  unit_cost: number;
-}
-
-interface Sale {
-  id: string;
-  sale_number: string;
-  customer_name?: string;
-  subtotal: number;
-  tax_total: number;
-  discount_total: number;
-  grand_total: number;
-  currency: string;
-  payment_method: 'cash' | 'card' | 'bank_transfer' | 'credit' | 'split';
-  payment_status: 'paid' | 'partial' | 'refunded' | 'voided';
-  notes?: string;
-  created_at: string;
-  items?: SaleItem[];
-}
+import {
+  normalizeSales,
+  NormalizedRetailSale,
+  formatPrice,
+  safeLowerCase,
+  safeReplace,
+} from '@/lib/retail/adapters';
 
 export default function RetailSalesPage() {
-  const [sales, setSales] = useState<Sale[]>([]);
+  const [sales, setSales] = useState<NormalizedRetailSale[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorState, setErrorState] = useState<RetailErrorState | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [paymentFilter, setPaymentFilter] = useState('all');
 
-  const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
+  const [selectedSale, setSelectedSale] = useState<NormalizedRetailSale | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [refundReason, setRefundReason] = useState('customer_return');
@@ -79,7 +59,7 @@ export default function RetailSalesPage() {
       }
       const data = await res.json();
       if (data.success) {
-        setSales(data.sales || []);
+        setSales(normalizeSales(data.sales || []));
       } else {
         setErrorState({
           status: 400,
@@ -104,23 +84,30 @@ export default function RetailSalesPage() {
   }, []);
 
   const totalRevenue = sales
-    .filter((s) => s.payment_status === 'paid')
-    .reduce((acc, s) => acc + s.grand_total, 0);
+    .filter((s) => s.payment_status === 'paid' || s.paymentStatus === 'paid')
+    .reduce((acc, s) => acc + (s.totalAmount ?? s.grand_total ?? 0), 0);
 
   const cashRevenue = sales
-    .filter((s) => s.payment_status === 'paid' && s.payment_method === 'cash')
-    .reduce((acc, s) => acc + s.grand_total, 0);
+    .filter((s) => (s.payment_status === 'paid' || s.paymentStatus === 'paid') && (s.payment_method === 'cash' || s.paymentMethod === 'cash'))
+    .reduce((acc, s) => acc + (s.totalAmount ?? s.grand_total ?? 0), 0);
 
   const cardRevenue = sales
-    .filter((s) => s.payment_status === 'paid' && s.payment_method === 'card')
-    .reduce((acc, s) => acc + s.grand_total, 0);
+    .filter((s) => (s.payment_status === 'paid' || s.paymentStatus === 'paid') && (s.payment_method === 'card' || s.paymentMethod === 'card'))
+    .reduce((acc, s) => acc + (s.totalAmount ?? s.grand_total ?? 0), 0);
 
   const filteredSales = sales.filter((s) => {
-    const matchesSearch =
-      s.sale_number.toLowerCase().includes(search.toLowerCase()) ||
-      (s.customer_name && s.customer_name.toLowerCase().includes(search.toLowerCase()));
-    const matchesStatus = statusFilter === 'all' || s.payment_status === statusFilter;
-    const matchesPayment = paymentFilter === 'all' || s.payment_method === paymentFilter;
+    const saleNum = safeLowerCase(s.sale_number || s.saleNumber);
+    const custName = safeLowerCase(s.customer_name || s.customerName);
+    const q = safeLowerCase(search);
+    const matchesSearch = !q || saleNum.includes(q) || custName.includes(q);
+    const matchesStatus =
+      statusFilter === 'all' ||
+      s.payment_status === statusFilter ||
+      s.paymentStatus === statusFilter;
+    const matchesPayment =
+      paymentFilter === 'all' ||
+      s.payment_method === paymentFilter ||
+      s.paymentMethod === paymentFilter;
     return matchesSearch && matchesStatus && matchesPayment;
   });
 
@@ -176,7 +163,7 @@ export default function RetailSalesPage() {
           <div className="bg-zinc-900/60 border border-zinc-800/80 p-4 rounded-2xl">
             <div className="text-xs text-zinc-400 mb-1">Total Paid Revenue</div>
             <div className="text-2xl font-bold font-mono text-emerald-400">
-              ${totalRevenue.toFixed(2)}
+              {formatPrice(totalRevenue)}
             </div>
             <div className="text-[11px] text-zinc-500 mt-1">USD • Historical posted</div>
           </div>
@@ -193,7 +180,7 @@ export default function RetailSalesPage() {
               Cash Collected
             </div>
             <div className="text-2xl font-bold font-mono text-zinc-200">
-              ${cashRevenue.toFixed(2)}
+              {formatPrice(cashRevenue)}
             </div>
             <div className="text-[11px] text-zinc-500 mt-1">Cash drawer verified</div>
           </div>
@@ -204,7 +191,7 @@ export default function RetailSalesPage() {
               Card / Electronic
             </div>
             <div className="text-2xl font-bold font-mono text-zinc-200">
-              ${cardRevenue.toFixed(2)}
+              {formatPrice(cardRevenue)}
             </div>
             <div className="text-[11px] text-zinc-500 mt-1">Settled transactions</div>
           </div>
@@ -283,34 +270,34 @@ export default function RetailSalesPage() {
                   filteredSales.map((s) => (
                     <tr key={s.id} className="hover:bg-zinc-800/30 transition-colors">
                       <td className="py-3.5 px-4 font-mono font-medium text-emerald-400">
-                        {s.sale_number}
+                        {s.sale_number || s.saleNumber || '—'}
                       </td>
                       <td className="py-3.5 px-4 text-xs text-zinc-400">
-                        {new Date(s.created_at).toLocaleString()}
+                        {s.created_at ? new Date(s.created_at).toLocaleString() : '—'}
                       </td>
                       <td className="py-3.5 px-4 font-medium text-zinc-200">
-                        {s.customer_name || 'Walk-in Retail Customer'}
+                        {s.customer_name || s.customerName || 'Walk-in Retail Customer'}
                       </td>
                       <td className="py-3.5 px-4">
                         <span className="capitalize font-mono text-xs px-2 py-0.5 rounded bg-zinc-800 border border-zinc-700/60 text-zinc-300">
-                          {s.payment_method.replace('_', ' ')}
+                          {safeReplace(s.payment_method || s.paymentMethod || 'cash', '_', ' ')}
                         </span>
                       </td>
                       <td className="py-3.5 px-4 text-center">
                         <span
                           className={`px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${
-                            s.payment_status === 'paid'
+                            (s.payment_status || s.paymentStatus) === 'paid'
                               ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                              : s.payment_status === 'refunded'
+                              : (s.payment_status || s.paymentStatus) === 'refunded'
                               ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
                               : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
                           }`}
                         >
-                          {s.payment_status}
+                          {s.payment_status || s.paymentStatus}
                         </span>
                       </td>
                       <td className="py-3.5 px-4 text-right font-mono font-bold text-zinc-100">
-                        ${s.grand_total.toFixed(2)}
+                        {formatPrice(s.grand_total ?? s.totalAmount)}
                       </td>
                       <td className="py-3.5 px-4 text-right">
                         <button
@@ -339,10 +326,10 @@ export default function RetailSalesPage() {
                 <div>
                   <h3 className="text-base font-bold text-zinc-100 font-mono flex items-center gap-2">
                     <Receipt className="w-4 h-4 text-emerald-400" />
-                    Tax Invoice #{selectedSale.sale_number}
+                    Tax Invoice #{selectedSale.sale_number || selectedSale.saleNumber || '—'}
                   </h3>
                   <p className="text-xs text-zinc-400">
-                    Date: {new Date(selectedSale.created_at).toLocaleString()} • Currency: USD ($)
+                    Date: {selectedSale.created_at ? new Date(selectedSale.created_at).toLocaleString() : '—'} • Currency: USD ($)
                   </p>
                 </div>
                 <button
@@ -355,11 +342,11 @@ export default function RetailSalesPage() {
 
               <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-850 space-y-3 font-mono text-xs">
                 <div className="flex justify-between text-zinc-400">
-                  <span>Customer: <strong className="text-zinc-200">{selectedSale.customer_name || 'Walk-in'}</strong></span>
-                  <span>Payment: <strong className="text-zinc-200 capitalize">{selectedSale.payment_method}</strong></span>
+                  <span>Customer: <strong className="text-zinc-200">{selectedSale.customer_name || selectedSale.customerName || 'Walk-in'}</strong></span>
+                  <span>Payment: <strong className="text-zinc-200 capitalize">{safeReplace(selectedSale.payment_method || selectedSale.paymentMethod, '_', ' ')}</strong></span>
                 </div>
                 <div className="flex justify-between text-zinc-400">
-                  <span>Status: <strong className="text-emerald-400 uppercase">{selectedSale.payment_status}</strong></span>
+                  <span>Status: <strong className="text-emerald-400 uppercase">{selectedSale.payment_status || selectedSale.paymentStatus}</strong></span>
                   <span>Currency: <strong className="text-emerald-400">USD ($)</strong></span>
                 </div>
               </div>
@@ -379,11 +366,11 @@ export default function RetailSalesPage() {
                     {selectedSale.items && selectedSale.items.length > 0 ? (
                       selectedSale.items.map((item, idx) => (
                         <tr key={idx} className="hover:bg-zinc-800/20">
-                          <td className="p-2.5 font-medium text-zinc-200">{item.product_name}</td>
+                          <td className="p-2.5 font-medium text-zinc-200">{item.product_name || item.productName || 'Hardware Item'}</td>
                           <td className="p-2.5 text-center font-mono">{item.quantity}</td>
-                          <td className="p-2.5 text-right font-mono">${item.unit_price.toFixed(2)}</td>
+                          <td className="p-2.5 text-right font-mono">{formatPrice(item.unit_price ?? item.unitPrice)}</td>
                           <td className="p-2.5 text-right font-mono font-bold text-emerald-400">
-                            ${item.line_total.toFixed(2)}
+                            {formatPrice(item.line_total ?? item.lineTotal)}
                           </td>
                         </tr>
                       ))
@@ -403,11 +390,11 @@ export default function RetailSalesPage() {
                 <div className="w-64 bg-zinc-950/80 p-3 rounded-xl border border-zinc-800 space-y-1.5 text-xs font-mono">
                   <div className="flex justify-between text-zinc-400">
                     <span>Subtotal:</span>
-                    <span>${selectedSale.subtotal.toFixed(2)}</span>
+                    <span>{formatPrice(selectedSale.subtotal)}</span>
                   </div>
                   <div className="flex justify-between font-bold text-sm text-zinc-100 pt-1 border-t border-zinc-800">
                     <span>Grand Total:</span>
-                    <span className="text-emerald-400">${selectedSale.grand_total.toFixed(2)} USD</span>
+                    <span className="text-emerald-400">{formatPrice(selectedSale.grand_total ?? selectedSale.totalAmount)} USD</span>
                   </div>
                 </div>
               </div>

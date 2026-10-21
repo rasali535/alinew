@@ -20,37 +20,18 @@ import {
 import { RetailNavHeader } from '../components/RetailNavHeader';
 import { RetailAccessErrorCard, RetailErrorState } from '../components/RetailAccessErrorCard';
 import { authFetch } from '@/lib/api-config';
-
-interface RetailProduct {
-  id: string;
-  sku: string;
-  barcode?: string;
-  name: string;
-  category: string;
-  unit_of_measure: string;
-  unit_cost: number;
-  selling_price: number;
-  tax_rate: number;
-  current_stock: number;
-  min_stock_level: number;
-  is_active: boolean;
-}
-
-interface StockMovement {
-  id: string;
-  product_id: string;
-  movement_type: string;
-  quantity_change: number;
-  quantity_after: number;
-  unit_cost_at_time: number;
-  reference_type?: string;
-  reference_id?: string;
-  notes?: string;
-  created_at: string;
-}
+import {
+  normalizeProducts,
+  normalizeStockMovements,
+  NormalizedRetailProduct,
+  NormalizedRetailStockMovement,
+  formatPrice,
+  safeLowerCase,
+  safeReplace,
+} from '@/lib/retail/adapters';
 
 export default function RetailInventoryPage() {
-  const [products, setProducts] = useState<RetailProduct[]>([]);
+  const [products, setProducts] = useState<NormalizedRetailProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorState, setErrorState] = useState<RetailErrorState | null>(null);
   const [search, setSearch] = useState('');
@@ -61,8 +42,8 @@ export default function RetailInventoryPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAdjustModal, setShowAdjustModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<RetailProduct | null>(null);
-  const [movements, setMovements] = useState<StockMovement[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<NormalizedRetailProduct | null>(null);
+  const [movements, setMovements] = useState<NormalizedRetailStockMovement[]>([]);
   const [loadingMovements, setLoadingMovements] = useState(false);
 
   // Form states
@@ -103,7 +84,7 @@ export default function RetailInventoryPage() {
       }
       const data = await res.json();
       if (data.success && data.products) {
-        setProducts(data.products);
+        setProducts(normalizeProducts(data.products));
       } else {
         setErrorState({
           status: 400,
@@ -127,7 +108,7 @@ export default function RetailInventoryPage() {
     fetchProducts();
   }, []);
 
-  const openHistory = async (product: RetailProduct) => {
+  const openHistory = async (product: NormalizedRetailProduct) => {
     setSelectedProduct(product);
     setShowHistoryModal(true);
     setLoadingMovements(true);
@@ -135,7 +116,7 @@ export default function RetailInventoryPage() {
       const res = await authFetch(`/api/retail/inventory/movements?productId=${product.id}`);
       const data = await res.json();
       if (data.success) {
-        setMovements(data.movements || []);
+        setMovements(normalizeStockMovements(data.movements || []));
       }
     } catch (e) {
       console.error('Failed to load movements', e);
@@ -150,7 +131,17 @@ export default function RetailInventoryPage() {
       const res = await authFetch('/api/retail/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newProduct),
+        body: JSON.stringify({
+          name: newProduct.name.trim(),
+          category: newProduct.category,
+          sku: newProduct.sku.trim().toUpperCase(),
+          barcode: newProduct.barcode.trim() || undefined,
+          purchaseCost: Number(newProduct.unit_cost),
+          sellingPrice: Number(newProduct.selling_price),
+          unitOfMeasure: newProduct.unit_of_measure,
+          reorderLevel: Number(newProduct.min_stock_level),
+          initialStock: Number(newProduct.initial_stock),
+        }),
       });
       const data = await res.json();
       if (data.success) {
@@ -186,7 +177,8 @@ export default function RetailInventoryPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           productId: selectedProduct.id,
-          quantityDelta: Number(adjustment.quantity_change),
+          quantityChange: Number(adjustment.quantity_change),
+          movementType: 'COUNT_ADJUSTMENT',
           reason: adjustment.reason,
           notes: adjustment.notes,
         }),
@@ -208,12 +200,14 @@ export default function RetailInventoryPage() {
   // Filtered products
   const categories = Array.from(new Set(products.map((p) => p.category))).filter(Boolean);
   const filteredProducts = products.filter((p) => {
+    const q = safeLowerCase(search);
     const matchesSearch =
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.sku.toLowerCase().includes(search.toLowerCase()) ||
-      (p.barcode && p.barcode.toLowerCase().includes(search.toLowerCase()));
+      !q ||
+      safeLowerCase(p.name).includes(q) ||
+      safeLowerCase(p.sku).includes(q) ||
+      (p.barcode ? safeLowerCase(p.barcode).includes(q) : false);
     const matchesCategory = selectedCategory === 'all' || p.category === selectedCategory;
-    const matchesLowStock = !filterLowStock || p.current_stock <= p.min_stock_level;
+    const matchesLowStock = !filterLowStock || p.currentStock <= p.reorderLevel;
     return matchesSearch && matchesCategory && matchesLowStock;
   });
 
@@ -342,10 +336,10 @@ export default function RetailInventoryPage() {
                 ) : (
                   filteredProducts.map((p) => {
                     const margin =
-                      p.selling_price > 0
-                        ? (((p.selling_price - p.unit_cost) / p.selling_price) * 100).toFixed(1)
-                        : '0';
-                    const isLowStock = p.current_stock <= p.min_stock_level;
+                      p.sellingPrice > 0 && p.purchaseCost >= 0
+                        ? (((p.sellingPrice - p.purchaseCost) / p.sellingPrice) * 100).toFixed(1)
+                        : '0.0';
+                    const isLowStock = p.currentStock <= p.reorderLevel;
 
                     return (
                       <tr key={p.id} className="hover:bg-zinc-800/30 transition-colors">
@@ -362,10 +356,10 @@ export default function RetailInventoryPage() {
                           </span>
                         </td>
                         <td className="py-3 px-4 text-right font-mono text-zinc-300">
-                          ${p.unit_cost.toFixed(2)}
+                          {formatPrice(p.purchaseCost)}
                         </td>
                         <td className="py-3 px-4 text-right font-mono font-medium text-emerald-400">
-                          ${p.selling_price.toFixed(2)}
+                          {formatPrice(p.sellingPrice)}
                         </td>
                         <td className="py-3 px-4 text-right font-mono text-xs text-zinc-400">
                           {margin}%
@@ -379,7 +373,7 @@ export default function RetailInventoryPage() {
                                   : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                               }`}
                             >
-                              {p.current_stock} {p.unit_of_measure}
+                              {p.currentStock} {p.unitOfMeasure}
                             </span>
                             {isLowStock && (
                               <span title="Low stock alert">
@@ -589,7 +583,7 @@ export default function RetailInventoryPage() {
               <div className="bg-zinc-950/60 p-3 rounded-xl border border-zinc-800 text-xs flex justify-between items-center font-mono">
                 <span className="text-zinc-400">Current Authoritative Stock:</span>
                 <span className="font-bold text-emerald-400 text-sm">
-                  {selectedProduct.current_stock} {selectedProduct.unit_of_measure}
+                  {selectedProduct.currentStock} {selectedProduct.unitOfMeasure}
                 </span>
               </div>
 
@@ -606,7 +600,7 @@ export default function RetailInventoryPage() {
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 font-mono focus:outline-none focus:border-emerald-500"
                   />
                   <p className="text-[11px] text-zinc-500 mt-1">
-                    New total will be: {selectedProduct.current_stock + Number(adjustment.quantity_change)} {selectedProduct.unit_of_measure}
+                    New total will be: {selectedProduct.currentStock + Number(adjustment.quantity_change)} {selectedProduct.unitOfMeasure}
                   </p>
                 </div>
 
@@ -698,15 +692,15 @@ export default function RetailInventoryPage() {
                         <div className="flex items-center gap-2">
                           <span
                             className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                              m.quantity_change > 0
+                              m.quantityChange > 0
                                 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                                 : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
                             }`}
                           >
-                            {m.movement_type.replace('_', ' ')}
+                            {safeReplace(m.movementType, /_/g, ' ')}
                           </span>
                           <span className="text-zinc-400">
-                            {new Date(m.created_at).toLocaleString()}
+                            {new Date(m.createdAt).toLocaleString()}
                           </span>
                         </div>
                         {m.notes && <p className="text-zinc-400 font-sans mt-1">{m.notes}</p>}
@@ -714,13 +708,13 @@ export default function RetailInventoryPage() {
                       <div className="text-right">
                         <div
                           className={`font-bold ${
-                            m.quantity_change > 0 ? 'text-emerald-400' : 'text-rose-400'
+                            m.quantityChange > 0 ? 'text-emerald-400' : 'text-rose-400'
                           }`}
                         >
-                          {m.quantity_change > 0 ? `+${m.quantity_change}` : m.quantity_change}
+                          {m.quantityChange > 0 ? `+${m.quantityChange}` : m.quantityChange}
                         </div>
                         <div className="text-zinc-500 text-[10px]">
-                          Balance: {m.quantity_after}
+                          Balance: {m.balanceAfter}
                         </div>
                       </div>
                     </div>

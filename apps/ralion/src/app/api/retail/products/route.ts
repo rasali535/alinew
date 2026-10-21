@@ -60,36 +60,87 @@ export async function POST(request: NextRequest) {
       return corsJsonResponse({ success: false, error: scopeCheck.error }, { status: 403 }, request);
     }
 
-    if (!body.name || !body.sku || body.sellingPrice === undefined) {
-      return corsJsonResponse({ success: false, error: 'Missing required product fields (name, sku, sellingPrice).' }, { status: 400 }, request);
+    if (!body || typeof body !== 'object') {
+      return corsJsonResponse({ success: false, error: 'Invalid JSON request body.' }, { status: 400 }, request);
     }
+
+    const name = body.name ? String(body.name).trim() : '';
+    const sku = body.sku ? String(body.sku).trim().toUpperCase() : '';
+    const sellingPriceRaw = body.sellingPrice !== undefined ? body.sellingPrice : body.selling_price;
+    const purchaseCostRaw = body.purchaseCost !== undefined ? body.purchaseCost : (body.unit_cost !== undefined ? body.unit_cost : body.cost_price);
+    const reorderLevelRaw = body.reorderLevel !== undefined ? body.reorderLevel : body.min_stock_level;
+    const unitOfMeasure = (body.unitOfMeasure || body.unit_of_measure || 'EACH').trim();
+    const initialStockRaw = body.initialStock !== undefined ? body.initialStock : body.initial_stock;
+
+    if (!name || !sku) {
+      return corsJsonResponse({ success: false, error: 'Missing required product fields: name and sku.' }, { status: 400 }, request);
+    }
+
+    // Strict numeric validation: do NOT silently replace missing or invalid financial values with zero
+    if (
+      sellingPriceRaw === undefined ||
+      sellingPriceRaw === null ||
+      sellingPriceRaw === '' ||
+      typeof sellingPriceRaw === 'boolean' ||
+      isNaN(Number(sellingPriceRaw)) ||
+      !Number.isFinite(Number(sellingPriceRaw)) ||
+      Number(sellingPriceRaw) < 0
+    ) {
+      return corsJsonResponse(
+        { success: false, error: 'Missing or invalid required financial field: sellingPrice must be a valid non-negative finite number.' },
+        { status: 400 },
+        request
+      );
+    }
+    const sellingPrice = Number(sellingPriceRaw);
+
+    let purchaseCost = 0;
+    if (purchaseCostRaw !== undefined && purchaseCostRaw !== null && purchaseCostRaw !== '') {
+      if (
+        typeof purchaseCostRaw === 'boolean' ||
+        isNaN(Number(purchaseCostRaw)) ||
+        !Number.isFinite(Number(purchaseCostRaw)) ||
+        Number(purchaseCostRaw) < 0
+      ) {
+        return corsJsonResponse(
+          { success: false, error: 'Invalid financial field: purchaseCost must be a valid non-negative finite number.' },
+          { status: 400 },
+          request
+        );
+      }
+      purchaseCost = Number(purchaseCostRaw);
+    }
+
+    const reorderLevel = reorderLevelRaw !== undefined && reorderLevelRaw !== null && !isNaN(Number(reorderLevelRaw))
+      ? Number(reorderLevelRaw)
+      : 10;
 
     const product: RetailProduct = {
       id: body.id || `prod_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       organizationId: context.organization.id,
       workspaceId: context.workspace.id,
-      name: body.name.trim(),
-      sku: body.sku.trim().toUpperCase(),
-      barcode: body.barcode ? body.barcode.trim() : undefined,
+      name,
+      sku,
+      barcode: body.barcode ? String(body.barcode).trim() : undefined,
       category: body.category || 'General Supplies',
       subcategory: body.subcategory,
       description: body.description,
       brand: body.brand,
-      supplierId: body.supplierId,
-      unitOfMeasure: body.unitOfMeasure || 'EACH',
-      purchaseCost: Number(body.purchaseCost) || 0,
-      sellingPrice: Number(body.sellingPrice) || 0,
-      minSellingPrice: Number(body.minSellingPrice) || Number(body.sellingPrice) || 0,
-      vatRate: Number(body.vatRate) || 0,
-      reorderLevel: Number(body.reorderLevel) || 10,
+      supplierId: body.supplierId || body.supplier_id,
+      unitOfMeasure: unitOfMeasure as any,
+      purchaseCost,
+      sellingPrice,
+      minSellingPrice: body.minSellingPrice !== undefined ? Number(body.minSellingPrice) : sellingPrice,
+      vatRate: Number(body.vatRate ?? body.tax_rate ?? 0) || 0,
+      reorderLevel,
       status: body.status || 'ACTIVE',
-      imageUrl: body.imageUrl,
-      isPilotDemo: Boolean(body.isPilotDemo),
-      createdAt: body.createdAt || new Date().toISOString(),
+      imageUrl: body.imageUrl || body.image_url,
+      isPilotDemo: Boolean(body.isPilotDemo || body.is_pilot_demo),
+      createdAt: body.createdAt || body.created_at || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
-    const initialStock = Number(body.initialStock) || 0;
+    const initialStock = initialStockRaw !== undefined && !isNaN(Number(initialStockRaw)) ? Number(initialStockRaw) : 0;
     const saved = await RetailDatabaseService.upsertProduct(product, initialStock);
 
     return corsJsonResponse({ success: true, product: saved }, undefined, request);

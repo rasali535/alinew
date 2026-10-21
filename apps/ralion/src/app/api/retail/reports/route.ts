@@ -28,11 +28,38 @@ export async function GET(request: NextRequest) {
       return corsJsonResponse({ success: false, error: 'FORBIDDEN_REPORTS_ACCESS' }, { status: 403 }, request);
     }
 
-    const metrics = await RetailDatabaseService.computeFinancialMetrics(context.workspace.id);
+    const rawMetrics = await RetailDatabaseService.computeFinancialMetrics(context.workspace.id);
     const sales = await RetailDatabaseService.listSales(context.workspace.id);
     const movements = await RetailDatabaseService.listStockMovements(context.workspace.id);
     const expenses = await RetailDatabaseService.listExpenses(context.workspace.id);
     const payrollRuns = entitlement.canAccessPayroll ? await RetailDatabaseService.listPayrollRuns(context.workspace.id) : [];
+
+    const expensesByCategory: Record<string, number> = {};
+    if (Array.isArray(rawMetrics.expenseBreakdown)) {
+      for (const item of rawMetrics.expenseBreakdown) {
+        if (item && item.category) {
+          expensesByCategory[item.category] = Number(item.amount) || 0;
+        }
+      }
+    }
+
+    const metrics = {
+      ...rawMetrics,
+      // Canonical database fields are preserved
+      // Complete aliases for reports rendering:
+      totalRevenue: rawMetrics.monthlySales,
+      totalCogs: rawMetrics.costOfGoodsSold,
+      grossMarginPct: rawMetrics.grossProfitMarginPercent,
+      totalExpenses: rawMetrics.operatingExpenses,
+      totalPayroll: rawMetrics.payrollExpenses,
+      operatingProfit: rawMetrics.estimatedOperatingProfit,
+      operatingMarginPct: rawMetrics.operatingMarginPercent,
+      inventoryValuationCost: rawMetrics.stockValuation,
+      inventoryValuationRetail: rawMetrics.stockValuation * 1.35,
+      inventoryItemCount: rawMetrics.totalActiveProducts,
+      totalTransactions: sales.length,
+      expensesByCategory,
+    };
 
     return corsJsonResponse(
       {

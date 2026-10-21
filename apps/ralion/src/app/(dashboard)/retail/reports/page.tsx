@@ -18,26 +18,15 @@ import {
 import { RetailNavHeader } from '../components/RetailNavHeader';
 import { RetailAccessErrorCard, RetailErrorState } from '../components/RetailAccessErrorCard';
 import { authFetch } from '@/lib/api-config';
-
-interface FinancialMetrics {
-  totalRevenue: number;
-  totalCogs: number;
-  grossProfit: number;
-  grossMarginPct: number;
-  totalExpenses: number;
-  totalPayroll: number;
-  operatingProfit: number;
-  operatingMarginPct: number;
-  inventoryValuationCost: number;
-  inventoryValuationRetail: number;
-  inventoryItemCount: number;
-  totalTransactions: number;
-  expensesByCategory: { [cat: string]: number };
-}
+import {
+  normalizeFinancialMetrics,
+  formatPrice,
+  type NormalizedFinancialMetrics,
+} from '@/lib/retail/adapters';
 
 export default function RetailReportsPage() {
   const [period, setPeriod] = useState<'today' | '7d' | '30d' | 'all'>('30d');
-  const [metrics, setMetrics] = useState<FinancialMetrics | null>(null);
+  const [metrics, setMetrics] = useState<NormalizedFinancialMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorState, setErrorState] = useState<RetailErrorState | null>(null);
 
@@ -58,7 +47,7 @@ export default function RetailReportsPage() {
       }
       const data = await res.json();
       if (data.success && data.metrics) {
-        setMetrics(data.metrics);
+        setMetrics(normalizeFinancialMetrics(data.metrics));
       } else {
         setErrorState({
           status: 400,

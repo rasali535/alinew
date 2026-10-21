@@ -50,25 +50,34 @@ export async function POST(request: NextRequest) {
       return corsJsonResponse({ success: false, error: scopeCheck.error }, { status: 403 }, request);
     }
 
-    if (!body.name) {
+    if (!body || typeof body !== 'object') {
+      return corsJsonResponse({ success: false, error: 'Invalid JSON request body.' }, { status: 400 }, request);
+    }
+
+    const name = (body.name || '').trim();
+    if (!name) {
       return corsJsonResponse({ success: false, error: 'Supplier name is required.' }, { status: 400 }, request);
     }
+
+    const contactName = body.contactName || body.contact_person;
+    const paymentTerms = body.paymentTerms || body.payment_terms || '30_DAYS';
+    const balanceOwed = Number(body.balanceOwed ?? body.balance_owed ?? 0) || 0;
 
     const supplier: RetailSupplier = {
       id: body.id || `sup_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       organizationId: context.organization.id,
       workspaceId: context.workspace.id,
-      name: body.name.trim(),
-      contactName: body.contactName,
+      name,
+      contactName,
       email: body.email,
       phone: body.phone,
       address: body.address,
-      paymentTerms: body.paymentTerms || '30_DAYS',
+      paymentTerms,
       currency: 'USD',
-      balanceOwed: Number(body.balanceOwed) || 0,
+      balanceOwed,
       notes: body.notes,
-      isPilotDemo: Boolean(body.isPilotDemo),
-      createdAt: body.createdAt || new Date().toISOString(),
+      isPilotDemo: Boolean(body.isPilotDemo || body.is_pilot_demo),
+      createdAt: body.createdAt || body.created_at || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
