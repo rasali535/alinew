@@ -1,143 +1,67 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Sparkles, X, Send, Bot, User, ChevronUp, Zap, ArrowRight } from 'lucide-react';
+import React, { useEffect } from 'react';
+import { usePathname } from 'next/navigation';
+import { Sparkles, X, Send, Zap } from 'lucide-react';
 import { MariMarkdownMessage } from './MariMarkdownMessage';
-import { authFetch, getRalionApiUrl, MARI_BUILD_VERSION } from '@/lib/api-config';
-import { useOrganization } from '@ralion/auth';
+import { useMariConversation } from '@/context/MariConversationContext';
+import { isRetailPosRoute } from '@/lib/retail/posRoute';
 
 export const FloatingMariAi: React.FC = () => {
-  const { organization, workspace, user } = useOrganization();
-  const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<Array<{ sender: 'USER' | 'MARI'; text: string; id?: string }>>([
-    { sender: 'MARI', text: 'Hello! I am Mari, your AI Business Growth Partner. How can I help your business grow today?' }
-  ]);
-  const [input, setInput] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
+  const pathname = usePathname();
+  const isPos = isRetailPosRoute(pathname);
+
+  const {
+    messages,
+    input,
+    setInput,
+    isProcessing,
+    sendMessage,
+    isFloatingOpen,
+    openFloating,
+    closeFloating,
+  } = useMariConversation();
+
+  // If the user navigates into Retail POS, automatically dismiss any floating launcher
+  useEffect(() => {
+    if (isPos && isFloatingOpen) {
+      closeFloating();
+    }
+  }, [isPos, isFloatingOpen, closeFloating]);
+
+  // On Retail POS routes, the floating launcher is completely removed to protect checkout controls
+  if (isPos) {
+    return null;
+  }
 
   const quickPrompts = [
     'Show my business performance',
     'Where should we focus today?',
     'Summarize activity',
-    'Find growth opportunities'
+    'Find growth opportunities',
   ];
 
   const handleSend = async (text: string) => {
     if (!text.trim() || isProcessing) return;
-
-    const userMsg = { sender: 'USER' as const, text, id: `user-${Date.now()}` };
-    const newHistory = [...messages, userMsg];
-    setMessages(newHistory);
-    setInput('');
-    setIsProcessing(true);
-    const apiUrl = getRalionApiUrl('/api/mari/chat');
-    let httpStatus = 0;
-    let responseText = '';
-    let responseSource = 'UNKNOWN';
-    let fallbackUsed = false;
-    let buildVersion = MARI_BUILD_VERSION;
-    let detectedIntent: string | undefined = undefined;
-    let modelAttempted: string | null = null;
-    let modelSucceeded: boolean = false;
-    let fallbackReason: string | null = null;
-
-    try {
-      const activeOrgId = organization?.id || '';
-      const activeWorkspaceId = workspace?.id || '';
-      if (!activeOrgId || !activeWorkspaceId) {
-        throw new Error('Canonical organization workspace is not ready.');
-      }
-
-      const res = await authFetch('/api/mari/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-organization-id': activeOrgId,
-          'x-workspace-id': activeWorkspaceId,
-        },
-        body: JSON.stringify({
-          query: text,
-          prompt: text,
-          organizationId: activeOrgId,
-          workspaceId: activeWorkspaceId,
-          messages: newHistory.map(m => ({
-            role: m.sender === 'USER' ? 'user' : 'model',
-            text: m.text,
-          })),
-        }),
-      });
-
-      httpStatus = res.status;
-
-      if (res.ok) {
-        const data = await res.json();
-        responseText = data.answer || data.text || '';
-        if (!data.success || !responseText) throw new Error('Invalid Mari server response');
-        responseSource = data.responseSource || 'SERVER_MARI_CHAT_API';
-        fallbackUsed = data.fallbackUsed !== undefined ? data.fallbackUsed : (responseSource === 'local_grounded' && data.detectedIntent !== 'GREETING' && data.detectedIntent !== 'FACEBOOK_CONNECTION_STATUS' && data.detectedIntent !== 'CREATIVE_STUDIO');
-        buildVersion = data.buildVersion || MARI_BUILD_VERSION;
-        detectedIntent = data.detectedIntent;
-        modelAttempted = data.modelAttempted;
-        modelSucceeded = Boolean(data.modelSucceeded);
-        fallbackReason = data.fallbackReason;
-
-        setMessages(prev => [...prev, { sender: 'MARI', text: responseText, id: `mari-${Date.now()}` }]);
-      } else {
-        fallbackUsed = true;
-        fallbackReason = `HTTP_${httpStatus}`;
-        responseText = "Mari couldn't complete that request right now. Please retry.";
-        responseSource = 'HTTP_ERROR';
-        setMessages(prev => [
-          ...prev,
-          {
-            sender: 'MARI',
-            text: responseText,
-            id: `mari-${Date.now()}`
-          }
-        ]);
-      }
-    } catch (err: any) {
-      fallbackUsed = true;
-      fallbackReason = 'NETWORK_ERROR';
-      responseText = "Mari couldn't reach the server right now. Please retry.";
-      responseSource = 'NETWORK_ERROR';
-      setMessages(prev => [
-        ...prev,
-        {
-          sender: 'MARI',
-          text: responseText,
-          id: `mari-${Date.now()}`
-        }
-      ]);
-    } finally {
-      console.log('[MARI_FLOATING_TELEMETRY]', {
-        MARI_REQUEST_URL: apiUrl,
-        MARI_HTTP_STATUS: httpStatus,
-        MARI_RESPONSE_HAS_ANSWER: Boolean(responseText),
-        MARI_RESPONSE_SOURCE: responseSource,
-        MARI_FALLBACK_USED: fallbackUsed,
-        MARI_BUILD_VERSION: buildVersion,
-        MARI_DETECTED_INTENT: detectedIntent,
-        MARI_MODEL_ATTEMPTED: modelAttempted,
-        MARI_MODEL_SUCCEEDED: modelSucceeded,
-        MARI_FALLBACK_REASON: fallbackReason,
-      });
-      setIsProcessing(false);
-    }
+    await sendMessage(text, {
+      route: pathname || '/dashboard',
+      label: 'Floating Mari Widget',
+    });
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-50">
-      {!isOpen ? (
+    <div className="fixed bottom-6 right-6 z-40">
+      {!isFloatingOpen ? (
         <button
-          onClick={() => setIsOpen(true)}
+          onClick={openFloating}
+          aria-label="Open Mari AI Assistant"
           className="flex items-center gap-2.5 px-4 py-3 rounded-full bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600 text-white font-bold text-xs shadow-2xl shadow-purple-500/30 hover:scale-105 transition-all group border border-purple-400/40"
         >
           <Sparkles className="w-4 h-4 animate-pulse text-amber-300" />
           <span>Mari AI</span>
         </button>
       ) : (
-        <div className="w-80 sm:w-96 h-[480px] bg-zinc-900/95 backdrop-blur-xl border border-zinc-800 rounded-2xl shadow-2xl flex flex-col justify-between overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="w-80 sm:w-96 max-w-[calc(100vw-2rem)] h-[480px] bg-zinc-900/95 backdrop-blur-xl border border-zinc-800 rounded-2xl shadow-2xl flex flex-col justify-between overflow-hidden animate-in zoom-in-95 duration-200">
           {/* Header */}
           <div className="p-3.5 border-b border-zinc-800 bg-gradient-to-r from-blue-950/60 to-purple-950/60 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -149,7 +73,11 @@ export const FloatingMariAi: React.FC = () => {
                 <span className="text-[10px] text-purple-300">Empowered to Prosper</span>
               </div>
             </div>
-            <button onClick={() => setIsOpen(false)} className="p-1 rounded text-zinc-400 hover:text-white">
+            <button
+              onClick={closeFloating}
+              aria-label="Close Mari AI Floating Widget"
+              className="p-1 rounded text-zinc-400 hover:text-white transition-colors"
+            >
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -160,7 +88,9 @@ export const FloatingMariAi: React.FC = () => {
               <div key={m.id || i} className={`flex ${m.sender === 'USER' ? 'justify-end' : 'justify-start'}`}>
                 <div
                   className={`p-3 rounded-xl max-w-[88%] leading-relaxed ${
-                    m.sender === 'USER' ? 'bg-blue-600 text-white font-medium' : 'bg-zinc-800 border border-zinc-700/60 text-zinc-100'
+                    m.sender === 'USER'
+                      ? 'bg-blue-600 text-white font-medium'
+                      : 'bg-zinc-800 border border-zinc-700/60 text-zinc-100'
                   }`}
                 >
                   <MariMarkdownMessage text={m.text} isUser={m.sender === 'USER'} />
@@ -176,7 +106,10 @@ export const FloatingMariAi: React.FC = () => {
                               .replace(/<svg[\s\S]*?<\/svg>/gi, '')
                               .replace(/!\[.*?\]\(.*?\)/g, '')
                               .replace(/[*#_`]/g, '')
-                              .replace(/^(Social & Channel Intelligence|Good day!|Based on your|Here is|I recommend)[^\n]*\n+/gi, '')
+                              .replace(
+                                /^(Social & Channel Intelligence|Good day!|Based on your|Here is|I recommend)[^\n]*\n+/gi,
+                                ''
+                              )
                               .replace(/\[.*?\]/g, '')
                               .replace(/\bsvg[A-Za-z0-9 ]*/gi, '')
                               .replace(/\s+/g, ' ')
@@ -185,7 +118,7 @@ export const FloatingMariAi: React.FC = () => {
                             localStorage.setItem('ralion_creative_prompt', clean || m.text.substring(0, 200));
                             window.location.href = '/growth?tab=creatives';
                           }
-                          setIsOpen(false);
+                          closeFloating();
                         }}
                         className="text-[10px] font-bold text-purple-300 hover:text-white flex items-center gap-1 transition-colors px-2 py-0.5 rounded bg-purple-950/40 border border-purple-500/30"
                       >
@@ -224,7 +157,10 @@ export const FloatingMariAi: React.FC = () => {
                                   const clean = m.text
                                     .replace(/!\[.*?\]\(.*?\)/g, '')
                                     .replace(/[*#_`]/g, '')
-                                    .replace(/^(Social & Channel Intelligence|Good day!|Based on your|Here is|I recommend)[^\n]*\n+/gi, '')
+                                    .replace(
+                                      /^(Social & Channel Intelligence|Good day!|Based on your|Here is|I recommend)[^\n]*\n+/gi,
+                                      ''
+                                    )
                                     .replace(/\[.*?\]/g, '')
                                     .replace(/\s+/g, ' ')
                                     .trim()
@@ -232,7 +168,7 @@ export const FloatingMariAi: React.FC = () => {
                                   localStorage.setItem('ralion_creative_prompt', clean || m.text.substring(0, 200));
                                 }
                                 window.location.href = route;
-                                setIsOpen(false);
+                                closeFloating();
                               }}
                               className="text-[10px] font-semibold text-purple-300 hover:text-white px-2 py-0.5 rounded bg-zinc-800/80 border border-purple-500/30 flex items-center gap-1 transition-all"
                             >
@@ -259,7 +195,7 @@ export const FloatingMariAi: React.FC = () => {
 
           {/* Quick Prompts & Input */}
           <div className="p-3 border-t border-zinc-800 bg-zinc-950/80 flex flex-col gap-2">
-            <div className="flex gap-1 overflow-x-auto pb-1">
+            <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-none">
               {quickPrompts.map((qp, idx) => (
                 <button
                   key={idx}
@@ -285,6 +221,7 @@ export const FloatingMariAi: React.FC = () => {
               <button
                 onClick={() => handleSend(input)}
                 disabled={!input.trim() || isProcessing}
+                aria-label="Send message to Mari"
                 className="absolute right-1.5 top-1.5 p-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white transition-colors"
               >
                 <Send className="w-3 h-3" />

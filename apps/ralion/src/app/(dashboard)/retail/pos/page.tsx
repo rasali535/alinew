@@ -18,6 +18,7 @@ import {
   User,
   ShieldCheck,
   AlertCircle,
+  Sparkles,
 } from 'lucide-react';
 import { RetailNavHeader } from '../components/RetailNavHeader';
 import { RetailAccessErrorCard, RetailErrorState } from '../components/RetailAccessErrorCard';
@@ -345,6 +346,21 @@ export default function RetailPOSPage() {
               <Clock className="w-3.5 h-3.5 text-amber-400" />
               <span>Shift: {activeShift ? 'Open' : 'Closed'}</span>
             </button>
+
+            {/* Ask Mari POS Quick Trigger */}
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new CustomEvent('ralion:open-mari'));
+                }
+              }}
+              className="px-3 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 bg-indigo-950/60 hover:bg-indigo-900/80 text-indigo-300 hover:text-white border border-indigo-500/40 transition-all shadow-sm cursor-pointer"
+              title="Ask Mari AI Assistant (Ctrl+Shift+M)"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Ask Mari</span>
+            </button>
           </div>
 
           {/* Category Tabs */}
@@ -539,7 +555,7 @@ export default function RetailPOSPage() {
 
       {/* Printable Receipt Modal */}
       {completedSale && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-60 flex items-center justify-center p-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-3xl max-w-sm w-full p-6 text-center shadow-2xl space-y-4">
             <div className="w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-7 h-7" />
@@ -595,7 +611,7 @@ export default function RetailPOSPage() {
 
       {/* Cashier Shift Modal */}
       {showShiftModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-60 flex items-center justify-center p-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4">
             <h3 className="text-base font-bold text-zinc-100">
               {isClosingShift ? 'Reconcile & Close Cashier Shift' : 'Open New Cashier Shift'}

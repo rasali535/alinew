@@ -1,12 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
-import { X, Send, Sparkles, Bot, FileText, Zap, CornerDownLeft, ArrowRight } from 'lucide-react';
-import { Button, Badge } from '@ralion/ui';
+import React from 'react';
+import { usePathname } from 'next/navigation';
+import { X, Send, Sparkles, Bot, Zap } from 'lucide-react';
+import { Badge } from '@ralion/ui';
 import { MariMarkdownMessage } from './MariMarkdownMessage';
-import { useOrganization } from '@ralion/auth';
-
-import { authFetch, getRalionApiUrl, MARI_BUILD_VERSION } from '@/lib/api-config';
+import { useMariConversation } from '@/context/MariConversationContext';
 
 export interface MariAiDrawerProps {
   isOpen: boolean;
@@ -17,134 +16,25 @@ export interface MariAiDrawerProps {
 export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
   isOpen,
   onClose,
-  onNavigate
+  onNavigate,
 }) => {
-  const { organization, workspace, user } = useOrganization();
-  const [messages, setMessages] = useState<Array<{ sender: 'USER' | 'MARI'; text: string; actions?: any[]; tokens?: { totalTokens?: number } }>>([
-    {
-      sender: 'MARI',
-      text: "Hello! I am Mari AI, your AI Business Growth Partner. Ask me anything about your growth strategy, market positioning, revenue, or tell me to generate marketing content!"
-    }
-  ]);
-  const [inputQuery, setInputQuery] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
+  const pathname = usePathname();
+  const {
+    messages,
+    input,
+    setInput,
+    isProcessing,
+    sendMessage,
+  } = useMariConversation();
 
   if (!isOpen) return null;
 
   const handleSend = () => {
-    if (!inputQuery.trim() || isProcessing) return;
-
-    const userText = inputQuery.trim();
-    const newHistory = [...messages, { sender: 'USER' as const, text: userText }];
-    setMessages(newHistory);
-    setInputQuery('');
-    setIsProcessing(true);
-
-    const fetchResponse = async () => {
-      const apiUrl = getRalionApiUrl('/api/mari/chat');
-      let httpStatus = 0;
-      let respText = '';
-      let responseSource = 'UNKNOWN';
-      let fallbackUsed = false;
-      let buildVersion = MARI_BUILD_VERSION;
-      let detectedIntent: string | undefined = undefined;
-      let modelAttempted: string | null = null;
-      let modelSucceeded: boolean = false;
-      let fallbackReason: string | null = null;
-
-      try {
-        const activeOrgId = organization?.id || '';
-        const activeWorkspaceId = workspace?.id || '';
-        if (!activeOrgId || !activeWorkspaceId) {
-          throw new Error('Canonical organization workspace is not ready.');
-        }
-
-        const res = await authFetch('/api/mari/chat', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-organization-id': activeOrgId,
-            'x-workspace-id': activeWorkspaceId,
-          },
-          body: JSON.stringify({
-            query: userText,
-            prompt: userText,
-            organizationId: activeOrgId,
-            workspaceId: activeWorkspaceId,
-            activeScreen: { route: '/mari-ai', label: 'Mari Business Drawer' },
-            messages: newHistory.map(m => ({
-              role: m.sender === 'USER' ? 'user' : 'model',
-              text: m.text,
-            })),
-          }),
-        });
-
-        httpStatus = res.status;
-
-        if (res.ok) {
-          const data = await res.json();
-          respText = data.answer || data.text || '';
-          if (!data.success || !respText) throw new Error('Invalid Mari server response');
-          responseSource = data.responseSource || 'SERVER_MARI_CHAT_API';
-          fallbackUsed = data.fallbackUsed !== undefined ? data.fallbackUsed : (responseSource === 'local_grounded' && data.detectedIntent !== 'GREETING' && data.detectedIntent !== 'FACEBOOK_CONNECTION_STATUS' && data.detectedIntent !== 'CREATIVE_STUDIO');
-          buildVersion = data.buildVersion || MARI_BUILD_VERSION;
-          detectedIntent = data.detectedIntent;
-          modelAttempted = data.modelAttempted;
-          modelSucceeded = Boolean(data.modelSucceeded);
-          fallbackReason = data.fallbackReason;
-
-          setMessages(prev => [
-            ...prev,
-            {
-              sender: 'MARI',
-              text: respText,
-              actions: data.actionsSuggested || [],
-              tokens: data.usage ? { totalTokens: data.usage.totalTokens } : undefined,
-            }
-          ]);
-        } else {
-          fallbackUsed = true;
-          fallbackReason = `HTTP_${httpStatus}`;
-          respText = "Mari couldn't complete that request right now. Please retry.";
-          responseSource = 'HTTP_ERROR';
-          setMessages(prev => [
-            ...prev,
-            {
-              sender: 'MARI',
-              text: respText,
-            }
-          ]);
-        }
-      } catch (err: any) {
-        fallbackUsed = true;
-        fallbackReason = 'NETWORK_ERROR';
-        respText = "Mari couldn't reach the server right now. Please retry.";
-        responseSource = 'NETWORK_ERROR';
-        setMessages(prev => [
-          ...prev,
-          {
-            sender: 'MARI',
-            text: respText,
-          }
-        ]);
-      } finally {
-        console.log('[MARI_DRAWER_TELEMETRY]', {
-          MARI_REQUEST_URL: apiUrl,
-          MARI_HTTP_STATUS: httpStatus,
-          MARI_RESPONSE_HAS_ANSWER: Boolean(respText),
-          MARI_RESPONSE_SOURCE: responseSource,
-          MARI_FALLBACK_USED: fallbackUsed,
-          MARI_BUILD_VERSION: buildVersion,
-          MARI_DETECTED_INTENT: detectedIntent,
-          MARI_MODEL_ATTEMPTED: modelAttempted,
-          MARI_MODEL_SUCCEEDED: modelSucceeded,
-          MARI_FALLBACK_REASON: fallbackReason,
-        });
-        setIsProcessing(false);
-      }
-    };
-    
-    fetchResponse();
+    if (!input.trim() || isProcessing) return;
+    sendMessage(input, {
+      route: pathname || '/mari-ai',
+      label: 'Mari Business Drawer',
+    });
   };
 
   return (
@@ -165,6 +55,7 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
         </div>
         <button
           onClick={onClose}
+          aria-label="Close Mari AI Assistant"
           className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
         >
           <X className="w-4 h-4" />
@@ -175,7 +66,7 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
       <div className="flex-1 p-4 overflow-y-auto flex flex-col gap-4">
         {messages.map((msg, index) => (
           <div
-            key={index}
+            key={msg.id || index}
             className={`flex flex-col gap-2 ${msg.sender === 'USER' ? 'items-end' : 'items-start'}`}
           >
             <div
@@ -317,7 +208,7 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
           <button
             type="button"
             onClick={() => {
-              setInputQuery('Brainstorm 3 viral social media marketing poster concepts for our business');
+              setInput('Brainstorm 3 viral social media marketing poster concepts for our business');
             }}
             className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[10px] text-zinc-300 hover:text-white shrink-0 transition-colors flex items-center gap-1"
           >
@@ -326,7 +217,7 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
           <button
             type="button"
             onClick={() => {
-              setInputQuery('Draft a high-converting Facebook post with caption, image concept, and hashtags');
+              setInput('Draft a high-converting Facebook post with caption, image concept, and hashtags');
             }}
             className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[10px] text-zinc-300 hover:text-white shrink-0 transition-colors flex items-center gap-1"
           >
@@ -337,15 +228,16 @@ export const MariAiDrawer: React.FC<MariAiDrawerProps> = ({
         <div className="relative">
           <input
             type="text"
-            value={inputQuery}
-            onChange={(e) => setInputQuery(e.target.value)}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             placeholder="Ask Mari: 'Generate 3 poster concepts' or 'Draft ad'..."
             className="w-full pl-4 pr-12 py-3 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 transition-colors shadow-inner"
           />
           <button
             onClick={handleSend}
-            disabled={!inputQuery.trim()}
+            disabled={!input.trim() || isProcessing}
+            aria-label="Send message to Mari"
             className="absolute right-2 top-2 p-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white transition-colors"
           >
             <Send className="w-3.5 h-3.5" />
