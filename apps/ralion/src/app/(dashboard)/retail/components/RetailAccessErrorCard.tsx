@@ -66,7 +66,7 @@ export const RetailAccessErrorCard: React.FC<RetailAccessErrorCardProps> = ({ er
           </div>
           <h2 className="text-xl font-bold text-zinc-100 mb-2">Retail Access Restricted</h2>
           <p className="text-sm text-zinc-400 mb-6 leading-relaxed">
-            This workspace is not entitled to access Ralion Retail OS. Exclusive pilot access is reserved for Proinsight Hardware &amp; Building Supplies.
+            {error.message || 'This workspace is not entitled to access Ralion Retail OS. Please contact your platform administrator to activate Retail demo access or redeem an access voucher.'}
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link

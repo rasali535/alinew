@@ -81,14 +81,17 @@ export function formatCurrency(
 }
 
 /**
- * Safe price formatter with dollar symbol ($).
+ * Safe price formatter with configured currency symbol.
+ * Defaults to USD ($), supports BWP (P), ZAR (R), etc.
  * If value is missing / null / not finite, returns '—'.
  */
-export function formatPrice(value: number | null | undefined): string {
+export function formatPrice(value: number | null | undefined, currency: string = 'USD'): string {
   if (value === null || value === undefined || !isValidFiniteNumber(value)) {
     return '—';
   }
-  return `$${value.toFixed(2)}`;
+  const curr = (currency || 'USD').toUpperCase();
+  const symbol = curr === 'BWP' ? 'P' : curr === 'ZAR' ? 'R' : curr === 'EUR' ? '€' : curr === 'GBP' ? '£' : '$';
+  return `${symbol}${value.toFixed(2)}`;
 }
 
 /**

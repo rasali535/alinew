@@ -10,6 +10,9 @@ import crypto from 'node:crypto';
 import { getPrivilegedSupabase } from '../../supabase/server';
 import { PROINSIGHT_ORGANIZATION_ID, PROINSIGHT_WORKSPACE_ID } from '../retail/retailEntitlement.service';
 
+import { RetailDemoDataService } from '../retail/retailDemoData.service';
+import { RetailCurrency } from '@ralion/database';
+
 export interface GenerateTrialCodeParams {
   eligibleProducts: Array<'retail' | 'trade'>;
   durationDays?: number;
@@ -24,6 +27,19 @@ export interface GenerateTrialCodeParams {
   adminEmail?: string;
 }
 
+export interface GrantWorkspaceTrialParams {
+  organizationId: string;
+  workspaceId: string;
+  eligibleProducts?: Array<'retail' | 'trade'>;
+  durationDays?: number;
+  currency?: RetailCurrency;
+  workspaceMode?: 'DEMO_DATA' | 'CLEAN_WORKSPACE';
+  notes?: string;
+  reason: string;
+  adminUserId: string;
+  adminEmail: string;
+}
+
 export interface RedeemTrialCodeParams {
   rawCode: string;
   userId: string;
@@ -35,7 +51,8 @@ export interface RedeemTrialCodeParams {
 }
 
 export interface ExtendTrialParams {
-  workspaceId: string;
+  workspaceId?: string;
+  codeId?: string;
   additionalDays: number;
   adminUserId: string;
   adminEmail: string;
@@ -51,8 +68,9 @@ export interface RevokeTrialParams {
 }
 
 export interface ConvertTrialParams {
-  organizationId: string;
-  workspaceId: string;
+  organizationId?: string;
+  workspaceId?: string;
+  codeId?: string;
   moduleKey?: 'retail' | 'trade' | 'both';
   targetTier?: 'STANDARD' | 'PROFESSIONAL' | 'ENTERPRISE';
   adminUserId: string;
@@ -129,6 +147,154 @@ export class TrialAccessService {
       return `${parts[0]}-${parts[1]}-****-****`;
     }
     return 'RT-DEMO-****';
+  }
+
+  /**
+   * Direct Workspace Trial Grant (Platform Administrator Command Centre).
+   * Grants Retail (and/or Trade) demo access directly to an eligible customer workspace
+   * without requiring an access voucher code.
+   *
+   * Safeguards:
+   * 1. Preserves Proinsight data and entitlements.
+   * 2. NEVER overwrites an active paid commercial subscription (STANDARD, PROFESSIONAL, ENTERPRISE).
+   * 3. Validates mandatory audit justification (reason >= 5 chars).
+   * 4. Enforces CLEAN_WORKSPACE as default; if DEMO_DATA is selected, seeds with deterministic UUIDs and configured currency.
+   * 5. Atomically registers entitlement in tenant_module_entitlements and records redemption/grant in trial_code_redemptions.
+   * 6. Appends immutable audit log entry.
+   */
+  static async grantWorkspaceTrialDirectly(params: GrantWorkspaceTrialParams) {
+    const supabase = getPrivilegedSupabase();
+
+    if (!params.reason || params.reason.trim().length < 5) {
+      throw new Error('A mandatory audit justification of at least 5 characters is required.');
+    }
+    if (!params.organizationId || !params.workspaceId) {
+      throw new Error('Both organizationId and workspaceId are required for direct demo grants.');
+    }
+
+    const durationDays = params.durationDays && params.durationDays > 0 ? params.durationDays : 14;
+    const eligibleProducts = (params.eligibleProducts && params.eligibleProducts.length > 0)
+      ? params.eligibleProducts
+      : ['retail' as const];
+    const currency: RetailCurrency = params.currency || 'USD';
+    const workspaceMode = params.workspaceMode || 'CLEAN_WORKSPACE';
+    const now = Date.now();
+    const expiresAt = new Date(now + durationDays * 86400000).toISOString();
+
+    // 1. Safeguard: Check if workspace currently has an active paid commercial plan
+    const { data: existingEntitlements, error: entCheckError } = await supabase
+      .from('tenant_module_entitlements')
+      .select('id, module_key, tier, status')
+      .eq('workspace_id', params.workspaceId);
+
+    if (entCheckError) {
+      throw new Error(`Failed to verify workspace entitlement status: ${entCheckError.message}`);
+    }
+
+    for (const ent of existingEntitlements || []) {
+      const isPaidTier = ['STANDARD', 'PROFESSIONAL', 'ENTERPRISE'].includes(ent.tier);
+      if (isPaidTier && ent.status === 'ACTIVE') {
+        throw new Error(
+          `SAFEGUARD_BLOCKED: Workspace already possesses an active paid commercial subscription (${ent.tier}) for module '${ent.module_key}'. Active paid subscriptions cannot be downgraded or overwritten with a demo trial.`
+        );
+      }
+    }
+
+    // 2. Upsert entitlements in tenant_module_entitlements
+    for (const moduleKey of eligibleProducts) {
+      const { error: upsertError } = await supabase
+        .from('tenant_module_entitlements')
+        .upsert(
+          {
+            organization_id: params.organizationId,
+            workspace_id: params.workspaceId,
+            module_key: moduleKey,
+            tier: 'TRIAL',
+            status: 'ACTIVE',
+            expires_at: expiresAt,
+            default_currency: currency,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'organization_id,workspace_id,module_key' }
+        );
+
+      if (upsertError) {
+        throw new Error(`Failed to grant entitlement for ${moduleKey}: ${upsertError.message}`);
+      }
+    }
+
+    // 3. Insert record into trial_code_redemptions (grant_type: 'ADMIN_DIRECT')
+    const { data: redemptionData, error: redemptionError } = await supabase
+      .from('trial_code_redemptions')
+      .insert({
+        code_id: null,
+        user_id: params.adminUserId || '00000000-0000-0000-0000-000000000000',
+        organization_id: params.organizationId,
+        workspace_id: params.workspaceId,
+        status: 'ACTIVE',
+        trial_expires_at: expiresAt,
+        grant_type: 'ADMIN_DIRECT',
+        granted_by_user_id: params.adminUserId || null,
+        reason: params.reason.trim(),
+        redeemed_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (redemptionError) {
+      console.warn('[TrialAccessService] Direct grant redemption log error (non-fatal):', redemptionError.message);
+    }
+
+    // 4. If DEMO_DATA is selected, seed demonstration records with live data safeguards
+    let demoDataLoaded = false;
+    if (workspaceMode === 'DEMO_DATA') {
+      if (eligibleProducts.includes('retail')) {
+        await RetailDemoDataService.loadHardwareStoreDemoData(
+          params.organizationId,
+          params.workspaceId,
+          params.adminUserId,
+          { currency, force: false }
+        );
+        demoDataLoaded = true;
+      }
+      if (eligibleProducts.includes('trade')) {
+        await this.seedDemoWorkspaceData(params.organizationId, params.workspaceId, ['trade']);
+      }
+    }
+
+    // 5. Append immutable audit log entry
+    await supabase.from('audit_logs').insert({
+      organization_id: params.organizationId,
+      user_id: params.adminUserId,
+      action: 'WORKSPACE_TRIAL_GRANTED',
+      module: 'TRIAL_ACCESS_MANAGER',
+      metadata: {
+        workspaceId: params.workspaceId,
+        organizationId: params.organizationId,
+        eligibleProducts,
+        durationDays,
+        currency,
+        workspaceMode,
+        demoDataLoaded,
+        reason: params.reason.trim(),
+        notes: params.notes || null,
+        adminEmail: params.adminEmail,
+        trialExpiresAt: expiresAt,
+        redemptionId: redemptionData?.id || null,
+        timestamp: new Date().toISOString(),
+      },
+    });
+
+    return {
+      success: true,
+      message: `Retail demo access granted successfully to workspace for ${durationDays} days (${currency}).`,
+      workspaceId: params.workspaceId,
+      eligibleProducts,
+      durationDays,
+      currency,
+      workspaceMode,
+      expiresAt,
+    };
   }
 
   /**
@@ -311,7 +477,6 @@ export class TrialAccessService {
         .select();
 
       const sup1 = insertedSuppliers?.[0]?.id;
-      const sup2 = insertedSuppliers?.[1]?.id;
 
       // Seed trade products
       const tradeProducts = [
@@ -424,103 +589,113 @@ export class TrialAccessService {
 
     // 2. Seed Retail sample products if Retail is eligible
     if (eligibleProducts.includes('retail')) {
-      const retailProducts = [
-        {
-          organization_id: organizationId,
-          workspace_id: workspaceId,
-          name: 'DeWalt 20V Cordless Brushless Drill Kit',
-          sku: 'RET-PWR-DCD777',
-          barcode: '885911478123',
-          category: 'Power Tools',
-          selling_price: 159.00,
-          purchase_cost: 98.00,
-          unit_of_measure: 'EACH',
-          is_pilot_demo: true,
-        },
-        {
-          organization_id: organizationId,
-          workspace_id: workspaceId,
-          name: 'Stanley FatMax 8m/26ft Tape Measure',
-          sku: 'RET-HND-FM8M',
-          barcode: '076174338921',
-          category: 'Hand Tools',
-          selling_price: 24.50,
-          purchase_cost: 12.00,
-          unit_of_measure: 'EACH',
-          is_pilot_demo: true,
-        },
-        {
-          organization_id: organizationId,
-          workspace_id: workspaceId,
-          name: 'Dulux Weatherguard Exterior Paint 5L (Pure Brilliant White)',
-          sku: 'RET-PNT-WG5L',
-          barcode: '501021255410',
-          category: 'Paint & Decorating',
-          selling_price: 49.99,
-          purchase_cost: 29.50,
-          unit_of_measure: 'EACH',
-          is_pilot_demo: true,
-        },
-      ];
-
-      await supabase.from('retail_products').insert(retailProducts);
+      await RetailDemoDataService.loadHardwareStoreDemoData(
+        organizationId,
+        workspaceId,
+        '00000000-0000-0000-0000-000000000000',
+        { currency: 'USD', force: false }
+      );
     }
   }
 
   /**
    * Extends an active or expired trial by additional days.
+   * Supports either workspaceId directly, or codeId (extending all workspaces redeemed under that code).
    */
   static async extendTrial(params: ExtendTrialParams) {
     if (params.additionalDays <= 0) {
       throw new Error('Additional trial days must be greater than zero.');
     }
+    if (!params.reason || params.reason.trim().length < 5) {
+      throw new Error('A justification reason of at least 5 characters is required for the audit trail.');
+    }
 
     const supabase = getPrivilegedSupabase();
+    const targetWorkspaceIds: string[] = [];
 
-    // Fetch current entitlements for this workspace
-    const { data: entitlements, error } = await supabase
-      .from('tenant_module_entitlements')
-      .select('*')
-      .eq('workspace_id', params.workspaceId);
+    if (params.workspaceId) {
+      targetWorkspaceIds.push(params.workspaceId);
+    }
 
-    if (error || !entitlements || entitlements.length === 0) {
-      throw new Error('No entitlement records found for this workspace.');
+    if (params.codeId) {
+      // Find all redemptions under this code
+      const { data: redemptions } = await supabase
+        .from('trial_code_redemptions')
+        .select('workspace_id')
+        .eq('code_id', params.codeId);
+
+      for (const r of redemptions || []) {
+        if (r.workspace_id && !targetWorkspaceIds.includes(r.workspace_id)) {
+          targetWorkspaceIds.push(r.workspace_id);
+        }
+      }
+
+      // Also extend code's expires_at if set
+      const { data: codeData } = await supabase
+        .from('trial_access_codes')
+        .select('expires_at')
+        .eq('id', params.codeId)
+        .maybeSingle();
+
+      if (codeData?.expires_at) {
+        const curExp = new Date(codeData.expires_at).getTime();
+        const base = curExp > Date.now() ? curExp : Date.now();
+        await supabase
+          .from('trial_access_codes')
+          .update({
+            expires_at: new Date(base + params.additionalDays * 86400000).toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', params.codeId);
+      }
+    }
+
+    if (targetWorkspaceIds.length === 0 && !params.codeId) {
+      throw new Error('Either workspaceId or codeId must be provided to extend trial access.');
     }
 
     const now = Date.now();
-    for (const ent of entitlements) {
-      // Calculate new expiration: if already expired, extend from now; if active, extend from current expires_at
-      const currentExpiry = ent.expires_at ? new Date(ent.expires_at).getTime() : now;
-      const baseTime = currentExpiry > now ? currentExpiry : now;
-      const newExpiry = new Date(baseTime + params.additionalDays * 86400000).toISOString();
-
-      await supabase
+    for (const wsId of targetWorkspaceIds) {
+      const { data: entitlements } = await supabase
         .from('tenant_module_entitlements')
+        .select('*')
+        .eq('workspace_id', wsId);
+
+      for (const ent of entitlements || []) {
+        const currentExpiry = ent.expires_at ? new Date(ent.expires_at).getTime() : now;
+        const baseTime = currentExpiry > now ? currentExpiry : now;
+        const newExpiry = new Date(baseTime + params.additionalDays * 86400000).toISOString();
+
+        await supabase
+          .from('tenant_module_entitlements')
+          .update({
+            status: 'ACTIVE',
+            expires_at: newExpiry,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', ent.id);
+      }
+
+      // Update redemption records
+      await supabase
+        .from('trial_code_redemptions')
         .update({
           status: 'ACTIVE',
-          expires_at: newExpiry,
-          updated_at: new Date().toISOString(),
+          trial_expires_at: new Date(now + params.additionalDays * 86400000).toISOString(),
         })
-        .eq('id', ent.id);
+        .eq('workspace_id', wsId);
     }
-
-    // Update redemption records
-    await supabase
-      .from('trial_code_redemptions')
-      .update({
-        status: 'ACTIVE',
-        trial_expires_at: new Date(now + params.additionalDays * 86400000).toISOString(),
-      })
-      .eq('workspace_id', params.workspaceId);
 
     // Audit log
     await supabase.from('audit_logs').insert({
-      organization_id: entitlements[0].organization_id,
+      organization_id: PROINSIGHT_ORGANIZATION_ID,
       user_id: params.adminUserId,
       action: 'TRIAL_EXTENDED',
       module: 'TRIAL_ACCESS_MANAGER',
       metadata: {
-        workspaceId: params.workspaceId,
+        workspaceId: params.workspaceId || null,
+        codeId: params.codeId || null,
+        extendedWorkspaces: targetWorkspaceIds,
         additionalDays: params.additionalDays,
         reason: params.reason,
         adminEmail: params.adminEmail,
@@ -528,14 +703,23 @@ export class TrialAccessService {
       },
     });
 
-    return { success: true, message: `Trial extended by ${params.additionalDays} days.` };
+    return {
+      success: true,
+      message: `Trial extended by ${params.additionalDays} days for ${targetWorkspaceIds.length > 0 ? targetWorkspaceIds.length + ' workspace(s)' : 'code'}.`,
+    };
   }
 
   /**
    * Revokes trial access for a code or workspace.
+   * Code revocation GUARANTEES that previously redeemed workspace entitlements are revoked/suspended.
    */
   static async revokeTrial(params: RevokeTrialParams) {
+    if (!params.reason || params.reason.trim().length < 5) {
+      throw new Error('A justification reason of at least 5 characters is required for the audit trail.');
+    }
+
     const supabase = getPrivilegedSupabase();
+    const affectedWorkspaceIds: string[] = [];
 
     if (params.codeId) {
       await supabase
@@ -547,24 +731,44 @@ export class TrialAccessService {
           updated_at: new Date().toISOString(),
         })
         .eq('id', params.codeId);
+
+      // Cascade to all redemptions under this code
+      const { data: redemptions } = await supabase
+        .from('trial_code_redemptions')
+        .select('workspace_id')
+        .eq('code_id', params.codeId);
+
+      for (const r of redemptions || []) {
+        if (r.workspace_id && !affectedWorkspaceIds.includes(r.workspace_id)) {
+          affectedWorkspaceIds.push(r.workspace_id);
+        }
+      }
+
+      await supabase
+        .from('trial_code_redemptions')
+        .update({ status: 'REVOKED' })
+        .eq('code_id', params.codeId);
     }
 
-    if (params.workspaceId) {
+    if (params.workspaceId && !affectedWorkspaceIds.includes(params.workspaceId)) {
+      affectedWorkspaceIds.push(params.workspaceId);
+    }
+
+    // Suspend trial entitlements for all affected workspaces
+    for (const wsId of affectedWorkspaceIds) {
       await supabase
         .from('tenant_module_entitlements')
         .update({
           status: 'SUSPENDED',
           updated_at: new Date().toISOString(),
         })
-        .eq('workspace_id', params.workspaceId)
+        .eq('workspace_id', wsId)
         .eq('tier', 'TRIAL');
 
       await supabase
         .from('trial_code_redemptions')
-        .update({
-          status: 'REVOKED',
-        })
-        .eq('workspace_id', params.workspaceId);
+        .update({ status: 'REVOKED' })
+        .eq('workspace_id', wsId);
     }
 
     // Audit log
@@ -576,21 +780,46 @@ export class TrialAccessService {
       metadata: {
         codeId: params.codeId || null,
         workspaceId: params.workspaceId || null,
+        revokedWorkspaces: affectedWorkspaceIds,
         reason: params.reason,
         adminEmail: params.adminEmail,
         timestamp: new Date().toISOString(),
       },
     });
 
-    return { success: true, message: 'Trial access revoked.' };
+    return { success: true, message: 'Trial access revoked and associated workspace entitlements suspended.' };
   }
 
   /**
    * Converts an active or completed trial into a paid commercial subscription.
    * Customer records are NEVER destroyed or mutated.
+   * Supports workspaceId or codeId.
    */
   static async convertTrialToPaid(params: ConvertTrialParams) {
     const supabase = getPrivilegedSupabase();
+    let workspaceId = params.workspaceId;
+    let organizationId = params.organizationId;
+
+    if (!workspaceId && params.codeId) {
+      // Find redemption by code_id
+      const { data: redemption } = await supabase
+        .from('trial_code_redemptions')
+        .select('workspace_id, organization_id')
+        .eq('code_id', params.codeId)
+        .order('redeemed_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (redemption) {
+        workspaceId = redemption.workspace_id;
+        organizationId = redemption.organization_id;
+      }
+    }
+
+    if (!workspaceId) {
+      throw new Error('Workspace ID is required for commercial plan conversion.');
+    }
+
     const targetTier = params.targetTier || 'STANDARD';
 
     // Upgrade entitlements
@@ -602,7 +831,7 @@ export class TrialAccessService {
         expires_at: null, // Indefinite or managed by recurring billing engine
         updated_at: new Date().toISOString(),
       })
-      .eq('workspace_id', params.workspaceId)
+      .eq('workspace_id', workspaceId)
       .select();
 
     if (error) {
@@ -616,16 +845,18 @@ export class TrialAccessService {
         status: 'CONVERTED',
         converted_at: new Date().toISOString(),
       })
-      .eq('workspace_id', params.workspaceId);
+      .eq('workspace_id', workspaceId);
 
     // Audit log
     await supabase.from('audit_logs').insert({
-      organization_id: params.organizationId,
+      organization_id: organizationId || PROINSIGHT_ORGANIZATION_ID,
       user_id: params.adminUserId,
       action: 'TRIAL_CONVERTED_TO_COMMERCIAL',
       module: 'TRIAL_ACCESS_MANAGER',
       metadata: {
-        workspaceId: params.workspaceId,
+        workspaceId,
+        organizationId: organizationId || null,
+        codeId: params.codeId || null,
         targetTier,
         notes: params.notes || 'Commercial conversion from Command Centre',
         adminEmail: params.adminEmail,
@@ -724,7 +955,9 @@ export class TrialAccessService {
         both: bothCount,
       },
       codes,
+      recentCodes: codes,
       redemptions,
+      revokedTrials: codes.filter(c => c.status === 'REVOKED').length,
     };
   }
 }
