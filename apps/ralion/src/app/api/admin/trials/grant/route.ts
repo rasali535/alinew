@@ -63,9 +63,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result, { status: 201 });
   } catch (err: any) {
     console.error('[AdminTrialGrantAPI] Error:', err);
+    const msg = err.message || 'Internal server error processing direct trial grant.';
+    let status = 500;
+    if (msg.includes('SAFEGUARD_BLOCKED')) {
+      status = 409;
+    } else if (
+      msg.includes('CROSS_TENANT_REJECTED') ||
+      msg.includes('INVALID_WORKSPACE') ||
+      msg.includes('INVALID_ARGUMENT')
+    ) {
+      status = 400;
+    } else if (msg.includes('PERSISTENCE_FAILED') || msg.includes('DATABASE_ERROR')) {
+      status = 502;
+    }
+
     return NextResponse.json(
-      { success: false, error: err.message || 'Internal server error processing direct trial grant.' },
-      { status: 500 }
+      { success: false, error: msg },
+      { status }
     );
   }
 }

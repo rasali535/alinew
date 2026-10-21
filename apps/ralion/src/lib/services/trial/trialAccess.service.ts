@@ -165,87 +165,232 @@ export class TrialAccessService {
   static async grantWorkspaceTrialDirectly(params: GrantWorkspaceTrialParams) {
     const supabase = getPrivilegedSupabase();
 
+    // 1. Parameter Validation
     if (!params.reason || params.reason.trim().length < 5) {
-      throw new Error('A mandatory audit justification of at least 5 characters is required.');
+      throw new Error('INVALID_ARGUMENT: A mandatory audit justification of at least 5 characters is required.');
     }
     if (!params.organizationId || !params.workspaceId) {
-      throw new Error('Both organizationId and workspaceId are required for direct demo grants.');
+      throw new Error('INVALID_ARGUMENT: Both organizationId and workspaceId are required for direct demo grants.');
     }
 
-    const durationDays = params.durationDays && params.durationDays > 0 ? params.durationDays : 14;
+    const durationDays = params.durationDays && params.durationDays > 0 ? Number(params.durationDays) : 14;
+    if (durationDays < 1 || durationDays > 365) {
+      throw new Error('INVALID_ARGUMENT: Trial duration must be between 1 and 365 days.');
+    }
+
     const eligibleProducts = (params.eligibleProducts && params.eligibleProducts.length > 0)
       ? params.eligibleProducts
       : ['retail' as const];
+
+    for (const p of eligibleProducts) {
+      if (!['retail', 'trade'].includes(p)) {
+        throw new Error(`INVALID_ARGUMENT: Unsupported product module key '${p}'.`);
+      }
+    }
+
     const currency: RetailCurrency = params.currency || 'USD';
-    const workspaceMode = params.workspaceMode || 'CLEAN_WORKSPACE';
+    const allowedCurrencies = ['USD', 'BWP', 'ZAR', 'EUR', 'GBP'];
+    if (!allowedCurrencies.includes(currency)) {
+      throw new Error(`INVALID_ARGUMENT: Unsupported currency '${currency}'.`);
+    }
+
+    const workspaceMode = params.workspaceMode === 'DEMO_DATA' ? 'DEMO_DATA' : 'CLEAN_WORKSPACE';
     const now = Date.now();
     const expiresAt = new Date(now + durationDays * 86400000).toISOString();
 
-    // 1. Safeguard: Check if workspace currently has an active paid commercial plan
+    // 2. Tenancy Validation: Verify workspace belongs to organization (strictly reject cross-tenant)
+    const { data: workspaceRecord, error: wsError } = await supabase
+      .from('workspaces')
+      .select('id, organization_id, name')
+      .eq('id', params.workspaceId)
+      .maybeSingle();
+
+    if (wsError) {
+      throw new Error(`DATABASE_ERROR: Failed to query workspace record: ${wsError.message}`);
+    }
+    if (!workspaceRecord) {
+      throw new Error(`INVALID_WORKSPACE: Target workspace ${params.workspaceId} does not exist.`);
+    }
+    if (workspaceRecord.organization_id !== params.organizationId) {
+      throw new Error(
+        `CROSS_TENANT_REJECTED: Workspace ${params.workspaceId} does not belong to organization ${params.organizationId}. Cross-tenant grants are strictly forbidden.`
+      );
+    }
+
+    // 3. Safeguard: Check if workspace currently has an active paid or PILOT plan
     const { data: existingEntitlements, error: entCheckError } = await supabase
       .from('tenant_module_entitlements')
-      .select('id, module_key, tier, status')
+      .select('id, module_key, tier, status, expires_at')
       .eq('workspace_id', params.workspaceId);
 
     if (entCheckError) {
-      throw new Error(`Failed to verify workspace entitlement status: ${entCheckError.message}`);
+      throw new Error(`DATABASE_ERROR: Failed to verify workspace entitlement status: ${entCheckError.message}`);
     }
 
     for (const ent of existingEntitlements || []) {
-      const isPaidTier = ['STANDARD', 'PROFESSIONAL', 'ENTERPRISE'].includes(ent.tier);
-      if (isPaidTier && ent.status === 'ACTIVE') {
+      const isPaidOrPilot = ['PILOT', 'STANDARD', 'PROFESSIONAL', 'ENTERPRISE'].includes(ent.tier);
+      const isUnexpired = !ent.expires_at || new Date(ent.expires_at).getTime() > now;
+      if (isPaidOrPilot && ent.status === 'ACTIVE' && isUnexpired && eligibleProducts.includes(ent.module_key as any)) {
         throw new Error(
-          `SAFEGUARD_BLOCKED: Workspace already possesses an active paid commercial subscription (${ent.tier}) for module '${ent.module_key}'. Active paid subscriptions cannot be downgraded or overwritten with a demo trial.`
+          `SAFEGUARD_BLOCKED: Workspace already possesses an active ${ent.tier} commercial entitlement for module '${ent.module_key}'. Active paid/pilot subscriptions cannot be downgraded or overwritten with a demo trial.`
         );
       }
     }
 
-    // 2. Upsert entitlements in tenant_module_entitlements
-    for (const moduleKey of eligibleProducts) {
-      const { error: upsertError } = await supabase
-        .from('tenant_module_entitlements')
-        .upsert(
-          {
-            organization_id: params.organizationId,
-            workspace_id: params.workspaceId,
-            module_key: moduleKey,
-            tier: 'TRIAL',
-            status: 'ACTIVE',
-            expires_at: expiresAt,
-            default_currency: currency,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'organization_id,workspace_id,module_key' }
-        );
+    // 4. Demo Data Live Business Record Safeguard
+    if (workspaceMode === 'DEMO_DATA') {
+      const { data: liveProducts, error: prodErr } = await supabase
+        .from('retail_products')
+        .select('id, is_pilot_demo')
+        .eq('workspace_id', params.workspaceId)
+        .limit(10);
 
-      if (upsertError) {
-        throw new Error(`Failed to grant entitlement for ${moduleKey}: ${upsertError.message}`);
+      if (!prodErr && liveProducts && liveProducts.some((p: any) => !p.is_pilot_demo)) {
+        throw new Error(
+          `SAFEGUARD_BLOCKED: Destination workspace contains live customer products. Seeding demo data into an active business workspace is prohibited.`
+        );
       }
     }
 
-    // 3. Insert record into trial_code_redemptions (grant_type: 'ADMIN_DIRECT')
-    const { data: redemptionData, error: redemptionError } = await supabase
-      .from('trial_code_redemptions')
-      .insert({
+    // 5. ATOMIC EXECUTION: Try atomic database RPC function first
+    let rpcExecuted = false;
+    let redemptionId: string | null = null;
+
+    try {
+      const { data: rpcData, error: rpcError } = await supabase.rpc('grant_workspace_trial_access', {
+        p_organization_id: params.organizationId,
+        p_workspace_id: params.workspaceId,
+        p_eligible_products: eligibleProducts,
+        p_duration_days: durationDays,
+        p_currency: currency,
+        p_workspace_mode: workspaceMode,
+        p_reason: params.reason.trim(),
+        p_admin_user_id: params.adminUserId || null,
+        p_admin_email: params.adminEmail || null,
+        p_notes: params.notes || null,
+      });
+
+      if (!rpcError && rpcData) {
+        rpcExecuted = true;
+        redemptionId = rpcData.redemptionId || null;
+      } else if (rpcError) {
+        const msg = rpcError.message || '';
+        if (
+          msg.includes('SAFEGUARD_BLOCKED') ||
+          msg.includes('CROSS_TENANT_REJECTED') ||
+          msg.includes('INVALID_WORKSPACE') ||
+          msg.includes('INVALID_ARGUMENT')
+        ) {
+          throw new Error(msg);
+        }
+        console.warn('[TrialAccessService] grant_workspace_trial_access RPC unavailable, attempting server-level atomic orchestration:', msg);
+      }
+    } catch (rpcCallErr: any) {
+      if (
+        rpcCallErr.message?.includes('SAFEGUARD_BLOCKED') ||
+        rpcCallErr.message?.includes('CROSS_TENANT_REJECTED') ||
+        rpcCallErr.message?.includes('INVALID_WORKSPACE') ||
+        rpcCallErr.message?.includes('INVALID_ARGUMENT')
+      ) {
+        throw rpcCallErr;
+      }
+      console.warn('[TrialAccessService] RPC invocation exception, falling back to server orchestration:', rpcCallErr.message);
+    }
+
+    // 6. Application-level atomic orchestration (zero partial writes tolerated)
+    if (!rpcExecuted) {
+      // Step A: Attempt redemption insertion FIRST
+      // If trial_code_redemptions fails (e.g. code_id NOT NULL or missing columns before migration),
+      // fail closed immediately WITHOUT touching tenant_module_entitlements!
+      const redemptionInsert = {
         code_id: null,
         user_id: params.adminUserId || '00000000-0000-0000-0000-000000000000',
         organization_id: params.organizationId,
         workspace_id: params.workspaceId,
         status: 'ACTIVE',
+        trial_starts_at: new Date().toISOString(),
         trial_expires_at: expiresAt,
         grant_type: 'ADMIN_DIRECT',
         granted_by_user_id: params.adminUserId || null,
         reason: params.reason.trim(),
         redeemed_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
+      };
 
-    if (redemptionError) {
-      console.warn('[TrialAccessService] Direct grant redemption log error (non-fatal):', redemptionError.message);
+      const { data: redemptionData, error: redemptionError } = await supabase
+        .from('trial_code_redemptions')
+        .insert(redemptionInsert)
+        .select()
+        .single();
+
+      if (redemptionError) {
+        console.error('[TrialAccessService] trial_code_redemptions insert failed:', redemptionError);
+        throw new Error(
+          `PERSISTENCE_FAILED: Unable to record trial redemption audit record (${redemptionError.message}). ` +
+          `Database migration '20261024000000_harden_trial_redemption_and_workspace_grants.sql' must be applied. ` +
+          `Zero entitlements were modified.`
+        );
+      }
+
+      redemptionId = redemptionData.id;
+
+      // Step B: Upsert entitlements using the CORRECT unique constraint (workspace_id, module_key)
+      try {
+        for (const moduleKey of eligibleProducts) {
+          const { error: upsertError } = await supabase
+            .from('tenant_module_entitlements')
+            .upsert(
+              {
+                organization_id: params.organizationId,
+                workspace_id: params.workspaceId,
+                module_key: moduleKey,
+                tier: 'TRIAL',
+                status: 'ACTIVE',
+                expires_at: expiresAt,
+                default_currency: currency,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: 'workspace_id,module_key' }
+            );
+
+          if (upsertError) {
+            throw new Error(`Failed to grant entitlement for ${moduleKey}: ${upsertError.message}`);
+          }
+        }
+      } catch (upsertFailure: any) {
+        // Rollback redemption record to guarantee atomic consistency
+        console.error('[TrialAccessService] Entitlement upsert failed, rolling back redemption record:', upsertFailure);
+        await supabase.from('trial_code_redemptions').delete().eq('id', redemptionId);
+        throw new Error(`PERSISTENCE_FAILED: Entitlement upsert failed (${upsertFailure.message}). Rolled back redemption record.`);
+      }
+
+      // Step C: Append immutable audit log entry
+      const { error: auditError } = await supabase.from('audit_logs').insert({
+        organization_id: params.organizationId,
+        user_id: params.adminUserId,
+        action: 'WORKSPACE_TRIAL_GRANTED',
+        module: 'TRIAL_ACCESS_MANAGER',
+        metadata: {
+          workspaceId: params.workspaceId,
+          organizationId: params.organizationId,
+          eligibleProducts,
+          durationDays,
+          currency,
+          workspaceMode,
+          reason: params.reason.trim(),
+          notes: params.notes || null,
+          adminEmail: params.adminEmail,
+          trialExpiresAt: expiresAt,
+          redemptionId,
+          timestamp: new Date().toISOString(),
+        },
+      });
+
+      if (auditError) {
+        console.warn('[TrialAccessService] audit_log insert failed (non-blocking for grant completion):', auditError.message);
+      }
     }
 
-    // 4. If DEMO_DATA is selected, seed demonstration records with live data safeguards
+    // 7. Seed demonstration records if DEMO_DATA selected
     let demoDataLoaded = false;
     if (workspaceMode === 'DEMO_DATA') {
       if (eligibleProducts.includes('retail')) {
@@ -262,38 +407,18 @@ export class TrialAccessService {
       }
     }
 
-    // 5. Append immutable audit log entry
-    await supabase.from('audit_logs').insert({
-      organization_id: params.organizationId,
-      user_id: params.adminUserId,
-      action: 'WORKSPACE_TRIAL_GRANTED',
-      module: 'TRIAL_ACCESS_MANAGER',
-      metadata: {
-        workspaceId: params.workspaceId,
-        organizationId: params.organizationId,
-        eligibleProducts,
-        durationDays,
-        currency,
-        workspaceMode,
-        demoDataLoaded,
-        reason: params.reason.trim(),
-        notes: params.notes || null,
-        adminEmail: params.adminEmail,
-        trialExpiresAt: expiresAt,
-        redemptionId: redemptionData?.id || null,
-        timestamp: new Date().toISOString(),
-      },
-    });
-
     return {
       success: true,
       message: `Retail demo access granted successfully to workspace for ${durationDays} days (${currency}).`,
       workspaceId: params.workspaceId,
+      organizationId: params.organizationId,
       eligibleProducts,
       durationDays,
       currency,
       workspaceMode,
       expiresAt,
+      redemptionId,
+      demoDataLoaded,
     };
   }
 
