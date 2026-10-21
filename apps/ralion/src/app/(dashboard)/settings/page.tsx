@@ -36,12 +36,27 @@ export default function SettingsPage() {
   const [waLinkSuccess, setWaLinkSuccess] = useState<string | null>(null);
   const [waError, setWaError] = useState<string | null>(null);
   const [waCopiedLink, setWaCopiedLink] = useState(false);
+  const [savedEnquiryRef, setSavedEnquiryRef] = useState<string | null>(null);
+  const [savedDirectLink, setSavedDirectLink] = useState<string | null>(null);
   const [waNotifications, setWaNotifications] = useState({
-    quotations: true,
-    tasks: true,
-    enquiries: true,
-    alerts: true,
+    quotations: false,
+    tasks: false,
+    enquiries: false,
+    alerts: false,
   });
+
+  const loadEnquiryRef = async () => {
+    try {
+      const res = await authFetch('/api/whatsapp/enquiry-ref');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.referenceCode) {
+          setSavedEnquiryRef(data.referenceCode);
+          setSavedDirectLink(data.directLink);
+        }
+      }
+    } catch {}
+  };
 
   const handleGenerateWaCode = async () => {
     if (!waPhoneNumber.trim()) {
@@ -114,7 +129,10 @@ export default function SettingsPage() {
     } else {
       setWkKnowledge(null);
     }
-  }, [activeOrgId]);
+    if (activeTab === 'WHATSAPP') {
+      loadEnquiryRef();
+    }
+  }, [activeOrgId, activeTab]);
 
   const handleSyncWebsite = async () => {
     if (!activeOrgId) return;
@@ -510,32 +528,34 @@ export default function SettingsPage() {
       {activeTab === 'WHATSAPP' && (
         <div className="space-y-6">
           {/* Central Ralion WhatsApp Gateway Status Card */}
-          <Card className="bg-gradient-to-br from-emerald-950/30 via-zinc-900 to-teal-950/30 border-emerald-500/30 p-6 shadow-xl">
+          <Card className="bg-gradient-to-br from-amber-950/20 via-zinc-900 to-zinc-900 border-amber-500/30 p-6 shadow-xl">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-zinc-800/80 pb-5">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/30">
+                <div className="p-2.5 rounded-xl bg-amber-600/20 text-amber-400 border border-amber-500/30">
                   <Phone className="w-5 h-5" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="text-base font-bold text-white">Central Ralion WhatsApp Gateway</h3>
-                    <Badge variant="success">Cloud API Connected</Badge>
+                    <Badge variant="warning" className="border-amber-500/40 text-amber-300 bg-amber-500/10">
+                      Sandbox Evaluation
+                    </Badge>
                   </div>
                   <p className="text-xs text-zinc-400 mt-0.5 font-mono">
-                    Central Business Number: <span className="text-emerald-400 font-bold">+1 (202) 908-7457</span> (Zernio Cloud API)
+                    Evaluation Sender: <span className="text-amber-300 font-bold">+1 (202) 908-7457</span> (Zernio Shared Test Sender)
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
-                <Badge variant="success" className="border-emerald-500/30 text-emerald-300 text-[10px]">
-                  Quality: Green (Meta Verified)
-                </Badge>
+                <span className="px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 font-bold text-[10px]">
+                  Pilot Allowlist Active
+                </span>
               </div>
             </div>
 
             <p className="text-xs text-zinc-300 mt-4 leading-relaxed">
-              Users and public customers can message Mari through Ralion OS&apos;s central WhatsApp number. Secure account linking and unique enquiry references keep customer and business conversations strictly isolated.
+              <strong>Environment Notice:</strong> This gateway is currently linked to the Zernio Cloud API sandbox for controlled pre-merge evaluation. Auto-replies and outbound RFQ messages are restricted strictly to configured pilot allowlist numbers.
             </p>
           </Card>
 
@@ -616,19 +636,20 @@ export default function SettingsPage() {
               <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-3">
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-zinc-400">Store Routing Reference:</span>
-                  <span className="font-mono text-cyan-400 font-bold">REF-{workspace?.name?.slice(0, 4).toUpperCase() || 'PRO123'}</span>
+                  <span className="font-mono text-cyan-400 font-bold">{savedEnquiryRef || `REF-${workspace?.id?.slice(0, 6).toUpperCase() || 'STORE'}`}</span>
                 </div>
 
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-zinc-400">Direct WhatsApp Link:</span>
-                  <span className="font-mono text-zinc-300 truncate max-w-[200px]">https://wa.me/12029087457?text=REF-...</span>
+                  <span className="font-mono text-zinc-300 truncate max-w-[200px]">{savedDirectLink || 'https://wa.me/12029087457?text=REF-...'}</span>
                 </div>
 
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    navigator.clipboard?.writeText(`https://wa.me/12029087457?text=REF-${workspace?.name?.slice(0, 4).toUpperCase() || 'PRO123'}`);
+                    const linkToCopy = savedDirectLink || `https://wa.me/12029087457?text=${savedEnquiryRef || 'REF-STORE'}`;
+                    navigator.clipboard?.writeText(linkToCopy);
                     setWaCopiedLink(true);
                     setTimeout(() => setWaCopiedLink(false), 2000);
                   }}

@@ -4,10 +4,11 @@
  *
  * Implements the 3 authoritative conversation modes:
  * A. Public Ralion Assistant (Grounded public business support)
- * B. Registered Ralion User (Account-linked workspace operations)
+ * B. Registered Ralion User (Account-linked workspace operations with live DB authorization)
  * C. Business Customer (Tenant-scoped customer enquiries & Retail quotations)
  */
 
+import crypto from 'crypto';
 import { getPrivilegedSupabase } from '../../supabase/server';
 import { RetailDatabaseService } from '../retail/retailDatabase.service';
 import { RetailQuotation, RetailQuoteItem } from '@ralion/database';
@@ -53,14 +54,33 @@ export class MariWhatsAppRouterService {
     const rawText = (message.messageText || '').trim();
     const cleanLower = rawText.toLowerCase();
 
-    // 1. Global Reset / Help triggers
+    // 1. Opt-out & Compliance keywords (STOP / UNSUBSCRIBE)
+    if (cleanLower === 'stop' || cleanLower === 'unsubscribe' || cleanLower === 'optout') {
+      await this.recordOptOut(message.senderPhone);
+      return {
+        replyText: "You have successfully unsubscribed from automated WhatsApp notifications from Ralion OS. You can still message Mari directly at any time. Reply START to re-enable alerts.",
+        mode: 'PUBLIC_ASSISTANT',
+        organizationId: null,
+        workspaceId: null,
+      };
+    }
+
+    if (cleanLower === 'start' || cleanLower === 'unstop') {
+      await this.recordOptIn(message.senderPhone);
+      return {
+        replyText: "Welcome back! You have re-enabled automated WhatsApp notifications from Ralion OS.",
+        mode: 'PUBLIC_ASSISTANT',
+      };
+    }
+
+    // 2. Global Reset / Help triggers
     if (cleanLower === 'reset' || cleanLower === 'exit' || cleanLower === 'menu' || cleanLower === 'ralion') {
       return {
         replyText:
           "Hello! I am Mari, Ralion OS's business assistant. How can I help you today?\n\n" +
           "1. Explore Ralion OS & Solutions (Retail, Trade, Growth, CRM)\n" +
           "2. Link your WhatsApp to your Ralion Account (Text: LINK <code>)\n" +
-          "3. Request a business quotation (Include your business reference, e.g. #REF-CODE)\n" +
+          "3. Request a business quotation (Include your store reference, e.g. #REF-CODE)\n" +
           "4. Talk to Ras Ali Labs Support",
         mode: 'PUBLIC_ASSISTANT',
         organizationId: null,
@@ -68,7 +88,7 @@ export class MariWhatsAppRouterService {
       };
     }
 
-    // 2. Check for Account Linking Command (Mode B Initiation)
+    // 3. Check for Account Linking Command (Mode B Initiation)
     const linkMatch = rawText.match(/^(?:link|verify|auth)\s+([A-Z0-9]{6})$/i);
     if (linkMatch) {
       const code = linkMatch[1].toUpperCase();
@@ -96,7 +116,7 @@ export class MariWhatsAppRouterService {
 
     // Check for Unlink Command
     if (cleanLower === 'unlink') {
-      await this.revokeAccountLink(message.senderPhone);
+      await this.revokeAccountLink(message.senderPhone, conversationState?.linkedUserId || undefined);
       return {
         replyText: "Your WhatsApp number has been unlinked from Ralion OS. You are now in public guest mode.",
         mode: 'PUBLIC_ASSISTANT',
@@ -105,8 +125,8 @@ export class MariWhatsAppRouterService {
       };
     }
 
-    // 3. Check for Business Customer Enquiry Reference (Mode C Initiation)
-    const refMatch = rawText.match(/\b(?:ref-|#)([A-Za-z0-9_-]{3,20})\b/i);
+    // 4. Check for Business Customer Enquiry Reference (Mode C Initiation)
+    const refMatch = rawText.match(/(?:#|ref-)([A-Za-z0-9_-]{3,20})/i);
     if (refMatch) {
       const refCode = refMatch[1].toUpperCase();
       const business = await this.resolveBusinessReference(refCode);
@@ -123,10 +143,23 @@ export class MariWhatsAppRouterService {
       }
     }
 
-    // 4. Dispatch based on current session mode
+    // 5. Dispatch based on current session mode with LIVE RE-VALIDATION
     const currentMode = conversationState?.mode || 'PUBLIC_ASSISTANT';
 
     if (currentMode === 'REGISTERED_USER' && conversationState?.workspaceId) {
+      // Security revalidation: Ensure linked user still has valid active membership
+      const isValidMember = await this.validateWorkspaceMembership(
+        conversationState.linkedUserId,
+        conversationState.workspaceId
+      );
+      if (!isValidMember) {
+        return {
+          replyText: "⚠️ Your workspace permissions have changed or expired. Reverting to public assistant mode.",
+          mode: 'PUBLIC_ASSISTANT',
+          organizationId: null,
+          workspaceId: null,
+        };
+      }
       return await this.handleRegisteredUserQuery(message, conversationState.workspaceId, conversationState.organizationId || undefined);
     }
 
@@ -134,7 +167,7 @@ export class MariWhatsAppRouterService {
       return await this.handleBusinessCustomerQuery(message, conversationState.workspaceId, conversationState.organizationId || undefined);
     }
 
-    // 5. Default: Mode A (Public Ralion Assistant)
+    // 6. Default: Mode A (Public Ralion Assistant)
     return await this.handlePublicAssistantQuery(message);
   }
 
@@ -151,7 +184,7 @@ export class MariWhatsAppRouterService {
           "I can help you:\n" +
           "• Learn about Ralion OS and our integrated business software\n" +
           "• Explore Retail, Trade, POS, CRM, Growth and Social systems\n" +
-          "• Find participating businesses using Ralion\n" +
+          "• Connect with participating stores using their store reference (e.g. #STORE_CODE)\n" +
           "• Connect with Ras Ali Labs support\n\n" +
           "What can I help you with today?",
         mode: 'PUBLIC_ASSISTANT',
@@ -175,11 +208,9 @@ export class MariWhatsAppRouterService {
     if (text.includes('price') || text.includes('pricing') || text.includes('cost') || text.includes('subscription')) {
       return {
         replyText:
-          "Ralion OS offers transparent tier-based plans with 30-day pilot access for eligible businesses:\n\n" +
-          "• **Starter Tier:** Essential CRM, Overview & Operations\n" +
-          "• **Business Tier:** Includes Retail POS, Inventory & Social Engine\n" +
-          "• **Enterprise Edition:** Dedicated database isolation, custom integrations and high-volume Mari AI\n\n" +
-          "To request a demo access code or speak with our solutions architect, contact us at contact@rasalilabs.com.",
+          "Ralion OS offers tailored subscription tiers with evaluation access for eligible commercial businesses.\n\n" +
+          "Modules include Retail POS & Inventory, Trade Quotes & Invoicing, Growth Social Inbox, and Autonomous Mari AI.\n\n" +
+          "To request a pilot demonstration code or speak with our solutions architect, contact us at contact@rasalilabs.com or visit https://rasalilabs.com.",
         mode: 'PUBLIC_ASSISTANT',
       };
     }
@@ -187,7 +218,7 @@ export class MariWhatsAppRouterService {
     if (text.includes('retail') || text.includes('pos') || text.includes('hardware') || text.includes('trade')) {
       return {
         replyText:
-          "**Ralion Retail & Trade** is our battle-tested operational suite for hardware stores, merchants, and trade distributors:\n\n" +
+          "**Ralion Retail & Trade** is our battle-tested operational suite for merchants and trade distributors:\n\n" +
           "• Fast touch POS with offline-resilience and receipt printing\n" +
           "• Authoritative inventory with automated low-stock reorder points\n" +
           "• Contractor quotations with conversion to sale in one click\n" +
@@ -202,7 +233,7 @@ export class MariWhatsAppRouterService {
       replyText:
         "Thank you for contacting Ras Ali Labs! I am Mari, the central Ralion business assistant.\n\n" +
         "You can ask me about Ralion OS features, retail solutions, or how to link your business workspace. " +
-        "For complex enquiries, our team is available at contact@rasalilabs.com or https://rasalilabs.com.",
+        "For enquiries, our team is available at contact@rasalilabs.com or https://rasalilabs.com.",
       mode: 'PUBLIC_ASSISTANT',
     };
   }
@@ -259,28 +290,23 @@ export class MariWhatsAppRouterService {
           const products = await RetailDatabaseService.listProducts(workspaceId, { query: prodSearch });
           if (products.length === 0) {
             return {
-              replyText: `🔍 No products matching "${prodSearch}" were found in your workspace catalogue.`,
+              replyText: `🔍 No products matching "${prodSearch}" were found in your catalogue.`,
               mode: 'REGISTERED_USER',
               workspaceId,
               organizationId,
             };
           }
 
-          const topMatch = products[0];
+          const lines = products.slice(0, 4).map((p) => `• **${p.name}**: ${p.currentStock} ${p.unitOfMeasure || 'units'} on hand ($${p.sellingPrice.toFixed(2)})`);
           return {
-            replyText:
-              `📦 **Inventory Status for ${topMatch.name}:**\n` +
-              `• SKU: ${topMatch.sku}\n` +
-              `• Current Stock: **${topMatch.currentStock ?? 0} ${topMatch.unitOfMeasure || 'units'}**\n` +
-              `• Selling Price: $${topMatch.sellingPrice.toFixed(2)}\n` +
-              `• Status: ${(topMatch.currentStock ?? 0) > (topMatch.reorderLevel || 10) ? '🟢 In Stock' : '🔴 Low Stock'}`,
+            replyText: `📦 Stock availability in your workspace:\n\n${lines.join('\n')}`,
             mode: 'REGISTERED_USER',
             workspaceId,
             organizationId,
           };
         } catch (err: any) {
           return {
-            replyText: `Could not check stock: ${err.message}`,
+            replyText: `Error checking stock: ${err.message}`,
             mode: 'REGISTERED_USER',
             workspaceId,
             organizationId,
@@ -289,14 +315,40 @@ export class MariWhatsAppRouterService {
       }
     }
 
-    // Registered user fallback
+    // 3. Sales / Performance inquiry
+    if (text.includes('sale') || text.includes('revenue') || text.includes('today')) {
+      try {
+        const metrics = await RetailDatabaseService.computeFinancialMetrics(workspaceId);
+        return {
+          replyText:
+            `📊 **Today's Workspace Performance**:\n\n` +
+            `• Sales Count: **${metrics.todaySalesCount || 0}**\n` +
+            `• Gross Sales: **$${(metrics.todaySales || 0).toFixed(2)}**\n` +
+            `• Low Stock Alerts: **${metrics.lowStockCount || 0} items**\n` +
+            `• Active Products: **${metrics.totalActiveProducts || 0}**\n\n` +
+            `For detailed drilldowns, open the Ralion Command Centre.`,
+          mode: 'REGISTERED_USER',
+          workspaceId,
+          organizationId,
+        };
+      } catch (err: any) {
+        return {
+          replyText: `Unable to fetch sales metrics: ${err.message}`,
+          mode: 'REGISTERED_USER',
+          workspaceId,
+          organizationId,
+        };
+      }
+    }
+
+    // Default registered user fallback
     return {
       replyText:
-        "Hello! As a registered user, you can ask for:\n" +
-        "• Quotations awaiting approval\n" +
-        "• Stock availability for products (e.g. \"check stock for cement\")\n" +
-        "• Today's sales or pending alerts\n\n" +
-        "Text \"UNLINK\" to disconnect your WhatsApp account.",
+        "I'm ready to assist with your workspace! You can ask:\n" +
+        "• \"What are today's sales numbers?\"\n" +
+        "• \"Check stock for [product]\"\n" +
+        "• \"Show quotations awaiting approval\"\n" +
+        "• Type \"UNLINK\" to switch back to public mode.",
       mode: 'REGISTERED_USER',
       workspaceId,
       organizationId,
@@ -304,57 +356,76 @@ export class MariWhatsAppRouterService {
   }
 
   // =========================================================================
-  // MODE C — BUSINESS CUSTOMER (Retail RFQ & Enquiries)
+  // MODE C — BUSINESS CUSTOMER ENQUIRIES & RETAIL QUOTATIONS
   // =========================================================================
   private static async handleBusinessCustomerQuery(
     message: WhatsAppIncomingMessage,
     workspaceId: string,
     organizationId?: string
   ): Promise<WhatsAppRouterResponse> {
-    const text = message.messageText.trim();
-    const cleanLower = text.toLowerCase();
+    const text = message.messageText.toLowerCase();
 
-    // Check if customer is requesting a quotation
-    const isQuotationRequest =
-      cleanLower.includes('quote') ||
-      cleanLower.includes('quotation') ||
-      cleanLower.includes('price for') ||
-      cleanLower.includes('estimate') ||
-      message.mediaUrl !== undefined;
+    // Check if customer wants a quotation
+    const isQuoteRequest =
+      text.includes('quote') ||
+      text.includes('price') ||
+      text.includes('cost') ||
+      text.includes('need') ||
+      text.includes('buy') ||
+      text.includes('order') ||
+      Boolean(message.mediaUrl);
 
-    if (isQuotationRequest) {
+    if (isQuoteRequest) {
       return await this.createRetailQuotationDraft(message, workspaceId, organizationId);
     }
 
-    // General store enquiry
+    // General product availability enquiry
+    try {
+      const products = await RetailDatabaseService.listProducts(workspaceId, { query: text });
+      if (products.length > 0) {
+        const lines = products.slice(0, 3).map((p) => `• **${p.name}**: $${p.sellingPrice.toFixed(2)} (${(p.currentStock || 0) > 0 ? 'In Stock' : 'Out of Stock'})`);
+        return {
+          replyText:
+            `Here are matching products from our store:\n\n` +
+            lines.join('\n') +
+            `\n\nReply with what you need (e.g. "Quote for 5x ${products[0].name}") to receive an official quotation.`,
+          mode: 'BUSINESS_CUSTOMER',
+          workspaceId,
+          organizationId,
+        };
+      }
+    } catch {
+      // ignore
+    }
+
     return {
       replyText:
-        "Thanks for your message! To receive an official price estimate or quotation, please list the items and quantities you require (e.g. \"5 bags cement, 10 timber planks\"), or attach an image of your bill of quantities.",
+        "How can we help your project today? Send us your required materials or product list, and Mari will generate an official quotation for store review.",
       mode: 'BUSINESS_CUSTOMER',
       workspaceId,
       organizationId,
     };
   }
 
-  // =========================================================================
-  // RETAIL QUOTATION ASSISTANT (Phase 4 Implementation)
-  // =========================================================================
+  /**
+   * Builds and persists an authoritative quotation draft in the Retail database.
+   * Uses crypto.randomUUID() for RFC 4122 primary keys, strictly respects catalogue prices,
+   * and records in whatsapp_quotation_drafts for human review.
+   */
   private static async createRetailQuotationDraft(
     message: WhatsAppIncomingMessage,
     workspaceId: string,
     organizationId?: string
   ): Promise<WhatsAppRouterResponse> {
     try {
-      const products = await RetailDatabaseService.listProducts(workspaceId);
       const text = message.messageText;
+      const products = await RetailDatabaseService.listProducts(workspaceId);
 
-      // Extract requested products from message text
       const extractedItems: Array<{
         product: any;
         quantity: number;
       }> = [];
 
-      // Simple regex-based product matching against catalogue
       for (const prod of products) {
         const prodNameRegex = new RegExp(`\\b(\\d+)?\\s*(?:bags?|units?|tins?|boxes?|pieces?|pcs?)?\\s*(${prod.name.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')})\\b`, 'i');
         const match = text.match(prodNameRegex);
@@ -367,7 +438,7 @@ export class MariWhatsAppRouterService {
         }
       }
 
-      // If no exact name match was found, do a fuzzy word match
+      // If no exact match, fuzzy search
       if (extractedItems.length === 0 && products.length > 0) {
         const words = text.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
         for (const w of words) {
@@ -378,7 +449,7 @@ export class MariWhatsAppRouterService {
         }
       }
 
-      // If still nothing matched (e.g. photo of handwritten list or unlisted product)
+      // If nothing matched in catalogue (e.g. handwritten photo or unlisted items)
       if (extractedItems.length === 0) {
         await this.storeQuotationDraftRecord({
           workspaceId,
@@ -402,7 +473,10 @@ export class MariWhatsAppRouterService {
         };
       }
 
-      // Build authoritative quote items
+      // RFC 4122 v4 UUIDs for quotation and line items
+      const quoteId = crypto.randomUUID();
+      const quoteNumber = `WQ-${Date.now().toString().slice(-6)}`;
+
       let subtotal = 0;
       let taxTotal = 0;
       const quoteItems: RetailQuoteItem[] = [];
@@ -420,9 +494,11 @@ export class MariWhatsAppRouterService {
         taxTotal += lineTax;
 
         quoteItems.push({
-          id: `qi_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-          quotationId: '',
+          id: crypto.randomUUID(),
+          quotationId: quoteId,
           productId: p.id,
+          productName: p.name,
+          sku: p.sku,
           description: p.name,
           quantity: qty,
           unitPrice,
@@ -434,8 +510,6 @@ export class MariWhatsAppRouterService {
       }
 
       const totalAmount = subtotal + taxTotal;
-      const quoteNumber = `WQ-${Date.now().toString().slice(-6)}`;
-      const quoteId = `quote_wa_${Date.now()}`;
 
       const quotationPayload: RetailQuotation = {
         id: quoteId,
@@ -456,7 +530,7 @@ export class MariWhatsAppRouterService {
         updatedAt: new Date().toISOString(),
       };
 
-      // Persist draft in Retail database
+      // Persist draft in Retail database and confirm persistence
       await RetailDatabaseService.createQuotation(quotationPayload, quoteItems);
 
       // Record in WhatsApp Quotation Inbox
@@ -478,11 +552,10 @@ export class MariWhatsAppRouterService {
         replyText:
           `📄 **Quotation Draft Prepared (${quoteNumber})**\n\n` +
           itemsSummary +
-          `\n\n` +
-          `Subtotal: $${subtotal.toFixed(2)}\n` +
-          `Tax: $${taxTotal.toFixed(2)}\n` +
-          `**Estimated Total: $${totalAmount.toFixed(2)}**\n\n` +
-          `⚠️ *This estimate has been sent to our sales team for review and approval. An authorized team member will confirm delivery details shortly.*`,
+          `\n\n**Subtotal:** $${subtotal.toFixed(2)}\n` +
+          `**VAT (15%):** $${taxTotal.toFixed(2)}\n` +
+          `**Total Estimated Amount:** $${totalAmount.toFixed(2)}\n\n` +
+          `_This draft quotation has been submitted to store staff for stock confirmation and approval. You will receive official confirmation once approved._`,
         mode: 'BUSINESS_CUSTOMER',
         workspaceId,
         organizationId,
@@ -491,9 +564,9 @@ export class MariWhatsAppRouterService {
         requiresApproval: true,
       };
     } catch (err: any) {
-      console.error('[MariWhatsAppRouter] Error creating quotation draft:', err);
+      console.error('[MariWhatsAppRouter] Error creating quotation draft:', err.message);
       return {
-        replyText: `Your enquiry was received, but we could not prepare an automatic quotation. Our team will review your message directly.`,
+        replyText: `We received your enquiry, but encountered a system issue preparing the automated quotation: ${err.message}. Our sales team has been notified.`,
         mode: 'BUSINESS_CUSTOMER',
         workspaceId,
         organizationId,
@@ -502,50 +575,55 @@ export class MariWhatsAppRouterService {
   }
 
   // =========================================================================
-  // HELPER METHODS: ACCOUNT LINKING & REFERENCES
+  // HELPER METHODS: SECURE ACCOUNT LINKING, MEMBERSHIP & REFERENCES
   // =========================================================================
 
-  private static inMemoryLinks = new Map<string, {
-    userId: string;
-    organizationId: string;
-    workspaceId: string;
-    code: string;
-    phone: string;
-    expiresAt: number;
-    userName?: string;
-    organizationName?: string;
-  }>();
-
   /**
-   * Generates a 6-digit link challenge code inside Ralion Settings
+   * Generates a cryptographically secure 6-digit challenge code and persists its SHA-256 hash.
    */
-  static generateLinkChallenge(params: {
+  static async generateLinkChallenge(params: {
     userId: string;
     organizationId: string;
     workspaceId: string;
     phone: string;
     userName?: string;
     organizationName?: string;
-  }): { code: string; expiresAt: string } {
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = Date.now() + 15 * 60 * 1000; // 15 mins
+  }): Promise<{ code: string; expiresAt: string }> {
+    const code = crypto.randomInt(100000, 999999).toString();
+    const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    const cleanPhone = params.phone.replace(/[^0-9+]/g, '');
 
-    this.inMemoryLinks.set(params.phone.replace(/[^0-9+]/g, ''), {
-      ...params,
-      code,
-      expiresAt,
-    });
-    this.inMemoryLinks.set(code, {
-      ...params,
-      code,
-      expiresAt,
-    });
+    try {
+      const supabase = getPrivilegedSupabase();
+      // Invalidate any existing pending codes for this user/phone
+      await supabase
+        .from('whatsapp_account_links')
+        .update({ status: 'REVOKED' })
+        .eq('user_id', params.userId)
+        .eq('status', 'PENDING');
 
-    return { code, expiresAt: new Date(expiresAt).toISOString() };
+      await supabase.from('whatsapp_account_links').insert({
+        user_id: params.userId,
+        organization_id: params.organizationId,
+        workspace_id: params.workspaceId,
+        phone_number: cleanPhone,
+        code_hash: codeHash,
+        attempts: 0,
+        max_attempts: 3,
+        status: 'PENDING',
+        expires_at: expiresAt,
+      });
+    } catch (err: any) {
+      console.warn('[MariWhatsAppRouter] Challenge persistence warning:', err.message);
+    }
+
+    return { code, expiresAt };
   }
 
   /**
-   * Validates account link challenge code sent via WhatsApp
+   * Validates account link challenge code sent via WhatsApp.
+   * Matches sender phone against expected number, limits attempts, and consumes atomically.
    */
   static async verifyAccountLink(
     phone: string,
@@ -560,93 +638,140 @@ export class MariWhatsAppRouterService {
     error?: string;
   }> {
     const cleanPhone = phone.replace(/[^0-9+]/g, '');
-    const challenge = this.inMemoryLinks.get(code) || this.inMemoryLinks.get(cleanPhone);
+    const codeHash = crypto.createHash('sha256').update(code.trim().toUpperCase()).digest('hex');
 
-    if (!challenge || challenge.code !== code) {
-      return { success: false, error: 'Invalid verification code.' };
-    }
-
-    if (Date.now() > challenge.expiresAt) {
-      return { success: false, error: 'Verification code has expired. Please request a new one.' };
-    }
-
-    // Persist verified link in DB if available
     try {
       const supabase = getPrivilegedSupabase();
-      await supabase.from('whatsapp_account_links').upsert({
-        user_id: challenge.userId,
-        organization_id: challenge.organizationId,
-        workspace_id: challenge.workspaceId,
-        phone_number: cleanPhone,
-        verification_code: code,
-        status: 'VERIFIED',
-        verified_at: new Date().toISOString(),
-        expires_at: new Date(challenge.expiresAt).toISOString(),
-      }, { onConflict: 'phone_number' });
-    } catch (e) {
-      // Continue even if DB table is pending migration
-    }
+      const { data: challenge, error } = await supabase
+        .from('whatsapp_account_links')
+        .select('*')
+        .eq('phone_number', cleanPhone)
+        .eq('status', 'PENDING')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-    return {
-      success: true,
-      userId: challenge.userId,
-      organizationId: challenge.organizationId,
-      workspaceId: challenge.workspaceId,
-      userName: challenge.userName,
-      organizationName: challenge.organizationName,
-    };
+      if (error || !challenge) {
+        return { success: false, error: 'No active verification challenge found for this phone number.' };
+      }
+
+      // Check expiration
+      if (new Date(challenge.expires_at) < new Date()) {
+        await supabase.from('whatsapp_account_links').update({ status: 'EXPIRED' }).eq('id', challenge.id);
+        return { success: false, error: 'Verification code has expired. Please request a new one.' };
+      }
+
+      // Check max attempts
+      if (challenge.attempts >= (challenge.max_attempts || 3)) {
+        await supabase.from('whatsapp_account_links').update({ status: 'EXPIRED' }).eq('id', challenge.id);
+        return { success: false, error: 'Maximum verification attempts exceeded. Please generate a new code.' };
+      }
+
+      // Verify cryptographic hash
+      if (challenge.code_hash !== codeHash) {
+        await supabase
+          .from('whatsapp_account_links')
+          .update({ attempts: (challenge.attempts || 0) + 1 })
+          .eq('id', challenge.id);
+        return { success: false, error: 'Invalid verification code.' };
+      }
+
+      // Atomically consume challenge
+      const { data: updated, error: updateErr } = await supabase
+        .from('whatsapp_account_links')
+        .update({
+          status: 'CONSUMED',
+          consumed_at: new Date().toISOString(),
+          verified_at: new Date().toISOString(),
+        })
+        .eq('id', challenge.id)
+        .eq('status', 'PENDING')
+        .select('id, user_id, organization_id, workspace_id')
+        .maybeSingle();
+
+      if (updateErr || !updated) {
+        return { success: false, error: 'Challenge already consumed or revoked.' };
+      }
+
+      // Retrieve workspace & user details
+      const { data: ws } = await supabase
+        .from('workspaces')
+        .select('name')
+        .eq('id', challenge.workspace_id)
+        .maybeSingle();
+
+      return {
+        success: true,
+        userId: challenge.user_id,
+        organizationId: challenge.organization_id,
+        workspaceId: challenge.workspace_id,
+        organizationName: ws?.name || 'Ralion Workspace',
+      };
+    } catch (err: any) {
+      return { success: false, error: `Verification error: ${err.message}` };
+    }
   }
 
-  static async revokeAccountLink(phone: string): Promise<boolean> {
+  /**
+   * Revokes account linking. If userId is provided, strictly scopes revocation to the authenticated user.
+   */
+  static async revokeAccountLink(phone: string, userId?: string): Promise<boolean> {
     const cleanPhone = phone.replace(/[^0-9+]/g, '');
-    this.inMemoryLinks.delete(cleanPhone);
 
     try {
       const supabase = getPrivilegedSupabase();
-      await supabase
+      let query = supabase
         .from('whatsapp_account_links')
         .update({ status: 'REVOKED' })
         .eq('phone_number', cleanPhone);
+
+      if (userId) {
+        query = query.eq('user_id', userId);
+      }
+
+      await query;
+      return true;
     } catch {
-      // ignore table missing
+      return false;
     }
-
-    return true;
   }
 
-  private static inMemoryRefs = new Map<string, {
-    organizationId: string;
-    workspaceId: string;
-    businessName: string;
-  }>([
-    ['PROINSIGHT', {
-      organizationId: 'proinsight-org',
-      workspaceId: 'proinsight-ws',
-      businessName: 'Proinsight Hardware & Building Supplies',
-    }],
-    ['REF-PRO123', {
-      organizationId: 'proinsight-org',
-      workspaceId: 'proinsight-ws',
-      businessName: 'Proinsight Hardware & Building Supplies',
-    }],
-  ]);
+  /**
+   * Revalidates user workspace membership before serving Mode B queries.
+   */
+  static async validateWorkspaceMembership(userId?: string | null, workspaceId?: string | null): Promise<boolean> {
+    if (!userId || !workspaceId) return false;
 
-  static registerBusinessReference(refCode: string, data: { organizationId: string; workspaceId: string; businessName: string }) {
-    this.inMemoryRefs.set(refCode.toUpperCase(), data);
+    try {
+      const supabase = getPrivilegedSupabase();
+      const { data: member } = await supabase
+        .from('workspace_members')
+        .select('role')
+        .eq('workspace_id', workspaceId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      return Boolean(member);
+    } catch {
+      return false;
+    }
   }
 
+  /**
+   * Resolves business customer enquiry reference (e.g. "REF-PRO123").
+   * Removed all mock placeholders; queries whatsapp_business_enquiry_refs strictly.
+   */
   static async resolveBusinessReference(refCode: string): Promise<{ organizationId: string; workspaceId: string; businessName: string } | null> {
-    const code = refCode.toUpperCase();
-    if (this.inMemoryRefs.has(code)) {
-      return this.inMemoryRefs.get(code)!;
-    }
+    const code = refCode.trim().toUpperCase();
+    const cleanWithoutRef = code.replace(/^REF-/, '');
+    const canonicalWithRef = `REF-${cleanWithoutRef}`;
 
     try {
       const supabase = getPrivilegedSupabase();
       const { data } = await supabase
         .from('whatsapp_business_enquiry_refs')
         .select('*')
-        .eq('reference_code', code)
+        .or(`reference_code.eq.${code},reference_code.eq.${canonicalWithRef},reference_code.eq.${cleanWithoutRef}`)
         .eq('is_active', true)
         .maybeSingle();
 
@@ -664,10 +789,35 @@ export class MariWhatsAppRouterService {
     return null;
   }
 
-  private static async storeQuotationDraftRecord(record: any) {
+  /**
+   * Creates or registers a server-side business enquiry reference.
+   */
+  static async registerBusinessReference(params: {
+    organizationId: string;
+    workspaceId: string;
+    referenceCode: string;
+    businessName: string;
+  }): Promise<boolean> {
     try {
       const supabase = getPrivilegedSupabase();
-      await supabase.from('whatsapp_quotation_drafts').insert({
+      const { error } = await supabase.from('whatsapp_business_enquiry_refs').upsert({
+        organization_id: params.organizationId,
+        workspace_id: params.workspaceId,
+        reference_code: params.referenceCode.trim().toUpperCase(),
+        business_name: params.businessName,
+        is_active: true,
+      }, { onConflict: 'reference_code' });
+
+      return !error;
+    } catch {
+      return false;
+    }
+  }
+
+  private static async storeQuotationDraftRecord(record: any): Promise<boolean> {
+    try {
+      const supabase = getPrivilegedSupabase();
+      const { error } = await supabase.from('whatsapp_quotation_drafts').insert({
         organization_id: record.organizationId,
         workspace_id: record.workspaceId,
         customer_phone: record.customerPhone,
@@ -678,8 +828,43 @@ export class MariWhatsAppRouterService {
         retail_quotation_id: record.retailQuotationId || null,
         status: record.status || 'AWAITING_REVIEW',
       });
+
+      if (error) {
+        console.error('[MariWhatsAppRouter] storeQuotationDraftRecord error:', error.message);
+        return false;
+      }
+      return true;
+    } catch (err: any) {
+      console.error('[MariWhatsAppRouter] storeQuotationDraftRecord exception:', err.message);
+      return false;
+    }
+  }
+
+  private static async recordOptOut(phone: string): Promise<void> {
+    const clean = phone.replace(/[^0-9+]/g, '');
+    try {
+      const supabase = getPrivilegedSupabase();
+      await supabase.from('whatsapp_notification_preferences').upsert({
+        phone_number: clean,
+        is_opted_in: false,
+        opted_out_at: new Date().toISOString(),
+      }, { onConflict: 'phone_number' });
     } catch {
-      // database table may not yet be migrated in production
+      // ignore
+    }
+  }
+
+  private static async recordOptIn(phone: string): Promise<void> {
+    const clean = phone.replace(/[^0-9+]/g, '');
+    try {
+      const supabase = getPrivilegedSupabase();
+      await supabase.from('whatsapp_notification_preferences').upsert({
+        phone_number: clean,
+        is_opted_in: true,
+        opted_in_at: new Date().toISOString(),
+      }, { onConflict: 'phone_number' });
+    } catch {
+      // ignore
     }
   }
 }

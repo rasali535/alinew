@@ -846,26 +846,70 @@ export class ZernioSocialService {
       return this.cachedWhatsAppAccount.account;
     }
 
+    const configuredAccountId = process.env.ZERNIO_WHATSAPP_ACCOUNT_ID?.trim();
+
     try {
       const res = await this.request<any>('accounts?category=communication&includeSandbox=true', 'GET');
       const accounts = Array.isArray(res) ? res : res.accounts || [];
-      const waAccount = accounts.find(
-        (a: any) =>
-          (a.platform === 'whatsapp' || a.type === 'whatsapp') &&
-          (a.isActive !== false && a.enabled !== false)
-      );
+      
+      let waAccount: any = null;
+
+      if (configuredAccountId) {
+        waAccount = accounts.find(
+          (a: any) =>
+            (a._id === configuredAccountId || a.id === configuredAccountId) &&
+            (a.platform === 'whatsapp' || a.type === 'whatsapp')
+        );
+        if (!waAccount) {
+          console.warn(`[ZernioSocialService] Configured WhatsApp account ID ${configuredAccountId} not found in Zernio accounts.`);
+          return null;
+        }
+      } else {
+        // When no specific account is configured:
+        // In production, strictly reject sandbox accounts
+        const isProd = process.env.NODE_ENV === 'production';
+        waAccount = accounts.find((a: any) => {
+          if (a.platform !== 'whatsapp' && a.type !== 'whatsapp') return false;
+          if (a.isActive === false || a.enabled === false) return false;
+          const isSandbox = Boolean(a.metadata?.isSandbox || a.profileId?.name === 'Sandbox' || a.username === '+12029087457');
+          if (isProd && isSandbox) return false;
+          return true;
+        });
+
+        // If in development/test and no non-sandbox account found, allow sandbox
+        if (!waAccount && !isProd) {
+          waAccount = accounts.find(
+            (a: any) =>
+              (a.platform === 'whatsapp' || a.type === 'whatsapp') &&
+              (a.isActive !== false && a.enabled !== false)
+          );
+        }
+      }
 
       if (waAccount) {
+        const isSandbox = Boolean(
+          waAccount.metadata?.isSandbox ||
+          waAccount.profileId?.name === 'Sandbox' ||
+          waAccount.username === '+12029087457'
+        );
+
         const normalized: ZernioAccountModel = {
           id: waAccount._id || waAccount.id,
           profileId: typeof waAccount.profileId === 'object' ? waAccount.profileId?._id || waAccount.profileId?.id : waAccount.profileId,
           platform: 'whatsapp',
-          name: waAccount.displayName || waAccount.name || 'WhatsApp Business',
+          name: waAccount.displayName || waAccount.name || (isSandbox ? 'Zernio WhatsApp Sandbox' : 'WhatsApp Business'),
           username: waAccount.username || waAccount.metadata?.displayPhoneNumber,
           avatarUrl: waAccount.profilePicture,
           status: waAccount.platformStatus === 'active' || waAccount.isActive ? 'connected' : 'disconnected',
           followersCount: 0,
-          metadata: waAccount.metadata || {},
+          metadata: {
+            ...waAccount.metadata,
+            isSandbox,
+            qualityRating: waAccount.metadata?.qualityRating || 'UNKNOWN',
+            displayPhoneNumber: waAccount.metadata?.displayPhoneNumber || waAccount.username,
+            wabaId: waAccount.metadata?.wabaId || null,
+            phoneNumberId: waAccount.metadata?.phoneNumberId || null,
+          },
           createdAt: waAccount.createdAt || new Date().toISOString(),
         };
 
@@ -948,6 +992,9 @@ export class ZernioSocialService {
 
   /**
    * Configure or register a webhook receiver on Zernio
+  /**
+   * Configure or register a webhook receiver on Zernio.
+   * Documented API: POST /v1/webhooks/settings
    */
   static async registerWebhook(params: {
     name: string;
@@ -957,6 +1004,28 @@ export class ZernioSocialService {
     profileIds?: string[];
     accountIds?: string[];
   }): Promise<any> {
+    const VALID_ZERNIO_EVENTS = new Set([
+      'message.received',
+      'message.sent',
+      'message.delivered',
+      'message.read',
+      'message.failed',
+      'account.connected',
+      'account.disconnected',
+      'account.reauth_required',
+      'post.published',
+      'post.failed',
+      'webhook.test',
+    ]);
+
+    for (const evt of params.events) {
+      if (!VALID_ZERNIO_EVENTS.has(evt)) {
+        throw new Error(
+          `[ZernioSocialService] Invalid webhook event name "${evt}". Zernio inbox events must be canonical: message.received, message.sent, message.delivered, message.read, message.failed (do not prefix with whatsapp.).`
+        );
+      }
+    }
+
     return await this.request<any>('webhooks/settings', 'POST', {
       name: params.name,
       url: params.url,

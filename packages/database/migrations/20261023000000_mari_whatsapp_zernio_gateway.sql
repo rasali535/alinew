@@ -13,7 +13,8 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- =====================================================================
 CREATE TABLE IF NOT EXISTS public.whatsapp_conversations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    conversation_id TEXT NOT NULL UNIQUE,             -- Provider conversation ID or sender phone number
+    conversation_id TEXT NOT NULL UNIQUE,             -- Provider conversation ID or canonical conversation identifier
+    provider_conversation_id TEXT,                    -- Zernio or platform conversation ID
     sender_phone TEXT NOT NULL,                        -- Sender E.164 phone number
     sender_name TEXT,                                  -- Sender profile name
     mode TEXT NOT NULL DEFAULT 'PUBLIC_ASSISTANT' CHECK (mode IN ('PUBLIC_ASSISTANT', 'REGISTERED_USER', 'BUSINESS_CUSTOMER')),
@@ -26,6 +27,9 @@ CREATE TABLE IF NOT EXISTS public.whatsapp_conversations (
     -- Scoping for Mode C (Business Customer Enquiry Reference)
     enquiry_reference_code TEXT,
     
+    -- 24-Hour Messaging Window Compliance
+    last_inbound_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
     -- Session & Conversation State
     current_intent TEXT,
     state JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -40,6 +44,7 @@ CREATE INDEX IF NOT EXISTS idx_wa_conv_ws ON public.whatsapp_conversations(works
 CREATE INDEX IF NOT EXISTS idx_wa_conv_org ON public.whatsapp_conversations(organization_id);
 CREATE INDEX IF NOT EXISTS idx_wa_conv_user ON public.whatsapp_conversations(linked_user_id);
 CREATE INDEX IF NOT EXISTS idx_wa_conv_mode ON public.whatsapp_conversations(mode);
+CREATE INDEX IF NOT EXISTS idx_wa_conv_inbound ON public.whatsapp_conversations(last_inbound_at);
 
 -- =====================================================================
 -- 3. WhatsApp Messages Ledger (Immutable Inbound / Outbound Records)
@@ -47,7 +52,7 @@ CREATE INDEX IF NOT EXISTS idx_wa_conv_mode ON public.whatsapp_conversations(mod
 CREATE TABLE IF NOT EXISTS public.whatsapp_messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     conversation_ref UUID NOT NULL REFERENCES public.whatsapp_conversations(id) ON DELETE CASCADE,
-    provider_message_id TEXT NOT NULL UNIQUE,         -- Idempotency key to deduplicate incoming webhooks
+    provider_message_id TEXT NOT NULL UNIQUE,         -- Durable idempotency key to deduplicate incoming webhooks
     direction TEXT NOT NULL CHECK (direction IN ('INBOUND', 'OUTBOUND')),
     sender_phone TEXT NOT NULL,
     recipient_phone TEXT NOT NULL,
@@ -65,7 +70,7 @@ CREATE INDEX IF NOT EXISTS idx_wa_msg_prov_id ON public.whatsapp_messages(provid
 CREATE INDEX IF NOT EXISTS idx_wa_msg_created ON public.whatsapp_messages(created_at DESC);
 
 -- =====================================================================
--- 4. WhatsApp Account Linking Challenges (Secure User Account Linking)
+-- 4. WhatsApp Account Linking Challenges (Durable Hashed Challenges)
 -- =====================================================================
 CREATE TABLE IF NOT EXISTS public.whatsapp_account_links (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -73,9 +78,13 @@ CREATE TABLE IF NOT EXISTS public.whatsapp_account_links (
     organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
     workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
     phone_number TEXT NOT NULL,
-    verification_code TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'VERIFIED', 'REVOKED', 'EXPIRED')),
+    code_hash TEXT NOT NULL,                           -- Cryptographic SHA-256 hash of verification code
+    verification_code TEXT,                            -- Deprecated/masked, kept for schema backwards-compatibility
+    attempts INT NOT NULL DEFAULT 0,                   -- Rate limiting attempts
+    max_attempts INT NOT NULL DEFAULT 3,
+    status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'VERIFIED', 'CONSUMED', 'REVOKED', 'EXPIRED')),
     expires_at TIMESTAMPTZ NOT NULL,
+    consumed_at TIMESTAMPTZ,
     verified_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -83,7 +92,7 @@ CREATE TABLE IF NOT EXISTS public.whatsapp_account_links (
 
 CREATE INDEX IF NOT EXISTS idx_wa_links_user ON public.whatsapp_account_links(user_id);
 CREATE INDEX IF NOT EXISTS idx_wa_links_phone ON public.whatsapp_account_links(phone_number);
-CREATE INDEX IF NOT EXISTS idx_wa_links_code ON public.whatsapp_account_links(verification_code);
+CREATE INDEX IF NOT EXISTS idx_wa_links_status ON public.whatsapp_account_links(status);
 
 -- =====================================================================
 -- 5. Business Customer Enquiry References (Mode C Routing Identifiers)
@@ -131,30 +140,58 @@ CREATE INDEX IF NOT EXISTS idx_wa_quotes_ws ON public.whatsapp_quotation_drafts(
 CREATE INDEX IF NOT EXISTS idx_wa_quotes_status ON public.whatsapp_quotation_drafts(status);
 
 -- =====================================================================
--- 7. Row Level Security (RLS) Configuration
+-- 7. WhatsApp Notification Preferences & Consent Ledger
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS public.whatsapp_notification_preferences (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    phone_number TEXT NOT NULL UNIQUE,
+    is_opted_in BOOLEAN NOT NULL DEFAULT false,        -- Defaults to NOT opted in
+    opted_in_at TIMESTAMPTZ,
+    opted_out_at TIMESTAMPTZ,
+    categories JSONB NOT NULL DEFAULT '{"marketing": false, "transactional": false, "quotations": false, "reminders": false}'::jsonb,
+    quiet_hours_start TEXT DEFAULT '21:00',
+    quiet_hours_end TEXT DEFAULT '07:00',
+    timezone TEXT NOT NULL DEFAULT 'Africa/Johannesburg',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_wa_notif_phone ON public.whatsapp_notification_preferences(phone_number);
+
+-- =====================================================================
+-- 8. Row Level Security (RLS) Configuration
 -- =====================================================================
 ALTER TABLE public.whatsapp_conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.whatsapp_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.whatsapp_account_links ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.whatsapp_business_enquiry_refs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.whatsapp_quotation_drafts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.whatsapp_notification_preferences ENABLE ROW LEVEL SECURITY;
 
--- 7.1 Service role has full access
+-- 8.1 Service role has full access
 CREATE POLICY "wa_conv_service_role" ON public.whatsapp_conversations FOR ALL USING (auth.role() = 'service_role');
 CREATE POLICY "wa_msg_service_role" ON public.whatsapp_messages FOR ALL USING (auth.role() = 'service_role');
 CREATE POLICY "wa_links_service_role" ON public.whatsapp_account_links FOR ALL USING (auth.role() = 'service_role');
 CREATE POLICY "wa_refs_service_role" ON public.whatsapp_business_enquiry_refs FOR ALL USING (auth.role() = 'service_role');
 CREATE POLICY "wa_quotes_service_role" ON public.whatsapp_quotation_drafts FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "wa_notif_service_role" ON public.whatsapp_notification_preferences FOR ALL USING (auth.role() = 'service_role');
 
--- 7.2 Authenticated workspace members can view their workspace-scoped records
+-- 8.2 Authenticated workspace members can view their workspace-scoped records
 CREATE POLICY "wa_links_user_own" ON public.whatsapp_account_links FOR ALL USING (auth.uid() = user_id);
 
 CREATE POLICY "wa_refs_ws_members" ON public.whatsapp_business_enquiry_refs FOR SELECT USING (
     workspace_id IN (SELECT workspace_id FROM public.workspace_members WHERE user_id = auth.uid())
 );
 
-CREATE POLICY "wa_quotes_ws_members" ON public.whatsapp_quotation_drafts FOR ALL USING (
+CREATE POLICY "wa_quotes_ws_members_select" ON public.whatsapp_quotation_drafts FOR SELECT USING (
     workspace_id IN (SELECT workspace_id FROM public.workspace_members WHERE user_id = auth.uid())
+);
+
+CREATE POLICY "wa_quotes_ws_managers_write" ON public.whatsapp_quotation_drafts FOR ALL USING (
+    workspace_id IN (
+        SELECT workspace_id FROM public.workspace_members 
+        WHERE user_id = auth.uid() AND role IN ('OWNER', 'ADMIN', 'MANAGER')
+    )
 );
 
 GRANT ALL ON public.whatsapp_conversations TO service_role;
@@ -162,7 +199,9 @@ GRANT ALL ON public.whatsapp_messages TO service_role;
 GRANT ALL ON public.whatsapp_account_links TO service_role;
 GRANT ALL ON public.whatsapp_business_enquiry_refs TO service_role;
 GRANT ALL ON public.whatsapp_quotation_drafts TO service_role;
+GRANT ALL ON public.whatsapp_notification_preferences TO service_role;
 
 GRANT SELECT ON public.whatsapp_account_links TO authenticated;
 GRANT SELECT ON public.whatsapp_business_enquiry_refs TO authenticated;
-GRANT SELECT, INSERT, UPDATE ON public.whatsapp_quotation_drafts TO authenticated;
+GRANT SELECT ON public.whatsapp_quotation_drafts TO authenticated;
+GRANT UPDATE ON public.whatsapp_quotation_drafts TO authenticated;
