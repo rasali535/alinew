@@ -15,10 +15,10 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { workspaceId, additionalDays, reason } = body;
+    const { workspaceId, codeId, additionalDays, reason } = body;
 
-    if (!workspaceId) {
-      return NextResponse.json({ success: false, error: 'workspaceId is required.' }, { status: 400 });
+    if (!workspaceId && !codeId) {
+      return NextResponse.json({ success: false, error: 'Either workspaceId or codeId is required to extend a trial.' }, { status: 400 });
     }
 
     const days = parseInt(additionalDays);
@@ -26,19 +26,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'additionalDays must be a positive integer.' }, { status: 400 });
     }
 
-    if (!reason || typeof reason !== 'string' || reason.trim().length < 5) {
-      return NextResponse.json(
-        { success: false, error: 'A justification reason of at least 5 characters is required for the audit trail.' },
-        { status: 400 }
-      );
-    }
+    const auditReason = (reason && typeof reason === 'string' && reason.trim().length >= 5)
+      ? reason.trim()
+      : 'Administrative trial extension from Admin Command Centre';
 
     const result = await TrialAccessService.extendTrial({
       workspaceId,
+      codeId,
       additionalDays: days,
       adminUserId: auth.user!.id,
       adminEmail: auth.user!.email,
-      reason: reason.trim(),
+      reason: auditReason,
     });
 
     return NextResponse.json(result);

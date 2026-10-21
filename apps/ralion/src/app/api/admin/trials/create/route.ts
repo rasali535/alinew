@@ -73,6 +73,9 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'Cryptographically secure demo access code generated successfully.',
       code: result,
+      trialCode: result,
+      codeSecret: result.rawCode,
+      rawCode: result.rawCode,
     }, { status: 201 });
   } catch (err: any) {
     console.error('[AdminTrialCreateAPI] Error:', err);

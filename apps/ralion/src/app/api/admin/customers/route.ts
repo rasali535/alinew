@@ -132,6 +132,11 @@ export async function GET(request: NextRequest) {
         socialPostCount,
         workspaceCount: orgWorkspaces.length,
         workspaceId: primaryWorkspace?.id || null,
+        workspaces: orgWorkspaces.map((w: any) => ({
+          id: w.id,
+          name: w.name,
+          organizationId: w.organization_id,
+        })),
       };
     });
 

@@ -27,7 +27,8 @@ import { safeReplace } from '@/lib/retail/adapters';
 export default function RetailDashboardPage() {
   const [metrics, setMetrics] = useState<RetailFinancialMetrics | null>(null);
   const [role, setRole] = useState('Store Owner');
-  const [storeName, setStoreName] = useState('Proinsight Hardware & Building Supplies');
+  const [storeName, setStoreName] = useState('Retail Hardware Store');
+  const [currency, setCurrency] = useState('USD');
   const [loading, setLoading] = useState(true);
   const [errorState, setErrorState] = useState<RetailErrorState | null>(null);
 
@@ -51,7 +52,7 @@ export default function RetailDashboardPage() {
           setErrorState({
             status: 403,
             code: errJson?.code || errJson?.error || 'RETAIL_MODULE_NOT_ENTITLED',
-            message: errJson?.message || 'This workspace is not entitled to access Ralion Retail OS. Exclusive pilot access is reserved for Proinsight.',
+            message: errJson?.message || 'This workspace is not entitled to access Ralion Retail OS. Please contact your platform administrator to activate Retail demo access or redeem a trial voucher.',
           });
           return;
         }
@@ -70,6 +71,11 @@ export default function RetailDashboardPage() {
         }
         if (data.settings?.storeName) {
           setStoreName(data.settings.storeName);
+        } else if (data.workspace?.name) {
+          setStoreName(`${data.workspace.name} Hardware`);
+        }
+        if (data.entitlement?.defaultCurrency) {
+          setCurrency(data.entitlement.defaultCurrency);
         }
       } else {
         setErrorState({
@@ -96,7 +102,7 @@ export default function RetailDashboardPage() {
   const formatUSD = (val: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency: currency || 'USD',
       minimumFractionDigits: 2,
     }).format(val || 0);
   };
@@ -104,11 +110,11 @@ export default function RetailDashboardPage() {
   if (loading) {
     return (
       <div className="flex-1 flex flex-col bg-zinc-950 text-zinc-100 min-h-screen">
-        <RetailNavHeader role={role} storeName={storeName} onRefresh={fetchDashboardData} />
+        <RetailNavHeader role={role} storeName={storeName} currency={currency} onRefresh={fetchDashboardData} />
         <div className="flex-1 flex items-center justify-center p-12 text-zinc-400">
           <div className="flex items-center gap-3">
             <RefreshCw className="w-5 h-5 animate-spin text-emerald-400" />
-            <span>Loading Proinsight Retail Dashboard in USD...</span>
+            <span>Loading Retail Dashboard in {currency}...</span>
           </div>
         </div>
       </div>
@@ -118,7 +124,7 @@ export default function RetailDashboardPage() {
   if (errorState) {
     return (
       <div className="flex-1 flex flex-col bg-zinc-950 text-zinc-100 min-h-screen">
-        <RetailNavHeader role={role} storeName={storeName} onRefresh={fetchDashboardData} />
+        <RetailNavHeader role={role} storeName={storeName} currency={currency} onRefresh={fetchDashboardData} />
         <RetailAccessErrorCard error={errorState} onRetry={fetchDashboardData} />
       </div>
     );
@@ -126,7 +132,7 @@ export default function RetailDashboardPage() {
 
   return (
     <div className="flex-1 flex flex-col bg-zinc-950 text-zinc-100 min-h-screen">
-      <RetailNavHeader role={role} storeName={storeName} onRefresh={fetchDashboardData} />
+      <RetailNavHeader role={role} storeName={storeName} currency={currency} onRefresh={fetchDashboardData} />
 
       <div role="region" aria-label="Hardware Store Performance Center" className="p-6 max-w-7xl mx-auto w-full space-y-6">
         {/* Quick Action Banner */}
@@ -137,7 +143,7 @@ export default function RetailDashboardPage() {
               Connected Retail Operations
             </span>
             <h2 className="text-xl font-bold text-zinc-100 tracking-tight">Hardware Store Performance Center</h2>
-            <p className="text-xs text-zinc-400 mt-0.5">Authoritative stock, sales, expense, and payroll figures for Proinsight.</p>
+            <p className="text-xs text-zinc-400 mt-0.5">Authoritative stock, sales, expense, and payroll figures for {storeName}.</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
