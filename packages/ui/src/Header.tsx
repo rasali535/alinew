@@ -81,22 +81,6 @@ export const Header: React.FC<HeaderProps> = ({
           <span className="font-medium text-zinc-300">{activeBranch}</span>
         </div>
 
-        {/* Quick Platform Admin Trigger */}
-        {isAdmin && (
-          <button
-            onClick={() => {
-              if (onOpenAdmin) {
-                onOpenAdmin();
-              } else if (typeof window !== 'undefined') {
-                window.location.href = '/ralion/admin';
-              }
-            }}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-amber-500/15 border border-amber-500/40 text-amber-300 hover:text-amber-100 hover:border-amber-400 hover:bg-amber-500/25 text-xs font-bold transition-all shadow-sm shadow-amber-500/10 cursor-pointer"
-          >
-            <span>👑</span>
-            <span className="hidden sm:inline">Admin Portal</span>
-          </button>
-        )}
 
         {/* Quick Mari AI Trigger */}
         <button
