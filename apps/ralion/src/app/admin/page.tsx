@@ -100,6 +100,8 @@ interface CustomerRow {
   }>;
   status: string;
   workspaceCount?: number;
+  workspaceId?: string | null;
+  workspaces?: Array<{ id: string; name: string; organizationId?: string }>;
   lastActive?: string;
 }
 
@@ -212,6 +214,19 @@ export default function PlatformAdminPortal() {
     notes: '',
   });
 
+  const [showGrantDemoModal, setShowGrantDemoModal] = useState(false);
+  const [grantDemoForm, setGrantDemoForm] = useState({
+    organizationId: '',
+    workspaceId: '',
+    eligibleProducts: ['retail'] as Array<'retail' | 'trade'>,
+    durationDays: 14,
+    currency: 'USD' as 'USD' | 'BWP' | 'ZAR',
+    workspaceMode: 'CLEAN_WORKSPACE' as 'CLEAN_WORKSPACE' | 'DEMO_DATA',
+    reason: '',
+    notes: '',
+    confirmDemoDataSafety: false,
+  });
+
   const json = async (res: Response) => {
     const text = await res.text();
     if (!text || text.trim().startsWith('<')) throw new Error(`Expected JSON, received HTTP ${res.status}.`);
@@ -295,6 +310,58 @@ export default function PlatformAdminPortal() {
       await loadAll();
     } catch (err: any) {
       setError(err?.message || 'Error generating demo code.');
+    }
+  };
+
+  const openGrantDemoForWorkspace = (orgId: string, wsId?: string) => {
+    const match = customers.find(c => c.organizationId === orgId);
+    const targetWs = wsId || match?.workspaceId || match?.workspaces?.[0]?.id || '';
+    setGrantDemoForm(prev => ({
+      ...prev,
+      organizationId: orgId,
+      workspaceId: targetWs,
+      reason: `Direct Retail demo evaluation grant for ${match?.name || 'customer'}`,
+      confirmDemoDataSafety: false,
+    }));
+    setShowGrantDemoModal(true);
+  };
+
+  const grantWorkspaceDemo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!grantDemoForm.organizationId || !grantDemoForm.workspaceId) {
+      setError('Please select both a customer organization and target workspace.');
+      return;
+    }
+    if (grantDemoForm.eligibleProducts.length === 0) {
+      setError('Please select at least one eligible product.');
+      return;
+    }
+    if (grantDemoForm.workspaceMode === 'DEMO_DATA' && !grantDemoForm.confirmDemoDataSafety) {
+      setError('Please confirm that the destination workspace is safe for demo data initialization.');
+      return;
+    }
+    try {
+      const res = await authFetch('/api/admin/trials/grant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          organizationId: grantDemoForm.organizationId,
+          workspaceId: grantDemoForm.workspaceId,
+          eligibleProducts: grantDemoForm.eligibleProducts,
+          durationDays: grantDemoForm.durationDays,
+          currency: grantDemoForm.currency,
+          workspaceMode: grantDemoForm.workspaceMode,
+          reason: grantDemoForm.reason.trim(),
+          notes: grantDemoForm.notes || undefined,
+        }),
+      });
+      const body = await json(res);
+      if (!res.ok) throw new Error(body.error || 'Failed to grant retail demo access.');
+      setShowGrantDemoModal(false);
+      setMessage(body.message || 'Retail demo access successfully granted.');
+      await loadAll();
+    } catch (err: any) {
+      setError(err?.message || 'Failed to grant retail demo access.');
     }
   };
 
@@ -686,16 +753,33 @@ export default function PlatformAdminPortal() {
                 </p>
               </div>
 
-              <button
-                onClick={() => {
-                  setGeneratedCodeSecret(null);
-                  setShowGenerateCodeModal(true);
-                }}
-                className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-indigo-600/20 transition-all"
-              >
-                <Plus className="w-4 h-4" />
-                Generate Demo Access Code
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => {
+                    const firstCust = customers[0];
+                    setGrantDemoForm(prev => ({
+                      ...prev,
+                      organizationId: prev.organizationId || firstCust?.organizationId || '',
+                      workspaceId: prev.workspaceId || firstCust?.workspaceId || firstCust?.workspaces?.[0]?.id || '',
+                    }));
+                    setShowGrantDemoModal(true);
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Grant Demo to Existing Workspace
+                </button>
+                <button
+                  onClick={() => {
+                    setGeneratedCodeSecret(null);
+                    setShowGenerateCodeModal(true);
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-indigo-600/20 transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                  Generate Demo Access Code
+                </button>
+              </div>
             </div>
 
             {/* Top Telemetry Metric Cards */}
@@ -903,7 +987,102 @@ export default function PlatformAdminPortal() {
           </section>
         )}
 
-        {tab === 'customers' && <section className="space-y-4"><div className="flex flex-col md:flex-row gap-3 md:items-center justify-between"><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search tenant, owner, email or ID…" className="w-full md:max-w-md px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs" /><div className="text-xs text-zinc-500">{filteredCustomers.length} visible tenants</div></div><div className="overflow-x-auto rounded-2xl border border-zinc-800"><table className="w-full text-xs"><thead className="bg-zinc-900 text-zinc-400"><tr><th className="p-3 text-left">Tenant</th><th className="p-3 text-left">Plan</th><th className="p-3 text-left">Credits</th><th className="p-3 text-left">Knowledge</th><th className="p-3 text-left">Mari</th><th className="p-3 text-left">Social</th><th className="p-3 text-left">Status</th><th className="p-3 text-right">Actions</th></tr></thead><tbody className="divide-y divide-zinc-800">{filteredCustomers.map(customer => { const tenantWidgets = (mariTelemetry?.widgets || []).filter(widget => widget.organizationId === customer.organizationId); const liveWidgets = tenantWidgets.filter(widget => widget.health === 'LIVE').length; return <tr key={customer.organizationId} className="bg-zinc-950/40"><td className="p-3"><div className="font-semibold text-white">{customer.name}</div><div className="font-mono text-[10px] text-zinc-600">{customer.organizationId}</div><div className="text-[10px] text-zinc-500">{customer.ownerEmail || 'No owner email'}</div></td><td className="p-3">{customer.plan}</td><td className="p-3 font-mono">{customer.credits || 0}<div className="text-[10px] text-zinc-600">{customer.creditsConsumed || 0} consumed</div></td><td className="p-3"><Pill text={customer.websiteIngestionStatus || 'NONE'} status={customer.websiteIngestionStatus === 'VERIFIED' ? 'ACTIVE' : 'UNKNOWN'} /></td><td className="p-3"><Pill text={tenantWidgets.length ? `${liveWidgets}/${tenantWidgets.length} LIVE` : 'NONE'} status={liveWidgets ? 'LIVE' : tenantWidgets.length ? tenantWidgets[0].health : 'UNKNOWN'} /></td><td className="p-3"><div className="flex flex-wrap gap-1">{(customer.socialConnections || []).map(connection => <Pill key={connection.id} text={`${connection.provider.toUpperCase()} · ${connection.accountName}`} status={connection.connectionStatus} />)}{!customer.socialConnections?.length && <Pill text="NO CHANNELS" status="DISCONNECTED" />}{Boolean(customer.socialAttentionCount) && <Pill text={`${customer.socialAttentionCount} NEED ATTENTION`} status="DEGRADED" />}</div></td><td className="p-3"><Pill text={customer.status} status={customer.status} /></td><td className="p-3"><div className="flex justify-end gap-2"><button onClick={() => void inspectTenant(customer.organizationId)} className="p-2 rounded-lg border border-zinc-700 bg-zinc-900" title="Inspect"><Eye className="w-3.5 h-3.5" /></button><button onClick={() => setCreditOrg(customer.organizationId)} className="p-2 rounded-lg border border-indigo-500/30 bg-indigo-500/10 text-indigo-300" title="Adjust credits"><Coins className="w-3.5 h-3.5" /></button><button onClick={() => void updateTenantStatus(customer)} className={`px-2 py-1 rounded-lg border text-[10px] font-bold ${customer.status === 'ACTIVE' ? 'border-rose-500/30 text-rose-300' : 'border-emerald-500/30 text-emerald-300'}`}>{customer.status === 'ACTIVE' ? 'Suspend' : 'Reactivate'}</button></div></td></tr>})}{!filteredCustomers.length && <tr><td colSpan={8} className="p-10 text-center text-zinc-500">No matching organizations.</td></tr>}</tbody></table></div><div className="flex items-center gap-2"><input value={inspectReason} onChange={e => setInspectReason(e.target.value)} className="flex-1 max-w-lg px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs" placeholder="Reason recorded when inspecting a tenant" /><span className="text-[10px] text-zinc-600">Inspection is audit logged.</span></div></section>}
+        {tab === 'customers' && (
+          <section className="space-y-4">
+            <div className="flex flex-col md:flex-row gap-3 md:items-center justify-between">
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search tenant, owner, email or ID…"
+                className="w-full md:max-w-md px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs"
+              />
+              <div className="text-xs text-zinc-500">{filteredCustomers.length} visible tenants</div>
+            </div>
+            <div className="overflow-x-auto rounded-2xl border border-zinc-800">
+              <table className="w-full text-xs">
+                <thead className="bg-zinc-900 text-zinc-400">
+                  <tr>
+                    <th className="p-3 text-left">Tenant</th>
+                    <th className="p-3 text-left">Plan</th>
+                    <th className="p-3 text-left">Credits</th>
+                    <th className="p-3 text-left">Knowledge</th>
+                    <th className="p-3 text-left">Mari</th>
+                    <th className="p-3 text-left">Social</th>
+                    <th className="p-3 text-left">Status</th>
+                    <th className="p-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800">
+                  {filteredCustomers.map(customer => {
+                    const tenantWidgets = (mariTelemetry?.widgets || []).filter(widget => widget.organizationId === customer.organizationId);
+                    const liveWidgets = tenantWidgets.filter(widget => widget.health === 'LIVE').length;
+                    return (
+                      <tr key={customer.organizationId} className="bg-zinc-950/40">
+                        <td className="p-3">
+                          <div className="font-semibold text-white">{customer.name}</div>
+                          <div className="font-mono text-[10px] text-zinc-600">{customer.organizationId}</div>
+                          <div className="text-[10px] text-zinc-500">{customer.ownerEmail || 'No owner email'}</div>
+                        </td>
+                        <td className="p-3">{customer.plan}</td>
+                        <td className="p-3 font-mono">
+                          {customer.credits || 0}
+                          <div className="text-[10px] text-zinc-600">{customer.creditsConsumed || 0} consumed</div>
+                        </td>
+                        <td className="p-3">
+                          <Pill text={customer.websiteIngestionStatus || 'NONE'} status={customer.websiteIngestionStatus === 'VERIFIED' ? 'ACTIVE' : 'UNKNOWN'} />
+                        </td>
+                        <td className="p-3">
+                          <Pill text={tenantWidgets.length ? `${liveWidgets}/${tenantWidgets.length} LIVE` : 'NONE'} status={liveWidgets ? 'LIVE' : tenantWidgets.length ? tenantWidgets[0].health : 'UNKNOWN'} />
+                        </td>
+                        <td className="p-3">
+                          <div className="flex flex-wrap gap-1">
+                            {(customer.socialConnections || []).map(connection => (
+                              <Pill key={connection.id} text={`${connection.provider.toUpperCase()} · ${connection.accountName}`} status={connection.connectionStatus} />
+                            ))}
+                            {!customer.socialConnections?.length && <Pill text="NO CHANNELS" status="DISCONNECTED" />}
+                            {Boolean(customer.socialAttentionCount) && <Pill text={`${customer.socialAttentionCount} NEED ATTENTION`} status="DEGRADED" />}
+                          </div>
+                        </td>
+                        <td className="p-3">
+                          <Pill text={customer.status} status={customer.status} />
+                        </td>
+                        <td className="p-3">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={() => openGrantDemoForWorkspace(customer.organizationId, customer.workspaceId || customer.workspaces?.[0]?.id)}
+                              className="p-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
+                              title="Grant Retail Demo Access"
+                            >
+                              <Sparkles className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => void inspectTenant(customer.organizationId)} className="p-2 rounded-lg border border-zinc-700 bg-zinc-900" title="Inspect">
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => setCreditOrg(customer.organizationId)} className="p-2 rounded-lg border border-indigo-500/30 bg-indigo-500/10 text-indigo-300" title="Adjust credits">
+                              <Coins className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => void updateTenantStatus(customer)} className={`px-2 py-1 rounded-lg border text-[10px] font-bold ${customer.status === 'ACTIVE' ? 'border-rose-500/30 text-rose-300' : 'border-emerald-500/30 text-emerald-300'}`}>
+                              {customer.status === 'ACTIVE' ? 'Suspend' : 'Reactivate'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {!filteredCustomers.length && (
+                    <tr>
+                      <td colSpan={8} className="p-10 text-center text-zinc-500">No matching organizations.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex items-center gap-2">
+              <input value={inspectReason} onChange={e => setInspectReason(e.target.value)} className="flex-1 max-w-lg px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs" placeholder="Reason recorded when inspecting a tenant" />
+              <span className="text-[10px] text-zinc-600">Inspection is audit logged.</span>
+            </div>
+          </section>
+        )}
 
         {tab === 'retail' && (
           <section className="space-y-5">
@@ -1242,6 +1421,65 @@ export default function PlatformAdminPortal() {
                   </select>
                 </div>
 
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-zinc-300 font-semibold block mb-1">Restricted Organization (Optional)</label>
+                    <select
+                      value={codeForm.restrictedOrganizationId}
+                      onChange={e => {
+                        const orgId = e.target.value;
+                        const match = customers.find(c => c.organizationId === orgId);
+                        const wsId = match?.workspaceId || match?.workspaces?.[0]?.id || '';
+                        setCodeForm({
+                          ...codeForm,
+                          restrictedOrganizationId: orgId,
+                          restrictedWorkspaceId: wsId,
+                        });
+                      }}
+                      className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-white"
+                    >
+                      <option value="">Any Customer (Open)</option>
+                      {customers.map(c => (
+                        <option key={c.organizationId} value={c.organizationId}>
+                          {c.name} ({c.ownerEmail || c.organizationId.slice(0, 8)})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-zinc-300 font-semibold block mb-1">Restricted Workspace (Optional)</label>
+                    {(() => {
+                      const selCust = customers.find(c => c.organizationId === codeForm.restrictedOrganizationId);
+                      const selWs = selCust?.workspaces || [];
+                      if (selWs.length > 0) {
+                        return (
+                          <select
+                            value={codeForm.restrictedWorkspaceId}
+                            onChange={e => setCodeForm({ ...codeForm, restrictedWorkspaceId: e.target.value })}
+                            className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-white"
+                          >
+                            <option value="">Any Workspace in Organization</option>
+                            {selWs.map(w => (
+                              <option key={w.id} value={w.id}>
+                                {w.name || 'Workspace'} ({w.id.slice(0, 8)})
+                              </option>
+                            ))}
+                          </select>
+                        );
+                      }
+                      return (
+                        <input
+                          type="text"
+                          value={codeForm.restrictedWorkspaceId}
+                          onChange={e => setCodeForm({ ...codeForm, restrictedWorkspaceId: e.target.value })}
+                          placeholder="Workspace UUID (optional)"
+                          className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-white font-mono"
+                        />
+                      );
+                    })()}
+                  </div>
+                </div>
+
                 <div>
                   <label className="text-zinc-300 font-semibold block mb-1">Restricted Email (Optional)</label>
                   <input
@@ -1284,6 +1522,220 @@ export default function PlatformAdminPortal() {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* GRANT RETAIL DEMO DIRECT MODAL */}
+      {showGrantDemoModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-emerald-400" />
+                Grant Retail Demo Access to Existing Workspace
+              </h3>
+              <button
+                onClick={() => setShowGrantDemoModal(false)}
+                className="text-zinc-500 hover:text-white text-lg font-bold"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={grantWorkspaceDemo} className="space-y-4 text-xs">
+              <div>
+                <label className="text-xs text-zinc-400 block mb-1.5 font-medium">Customer Organization</label>
+                <select
+                  value={grantDemoForm.organizationId}
+                  onChange={e => {
+                    const orgId = e.target.value;
+                    const match = customers.find(c => c.organizationId === orgId);
+                    const wsId = match?.workspaceId || match?.workspaces?.[0]?.id || '';
+                    setGrantDemoForm({
+                      ...grantDemoForm,
+                      organizationId: orgId,
+                      workspaceId: wsId,
+                    });
+                  }}
+                  className="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-200"
+                >
+                  <option value="">Select an organization...</option>
+                  {customers.map(c => (
+                    <option key={c.organizationId} value={c.organizationId}>
+                      {c.name} ({c.ownerEmail || c.organizationId.slice(0, 8)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs text-zinc-400 block mb-1.5 font-medium">Target Workspace</label>
+                {(() => {
+                  const selectedCustomer = customers.find(c => c.organizationId === grantDemoForm.organizationId);
+                  const orgWorkspaces = selectedCustomer?.workspaces || [];
+                  if (orgWorkspaces.length > 0) {
+                    return (
+                      <select
+                        value={grantDemoForm.workspaceId}
+                        onChange={e => setGrantDemoForm({ ...grantDemoForm, workspaceId: e.target.value })}
+                        className="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-200"
+                      >
+                        <option value="">Select a workspace...</option>
+                        {orgWorkspaces.map((w: any) => (
+                          <option key={w.id} value={w.id}>
+                            {w.name || 'Workspace'} ({w.id})
+                          </option>
+                        ))}
+                      </select>
+                    );
+                  }
+                  return (
+                    <input
+                      type="text"
+                      placeholder="Workspace UUID"
+                      value={grantDemoForm.workspaceId}
+                      onChange={e => setGrantDemoForm({ ...grantDemoForm, workspaceId: e.target.value })}
+                      className="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-200 font-mono"
+                    />
+                  );
+                })()}
+              </div>
+
+              <div>
+                <label className="text-xs text-zinc-400 block mb-1.5 font-medium">Eligible Products</label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={grantDemoForm.eligibleProducts.includes('retail')}
+                      onChange={e => {
+                        const next = e.target.checked
+                          ? [...grantDemoForm.eligibleProducts, 'retail' as const]
+                          : grantDemoForm.eligibleProducts.filter(p => p !== 'retail');
+                        setGrantDemoForm({ ...grantDemoForm, eligibleProducts: next });
+                      }}
+                      className="rounded border-zinc-700 bg-zinc-950 text-emerald-600"
+                    />
+                    🛒 Retail OS
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={grantDemoForm.eligibleProducts.includes('trade')}
+                      onChange={e => {
+                        const next = e.target.checked
+                          ? [...grantDemoForm.eligibleProducts, 'trade' as const]
+                          : grantDemoForm.eligibleProducts.filter(p => p !== 'trade');
+                        setGrantDemoForm({ ...grantDemoForm, eligibleProducts: next });
+                      }}
+                      className="rounded border-zinc-700 bg-zinc-950 text-emerald-600"
+                    />
+                    🏗️ Trade OS
+                  </label>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-zinc-400 block mb-1 font-medium">Duration (Days)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={90}
+                    value={grantDemoForm.durationDays}
+                    onChange={e => setGrantDemoForm({ ...grantDemoForm, durationDays: Number(e.target.value) })}
+                    className="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-200"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-zinc-400 block mb-1 font-medium">Operating Currency</label>
+                  <select
+                    value={grantDemoForm.currency}
+                    onChange={e => setGrantDemoForm({ ...grantDemoForm, currency: e.target.value as any })}
+                    className="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-200"
+                  >
+                    <option value="USD">USD ($) — US Dollar</option>
+                    <option value="BWP">BWP (P) — Botswana Pula</option>
+                    <option value="ZAR">ZAR (R) — South African Rand</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs text-zinc-400 block mb-1 font-medium">Sample Data Preference</label>
+                <select
+                  value={grantDemoForm.workspaceMode}
+                  onChange={e => setGrantDemoForm({ ...grantDemoForm, workspaceMode: e.target.value as any })}
+                  className="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-200"
+                >
+                  <option value="CLEAN_WORKSPACE">CLEAN_WORKSPACE (Recommended) — Empty workspace for customer pilot</option>
+                  <option value="DEMO_DATA">DEMO_DATA — Pre-load rich hardware store sample inventory and records</option>
+                </select>
+              </div>
+
+              {grantDemoForm.workspaceMode === 'DEMO_DATA' && (
+                <div className="p-3.5 rounded-xl bg-amber-950/40 border border-amber-500/30 text-amber-200 space-y-2 text-xs">
+                  <div className="font-bold flex items-center gap-1.5 text-amber-300">
+                    <ShieldAlert className="w-4 h-4" />
+                    Demo Data Safeguard
+                  </div>
+                  <p className="text-[11px] text-zinc-300">
+                    Pre-loading demonstration data will insert realistic hardware items, suppliers, and purchase records into the workspace. Never initialize demo data in an active workspace containing live customer inventory.
+                  </p>
+                  <label className="flex items-start gap-2 pt-1 text-[11px] text-amber-200 font-semibold cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={grantDemoForm.confirmDemoDataSafety}
+                      onChange={e => setGrantDemoForm({ ...grantDemoForm, confirmDemoDataSafety: e.target.checked })}
+                      className="mt-0.5 rounded border-amber-700 bg-zinc-950 text-amber-500"
+                    />
+                    <span>I confirm the destination workspace is safe for demo data initialization and does not overwrite live client inventory.</span>
+                  </label>
+                </div>
+              )}
+
+              <div>
+                <label className="text-xs text-zinc-400 block mb-1 font-medium">
+                  Mandatory Audit Justification <span className="text-rose-400">*</span>
+                </label>
+                <textarea
+                  required
+                  minLength={5}
+                  placeholder="e.g., Authorized Retail demonstration evaluation for prospect onboarding"
+                  value={grantDemoForm.reason}
+                  onChange={e => setGrantDemoForm({ ...grantDemoForm, reason: e.target.value })}
+                  className="w-full h-16 p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-200"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-zinc-400 block mb-1 font-medium">Internal Notes (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g., Referred by regional sales manager"
+                  value={grantDemoForm.notes}
+                  onChange={e => setGrantDemoForm({ ...grantDemoForm, notes: e.target.value })}
+                  className="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-200"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setShowGrantDemoModal(false)}
+                  className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/20"
+                >
+                  Grant Demo Access
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
