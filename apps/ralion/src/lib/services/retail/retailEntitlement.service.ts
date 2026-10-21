@@ -241,6 +241,7 @@ export class RetailEntitlementService {
     let dbEntitled = false;
     let entitlementTier: 'PILOT' | 'STANDARD' | 'PROFESSIONAL' | 'ENTERPRISE' | 'TRIAL' = 'PILOT';
     let entitlementStatus: 'ACTIVE' | 'NOT_ENTITLED' | 'SUSPENDED' | 'EXPIRED' = 'NOT_ENTITLED';
+    let resolvedCurrency: RetailCurrency = 'USD';
     let failureReason: string | undefined;
 
     try {
@@ -283,6 +284,7 @@ export class RetailEntitlementService {
           dbEntitled = true;
           entitlementTier = data.tier as any;
           entitlementStatus = 'ACTIVE';
+          resolvedCurrency = (data.default_currency as RetailCurrency) || 'USD';
         } else {
           dbEntitled = false;
           entitlementStatus = 'NOT_ENTITLED';
@@ -366,7 +368,7 @@ export class RetailEntitlementService {
       isEntitled: !roleDenied,
       status: 'ACTIVE',
       tier: entitlementTier,
-      defaultCurrency: 'USD',
+      defaultCurrency: resolvedCurrency,
       effectiveRole,
       isPlatformAdmin,
       canManageSettings,

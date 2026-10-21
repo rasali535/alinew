@@ -24,19 +24,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!reason || typeof reason !== 'string' || reason.trim().length < 5) {
-      return NextResponse.json(
-        { success: false, error: 'A justification reason of at least 5 characters is required for the audit trail.' },
-        { status: 400 }
-      );
-    }
+    const auditReason = (reason && typeof reason === 'string' && reason.trim().length >= 5)
+      ? reason.trim()
+      : 'Administrative revocation from Command Centre';
 
     const result = await TrialAccessService.revokeTrial({
       codeId,
       workspaceId,
       adminUserId: auth.user!.id,
       adminEmail: auth.user!.email,
-      reason: reason.trim(),
+      reason: auditReason,
     });
 
     return NextResponse.json(result);

@@ -15,23 +15,24 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { organizationId, workspaceId, targetTier, notes } = body;
+    const { organizationId, workspaceId, codeId, targetTier, tier, notes } = body;
 
-    if (!organizationId || !workspaceId) {
+    if (!workspaceId && !codeId) {
       return NextResponse.json(
-        { success: false, error: 'Both organizationId and workspaceId are required for commercial conversion.' },
+        { success: false, error: 'Either workspaceId or codeId is required for commercial conversion.' },
         { status: 400 }
       );
     }
 
-    const tier = targetTier && ['STANDARD', 'PROFESSIONAL', 'ENTERPRISE'].includes(targetTier)
-      ? targetTier
+    const selectedTier = (targetTier || tier) && ['STANDARD', 'PROFESSIONAL', 'ENTERPRISE'].includes(targetTier || tier)
+      ? (targetTier || tier)
       : 'STANDARD';
 
     const result = await TrialAccessService.convertTrialToPaid({
       organizationId,
       workspaceId,
-      targetTier: tier,
+      codeId,
+      targetTier: selectedTier,
       adminUserId: auth.user!.id,
       adminEmail: auth.user!.email,
       notes: notes || 'Commercial subscription conversion approved by platform administrator',
