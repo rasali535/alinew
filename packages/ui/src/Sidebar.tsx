@@ -151,7 +151,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const brandName = branding?.brandName || 'Ralion OS';
   const logoUrl = branding?.logoUrl || '/logo.png';
-  const adminCommandCentreUrl = platformUrl ? `${platformUrl.replace(/\/+$/, '')}/admin` : '/admin';
+  const adminCommandCentreUrl = '/ralion/admin';
 
   const renderNavSection = (items: SidebarItem[]) => {
     return items.map((item) => {
@@ -245,7 +245,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {(isPlatformAdmin || userTier === 'PLATFORM_ADMIN') && (
             <button
               onClick={() => {
-                if (typeof window !== 'undefined') {
+                if (onNavigate) {
+                  onNavigate('/ralion/admin');
+                } else if (typeof window !== 'undefined') {
                   window.location.href = adminCommandCentreUrl;
                 }
               }}
@@ -279,7 +281,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="px-2 pt-2">
           <button
             onClick={() => {
-              if (typeof window !== 'undefined') {
+              if (onNavigate) {
+                onNavigate('/ralion/admin');
+              } else if (typeof window !== 'undefined') {
                 window.location.href = adminCommandCentreUrl;
               }
             }}
