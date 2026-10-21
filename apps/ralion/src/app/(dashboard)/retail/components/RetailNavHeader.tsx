@@ -26,12 +26,14 @@ import { authFetch } from '@/lib/api-config';
 interface RetailNavHeaderProps {
   role?: string;
   storeName?: string;
+  currency?: string;
   onRefresh?: () => void;
 }
 
 export const RetailNavHeader: React.FC<RetailNavHeaderProps> = ({
   role = 'Store Owner',
-  storeName = 'Proinsight Hardware & Building Supplies',
+  storeName = 'Retail Hardware Store',
+  currency = 'USD',
   onRefresh,
 }) => {
   const pathname = usePathname();
@@ -93,7 +95,7 @@ export const RetailNavHeader: React.FC<RetailNavHeaderProps> = ({
               🛡️ PLATFORM ADMIN INSPECTION
             </span>
             <span>
-              Audited operational inspection session for Proinsight Hardware Workspace (Immutable audit logging active).
+              Audited operational inspection session for {storeName} (Immutable audit logging active).
             </span>
           </div>
           <Link
@@ -116,7 +118,7 @@ export const RetailNavHeader: React.FC<RetailNavHeaderProps> = ({
               <h1 className="text-base font-semibold text-zinc-100 tracking-tight">{storeName}</h1>
               <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
                 <ShieldCheck className="w-3 h-3" />
-                Proinsight Pilot
+                {storeName.includes('Proinsight') ? 'Proinsight Pilot' : 'Retail Demo'}
               </span>
             </div>
             <p className="text-xs text-zinc-400">Ralion Retail OS • Hardware & Building Materials Management</p>
@@ -128,7 +130,9 @@ export const RetailNavHeader: React.FC<RetailNavHeaderProps> = ({
           <div className="px-2.5 py-1 rounded-lg bg-zinc-800/80 border border-zinc-700/60 flex items-center gap-1.5 text-xs text-zinc-300 font-mono">
             <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
             <span>Currency:</span>
-            <strong className="text-emerald-400">USD ($)</strong>
+            <strong className="text-emerald-400">
+              {currency === 'BWP' ? 'BWP (P)' : currency === 'ZAR' ? 'ZAR (R)' : `${currency || 'USD'} ($)`}
+            </strong>
           </div>
 
           {/* Role Pill */}

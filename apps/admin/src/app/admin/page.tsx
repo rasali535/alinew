@@ -123,6 +123,7 @@ export default function PlatformAdminPortal() {
   const [trialsData, setTrialsData] = useState<any | null>(null);
   const [retailData, setRetailData] = useState<any | null>(null);
   const [showGenerateCodeModal, setShowGenerateCodeModal] = useState(false);
+  const [showGrantDemoModal, setShowGrantDemoModal] = useState(false);
   const [generatedCodeSecret, setGeneratedCodeSecret] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
   const [codeForm, setCodeForm] = useState({
@@ -135,6 +136,36 @@ export default function PlatformAdminPortal() {
     restrictedWorkspaceId: '',
     notes: '',
   });
+
+  const [grantDemoForm, setGrantDemoForm] = useState({
+    organizationId: '',
+    workspaceId: '',
+    eligibleProducts: ['retail'] as Array<'retail' | 'trade'>,
+    durationDays: 14,
+    currency: 'USD' as 'USD' | 'BWP' | 'ZAR',
+    workspaceMode: 'CLEAN_WORKSPACE' as 'CLEAN_WORKSPACE' | 'DEMO_DATA',
+    confirmDemoDataSafety: false,
+    reason: '',
+    notes: '',
+  });
+
+  const openGrantRetailDemoModal = (prefillOrgId?: string, prefillWorkspaceId?: string) => {
+    const orgId = prefillOrgId || (customers[0]?.organizationId ?? '');
+    const matchedCustomer = customers.find(c => c.organizationId === orgId);
+    const wsId = prefillWorkspaceId || matchedCustomer?.workspaceId || matchedCustomer?.workspaces?.[0]?.id || '';
+    setGrantDemoForm({
+      organizationId: orgId,
+      workspaceId: wsId,
+      eligibleProducts: ['retail'],
+      durationDays: 14,
+      currency: 'USD',
+      workspaceMode: 'CLEAN_WORKSPACE',
+      confirmDemoDataSafety: false,
+      reason: '',
+      notes: '',
+    });
+    setShowGrantDemoModal(true);
+  };
 
   // Authenticated Platform Admin Token / Secret
   const getAuthHeaders = (): Record<string, string> => {
@@ -241,6 +272,47 @@ export default function PlatformAdminPortal() {
     }
   };
 
+  const grantWorkspaceDemo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!grantDemoForm.organizationId || !grantDemoForm.workspaceId) {
+      setActionErrorMessage('Please select both an organization and a workspace.');
+      return;
+    }
+    if (!grantDemoForm.reason || grantDemoForm.reason.trim().length < 5) {
+      setActionErrorMessage('A mandatory audit justification of at least 5 characters is required.');
+      return;
+    }
+    if (grantDemoForm.workspaceMode === 'DEMO_DATA' && !grantDemoForm.confirmDemoDataSafety) {
+      setActionErrorMessage('Please confirm destination workspace safety before seeding demo data.');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/admin/trials/grant', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({
+          organizationId: grantDemoForm.organizationId,
+          workspaceId: grantDemoForm.workspaceId,
+          eligibleProducts: grantDemoForm.eligibleProducts,
+          durationDays: grantDemoForm.durationDays,
+          currency: grantDemoForm.currency,
+          workspaceMode: grantDemoForm.workspaceMode,
+          reason: grantDemoForm.reason.trim(),
+          notes: grantDemoForm.notes || undefined,
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed to grant retail demo access.');
+      setShowGrantDemoModal(false);
+      setActionSuccessMessage(body.message || 'Retail demo access successfully granted.');
+      fetchPlatformData();
+    } catch (err: any) {
+      setActionErrorMessage(err?.message || 'Failed to grant retail demo access.');
+    }
+  };
+
   const generateDemoCode = async (e: React.FormEvent) => {
     e.preventDefault();
     if (codeForm.eligibleProducts.length === 0) {
@@ -256,60 +328,78 @@ export default function PlatformAdminPortal() {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Failed to generate demo access code.');
-      setGeneratedCodeSecret(body.codeSecret);
-      setActionSuccessMessage(`Generated demo access code for ${body.trialCode?.eligible_products?.join(', ')}.`);
+      const secret = body.codeSecret || body.code?.rawCode || body.rawCode || body.trialCode?.rawCode;
+      setGeneratedCodeSecret(secret);
+      setActionSuccessMessage(`Generated demo access code for ${(body.trialCode?.eligible_products || body.code?.eligible_products || []).join(', ')}.`);
       fetchPlatformData();
     } catch (err: any) {
       setActionErrorMessage(err?.message || 'Error generating trial access code.');
     }
   };
 
-  const extendTrial = async (codeId: string, additionalDays: number) => {
+  const extendTrial = async (targetId: string, additionalDays: number) => {
+    const reason = prompt('Please enter an audit justification for this trial extension (minimum 5 characters):', 'Platform administrator authorized trial extension');
+    if (!reason || reason.trim().length < 5) {
+      setActionErrorMessage('A justification reason of at least 5 characters is required.');
+      return;
+    }
     try {
       const res = await fetch('/api/admin/trials/extend', {
         method: 'POST',
         headers: getAuthHeaders(),
         credentials: 'include',
-        body: JSON.stringify({ codeId, additionalDays }),
+        body: JSON.stringify({ codeId: targetId, workspaceId: targetId, additionalDays, reason: reason.trim() }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Failed to extend trial.');
-      setActionSuccessMessage('Trial successfully extended.');
+      setActionSuccessMessage(body.message || 'Trial successfully extended.');
       fetchPlatformData();
     } catch (err: any) {
       setActionErrorMessage(err?.message || 'Failed to extend trial.');
     }
   };
 
-  const revokeTrial = async (codeId: string) => {
-    if (!confirm('Are you sure you want to revoke this trial access code? Active redemptions will immediately lose trial access.')) return;
+  const revokeTrial = async (targetId: string) => {
+    const reason = prompt('Please enter an audit reason for revoking this trial access (minimum 5 characters):', 'Platform administrator revocation from Command Centre');
+    if (!reason || reason.trim().length < 5) {
+      setActionErrorMessage('A justification reason of at least 5 characters is required to revoke access.');
+      return;
+    }
     try {
       const res = await fetch('/api/admin/trials/revoke', {
         method: 'POST',
         headers: getAuthHeaders(),
         credentials: 'include',
-        body: JSON.stringify({ codeId, reason: 'Revoked by platform administrator from Command Centre' }),
+        body: JSON.stringify({ codeId: targetId, workspaceId: targetId, reason: reason.trim() }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Failed to revoke trial.');
-      setActionSuccessMessage('Trial access code revoked.');
+      setActionSuccessMessage(body.message || 'Trial access revoked and associated workspace entitlements suspended.');
       fetchPlatformData();
     } catch (err: any) {
       setActionErrorMessage(err?.message || 'Failed to revoke trial.');
     }
   };
 
-  const convertTrialToCommercial = async (codeId: string) => {
+  const convertTrialToCommercial = async (targetId: string, orgId?: string) => {
+    const notes = prompt('Enter conversion approval notes / commercial contract reference:', 'Commercial contract conversion approved from Command Centre');
+    if (notes === null) return;
     try {
       const res = await fetch('/api/admin/trials/convert', {
         method: 'POST',
         headers: getAuthHeaders(),
         credentials: 'include',
-        body: JSON.stringify({ codeId, tier: 'STANDARD' }),
+        body: JSON.stringify({
+          codeId: targetId,
+          workspaceId: targetId,
+          organizationId: orgId,
+          targetTier: 'STANDARD',
+          notes: notes || 'Commercial subscription conversion approved by platform administrator',
+        }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Failed to convert trial.');
-      setActionSuccessMessage('Trial successfully converted to commercial tier.');
+      setActionSuccessMessage(body.message || 'Trial successfully converted to commercial tier.');
       fetchPlatformData();
     } catch (err: any) {
       setActionErrorMessage(err?.message || 'Failed to convert trial.');
@@ -935,6 +1025,14 @@ export default function PlatformAdminPortal() {
                             </button>
                             <button
                               onClick={() => {
+                                openGrantRetailDemoModal(cust.organizationId, cust.workspaceId || cust.workspaces?.[0]?.id || '');
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 text-xs font-semibold border border-emerald-500/40"
+                            >
+                              Grant Retail Demo
+                            </button>
+                            <button
+                              onClick={() => {
                                 setInspectingOrgId(cust.organizationId);
                                 setInspectModalOpen(true);
                               }}
@@ -1185,16 +1283,25 @@ export default function PlatformAdminPortal() {
                 </p>
               </div>
 
-              <button
-                onClick={() => {
-                  setGeneratedCodeSecret(null);
-                  setShowGenerateCodeModal(true);
-                }}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/20 transition"
-              >
-                <Plus className="w-4 h-4" />
-                Generate Demo Access Code
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => openGrantRetailDemoModal()}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/20 transition"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Grant Retail Demo
+                </button>
+                <button
+                  onClick={() => {
+                    setGeneratedCodeSecret(null);
+                    setShowGenerateCodeModal(true);
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/20 transition"
+                >
+                  <Plus className="w-4 h-4" />
+                  Generate Demo Access Code
+                </button>
+              </div>
             </div>
 
             {/* Trial Stats */}
@@ -1877,6 +1984,43 @@ export default function PlatformAdminPortal() {
                   />
                 </div>
 
+                {/* Restriction Controls */}
+                <div className="space-y-3 pt-3 border-t border-zinc-800">
+                  <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block">Access Restrictions (Optional)</span>
+                  <div>
+                    <label className="text-xs text-zinc-400 block mb-1 font-medium">Restricted Recipient Email</label>
+                    <input
+                      type="email"
+                      placeholder="e.g. buyer@example.com (only this email can redeem)"
+                      value={codeForm.restrictedEmail}
+                      onChange={(e) => setCodeForm({ ...codeForm, restrictedEmail: e.target.value })}
+                      className="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-200"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-zinc-400 block mb-1 font-medium">Restricted Org ID</label>
+                      <input
+                        type="text"
+                        placeholder="UUID or leave blank"
+                        value={codeForm.restrictedOrganizationId}
+                        onChange={(e) => setCodeForm({ ...codeForm, restrictedOrganizationId: e.target.value })}
+                        className="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-200 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-zinc-400 block mb-1 font-medium">Restricted Workspace ID</label>
+                      <input
+                        type="text"
+                        placeholder="UUID or leave blank"
+                        value={codeForm.restrictedWorkspaceId}
+                        onChange={(e) => setCodeForm({ ...codeForm, restrictedWorkspaceId: e.target.value })}
+                        className="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-200 font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 <div className="flex justify-end gap-2 pt-2">
                   <button
                     type="button"
@@ -1894,6 +2038,220 @@ export default function PlatformAdminPortal() {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* GRANT RETAIL DEMO DIRECT MODAL */}
+      {showGrantDemoModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-emerald-400" />
+                Grant Retail Demo Access
+              </h3>
+              <button
+                onClick={() => setShowGrantDemoModal(false)}
+                className="text-zinc-500 hover:text-white text-lg font-bold"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={grantWorkspaceDemo} className="space-y-4">
+              <div>
+                <label className="text-xs text-zinc-400 block mb-1.5 font-medium">Customer Organization</label>
+                <select
+                  value={grantDemoForm.organizationId}
+                  onChange={(e) => {
+                    const orgId = e.target.value;
+                    const match = customers.find(c => c.organizationId === orgId);
+                    const wsId = match?.workspaceId || match?.workspaces?.[0]?.id || '';
+                    setGrantDemoForm({
+                      ...grantDemoForm,
+                      organizationId: orgId,
+                      workspaceId: wsId,
+                    });
+                  }}
+                  className="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-200"
+                >
+                  <option value="">Select an organization...</option>
+                  {customers.map((c) => (
+                    <option key={c.organizationId} value={c.organizationId}>
+                      {c.name} ({c.ownerEmail || c.organizationId})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs text-zinc-400 block mb-1.5 font-medium">Target Workspace</label>
+                {(() => {
+                  const selectedCustomer = customers.find(c => c.organizationId === grantDemoForm.organizationId);
+                  const orgWorkspaces = selectedCustomer?.workspaces || [];
+                  if (orgWorkspaces.length > 0) {
+                    return (
+                      <select
+                        value={grantDemoForm.workspaceId}
+                        onChange={(e) => setGrantDemoForm({ ...grantDemoForm, workspaceId: e.target.value })}
+                        className="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-200"
+                      >
+                        <option value="">Select a workspace...</option>
+                        {orgWorkspaces.map((w: any) => (
+                          <option key={w.id} value={w.id}>
+                            {w.name || 'Workspace'} ({w.id})
+                          </option>
+                        ))}
+                      </select>
+                    );
+                  }
+                  return (
+                    <input
+                      type="text"
+                      placeholder="Workspace UUID"
+                      value={grantDemoForm.workspaceId}
+                      onChange={(e) => setGrantDemoForm({ ...grantDemoForm, workspaceId: e.target.value })}
+                      className="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-200 font-mono"
+                    />
+                  );
+                })()}
+              </div>
+
+              <div>
+                <label className="text-xs text-zinc-400 block mb-1.5 font-medium">Eligible Products</label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={grantDemoForm.eligibleProducts.includes('retail')}
+                      onChange={(e) => {
+                        const next = e.target.checked
+                          ? [...grantDemoForm.eligibleProducts, 'retail' as const]
+                          : grantDemoForm.eligibleProducts.filter(p => p !== 'retail');
+                        setGrantDemoForm({ ...grantDemoForm, eligibleProducts: next });
+                      }}
+                      className="rounded border-zinc-700 bg-zinc-950 text-emerald-600"
+                    />
+                    🛒 Retail OS
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={grantDemoForm.eligibleProducts.includes('trade')}
+                      onChange={(e) => {
+                        const next = e.target.checked
+                          ? [...grantDemoForm.eligibleProducts, 'trade' as const]
+                          : grantDemoForm.eligibleProducts.filter(p => p !== 'trade');
+                        setGrantDemoForm({ ...grantDemoForm, eligibleProducts: next });
+                      }}
+                      className="rounded border-zinc-700 bg-zinc-950 text-emerald-600"
+                    />
+                    🏗️ Trade OS
+                  </label>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-zinc-400 block mb-1 font-medium">Duration (Days)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={90}
+                    value={grantDemoForm.durationDays}
+                    onChange={(e) => setGrantDemoForm({ ...grantDemoForm, durationDays: Number(e.target.value) })}
+                    className="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-200"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-zinc-400 block mb-1 font-medium">Operating Currency</label>
+                  <select
+                    value={grantDemoForm.currency}
+                    onChange={(e) => setGrantDemoForm({ ...grantDemoForm, currency: e.target.value as any })}
+                    className="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-200"
+                  >
+                    <option value="USD">USD ($) — US Dollar</option>
+                    <option value="BWP">BWP (P) — Botswana Pula</option>
+                    <option value="ZAR">ZAR (R) — South African Rand</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs text-zinc-400 block mb-1 font-medium">Sample Data Preference</label>
+                <select
+                  value={grantDemoForm.workspaceMode}
+                  onChange={(e) => setGrantDemoForm({ ...grantDemoForm, workspaceMode: e.target.value as any })}
+                  className="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-200"
+                >
+                  <option value="CLEAN_WORKSPACE">CLEAN_WORKSPACE (Recommended) — Empty workspace for customer pilot</option>
+                  <option value="DEMO_DATA">DEMO_DATA — Pre-load rich hardware store sample inventory and records</option>
+                </select>
+              </div>
+
+              {grantDemoForm.workspaceMode === 'DEMO_DATA' && (
+                <div className="p-3.5 rounded-xl bg-amber-950/40 border border-amber-500/30 text-amber-200 space-y-2 text-xs">
+                  <div className="font-bold flex items-center gap-1.5 text-amber-300">
+                    <ShieldAlert className="w-4 h-4" />
+                    Demo Data Safeguard
+                  </div>
+                  <p className="text-[11px] text-zinc-300">
+                    Pre-loading demonstration data will insert realistic hardware items, suppliers, and purchase records into the workspace. Never initialize demo data in an active workspace containing live customer inventory.
+                  </p>
+                  <label className="flex items-start gap-2 pt-1 text-[11px] text-amber-200 font-semibold cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={grantDemoForm.confirmDemoDataSafety}
+                      onChange={(e) => setGrantDemoForm({ ...grantDemoForm, confirmDemoDataSafety: e.target.checked })}
+                      className="mt-0.5 rounded border-amber-700 bg-zinc-950 text-amber-500"
+                    />
+                    <span>I confirm the destination workspace is safe for demo data initialization and does not overwrite live client inventory.</span>
+                  </label>
+                </div>
+              )}
+
+              <div>
+                <label className="text-xs text-zinc-400 block mb-1 font-medium">
+                  Mandatory Audit Justification <span className="text-rose-400">*</span>
+                </label>
+                <textarea
+                  required
+                  minLength={5}
+                  placeholder="e.g., Authorized Retail demonstration evaluation for prospect onboarding"
+                  value={grantDemoForm.reason}
+                  onChange={(e) => setGrantDemoForm({ ...grantDemoForm, reason: e.target.value })}
+                  className="w-full h-16 p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-200"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-zinc-400 block mb-1 font-medium">Internal Notes (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g., Referred by regional sales manager"
+                  value={grantDemoForm.notes}
+                  onChange={(e) => setGrantDemoForm({ ...grantDemoForm, notes: e.target.value })}
+                  className="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-200"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setShowGrantDemoModal(false)}
+                  className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/20"
+                >
+                  Grant Demo Access
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

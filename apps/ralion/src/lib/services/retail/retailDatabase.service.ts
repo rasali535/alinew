@@ -32,6 +32,7 @@ import {
   RetailPayslip,
   RetailSettings,
   RetailFinancialMetrics,
+  RetailCurrency,
 } from '@ralion/database';
 import { getPrivilegedSupabase } from '../../supabase/server';
 
@@ -46,7 +47,7 @@ export interface AtomicSaleParams {
   cashierUserId: string;
   cashierName: string;
   shiftId?: string;
-  currency: 'USD';
+  currency: RetailCurrency;
   items: Array<{
     productId: string;
     productName: string;

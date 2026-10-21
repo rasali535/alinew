@@ -124,6 +124,31 @@ export default function DashboardLayout({
     } catch {}
   }, [organization?.id, workspace?.id, user?.uid]);
 
+  const [dbRetailEntitled, setDbRetailEntitled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    if (!workspace?.id || !organization?.id) {
+      setDbRetailEntitled(null);
+      return;
+    }
+
+    fetch('/api/retail/entitlement', { credentials: 'include' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (active && data) {
+          setDbRetailEntitled(Boolean(data.isEntitled && data.status === 'ACTIVE'));
+        }
+      })
+      .catch(() => {
+        if (active) setDbRetailEntitled(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [workspace?.id, organization?.id]);
+
   const isPlatformAdmin = user?.role === 'PLATFORM_ADMIN' || user?.email === 'ali@rasalilabs.com';
   const isProinsightTenant =
     organization?.id === '85ec9738-937a-41ee-b0df-ed752777447c' &&
@@ -131,7 +156,10 @@ export default function DashboardLayout({
   const enabledModules: string[] = Array.isArray(organization?.enabledModules)
     ? organization.enabledModules
     : ((organization as any)?.settings?.modules || []);
-  const hasRetailEntitlement = isProinsightTenant || isPlatformAdmin || enabledModules.includes('retail');
+  const hasRetailEntitlement =
+    dbRetailEntitled !== null
+      ? dbRetailEntitled || isPlatformAdmin || isProinsightTenant
+      : (isProinsightTenant || isPlatformAdmin || enabledModules.includes('retail'));
   const hasTradeEntitlement = isPlatformAdmin || enabledModules.includes('trade');
   const orgBranding = organization?.branding ? {
     brandName: organization.name,
