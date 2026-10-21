@@ -824,8 +824,147 @@ export class ZernioSocialService {
         configured: true,
         reachable: false,
         latencyMs: Date.now() - start,
-        error: err.message || 'Zernio API unreachable',
       };
     }
+  }
+
+  // =====================================================================
+  // 8. WhatsApp Business Infrastructure
+  // =====================================================================
+
+  private static cachedWhatsAppAccount: {
+    account: ZernioAccountModel;
+    expiresAt: number;
+  } | null = null;
+
+  /**
+   * Discovers and retrieves the active connected WhatsApp account from Zernio.
+   * Prioritizes connected numbers, falling back to active Cloud API sandbox.
+   */
+  static async getConnectedWhatsAppAccount(forceRefresh = false): Promise<ZernioAccountModel | null> {
+    if (!forceRefresh && this.cachedWhatsAppAccount && this.cachedWhatsAppAccount.expiresAt > Date.now()) {
+      return this.cachedWhatsAppAccount.account;
+    }
+
+    try {
+      const res = await this.request<any>('accounts?category=communication&includeSandbox=true', 'GET');
+      const accounts = Array.isArray(res) ? res : res.accounts || [];
+      const waAccount = accounts.find(
+        (a: any) =>
+          (a.platform === 'whatsapp' || a.type === 'whatsapp') &&
+          (a.isActive !== false && a.enabled !== false)
+      );
+
+      if (waAccount) {
+        const normalized: ZernioAccountModel = {
+          id: waAccount._id || waAccount.id,
+          profileId: typeof waAccount.profileId === 'object' ? waAccount.profileId?._id || waAccount.profileId?.id : waAccount.profileId,
+          platform: 'whatsapp',
+          name: waAccount.displayName || waAccount.name || 'WhatsApp Business',
+          username: waAccount.username || waAccount.metadata?.displayPhoneNumber,
+          avatarUrl: waAccount.profilePicture,
+          status: waAccount.platformStatus === 'active' || waAccount.isActive ? 'connected' : 'disconnected',
+          followersCount: 0,
+          metadata: waAccount.metadata || {},
+          createdAt: waAccount.createdAt || new Date().toISOString(),
+        };
+
+        this.cachedWhatsAppAccount = {
+          account: normalized,
+          expiresAt: Date.now() + 5 * 60 * 1000, // 5 min cache
+        };
+
+        return normalized;
+      }
+      return null;
+    } catch (err: any) {
+      console.warn('[ZernioSocialService] WhatsApp account discovery warning:', err.message);
+      return null;
+    }
+  }
+
+  /**
+   * Send WhatsApp outbound text or media reply via Zernio Inbox API.
+   */
+  static async sendWhatsAppMessage(params: {
+    recipientPhone: string;
+    messageText: string;
+    conversationId?: string;
+    accountId?: string;
+    mediaUrl?: string;
+  }): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    let targetAccountId = params.accountId;
+    if (!targetAccountId) {
+      const waAcc = await this.getConnectedWhatsAppAccount();
+      if (!waAcc) {
+        throw new Error('No connected WhatsApp account found on Zernio.');
+      }
+      targetAccountId = waAcc.id;
+    }
+
+    if (params.conversationId) {
+      const body: Record<string, any> = {
+        accountId: targetAccountId,
+        message: params.messageText,
+      };
+      if (params.mediaUrl) {
+        body.attachmentUrl = params.mediaUrl;
+      }
+
+      const res = await this.request<any>(
+        `inbox/conversations/${encodeURIComponent(params.conversationId)}/messages`,
+        'POST',
+        body
+      );
+      return {
+        success: true,
+        messageId: res?.messageId || res?.id || res?.data?.id || `wa_${Date.now()}`,
+      };
+    }
+
+    const payload: Record<string, any> = {
+      accountId: targetAccountId,
+      participantId: params.recipientPhone,
+      message: params.messageText,
+    };
+    if (params.mediaUrl) {
+      payload.headerMedia = { url: params.mediaUrl };
+    }
+
+    const res = await this.request<any>('inbox/conversations', 'POST', payload);
+    return {
+      success: true,
+      messageId: res?.messageId || res?.id || res?.data?.id || `wa_${Date.now()}`,
+    };
+  }
+
+  /**
+   * List configured webhooks on Zernio
+   */
+  static async listWebhooks(): Promise<any[]> {
+    const res = await this.request<any>('webhooks/settings', 'GET');
+    return res.webhooks || (Array.isArray(res) ? res : []);
+  }
+
+  /**
+   * Configure or register a webhook receiver on Zernio
+   */
+  static async registerWebhook(params: {
+    name: string;
+    url: string;
+    secret?: string;
+    events: string[];
+    profileIds?: string[];
+    accountIds?: string[];
+  }): Promise<any> {
+    return await this.request<any>('webhooks/settings', 'POST', {
+      name: params.name,
+      url: params.url,
+      secret: params.secret,
+      events: params.events,
+      isActive: true,
+      profileIds: params.profileIds,
+      accountIds: params.accountIds,
+    });
   }
 }

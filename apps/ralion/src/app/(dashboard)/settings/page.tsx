@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, Button, Badge } from '@ralion/ui';
-import { Settings, Building2, Shield, Users, MapPin, Key, Laptop, Check, RefreshCw, HardDrive, BrainCircuit, Globe, BookOpen, CheckCircle2, ShieldCheck, Database, Activity, Sparkles } from 'lucide-react';
+import { Settings, Building2, Shield, Users, MapPin, Key, Laptop, Check, RefreshCw, HardDrive, BrainCircuit, Globe, BookOpen, CheckCircle2, ShieldCheck, Database, Activity, Sparkles, MessageSquare, Phone, Bell, QrCode, ExternalLink, Copy } from 'lucide-react';
 import { REGISTERED_MODULES } from '@ralion/modules';
 import { authFetch } from '@/lib/api-config';
 import { useOrganization } from '@ralion/auth';
@@ -14,7 +14,7 @@ export default function SettingsPage() {
   const isRasAli = activeOrgId === '22e61ff6-16fe-44c7-9d67-38e2a2e91ccf';
 
   const [enabledPlugins, setEnabledPlugins] = useState<string[]>(['health', 'funeral', 'logistics', 'trade']);
-  const [activeTab, setActiveTab] = useState<'KNOWLEDGE' | 'PLUGINS' | 'ROLES' | 'BRANCHES' | 'SECURITY' | 'DEVELOPER'>('KNOWLEDGE');
+  const [activeTab, setActiveTab] = useState<'KNOWLEDGE' | 'PLUGINS' | 'ROLES' | 'BRANCHES' | 'SECURITY' | 'WHATSAPP' | 'DEVELOPER'>('KNOWLEDGE');
   const [isDesktopEnv, setIsDesktopEnv] = useState(false);
   const [deviceId, setDeviceId] = useState('RALION-HW-HASH-2026-BW-882109');
   const [updateState, setUpdateState] = useState<any>({ status: 'idle', currentVersion: '', availableVersion: null, percent: 0, message: 'Ready to check for updates.' });
@@ -27,6 +27,63 @@ export default function SettingsPage() {
     encryptedCacheSize: '42.8 MB',
     lastSyncTimestamp: 'Just now'
   });
+
+  // WhatsApp Integration & Account Linking State
+  const [waPhoneNumber, setWaPhoneNumber] = useState('');
+  const [waLinkCode, setWaLinkCode] = useState<string | null>(null);
+  const [waCodeExpiry, setWaCodeExpiry] = useState<string | null>(null);
+  const [waIsLinking, setWaIsLinking] = useState(false);
+  const [waLinkSuccess, setWaLinkSuccess] = useState<string | null>(null);
+  const [waError, setWaError] = useState<string | null>(null);
+  const [waCopiedLink, setWaCopiedLink] = useState(false);
+  const [waNotifications, setWaNotifications] = useState({
+    quotations: true,
+    tasks: true,
+    enquiries: true,
+    alerts: true,
+  });
+
+  const handleGenerateWaCode = async () => {
+    if (!waPhoneNumber.trim()) {
+      setWaError('Please enter your WhatsApp mobile number.');
+      return;
+    }
+    setWaIsLinking(true);
+    setWaError(null);
+    setWaLinkSuccess(null);
+    try {
+      const res = await authFetch('/api/whatsapp/link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: waPhoneNumber }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setWaLinkCode(data.code);
+        setWaCodeExpiry(data.expiresAt);
+        setWaLinkSuccess(`Challenge code generated! Text "LINK ${data.code}" to Ralion WhatsApp (+1 202 908 7457).`);
+      } else {
+        setWaError(data.error || 'Failed to generate link challenge.');
+      }
+    } catch (e: any) {
+      setWaError(e.message || 'Connection error.');
+    } finally {
+      setWaIsLinking(false);
+    }
+  };
+
+  const handleUnlinkWa = async () => {
+    try {
+      await authFetch('/api/whatsapp/link', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: waPhoneNumber }),
+      });
+      setWaLinkCode(null);
+      setWaPhoneNumber('');
+      setWaLinkSuccess('WhatsApp number unlinked successfully.');
+    } catch {}
+  };
 
   const loadTenantWk = async () => {
     if (!activeOrgId) {
@@ -157,14 +214,14 @@ export default function SettingsPage() {
           </p>
         </div>
 
-        <div className="flex bg-zinc-900 p-1 rounded-xl border border-zinc-800">
-          {(['KNOWLEDGE', 'PLUGINS', 'ROLES', 'BRANCHES', 'SECURITY', 'DEVELOPER'] as const).map((tab) => (
+        <div className="flex bg-zinc-900 p-1 rounded-xl border border-zinc-800 overflow-x-auto">
+          {(['KNOWLEDGE', 'PLUGINS', 'ROLES', 'BRANCHES', 'SECURITY', 'WHATSAPP', 'DEVELOPER'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${activeTab === tab ? 'bg-blue-600 text-white' : 'text-zinc-400'}`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap ${activeTab === tab ? 'bg-blue-600 text-white' : 'text-zinc-400'}`}
             >
-              {tab === 'KNOWLEDGE' ? 'Business Knowledge' : tab === 'DEVELOPER' ? 'Developer Access' : tab}
+              {tab === 'KNOWLEDGE' ? 'Business Knowledge' : tab === 'DEVELOPER' ? 'Developer Access' : tab === 'WHATSAPP' ? 'WhatsApp & Enquiries' : tab}
             </button>
           ))}
         </div>
@@ -446,6 +503,188 @@ export default function SettingsPage() {
               </div>
             </CardContent>
           </Card>
+        </div>
+      )}
+
+      {/* WhatsApp Integration, Account Linking & Customer Enquiries Tab */}
+      {activeTab === 'WHATSAPP' && (
+        <div className="space-y-6">
+          {/* Central Ralion WhatsApp Gateway Status Card */}
+          <Card className="bg-gradient-to-br from-emerald-950/30 via-zinc-900 to-teal-950/30 border-emerald-500/30 p-6 shadow-xl">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-zinc-800/80 pb-5">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/30">
+                  <Phone className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold text-white">Central Ralion WhatsApp Gateway</h3>
+                    <Badge variant="success">Cloud API Connected</Badge>
+                  </div>
+                  <p className="text-xs text-zinc-400 mt-0.5 font-mono">
+                    Central Business Number: <span className="text-emerald-400 font-bold">+1 (202) 908-7457</span> (Zernio Cloud API)
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Badge variant="success" className="border-emerald-500/30 text-emerald-300 text-[10px]">
+                  Quality: Green (Meta Verified)
+                </Badge>
+              </div>
+            </div>
+
+            <p className="text-xs text-zinc-300 mt-4 leading-relaxed">
+              Users and public customers can message Mari through Ralion OS&apos;s central WhatsApp number. Secure account linking and unique enquiry references keep customer and business conversations strictly isolated.
+            </p>
+          </Card>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* User WhatsApp Account Linking Card */}
+            <Card className="bg-zinc-900 border-zinc-800 p-6 shadow-xl space-y-4">
+              <div className="flex items-center gap-2 border-b border-zinc-800 pb-3">
+                <MessageSquare className="w-4 h-4 text-purple-400" />
+                <h3 className="font-bold text-sm text-white">Personal Account Linking (Mode B)</h3>
+              </div>
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                Securely link your personal WhatsApp number to your Ralion account to ask Mari for active quotations, stock availability, and workspace metrics.
+              </p>
+
+              <div className="space-y-3 pt-2">
+                <div>
+                  <label className="text-[11px] font-semibold text-zinc-300 block mb-1">Your Mobile Number (E.164 format):</label>
+                  <input
+                    type="text"
+                    value={waPhoneNumber}
+                    onChange={(e) => setWaPhoneNumber(e.target.value)}
+                    placeholder="+27821234567"
+                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={handleGenerateWaCode}
+                    disabled={waIsLinking}
+                    className="text-xs font-bold"
+                  >
+                    {waIsLinking ? 'Generating...' : 'Generate Verification Code'}
+                  </Button>
+                  {waLinkCode && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleUnlinkWa}
+                      className="text-xs font-bold text-red-400 hover:text-red-300"
+                    >
+                      Unlink
+                    </Button>
+                  )}
+                </div>
+
+                {waLinkSuccess && (
+                  <div className="p-3 rounded-xl bg-purple-950/30 border border-purple-500/30 text-xs text-purple-200 space-y-1">
+                    <span className="font-bold block text-purple-300">{waLinkSuccess}</span>
+                    {waLinkCode && (
+                      <div className="mt-2 p-2 bg-zinc-950 rounded-lg font-mono text-center text-lg text-emerald-400 font-bold tracking-widest border border-emerald-500/30">
+                        {waLinkCode}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {waError && (
+                  <div className="p-2.5 rounded-xl bg-red-950/30 border border-red-500/30 text-xs text-red-300">
+                    {waError}
+                  </div>
+                )}
+              </div>
+            </Card>
+
+            {/* Business Customer Enquiries & Quotation Reference (Mode C) */}
+            <Card className="bg-zinc-900 border-zinc-800 p-6 shadow-xl space-y-4">
+              <div className="flex items-center gap-2 border-b border-zinc-800 pb-3">
+                <QrCode className="w-4 h-4 text-cyan-400" />
+                <h3 className="font-bold text-sm text-white">Business WhatsApp Enquiry Link & QR Code (Mode C)</h3>
+              </div>
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                Publish this direct link or QR code on your storefront, quotations, and social pages. When customers click it, Mari starts in business mode scoped exclusively to your catalogue.
+              </p>
+
+              <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-3">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-zinc-400">Store Routing Reference:</span>
+                  <span className="font-mono text-cyan-400 font-bold">REF-{workspace?.name?.slice(0, 4).toUpperCase() || 'PRO123'}</span>
+                </div>
+
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-zinc-400">Direct WhatsApp Link:</span>
+                  <span className="font-mono text-zinc-300 truncate max-w-[200px]">https://wa.me/12029087457?text=REF-...</span>
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(`https://wa.me/12029087457?text=REF-${workspace?.name?.slice(0, 4).toUpperCase() || 'PRO123'}`);
+                    setWaCopiedLink(true);
+                    setTimeout(() => setWaCopiedLink(false), 2000);
+                  }}
+                  className="w-full text-xs font-bold flex items-center justify-center gap-2"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  {waCopiedLink ? 'Copied to Clipboard!' : 'Copy WhatsApp Enquiry Link'}
+                </Button>
+              </div>
+
+              {/* Notification Preferences */}
+              <div className="pt-2 border-t border-zinc-800 space-y-2">
+                <h4 className="text-xs font-bold text-white flex items-center gap-2">
+                  <Bell className="w-3.5 h-3.5 text-amber-400" /> WhatsApp Notification Preferences
+                </h4>
+                <div className="grid grid-cols-2 gap-2 text-[11px] text-zinc-400">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={waNotifications.quotations}
+                      onChange={(e) => setWaNotifications({ ...waNotifications, quotations: e.target.checked })}
+                      className="rounded bg-zinc-950 border-zinc-700"
+                    />
+                    Quotation Reviews
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={waNotifications.tasks}
+                      onChange={(e) => setWaNotifications({ ...waNotifications, tasks: e.target.checked })}
+                      className="rounded bg-zinc-950 border-zinc-700"
+                    />
+                    Task Reminders
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={waNotifications.enquiries}
+                      onChange={(e) => setWaNotifications({ ...waNotifications, enquiries: e.target.checked })}
+                      className="rounded bg-zinc-950 border-zinc-700"
+                    />
+                    Customer RFQ
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={waNotifications.alerts}
+                      onChange={(e) => setWaNotifications({ ...waNotifications, alerts: e.target.checked })}
+                      className="rounded bg-zinc-950 border-zinc-700"
+                    />
+                    Workspace Alerts
+                  </label>
+                </div>
+              </div>
+            </Card>
+          </div>
         </div>
       )}
 

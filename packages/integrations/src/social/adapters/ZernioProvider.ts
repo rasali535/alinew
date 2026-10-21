@@ -364,7 +364,14 @@ export class ZernioProvider extends SocialProvider {
    */
   async sendMessage(accessToken: string, message: SocialMessagePayload): Promise<SocialMessageResult> {
     try {
-      const accountId = message.accountId || (accessToken !== 'zernio_master' ? accessToken : undefined) || '6a82df7277555aae018b92b4';
+      const accountId = message.accountId || (accessToken && accessToken !== 'zernio_master' ? accessToken : undefined);
+      if (!accountId) {
+        return {
+          success: false,
+          status: 'FAILED',
+          error: 'No target account ID provided for message delivery. Refusing fallback to platform assets.',
+        };
+      }
       const res = await ZernioSocialService.sendInboxReply({
         conversationId: message.conversationId,
         message: message.messageText,

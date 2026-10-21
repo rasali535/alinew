@@ -4,6 +4,7 @@ import { ZernioSocialService } from '@ralion/integrations/server';
 import { AuditLoggerService } from '@/lib/services/auditLogger.service';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 import { getPrivilegedSupabase as getServiceSupabase } from '@/lib/supabase/server';
+import { RalionWhatsAppGatewayService } from '@/lib/services/whatsapp/ralionWhatsAppGateway.service';
 
 export const dynamic = 'force-dynamic';
 
@@ -92,6 +93,35 @@ export async function POST(request: NextRequest) {
     if (!isValid) {
       console.warn('[ZernioWebhook] Invalid signature received on webhook endpoint.');
       return corsJsonResponse({ success: false, error: 'Invalid HMAC signature' }, { status: 401 }, request);
+    }
+
+    // 2.1 Central WhatsApp Gateway Event Routing (Isolated from Social publishing)
+    const isWhatsApp =
+      payload.platform === 'whatsapp' ||
+      payload.data?.platform === 'whatsapp' ||
+      payload.channel === 'whatsapp' ||
+      payload.data?.channel === 'whatsapp' ||
+      (typeof eventType === 'string' && (eventType.startsWith('whatsapp.') || eventType.startsWith('whatsapp_')));
+
+    if (isWhatsApp) {
+      const waResult = await RalionWhatsAppGatewayService.handleInboundEvent(rawBody, signature);
+      await AuditLoggerService.log({
+        eventType: 'SOCIAL_WEBHOOK_RECEIVED',
+        eventCategory: 'META',
+        success: waResult.success,
+        metadata: {
+          provider: 'zernio',
+          channel: 'whatsapp',
+          mode: waResult.mode,
+          senderPhone: waResult.senderPhone,
+        },
+      });
+      return corsJsonResponse({
+        success: waResult.success,
+        channel: 'whatsapp',
+        processed: waResult.dispatched,
+        mode: waResult.mode,
+      }, undefined, request);
     }
 
     // Mutating events must resolve to a canonical tenant mapping. Never allow a
