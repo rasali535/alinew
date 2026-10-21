@@ -436,13 +436,15 @@ export class RetailEntitlementService {
       };
     }
     if (body) {
-      if (body.workspaceId && body.workspaceId !== context.workspace.id) {
+      const bodyWorkspace = body.workspaceId || body.workspace_id;
+      const bodyOrg = body.organizationId || body.organization_id;
+      if (bodyWorkspace && bodyWorkspace !== context.workspace.id) {
         return {
           valid: false,
           error: 'CROSS_WORKSPACE_REQUEST_DENIED: Request payload workspaceId does not match authenticated workspace.',
         };
       }
-      if (body.organizationId && body.organizationId !== context.organization.id) {
+      if (bodyOrg && bodyOrg !== context.organization.id) {
         return {
           valid: false,
           error: 'CROSS_ORGANIZATION_REQUEST_DENIED: Request payload organizationId does not match authenticated organization.',

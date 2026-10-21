@@ -19,48 +19,34 @@ import {
 import { RetailNavHeader } from '../components/RetailNavHeader';
 import { RetailAccessErrorCard, RetailErrorState } from '../components/RetailAccessErrorCard';
 import { authFetch } from '@/lib/api-config';
+import {
+  normalizeQuotations,
+  normalizeProducts,
+  NormalizedRetailQuotation,
+  NormalizedRetailProduct,
+  formatPrice,
+  safeLowerCase,
+} from '@/lib/retail/adapters';
 
 interface QuotationItem {
+  productId: string;
   product_id: string;
+  productName: string;
   product_name: string;
   quantity: number;
+  unitPrice: number;
   unit_price: number;
+  discountAmount: number;
   discount_amount: number;
+  taxRate: number;
   tax_rate: number;
+  lineTotal: number;
   line_total: number;
 }
 
-interface Quotation {
-  id: string;
-  quotation_number: string;
-  customer_name: string;
-  customer_phone?: string;
-  customer_email?: string;
-  subtotal: number;
-  tax_total: number;
-  discount_total: number;
-  grand_total: number;
-  currency: string;
-  status: 'draft' | 'sent' | 'accepted' | 'converted' | 'expired' | 'rejected';
-  valid_until: string;
-  notes?: string;
-  created_at: string;
-  converted_sale_id?: string;
-  items?: QuotationItem[];
-}
-
-interface Product {
-  id: string;
-  name: string;
-  sku: string;
-  selling_price: number;
-  current_stock: number;
-  unit_of_measure: string;
-}
-
 export default function RetailQuotationsPage() {
-  const [quotations, setQuotations] = useState<Quotation[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [quotations, setQuotations] = useState<NormalizedRetailQuotation[]>([]);
+  const [products, setProducts] = useState<NormalizedRetailProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorState, setErrorState] = useState<RetailErrorState | null>(null);
   const [search, setSearch] = useState('');
@@ -69,7 +55,7 @@ export default function RetailQuotationsPage() {
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const [selectedQuote, setSelectedQuote] = useState<Quotation | null>(null);
+  const [selectedQuote, setSelectedQuote] = useState<NormalizedRetailQuotation | null>(null);
   const [convertingId, setConvertingId] = useState<string | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
 
@@ -98,7 +84,7 @@ export default function RetailQuotationsPage() {
       }
       const data = await res.json();
       if (data.success) {
-        setQuotations(data.quotations || []);
+        setQuotations(normalizeQuotations(data.quotations || []));
       } else {
         setErrorState({
           status: 400,
@@ -123,7 +109,7 @@ export default function RetailQuotationsPage() {
       const res = await authFetch('/api/retail/products');
       const data = await res.json();
       if (data.success) {
-        setProducts(data.products || []);
+        setProducts(normalizeProducts(data.products || []));
       }
     } catch (e) {
       console.error('Failed to fetch products', e);
@@ -139,14 +125,17 @@ export default function RetailQuotationsPage() {
     const prod = products.find((p) => p.id === productId);
     if (!prod) return;
 
-    const existing = quoteItems.find((item) => item.product_id === prod.id);
+    const existing = quoteItems.find((item) => item.productId === prod.id || item.product_id === prod.id);
+    const sellingPrice = prod.sellingPrice ?? prod.selling_price;
+
     if (existing) {
       setQuoteItems(
         quoteItems.map((item) =>
-          item.product_id === prod.id
+          item.productId === prod.id || item.product_id === prod.id
             ? {
                 ...item,
                 quantity: item.quantity + 1,
+                lineTotal: (item.quantity + 1) * item.unitPrice,
                 line_total: (item.quantity + 1) * item.unit_price,
               }
             : item
@@ -156,13 +145,19 @@ export default function RetailQuotationsPage() {
       setQuoteItems([
         ...quoteItems,
         {
+          productId: prod.id,
           product_id: prod.id,
+          productName: prod.name,
           product_name: prod.name,
           quantity: 1,
-          unit_price: prod.selling_price,
+          unitPrice: sellingPrice,
+          unit_price: sellingPrice,
+          discountAmount: 0,
           discount_amount: 0,
+          taxRate: 0,
           tax_rate: 0,
-          line_total: prod.selling_price,
+          lineTotal: sellingPrice,
+          line_total: sellingPrice,
         },
       ]);
     }
@@ -174,22 +169,24 @@ export default function RetailQuotationsPage() {
       updated.splice(index, 1);
     } else {
       updated[index].quantity = quantity;
-      updated[index].line_total =
-        quantity * updated[index].unit_price - updated[index].discount_amount;
+      const total = quantity * updated[index].unitPrice - updated[index].discountAmount;
+      updated[index].lineTotal = total;
+      updated[index].line_total = total;
     }
     setQuoteItems(updated);
   };
 
   const updateItemPrice = (index: number, price: number) => {
     const updated = [...quoteItems];
+    updated[index].unitPrice = price;
     updated[index].unit_price = price;
-    updated[index].line_total =
-      updated[index].quantity * price - updated[index].discount_amount;
-    setQuoteItems(updated);
+    const total = updated[index].quantity * price - updated[index].discountAmount;
+    updated[index].lineTotal = total;
+    updated[index].line_total = total;
   };
 
   // Totals
-  const subtotal = quoteItems.reduce((acc, item) => acc + item.line_total, 0);
+  const subtotal = quoteItems.reduce((acc, item) => acc + item.lineTotal, 0);
   const grandTotal = subtotal; // tax included / exempt in demo
 
   const handleCreateQuotation = async (e: React.FormEvent) => {
@@ -207,19 +204,38 @@ export default function RetailQuotationsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          customerName,
           customer_name: customerName,
+          customerPhone,
           customer_phone: customerPhone,
+          customerEmail,
           customer_email: customerEmail,
+          validUntil: validUntil.toISOString(),
           valid_until: validUntil.toISOString(),
           notes: quoteNotes,
-          items: quoteItems,
+          items: quoteItems.map((item) => ({
+            productId: item.productId,
+            product_id: item.product_id,
+            productName: item.productName,
+            product_name: item.product_name,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            unit_price: item.unit_price,
+            discountAmount: item.discountAmount,
+            discount_amount: item.discount_amount,
+            taxRate: item.taxRate,
+            tax_rate: item.tax_rate,
+            lineTotal: item.lineTotal,
+            line_total: item.line_total,
+          })),
         }),
       });
 
       const data = await res.json();
       if (data.success) {
         setShowCreateModal(false);
-        setNotification(`Quotation ${data.quotation?.quotation_number || ''} created successfully in USD.`);
+        const quoteNum = data.quotation?.quotation_number || data.quotation?.quoteNumber || '';
+        setNotification(`Quotation ${quoteNum} created successfully in USD.`);
         setTimeout(() => setNotification(null), 4000);
         // Reset form
         setCustomerName('');
@@ -245,7 +261,8 @@ export default function RetailQuotationsPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setNotification(`Quotation converted to Sale #${data.sale?.sale_number || ''} with atomic inventory deduction!`);
+        const saleNum = data.sale?.sale_number || data.sale?.saleNumber || '';
+        setNotification(`Quotation converted to Sale #${saleNum} with atomic inventory deduction!`);
         setTimeout(() => setNotification(null), 5000);
         if (showDetailModal) setShowDetailModal(false);
         fetchQuotations();
@@ -260,9 +277,10 @@ export default function RetailQuotationsPage() {
   };
 
   const filteredQuotes = quotations.filter((q) => {
-    const matchesSearch =
-      q.customer_name.toLowerCase().includes(search.toLowerCase()) ||
-      q.quotation_number.toLowerCase().includes(search.toLowerCase());
+    const custName = safeLowerCase(q.customer_name || q.customerName);
+    const quoteNum = safeLowerCase(q.quotation_number || q.quoteNumber);
+    const s = safeLowerCase(search);
+    const matchesSearch = !s || custName.includes(s) || quoteNum.includes(s);
     const matchesStatus = statusFilter === 'all' || q.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -378,16 +396,16 @@ export default function RetailQuotationsPage() {
                   filteredQuotes.map((q) => (
                     <tr key={q.id} className="hover:bg-zinc-800/30 transition-colors">
                       <td className="py-3.5 px-4 font-mono font-medium text-emerald-400">
-                        {q.quotation_number}
+                        {q.quotation_number || q.quoteNumber || '—'}
                       </td>
                       <td className="py-3.5 px-4">
-                        <div className="font-medium text-zinc-100">{q.customer_name}</div>
-                        {q.customer_phone && (
-                          <div className="text-xs text-zinc-400">{q.customer_phone}</div>
+                        <div className="font-medium text-zinc-100">{q.customer_name || q.customerName}</div>
+                        {(q.customer_phone || q.customerPhone) && (
+                          <div className="text-xs text-zinc-400">{q.customer_phone || q.customerPhone}</div>
                         )}
                       </td>
                       <td className="py-3.5 px-4 text-right font-mono font-bold text-zinc-100">
-                        ${q.grand_total.toFixed(2)}
+                        {formatPrice(q.grand_total ?? q.totalAmount)}
                       </td>
                       <td className="py-3.5 px-4 text-center">
                         <span
@@ -405,7 +423,7 @@ export default function RetailQuotationsPage() {
                         </span>
                       </td>
                       <td className="py-3.5 px-4 text-xs text-zinc-400">
-                        {new Date(q.valid_until).toLocaleDateString()}
+                        {q.valid_until ? new Date(q.valid_until).toLocaleDateString() : '—'}
                       </td>
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-2">
@@ -497,22 +515,26 @@ export default function RetailQuotationsPage() {
                     <span className="text-zinc-500 font-mono">Catalog: {products.length} items</span>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {products.slice(0, 6).map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => handleAddItem(p.id)}
-                        className="p-2 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-emerald-500/50 text-left text-xs transition group"
-                      >
-                        <div className="font-medium text-zinc-200 group-hover:text-emerald-300 truncate">
-                          {p.name}
-                        </div>
-                        <div className="text-zinc-500 font-mono mt-0.5 flex justify-between">
-                          <span>${p.selling_price.toFixed(2)}</span>
-                          <span>Stock: {p.current_stock}</span>
-                        </div>
-                      </button>
-                    ))}
+                    {products.slice(0, 6).map((p) => {
+                      const price = p.sellingPrice ?? p.selling_price;
+                      const stock = p.currentStock ?? p.current_stock ?? 0;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => handleAddItem(p.id)}
+                          className="p-2 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-emerald-500/50 text-left text-xs transition group"
+                        >
+                          <div className="font-medium text-zinc-200 group-hover:text-emerald-300 truncate">
+                            {p.name}
+                          </div>
+                          <div className="text-zinc-500 font-mono mt-0.5 flex justify-between">
+                            <span>{formatPrice(price)}</span>
+                            <span>Stock: {stock}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -538,7 +560,7 @@ export default function RetailQuotationsPage() {
                       ) : (
                         quoteItems.map((item, idx) => (
                           <tr key={idx} className="hover:bg-zinc-800/20">
-                            <td className="p-2.5 font-medium text-zinc-200">{item.product_name}</td>
+                            <td className="p-2.5 font-medium text-zinc-200">{item.productName || item.product_name}</td>
                             <td className="p-2.5 text-center">
                               <input
                                 type="number"
@@ -553,13 +575,13 @@ export default function RetailQuotationsPage() {
                                 type="number"
                                 step="0.01"
                                 min="0"
-                                value={item.unit_price}
+                                value={item.unitPrice}
                                 onChange={(e) => updateItemPrice(idx, parseFloat(e.target.value) || 0)}
                                 className="w-20 bg-zinc-950 border border-zinc-700 rounded px-2 py-1 text-right font-mono text-zinc-100"
                               />
                             </td>
                             <td className="p-2.5 text-right font-mono font-bold text-emerald-400">
-                              ${item.line_total.toFixed(2)}
+                              {formatPrice(item.lineTotal)}
                             </td>
                             <td className="p-2.5 text-center">
                               <button
@@ -582,11 +604,11 @@ export default function RetailQuotationsPage() {
                   <div className="w-64 bg-zinc-950/80 p-3 rounded-xl border border-zinc-800 space-y-1.5 text-xs font-mono">
                     <div className="flex justify-between text-zinc-400">
                       <span>Subtotal:</span>
-                      <span>${subtotal.toFixed(2)}</span>
+                      <span>{formatPrice(subtotal)}</span>
                     </div>
                     <div className="flex justify-between font-bold text-sm text-zinc-100 pt-1 border-t border-zinc-800">
                       <span>Grand Total:</span>
-                      <span className="text-emerald-400">${grandTotal.toFixed(2)} USD</span>
+                      <span className="text-emerald-400">{formatPrice(grandTotal)} USD</span>
                     </div>
                   </div>
                 </div>
@@ -618,10 +640,10 @@ export default function RetailQuotationsPage() {
               <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
                 <div>
                   <h3 className="text-base font-bold text-zinc-100 font-mono">
-                    Quotation #{selectedQuote.quotation_number}
+                    Quotation #{selectedQuote.quotation_number || selectedQuote.quoteNumber || '—'}
                   </h3>
                   <p className="text-xs text-zinc-400">
-                    Customer: <span className="text-zinc-200">{selectedQuote.customer_name}</span>
+                    Customer: <span className="text-zinc-200">{selectedQuote.customer_name || selectedQuote.customerName}</span>
                   </p>
                 </div>
                 <button
@@ -635,11 +657,11 @@ export default function RetailQuotationsPage() {
               <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-850 space-y-3 font-mono text-xs">
                 <div className="grid grid-cols-2 gap-2 text-zinc-400">
                   <div>Status: <span className="text-emerald-400 uppercase font-bold">{selectedQuote.status}</span></div>
-                  <div>Valid Until: {new Date(selectedQuote.valid_until).toLocaleDateString()}</div>
+                  <div>Valid Until: {selectedQuote.valid_until ? new Date(selectedQuote.valid_until).toLocaleDateString() : '—'}</div>
                 </div>
                 <div className="pt-2 border-t border-zinc-800 flex justify-between text-base font-bold text-zinc-100">
                   <span>Total Amount (USD):</span>
-                  <span className="text-emerald-400">${selectedQuote.grand_total.toFixed(2)}</span>
+                  <span className="text-emerald-400">{formatPrice(selectedQuote.grand_total ?? selectedQuote.totalAmount)}</span>
                 </div>
               </div>
 

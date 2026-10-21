@@ -22,22 +22,16 @@ import {
 import { RetailNavHeader } from '../components/RetailNavHeader';
 import { RetailAccessErrorCard, RetailErrorState } from '../components/RetailAccessErrorCard';
 import { authFetch } from '@/lib/api-config';
-
-interface Expense {
-  id: string;
-  category: string;
-  amount: number;
-  currency: string;
-  payee: string;
-  payment_method: string;
-  reference_number?: string;
-  notes?: string;
-  expense_date: string;
-  created_at: string;
-}
+import {
+  normalizeExpenses,
+  formatPrice,
+  safeLowerCase,
+  safeReplace,
+  type NormalizedExpense,
+} from '@/lib/retail/adapters';
 
 export default function RetailExpensesPage() {
-  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [expenses, setExpenses] = useState<NormalizedExpense[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorState, setErrorState] = useState<RetailErrorState | null>(null);
   const [search, setSearch] = useState('');
@@ -74,7 +68,7 @@ export default function RetailExpensesPage() {
       }
       const data = await res.json();
       if (data.success) {
-        setExpenses(data.expenses || []);
+        setExpenses(normalizeExpenses(data.expenses));
       } else {
         setErrorState({
           status: 400,
@@ -100,21 +94,34 @@ export default function RetailExpensesPage() {
 
   const handleCreateExpense = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newExpense.amount <= 0) {
+    if (newExpense.amount <= 0 || !Number.isFinite(newExpense.amount)) {
       alert('Please enter a valid expense amount.');
       return;
     }
 
     try {
+      const canonicalPayload = {
+        category: newExpense.category,
+        amount: newExpense.amount,
+        payee: newExpense.payee,
+        paymentMethod: newExpense.payment_method,
+        payment_method: newExpense.payment_method,
+        referenceNumber: newExpense.reference_number,
+        reference_number: newExpense.reference_number,
+        notes: newExpense.notes,
+        expenseDate: newExpense.expense_date,
+        expense_date: newExpense.expense_date,
+      };
+
       const res = await authFetch('/api/retail/expenses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newExpense),
+        body: JSON.stringify(canonicalPayload),
       });
       const data = await res.json();
       if (data.success) {
         setShowAddModal(false);
-        setNotification(`Operating expense of $${newExpense.amount.toFixed(2)} USD logged successfully.`);
+        setNotification(`Operating expense of ${formatPrice(newExpense.amount)} logged successfully.`);
         setTimeout(() => setNotification(null), 4000);
         setNewExpense({
           category: 'Rent & Premises',
@@ -134,20 +141,24 @@ export default function RetailExpensesPage() {
     }
   };
 
-  const totalExpenses = expenses.reduce((acc, exp) => acc + exp.amount, 0);
+  const totalExpenses = expenses.reduce((acc, exp) => acc + (exp.amount || 0), 0);
 
   // Group by category
-  const categories = Array.from(new Set(expenses.map((e) => e.category)));
+  const categories = Array.from(new Set(expenses.map((e) => e.category).filter(Boolean)));
   const categoryTotals: { [cat: string]: number } = {};
   expenses.forEach((e) => {
-    categoryTotals[e.category] = (categoryTotals[e.category] || 0) + e.amount;
+    if (e.category) {
+      categoryTotals[e.category] = (categoryTotals[e.category] || 0) + (e.amount || 0);
+    }
   });
 
   const filteredExpenses = expenses.filter((e) => {
+    const q = search.trim().toLowerCase();
     const matchesSearch =
-      e.payee.toLowerCase().includes(search.toLowerCase()) ||
-      (e.reference_number && e.reference_number.toLowerCase().includes(search.toLowerCase())) ||
-      (e.notes && e.notes.toLowerCase().includes(search.toLowerCase()));
+      q === '' ||
+      safeLowerCase(e.payee).includes(q) ||
+      safeLowerCase(e.reference_number || e.referenceNumber).includes(q) ||
+      safeLowerCase(e.notes).includes(q);
     const matchesCategory = selectedCategory === 'all' || e.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
@@ -207,7 +218,7 @@ export default function RetailExpensesPage() {
           <div className="bg-zinc-900/60 border border-zinc-800/80 p-4 rounded-2xl">
             <div className="text-xs text-zinc-400 mb-1">Total Operating Expenses</div>
             <div className="text-2xl font-bold font-mono text-rose-400">
-              ${totalExpenses.toFixed(2)}
+              {formatPrice(totalExpenses)}
             </div>
             <div className="text-[11px] text-zinc-500 mt-1">USD • Excludes inventory purchases & payroll</div>
           </div>
@@ -224,7 +235,7 @@ export default function RetailExpensesPage() {
               {Object.keys(categoryTotals).sort((a, b) => categoryTotals[b] - categoryTotals[a])[0] || 'N/A'}
             </div>
             <div className="text-[11px] text-zinc-500 mt-1 font-mono">
-              ${(Object.values(categoryTotals).sort((a, b) => b - a)[0] || 0).toFixed(2)} USD
+              {formatPrice(Object.values(categoryTotals).sort((a, b) => b - a)[0] || 0)}
             </div>
           </div>
         </div>
@@ -237,7 +248,7 @@ export default function RetailExpensesPage() {
               className="px-3 py-1.5 rounded-xl bg-zinc-900/80 border border-zinc-800 text-xs flex items-center gap-2 whitespace-nowrap"
             >
               <span className="text-zinc-400">{cat}:</span>
-              <strong className="text-zinc-200 font-mono">${amt.toFixed(2)}</strong>
+              <strong className="text-zinc-200 font-mono">{formatPrice(amt)}</strong>
             </div>
           ))}
         </div>
@@ -303,27 +314,27 @@ export default function RetailExpensesPage() {
                   filteredExpenses.map((exp) => (
                     <tr key={exp.id} className="hover:bg-zinc-800/30 transition-colors">
                       <td className="py-3 px-4 text-xs font-mono text-zinc-400">
-                        {new Date(exp.expense_date).toLocaleDateString()}
+                        {exp.expense_date ? new Date(exp.expense_date).toLocaleDateString() : '—'}
                       </td>
                       <td className="py-3 px-4">
                         <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-zinc-800 text-zinc-300 border border-zinc-700/60">
-                          {exp.category}
+                          {exp.category || 'Uncategorized'}
                         </span>
                       </td>
                       <td className="py-3 px-4 font-medium text-zinc-200">
-                        {exp.payee}
+                        {exp.payee || '—'}
                         {exp.notes && (
                           <div className="text-xs text-zinc-500 font-sans mt-0.5">{exp.notes}</div>
                         )}
                       </td>
                       <td className="py-3 px-4 capitalize font-mono text-xs text-zinc-400">
-                        {exp.payment_method.replace('_', ' ')}
+                        {safeReplace(exp.payment_method || exp.paymentMethod, '_', ' ')}
                       </td>
                       <td className="py-3 px-4 font-mono text-xs text-zinc-500">
-                        {exp.reference_number || '—'}
+                        {exp.reference_number || exp.referenceNumber || '—'}
                       </td>
                       <td className="py-3 px-4 text-right font-mono font-bold text-rose-400">
-                        -${exp.amount.toFixed(2)}
+                        -{formatPrice(exp.amount)}
                       </td>
                     </tr>
                   ))

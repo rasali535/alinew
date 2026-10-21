@@ -22,6 +22,7 @@ import { RetailNavHeader } from './components/RetailNavHeader';
 import { RetailAccessErrorCard, RetailErrorState } from './components/RetailAccessErrorCard';
 import { RetailFinancialMetrics } from '@ralion/database';
 import { authFetch } from '@/lib/api-config';
+import { safeReplace } from '@/lib/retail/adapters';
 
 export default function RetailDashboardPage() {
   const [metrics, setMetrics] = useState<RetailFinancialMetrics | null>(null);
@@ -65,7 +66,7 @@ export default function RetailDashboardPage() {
       if (data.success) {
         setMetrics(data.metrics);
         if (data.entitlement?.effectiveRole) {
-          setRole(data.entitlement.effectiveRole.replace('_', ' '));
+          setRole(safeReplace(data.entitlement.effectiveRole, '_', ' '));
         }
         if (data.settings?.storeName) {
           setStoreName(data.settings.storeName);
@@ -346,7 +347,7 @@ export default function RetailDashboardPage() {
                 {metrics?.expenseBreakdown && metrics.expenseBreakdown.length > 0 ? (
                   metrics.expenseBreakdown.map((exp) => (
                     <div key={exp.category} className="flex items-center justify-between text-xs py-1.5 border-b border-zinc-800/60 last:border-0">
-                      <span className="text-zinc-300 font-medium capitalize">{exp.category.replace('_', ' ').toLowerCase()}</span>
+                      <span className="text-zinc-300 font-medium capitalize">{safeReplace(exp.category, '_', ' ').toLowerCase()}</span>
                       <span className="text-zinc-100 font-mono font-semibold">{formatUSD(exp.amount)}</span>
                     </div>
                   ))

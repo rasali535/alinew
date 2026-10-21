@@ -50,43 +50,74 @@ export async function POST(request: NextRequest) {
       return corsJsonResponse({ success: false, error: scopeCheck.error }, { status: 403 }, request);
     }
 
-    if (!body.customerName || !Array.isArray(body.items) || body.items.length === 0) {
+    if (!body || typeof body !== 'object') {
+      return corsJsonResponse({ success: false, error: 'Invalid JSON request body.' }, { status: 400 }, request);
+    }
+
+    const customerName = (body.customerName || body.customer_name || '').trim();
+    const rawItems = Array.isArray(body.items) ? body.items : [];
+
+    if (!customerName || rawItems.length === 0) {
       return corsJsonResponse({ success: false, error: 'Customer name and at least one item are required.' }, { status: 400 }, request);
     }
 
     const quoteId = body.id || `quote_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const quoteNumber = body.quoteNumber || `Q-${Date.now().toString().slice(-6)}`;
+    const quoteNumber = body.quoteNumber || body.quotation_number || `Q-${Date.now().toString().slice(-6)}`;
 
     let subtotal = 0;
     let taxTotal = 0;
     let discountTotal = 0;
 
-    const quoteItems: RetailQuoteItem[] = body.items.map((it: any) => {
-      const lineSubtotal = Number(it.quantity) * Number(it.unitPrice);
-      const lineDiscount = lineSubtotal * ((Number(it.discountRate) || 0) / 100);
+    const quoteItems: RetailQuoteItem[] = [];
+    for (const it of rawItems) {
+      const quantity = Number(it.quantity ?? 1);
+      const unitPriceRaw = it.unitPrice !== undefined ? it.unitPrice : it.unit_price;
+
+      if (
+        unitPriceRaw === undefined ||
+        unitPriceRaw === null ||
+        typeof unitPriceRaw === 'boolean' ||
+        isNaN(Number(unitPriceRaw)) ||
+        !Number.isFinite(Number(unitPriceRaw)) ||
+        Number(unitPriceRaw) < 0
+      ) {
+        return corsJsonResponse(
+          { success: false, error: `Invalid unitPrice for item ${it.productName || it.product_name || it.productId || ''}: must be a valid non-negative number.` },
+          { status: 400 },
+          request
+        );
+      }
+
+      const unitPrice = Number(unitPriceRaw);
+      const unitCost = Number(it.unitCost ?? it.unit_cost ?? 0) || 0;
+      const discountRate = Number(it.discountRate ?? it.discount_rate ?? it.discount_amount ?? 0) || 0;
+      const taxRate = Number(it.taxRate ?? it.tax_rate ?? 0) || 0;
+
+      const lineSubtotal = quantity * unitPrice;
+      const lineDiscount = lineSubtotal * (discountRate / 100);
       const taxable = lineSubtotal - lineDiscount;
-      const lineTax = taxable * ((Number(it.taxRate) || 0) / 100);
+      const lineTax = taxable * (taxRate / 100);
       const lineTotal = taxable + lineTax;
 
       subtotal += lineSubtotal;
       discountTotal += lineDiscount;
       taxTotal += lineTax;
 
-      return {
+      quoteItems.push({
         id: `qi_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
         quotationId: quoteId,
-        productId: it.productId,
-        productName: it.productName,
-        sku: it.sku,
-        description: it.description || it.productName || 'Hardware Item',
-        quantity: Number(it.quantity) || 1,
-        unitPrice: Number(it.unitPrice) || 0,
-        unitCost: Number(it.unitCost) || 0,
-        discountRate: Number(it.discountRate) || 0,
-        taxRate: Number(it.taxRate) || 0,
+        productId: it.productId || it.product_id,
+        productName: it.productName || it.product_name || 'Hardware Item',
+        sku: it.sku || 'SKU-ITEM',
+        description: it.description || it.productName || it.product_name || 'Hardware Item',
+        quantity,
+        unitPrice,
+        unitCost,
+        discountRate,
+        taxRate,
         lineTotal,
-      };
-    });
+      });
+    }
 
     const totalAmount = subtotal - discountTotal + taxTotal;
 
@@ -95,17 +126,17 @@ export async function POST(request: NextRequest) {
       organizationId: context.organization.id,
       workspaceId: context.workspace.id,
       quoteNumber,
-      customerId: body.customerId,
-      customerName: body.customerName.trim(),
-      customerPhone: body.customerPhone,
-      customerEmail: body.customerEmail,
+      customerId: body.customerId || body.customer_id,
+      customerName,
+      customerPhone: body.customerPhone || body.customer_phone,
+      customerEmail: body.customerEmail || body.customer_email,
       status: body.status || 'SENT',
       currency: 'USD',
       subtotal,
       taxTotal,
       discountTotal,
       totalAmount,
-      validUntil: body.validUntil || new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+      validUntil: body.validUntil || body.valid_until || new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString().slice(0, 10),
       notes: body.notes,
       createdBy: context.user.id,
       items: quoteItems,

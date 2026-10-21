@@ -50,28 +50,57 @@ export async function POST(request: NextRequest) {
       return corsJsonResponse({ success: false, error: scopeCheck.error }, { status: 403 }, request);
     }
 
-    if (!body.category || !body.payee || body.amount === undefined) {
-      return corsJsonResponse({ success: false, error: 'Category, payee, and amount are required.' }, { status: 400 }, request);
+    if (!body || typeof body !== 'object') {
+      return corsJsonResponse({ success: false, error: 'Invalid JSON request body.' }, { status: 400 }, request);
     }
 
-    const expenseNumber = body.expenseNumber || `EXP-${Date.now().toString().slice(-6)}`;
+    const category = body.category ? String(body.category).trim() : '';
+    const payee = body.payee ? String(body.payee).trim() : '';
+    const amountRaw = body.amount;
+
+    if (!category || !payee) {
+      return corsJsonResponse({ success: false, error: 'Category and payee are required.' }, { status: 400 }, request);
+    }
+
+    if (
+      amountRaw === undefined ||
+      amountRaw === null ||
+      amountRaw === '' ||
+      typeof amountRaw === 'boolean' ||
+      isNaN(Number(amountRaw)) ||
+      !Number.isFinite(Number(amountRaw)) ||
+      Number(amountRaw) <= 0
+    ) {
+      return corsJsonResponse(
+        { success: false, error: 'Valid positive numeric amount is required for expense.' },
+        { status: 400 },
+        request
+      );
+    }
+
+    const amount = Number(amountRaw);
+    const taxAmount = Number(body.taxAmount ?? body.tax_amount ?? 0) || 0;
+    const paymentMethod = body.paymentMethod || body.payment_method || 'BANK_TRANSFER';
+    const expenseDate = body.expenseDate || body.expense_date || new Date().toISOString().slice(0, 10);
+    const expenseNumber = body.expenseNumber || body.reference_number || body.expense_number || `EXP-${Date.now().toString().slice(-6)}`;
+
     const expense: RetailExpense = {
       id: body.id || `exp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       organizationId: context.organization.id,
       workspaceId: context.workspace.id,
       expenseNumber,
-      category: body.category,
-      payee: body.payee.trim(),
-      amount: Number(body.amount) || 0,
-      taxAmount: Number(body.taxAmount) || 0,
+      category: category as any,
+      payee,
+      amount,
+      taxAmount,
       currency: 'USD',
-      paymentMethod: body.paymentMethod || 'BANK_TRANSFER',
-      expenseDate: body.expenseDate || new Date().toISOString().slice(0, 10),
+      paymentMethod,
+      expenseDate,
       status: body.status || 'APPROVED',
       approvedBy: context.user.id,
-      receiptUrl: body.receiptUrl,
+      receiptUrl: body.receiptUrl || body.receipt_url,
       notes: body.notes,
-      isPilotDemo: Boolean(body.isPilotDemo),
+      isPilotDemo: Boolean(body.isPilotDemo || body.is_pilot_demo),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };

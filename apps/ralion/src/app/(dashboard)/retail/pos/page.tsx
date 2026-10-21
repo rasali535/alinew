@@ -22,17 +22,23 @@ import {
 import { RetailNavHeader } from '../components/RetailNavHeader';
 import { RetailAccessErrorCard, RetailErrorState } from '../components/RetailAccessErrorCard';
 import { authFetch } from '@/lib/api-config';
-import { RetailProduct, RetailCashierShift, RetailSale } from '@ralion/database';
+import { RetailCashierShift, RetailSale } from '@ralion/database';
+import {
+  normalizeProducts,
+  formatPrice,
+  safeLowerCase,
+  type NormalizedProduct,
+} from '@/lib/retail/adapters';
 
 interface CartItem {
-  product: RetailProduct;
+  product: NormalizedProduct;
   quantity: number;
   unitPrice: number;
   discountRate: number;
 }
 
 export default function RetailPOSPage() {
-  const [products, setProducts] = useState<RetailProduct[]>([]);
+  const [products, setProducts] = useState<NormalizedProduct[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [barcodeInput, setBarcodeInput] = useState('');
@@ -73,7 +79,7 @@ export default function RetailPOSPage() {
 
       const prodData = await prodRes.json();
       if (prodData.success) {
-        setProducts(prodData.products || []);
+        setProducts(normalizeProducts(prodData.products));
       }
 
       const shiftData = await shiftRes.json();
@@ -105,7 +111,7 @@ export default function RetailPOSPage() {
   };
 
   // Add product to cart
-  const addToCart = (product: RetailProduct) => {
+  const addToCart = (product: NormalizedProduct) => {
     setCart((prev) => {
       const existing = prev.find((item) => item.product.id === product.id);
       if (existing) {
@@ -128,7 +134,7 @@ export default function RetailPOSPage() {
     setBarcodeInput('');
 
     // Check local loaded products first
-    const matched = products.find((p) => p.barcode === barcode || p.sku.toLowerCase() === barcode.toLowerCase());
+    const matched = products.find((p) => (p.barcode && p.barcode === barcode) || safeLowerCase(p.sku) === barcode.toLowerCase());
     if (matched) {
       addToCart(matched);
       return;
@@ -139,7 +145,7 @@ export default function RetailPOSPage() {
       const res = await authFetch(`/api/retail/products?barcode=${encodeURIComponent(barcode)}`);
       const data = await res.json();
       if (data.success && data.product) {
-        addToCart(data.product);
+        addToCart(normalizeProducts([data.product])[0]);
       } else {
         alert(`No product found for barcode: ${barcode}`);
       }
@@ -278,15 +284,16 @@ export default function RetailPOSPage() {
 
   const filteredProducts = products.filter((p) => {
     const matchesCat = selectedCategory === 'ALL' || p.category === selectedCategory;
+    const q = searchQuery.trim().toLowerCase();
     const matchesQuery =
-      searchQuery === '' ||
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (p.barcode && p.barcode.includes(searchQuery));
+      q === '' ||
+      safeLowerCase(p.name).includes(q) ||
+      safeLowerCase(p.sku).includes(q) ||
+      Boolean(p.barcode && p.barcode.includes(q));
     return matchesCat && matchesQuery;
   });
 
-  const categories = ['ALL', ...Array.from(new Set(products.map((p) => p.category)))];
+  const categories = ['ALL', ...Array.from(new Set(products.map((p) => p.category).filter(Boolean)))];
 
   if (errorState) {
     return (
