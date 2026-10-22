@@ -16,6 +16,8 @@ import {
   type MariBusinessIntelligenceSnapshot,
 } from '../../../../lib/services/mari/mariBusinessIntelligence.service';
 import { MariCreditsService } from '../../../../lib/services/mari/mariCredits.service';
+import { RetailEntitlementService } from '../../../../lib/services/retail/retailEntitlement.service';
+import { getServiceSupabase } from '../../../../lib/auth/serverAuth';
 import { MariKnowledgeRetrievalService } from '../../../../lib/services/mari/mariKnowledgeRetrieval.service';
 
 setMariFacebookPageService(FacebookPageManagementService);
@@ -286,6 +288,80 @@ export async function POST(request: NextRequest) {
 
     const requestId = body.requestId || `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const { mode: capabilityMode, intent: detectedIntent } = classifyCapabilityMode(cleanQuery);
+
+    // Deterministic, tenant-scoped Retail inventory answers: never substitute model guesses.
+    const inventoryQuestion = /\\b(stock|inventory|in\\s+stock|on\\s+hand|how\\s+many|available\\s+(?:units?|pieces?))\\b/i.test(cleanQuery)
+      && /\\b(stock|inventory|pipes?|products?|items?|units?|pieces?|available)\\b/i.test(cleanQuery)
+      && !/\\b(stock\\s+market|share\\s+price|stock\\s+exchange)\\b/i.test(cleanQuery);
+    if (inventoryQuestion) {
+      const retail = await RetailEntitlementService.verifyEntitlement(serverCtx);
+      if (!retail.isEntitled || !retail.canAccessInventory) {
+        return corsJsonResponse({
+          success: false,
+          code: 'RETAIL_INVENTORY_ACCESS_DENIED',
+          error: 'Retail inventory access is not available for your current workspace or role.',
+        }, { status: 403 }, request);
+      }
+
+      const normalized = cleanQuery
+        .replace(/[^\\w\\s-]/g, ' ')
+        .replace(/\\b(how|many|much|do|does|we|have|currently|in|stock|inventory|on|hand|are|there|is|the|our|what|quantity|of|available|please|tell|me|units|pieces)\\b/gi, ' ')
+        .replace(/\\s+/g, ' ').trim();
+      if (!normalized) {
+        return corsJsonResponse({
+          success: true,
+          answer: 'Which product or SKU would you like me to check in Retail inventory?',
+          responseSource: 'retail_inventory_lookup',
+        }, undefined, request);
+      }
+      const db = getServiceSupabase();
+      // The existing authenticated context and RetailEntitlementService authorize both
+      // organization and workspace. Never derive tenant identity from the prompt/body.
+      const tokens = normalized.toLowerCase().split(/\\s+/).filter(Boolean);
+      const { data: products, error: productError } = await db
+        .from('retail_products')
+        .select('id, name, sku, is_pilot_demo, status')
+        .eq('organization_id', orgId)
+        .eq('workspace_id', workspaceId)
+        .eq('status', 'ACTIVE')
+        .limit(500);
+      if (productError) {
+        return corsJsonResponse({ success: false, code: 'RETAIL_INVENTORY_LOOKUP_FAILED', error: 'Retail inventory could not be read right now.' }, { status: 503 }, request);
+      }
+      const matches = (products || []).filter((p: any) => {
+        const haystack = String(p.name || '') + ' ' + String(p.sku || '');
+        return tokens.every(token => haystack.toLowerCase().includes(token));
+      }).slice(0, 25);
+      if (!matches.length) {
+        return corsJsonResponse({
+          success: true,
+          answer: `I couldn't find a matching active product for "${normalized}" in this workspace's Retail inventory.`,
+          responseSource: 'retail_inventory_lookup',
+        }, undefined, request);
+      }
+      const { data: stock, error: stockError } = await db
+        .from('retail_stock_levels')
+        .select('product_id, quantity_on_hand, quantity_reserved')
+        .eq('organization_id', orgId)
+        .eq('workspace_id', workspaceId)
+        .in('product_id', matches.map((p: any) => p.id));
+      if (stockError) {
+        return corsJsonResponse({ success: false, code: 'RETAIL_INVENTORY_LOOKUP_FAILED', error: 'Retail stock balances could not be read right now.' }, { status: 503 }, request);
+      }
+      const answers = matches.map((p: any) => {
+        const rows = (stock || []).filter((s: any) => s.product_id === p.id);
+        const onHand = rows.reduce((sum: number, s: any) => sum + Number(s.quantity_on_hand || 0), 0);
+        const reserved = rows.reduce((sum: number, s: any) => sum + Number(s.quantity_reserved || 0), 0);
+        const suffix = p.is_pilot_demo ? ' (pilot/demo inventory)' : '';
+        return `${p.name} [${p.sku}]: ${onHand - reserved} available, ${onHand} on hand, ${reserved} reserved${suffix}.`;
+      });
+      return corsJsonResponse({
+        success: true,
+        answer: answers.join('\\n'),
+        responseSource: 'retail_inventory_lookup',
+        contextSources: ['retail_products', 'retail_stock_levels'],
+      }, undefined, request);
+    }
 
     if (detectedIntent === 'GREETING') {
       const greetingResult = await MariUniversalCore.processQuery({
