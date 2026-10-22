@@ -13,10 +13,21 @@
 --    - Add grant_type ('VOUCHER', 'ADMIN_DIRECT')
 --    - Add granted_by_user_id (references auth.users)
 --    - Add reason (mandatory justification for audit logging)
--- 4. Atomic direct workspace grant stored procedure:
+-- 4. Atomic direct workspace grant stored procedure with comprehensive safeguards:
 --    - grant_workspace_trial_access(...)
---    - Single ACID transaction: validates tenant ownership, preserves active paid/pilot tiers,
---      upserts entitlements on (workspace_id, module_key), inserts redemption history, logs audit.
+--    - Single ACID transaction:
+--      * Validates organization and workspace existence
+--      * Row-level locking on workspace prevents concurrent grant race conditions
+--      * Enforces cross-tenant assignment rejection
+--      * Validates product module keys ('retail', 'trade')
+--      * Validates currency ('USD', 'BWP', 'ZAR', 'EUR', 'GBP')
+--      * Validates workspace mode ('CLEAN_WORKSPACE', 'DEMO_DATA')
+--      * Safeguards Proinsight pilot workspace against demo data seeding
+--      * Safeguards active customer business records (products & sales) against demo seeding
+--      * Preserves active commercial paid (STANDARD, PROFESSIONAL, ENTERPRISE) & PILOT tiers
+--      * Atomically upserts entitlements on (workspace_id, module_key)
+--      * Records redemption history in trial_code_redemptions
+--      * Records immutable audit log entry in audit_logs
 -- =====================================================================
 
 -- 1. Security Hardening: Revoke public/authenticated execution on redeem_trial_access_code
@@ -72,6 +83,8 @@ DECLARE
     v_expires_at TIMESTAMPTZ;
     v_redemption_id UUID;
     v_existing RECORD;
+    v_clean_currency TEXT;
+    v_clean_mode TEXT;
 BEGIN
     -- 1. Validate mandatory parameters
     IF p_organization_id IS NULL OR p_workspace_id IS NULL THEN
@@ -86,11 +99,45 @@ BEGIN
         RAISE EXCEPTION 'INVALID_ARGUMENT: Trial duration must be between 1 and 365 days.';
     END IF;
 
+    -- Validate and normalize product module keys
     IF p_eligible_products IS NULL OR array_length(p_eligible_products, 1) = 0 THEN
         p_eligible_products := ARRAY['retail'];
     END IF;
 
+    FOR v_product IN SELECT unnest(p_eligible_products)
+    LOOP
+        IF v_product NOT IN ('retail', 'trade') THEN
+            RAISE EXCEPTION 'INVALID_ARGUMENT: Unsupported product module key ''%''. Allowed modules are ''retail'', ''trade''.', v_product;
+        END IF;
+    END LOOP;
+
+    -- Validate and normalize currency
+    v_clean_currency := UPPER(TRIM(COALESCE(p_currency, 'USD')));
+    IF v_clean_currency NOT IN ('USD', 'BWP', 'ZAR', 'EUR', 'GBP') THEN
+        RAISE EXCEPTION 'INVALID_ARGUMENT: Unsupported currency ''%''. Allowed currencies are USD, BWP, ZAR, EUR, GBP.', p_currency;
+    END IF;
+
+    -- Validate and normalize workspace mode
+    v_clean_mode := UPPER(TRIM(COALESCE(p_workspace_mode, 'CLEAN_WORKSPACE')));
+    IF v_clean_mode NOT IN ('CLEAN_WORKSPACE', 'DEMO_DATA') THEN
+        RAISE EXCEPTION 'INVALID_ARGUMENT: Unsupported workspace mode ''%''. Allowed modes are ''CLEAN_WORKSPACE'', ''DEMO_DATA''.', p_workspace_mode;
+    END IF;
+
     -- 2. Validate tenant-workspace relationship (strictly reject cross-tenant assignments)
+    IF NOT EXISTS (
+        SELECT 1 FROM public.organizations
+        WHERE id = p_organization_id
+    ) THEN
+        RAISE EXCEPTION 'INVALID_ARGUMENT: Target organization % does not exist.', p_organization_id;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM public.workspaces
+        WHERE id = p_workspace_id
+    ) THEN
+        RAISE EXCEPTION 'INVALID_WORKSPACE: Target workspace % does not exist.', p_workspace_id;
+    END IF;
+
     IF NOT EXISTS (
         SELECT 1 FROM public.workspaces
         WHERE id = p_workspace_id AND organization_id = p_organization_id
@@ -98,7 +145,35 @@ BEGIN
         RAISE EXCEPTION 'CROSS_TENANT_REJECTED: Workspace % does not belong to organization %.', p_workspace_id, p_organization_id;
     END IF;
 
-    -- 3. Preserve existing commercial paid and PILOT entitlements
+    -- Acquire row-level lock on workspace to serialize concurrent direct grants
+    PERFORM 1 FROM public.workspaces WHERE id = p_workspace_id FOR UPDATE;
+
+    -- 3. Live Business Record & Pilot Workspace Safeguards for DEMO_DATA mode
+    IF v_clean_mode = 'DEMO_DATA' THEN
+        -- Strictly guard Proinsight live pilot workspace against demo seeding
+        IF p_workspace_id = '67074e47-76bb-40e1-ae05-362e9cae8798'::UUID THEN
+            RAISE EXCEPTION 'SAFEGUARD_BLOCKED: Demo data seeding strictly denied for Proinsight live pilot workspace.';
+        END IF;
+
+        -- Check if workspace contains live non-demo retail products
+        IF EXISTS (
+            SELECT 1 FROM public.retail_products
+            WHERE workspace_id = p_workspace_id
+              AND (is_pilot_demo IS FALSE OR is_pilot_demo IS NULL)
+        ) THEN
+            RAISE EXCEPTION 'SAFEGUARD_BLOCKED: Destination workspace contains live customer products. Seeding demo data into an active business workspace is prohibited.';
+        END IF;
+
+        -- Check if workspace contains live sales records
+        IF EXISTS (
+            SELECT 1 FROM public.retail_sales
+            WHERE workspace_id = p_workspace_id
+        ) THEN
+            RAISE EXCEPTION 'SAFEGUARD_BLOCKED: Destination workspace contains live sales records. Seeding demo data into an active business workspace is prohibited.';
+        END IF;
+    END IF;
+
+    -- 4. Preserve existing commercial paid and PILOT entitlements
     FOR v_product IN SELECT unnest(p_eligible_products)
     LOOP
         SELECT * INTO v_existing
@@ -114,10 +189,10 @@ BEGIN
         END IF;
     END LOOP;
 
-    -- 4. Calculate expiration timestamp
+    -- 5. Calculate expiration timestamp
     v_expires_at := NOW() + (p_duration_days || ' days')::INTERVAL;
 
-    -- 5. Insert grant record into trial_code_redemptions atomically
+    -- 6. Insert grant record into trial_code_redemptions atomically
     INSERT INTO public.trial_code_redemptions (
         code_id,
         user_id,
@@ -144,7 +219,7 @@ BEGIN
         NOW()
     ) RETURNING id INTO v_redemption_id;
 
-    -- 6. Upsert entitlements for each eligible product using correct unique constraint (workspace_id, module_key)
+    -- 7. Upsert entitlements for each eligible product using correct unique constraint (workspace_id, module_key)
     FOR v_product IN SELECT unnest(p_eligible_products)
     LOOP
         INSERT INTO public.tenant_module_entitlements (
@@ -164,7 +239,7 @@ BEGIN
             'TRIAL',
             'ACTIVE',
             v_expires_at,
-            COALESCE(p_currency, 'USD'),
+            v_clean_currency,
             NOW(),
             NOW()
         )
@@ -176,7 +251,7 @@ BEGIN
             updated_at = NOW();
     END LOOP;
 
-    -- 7. Record immutable audit log entry
+    -- 8. Record immutable audit log entry
     INSERT INTO public.audit_logs (
         organization_id,
         user_id,
@@ -193,8 +268,8 @@ BEGIN
             'organizationId', p_organization_id,
             'eligibleProducts', p_eligible_products,
             'durationDays', p_duration_days,
-            'currency', p_currency,
-            'workspaceMode', p_workspace_mode,
+            'currency', v_clean_currency,
+            'workspaceMode', v_clean_mode,
             'reason', TRIM(p_reason),
             'notes', p_notes,
             'adminEmail', p_admin_email,
@@ -206,13 +281,13 @@ BEGIN
 
     RETURN jsonb_build_object(
         'success', true,
-        'message', format('Demo access granted successfully to workspace for %s days (%s).', p_duration_days, p_currency),
+        'message', format('Demo access granted successfully to workspace for %s days (%s).', p_duration_days, v_clean_currency),
         'workspaceId', p_workspace_id,
         'organizationId', p_organization_id,
         'eligibleProducts', p_eligible_products,
         'durationDays', p_duration_days,
-        'currency', p_currency,
-        'workspaceMode', p_workspace_mode,
+        'currency', v_clean_currency,
+        'workspaceMode', v_clean_mode,
         'expiresAt', v_expires_at,
         'redemptionId', v_redemption_id
     );
