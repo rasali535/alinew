@@ -290,9 +290,9 @@ export async function POST(request: NextRequest) {
     const { mode: capabilityMode, intent: detectedIntent } = classifyCapabilityMode(cleanQuery);
 
     // Deterministic, tenant-scoped Retail inventory answers: never substitute model guesses.
-    const inventoryQuestion = /\\b(stock|inventory|in\\s+stock|on\\s+hand|how\\s+many|available\\s+(?:units?|pieces?))\\b/i.test(cleanQuery)
-      && /\\b(stock|inventory|pipes?|products?|items?|units?|pieces?|available)\\b/i.test(cleanQuery)
-      && !/\\b(stock\\s+market|share\\s+price|stock\\s+exchange)\\b/i.test(cleanQuery);
+    const inventoryQuestion = /\b(stock|inventory|in\s+stock|on\s+hand|how\s+many|available\s+(?:units?|pieces?))\b/i.test(cleanQuery)
+      && /\b(stock|inventory|pipes?|products?|items?|units?|pieces?|available)\b/i.test(cleanQuery)
+      && !/\b(stock\s+market|share\s+price|stock\s+exchange)\b/i.test(cleanQuery);
     if (inventoryQuestion) {
       const retail = await RetailEntitlementService.verifyEntitlement(serverCtx);
       if (!retail.isEntitled || !retail.canAccessInventory) {
@@ -304,9 +304,9 @@ export async function POST(request: NextRequest) {
       }
 
       const normalized = cleanQuery
-        .replace(/[^\\w\\s-]/g, ' ')
-        .replace(/\\b(how|many|much|do|does|we|have|currently|in|stock|inventory|on|hand|are|there|is|the|our|what|quantity|of|available|please|tell|me|units|pieces)\\b/gi, ' ')
-        .replace(/\\s+/g, ' ').trim();
+        .replace(/[^\w\s-]/g, ' ')
+        .replace(/\b(how|many|much|do|does|we|have|currently|in|stock|inventory|on|hand|are|there|is|the|our|what|quantity|of|available|please|tell|me|units|pieces)\b/gi, ' ')
+        .replace(/\s+/g, ' ').trim();
       if (!normalized) {
         return corsJsonResponse({
           success: true,
@@ -317,7 +317,7 @@ export async function POST(request: NextRequest) {
       const db = getServiceSupabase();
       // The existing authenticated context and RetailEntitlementService authorize both
       // organization and workspace. Never derive tenant identity from the prompt/body.
-      const tokens = normalized.toLowerCase().split(/\\s+/).filter(Boolean);
+      const tokens = normalized.toLowerCase().split(/\s+/).filter(Boolean);
       const { data: products, error: productError } = await db
         .from('retail_products')
         .select('id, name, sku, is_pilot_demo, status')
@@ -357,7 +357,7 @@ export async function POST(request: NextRequest) {
       });
       return corsJsonResponse({
         success: true,
-        answer: answers.join('\\n'),
+        answer: answers.join('\n'),
         responseSource: 'retail_inventory_lookup',
         contextSources: ['retail_products', 'retail_stock_levels'],
       }, undefined, request);
