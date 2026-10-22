@@ -54,6 +54,26 @@ export const RetailNavHeader: React.FC<RetailNavHeaderProps> = ({
     }
   }, []);
 
+  // Standalone cashier machine: do not show admin navigation or demo-data seeding.
+  // Operational permissions remain enforced by server-side Retail APIs.
+  const isCashierTerminal = pathname === '/cashier' || pathname === '/ralion/cashier';
+  if (isCashierTerminal) {
+    return (
+      <header className="sticky top-0 z-30 border-b border-emerald-500/20 bg-zinc-900 px-5 py-3 text-zinc-100">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-lg font-bold">Ralion Retail • Cashier Terminal</h1>
+            <p className="text-xs text-zinc-400">Dedicated checkout workstation</p>
+          </div>
+          <div className="flex items-center gap-3 text-xs">
+            <span className="rounded-lg border border-zinc-700 px-3 py-2">POS</span>
+            <button type="button" onClick={() => window.location.reload()} className="rounded-lg bg-zinc-800 px-3 py-2 hover:bg-zinc-700">Refresh</button>
+          </div>
+        </div>
+      </header>
+    );
+  }
+
   const navLinks = [
     { label: 'Overview', href: '/retail', icon: <LayoutDashboard className="w-4 h-4" /> },
     { label: 'Point of Sale (POS)', href: '/retail/pos', icon: <ShoppingCart className="w-4 h-4" /> },
