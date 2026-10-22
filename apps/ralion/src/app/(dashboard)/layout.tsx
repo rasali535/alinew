@@ -9,6 +9,7 @@ import { ProductAccessGuard } from '../../components/ProductAccessGuard';
 import { DesktopWorkspaceHome } from '../../components/DesktopWorkspaceHome';
 import { MariConversationProvider, useMariConversation } from '@/context/MariConversationContext';
 import { isRetailPosRoute } from '@/lib/retail/posRoute';
+import { authFetch } from '@/lib/api-config';
 
 const MariAiDrawer = dynamic(
   () => import('../../components/MariAiDrawer').then((mod) => mod.MariAiDrawer),
@@ -97,42 +98,86 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
     });
   }, [organization?.id, workspace?.id]);
 
-  const [dbRetailEntitled, setDbRetailEntitled] = useState<boolean | null>(null);
+  // A trial is workspace-scoped. Never reuse a successful result after switching tenants.
+  const [dbRetailEntitled, setDbRetailEntitled] = useState<{
+    organizationId: string;
+    workspaceId: string;
+    isEntitled: boolean;
+  } | null>(null);
 
   useEffect(() => {
+    const organizationId = organization?.id;
+    const workspaceId = workspace?.id;
     let active = true;
-    if (!workspace?.id || !organization?.id) {
+    let latestRequest = 0;
+
+    if (!organizationId || !workspaceId) {
       setDbRetailEntitled(null);
       return;
     }
 
-    fetch('/api/retail/entitlement', { credentials: 'include' })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (active && data) {
-          setDbRetailEntitled(Boolean(data.isEntitled && data.status === 'ACTIVE'));
+    const verifyRetail = async () => {
+      const request = ++latestRequest;
+      try {
+        // authFetch attaches the verified bearer JWT, Hostinger proxy token mirror and
+        // authoritative workspace/organization hints. Plain fetch silently returned 401.
+        const url = `/api/retail/entitlement?workspaceId=${encodeURIComponent(workspaceId)}&organizationId=${encodeURIComponent(organizationId)}`;
+        const res = await authFetch(url, { cache: 'no-store' });
+        const data = await res.json().catch(() => null);
+        if (!active || request !== latestRequest) return;
+
+        if (!res.ok) {
+          console.warn('[RetailSidebar] Entitlement verification unavailable:', {
+            status: res.status,
+            code: typeof data?.code === 'string' ? data.code : 'API_ERROR',
+          });
         }
-      })
-      .catch(() => {
-        if (active) setDbRetailEntitled(null);
-      });
+        setDbRetailEntitled({
+          organizationId,
+          workspaceId,
+          isEntitled: Boolean(res.ok && data?.isEntitled === true && data?.status === 'ACTIVE'),
+        });
+      } catch (error) {
+        if (!active || request !== latestRequest) return;
+        console.warn('[RetailSidebar] Entitlement verification request failed.');
+        setDbRetailEntitled({ organizationId, workspaceId, isEntitled: false });
+      }
+    };
+
+    void verifyRetail();
+    const onFocus = () => void verifyRetail();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') void verifyRetail();
+    };
+    // Admin trial grants may occur while the customer is already logged in.
+    // Recheck on return to the tab and periodically, without requiring logout.
+    const onEntitlementUpdated = () => void verifyRetail();
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('ralion:retail-entitlement-updated', onEntitlementUpdated);
+    const refreshInterval = window.setInterval(() => void verifyRetail(), 60_000);
 
     return () => {
       active = false;
+      ++latestRequest;
+      window.clearInterval(refreshInterval);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('ralion:retail-entitlement-updated', onEntitlementUpdated);
     };
   }, [workspace?.id, organization?.id]);
 
   const isPlatformAdmin = user?.role === 'PLATFORM_ADMIN' || user?.email === 'ali@rasalilabs.com';
-  const isProinsightTenant =
-    organization?.id === '85ec9738-937a-41ee-b0df-ed752777447c' &&
-    workspace?.id === '67074e47-76bb-40e1-ae05-362e9cae8798';
   const enabledModules: string[] = Array.isArray(organization?.enabledModules)
     ? organization.enabledModules
     : ((organization as any)?.settings?.modules || []);
-  const hasRetailEntitlement =
-    dbRetailEntitled !== null
-      ? dbRetailEntitled || isPlatformAdmin || isProinsightTenant
-      : (isProinsightTenant || isPlatformAdmin || enabledModules.includes('retail'));
+  const hasRetailEntitlement = Boolean(
+    isPlatformAdmin ||
+    (dbRetailEntitled !== null &&
+      dbRetailEntitled.organizationId === organization?.id &&
+      dbRetailEntitled.workspaceId === workspace?.id &&
+      dbRetailEntitled.isEntitled)
+  );
   const hasTradeEntitlement = isPlatformAdmin || enabledModules.includes('trade');
   const orgBranding = organization?.branding ? {
     brandName: organization.name,
