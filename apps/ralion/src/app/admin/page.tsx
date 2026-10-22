@@ -547,9 +547,45 @@ export default function PlatformAdminPortal() {
         </div>
       </header>
 
-      <div className="border-b border-zinc-800 bg-zinc-900/30 px-5 py-2 overflow-x-auto"><div className="max-w-7xl mx-auto flex gap-1">{tabs.map(item => { const Icon = item.icon; return <button key={item.id} onClick={() => setTab(item.id)} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold whitespace-nowrap ${tab === item.id ? 'bg-indigo-600 text-white' : 'text-zinc-400 hover:bg-zinc-800'}`}><Icon className="w-3.5 h-3.5" />{item.label}</button>; })}</div></div>
+      <div className="mx-auto flex w-full max-w-[1680px] items-start">
+        <aside aria-label="Platform Command Centre navigation" className="sticky top-[81px] hidden h-[calc(100vh-81px)] w-64 shrink-0 flex-col border-r border-zinc-800/80 bg-zinc-950/80 px-3 py-6 lg:flex">
+          <div className="px-3 pb-5">
+            <div className="text-[10px] font-black uppercase tracking-[0.24em] text-indigo-400">Ras Ali Labs</div>
+            <div className="mt-1 text-sm font-semibold text-zinc-100">Platform Operations</div>
+            <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">Administrative tools · restricted access</p>
+          </div>
+          <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto" aria-label="Admin sections">
+            {tabs.map(item => {
+              const Icon = item.icon;
+              const selected = tab === item.id;
+              return (
+                <button key={item.id} type="button" aria-current={selected ? 'page' : undefined}
+                  onClick={() => setTab(item.id)}
+                  className={`group flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left text-xs font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400 ${selected ? 'border-indigo-500/40 bg-indigo-500/15 text-indigo-100' : 'border-transparent text-zinc-400 hover:bg-zinc-900 hover:text-white'}`}>
+                  <Icon className={`h-4 w-4 shrink-0 ${selected ? 'text-indigo-300' : 'text-zinc-500 group-hover:text-zinc-200'}`} />
+                  <span className="leading-snug">{item.label}</span>
+                  {selected && <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-400" aria-hidden="true" />}
+                </button>
+              );
+            })}
+          </nav>
+          <div className="mt-5 border-t border-zinc-800 px-3 pt-4 text-[11px] text-zinc-500">Workspace data remains tenant-scoped.</div>
+        </aside>
 
-      <main className="max-w-7xl mx-auto p-5 space-y-5">
+        <div className="min-w-0 flex-1">
+          <nav aria-label="Admin sections on smaller screens" className="sticky top-[81px] z-20 flex gap-1 overflow-x-auto border-b border-zinc-800 bg-zinc-950/95 px-4 py-3 backdrop-blur lg:hidden">
+            {tabs.map(item => {
+              const Icon = item.icon;
+              return (
+                <button key={item.id} type="button" onClick={() => setTab(item.id)}
+                  aria-current={tab === item.id ? 'page' : undefined}
+                  className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold whitespace-nowrap focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 ${tab === item.id ? 'bg-indigo-600 text-white' : 'bg-zinc-900 text-zinc-400 hover:text-white'}`}>
+                  <Icon className="h-3.5 w-3.5" />{item.label}
+                </button>
+              );
+            })}
+          </nav>
+          <main id="admin-command-centre-content" className="mx-auto w-full max-w-7xl space-y-5 p-4 sm:p-6">
         {error && <div className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-xs flex justify-between"><span>{error}</span><button onClick={() => setError(null)}>×</button></div>}
         {message && <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-xs flex justify-between"><span>{message}</span><button onClick={() => setMessage(null)}>×</button></div>}
         {loading && !metrics && <div className="py-24 text-center text-sm text-zinc-500"><RefreshCw className="w-6 h-6 animate-spin mx-auto mb-3" />Loading durable platform telemetry…</div>}
@@ -1284,7 +1320,9 @@ export default function PlatformAdminPortal() {
         {tab === 'system' && <section className="space-y-3"><div className="flex items-center justify-between"><div><h2 className="font-bold">System Health</h2><p className="text-xs text-zinc-500">PROBED means a live request ran. CONFIG_ONLY verifies configuration only and does not claim provider availability.</p></div><Pill text={overallHealth} status={overallHealth} /></div>{health.map(service => <div key={service.service} className="p-4 rounded-xl border border-zinc-800 bg-zinc-900/50 flex flex-col md:flex-row md:items-center justify-between gap-3"><div><div className="font-semibold text-sm">{service.service}</div><div className="text-[10px] text-zinc-500">{service.verification || 'PROBED'} · {service.latencyMs} ms · checked {new Date(service.lastChecked).toLocaleString()}</div>{service.lastError && <div className="text-[10px] text-amber-300 mt-1">{service.lastError}</div>}</div><Pill text={service.status} status={service.status} /></div>)}</section>}
 
         {tab === 'audit' && <section className="overflow-x-auto rounded-2xl border border-zinc-800"><table className="w-full text-xs"><thead className="bg-zinc-900 text-zinc-400"><tr><th className="p-3 text-left">Time</th><th className="p-3 text-left">Action</th><th className="p-3 text-left">Module</th><th className="p-3 text-left">Target</th><th className="p-3 text-left">Result / Reason</th></tr></thead><tbody className="divide-y divide-zinc-800">{auditLogs.map(log => <tr key={log.id}><td className="p-3 whitespace-nowrap">{new Date(log.timestamp || log.createdAt).toLocaleString()}</td><td className="p-3 font-mono text-indigo-300">{log.action}</td><td className="p-3">{log.module}</td><td className="p-3 font-mono text-[10px]">{log.targetType}: {log.targetId || '—'}</td><td className="p-3"><Pill text={log.result || 'SUCCESS'} status={log.result || 'SUCCESS'} /> <span className="text-zinc-500 ml-2">{log.reason || ''}</span></td></tr>)}{!auditLogs.length && <tr><td colSpan={5} className="p-10 text-center text-zinc-500">No durable audit events found.</td></tr>}</tbody></table></section>}
-      </main>
+          </main>
+        </div>
+      </div>
 
       {creditOrg && <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"><div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-950 p-5 space-y-4"><h3 className="font-bold">Adjust Tenant Credits</h3><p className="text-[10px] text-zinc-500 font-mono">{creditOrg}</p><input type="number" value={creditAmount} onChange={e => setCreditAmount(Number(e.target.value))} className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-sm" /><textarea value={creditReason} onChange={e => setCreditReason(e.target.value)} className="w-full min-h-24 px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs" /><div className="flex justify-end gap-2"><button onClick={() => setCreditOrg(null)} className="px-3 py-2 text-xs rounded-lg border border-zinc-700">Cancel</button><button onClick={() => void adjustCredits()} className="px-3 py-2 text-xs rounded-lg bg-indigo-600 font-bold">Apply Adjustment</button></div></div></div>}
 
