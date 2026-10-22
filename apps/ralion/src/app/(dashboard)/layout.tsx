@@ -132,6 +132,16 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
             code: typeof data?.code === 'string' ? data.code : 'API_ERROR',
           });
         }
+
+        const isAdmin = user?.role === 'PLATFORM_ADMIN' || user?.email === 'ali@rasalilabs.com';
+        if (res.ok && data?.isEntitled === true && data?.effectiveRole === 'CASHIER' && !isAdmin) {
+          const target = typeof window !== 'undefined' && window.location.pathname.startsWith('/ralion')
+            ? '/ralion/cashier'
+            : '/cashier';
+          router.replace(target);
+          return;
+        }
+
         setDbRetailEntitled({
           organizationId,
           workspaceId,

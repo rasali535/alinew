@@ -53,6 +53,15 @@ alinew/
 - **Strict JSON Contract**: Enforces JSON response types (`application/json`) across all HTTP statuses (`200`, `401`, `403`, `500`), preventing HTML rewrite parsing errors.
 - **Zero Cross-Tenant Leakage**: All analytics, CRM statistics, and audit logs are cryptographically scoped by tenant and workspace IDs.
 
+### 5. Ralion Retail Cashier Workstation (Issue #153)
+- **Dedicated POS Terminal**: Independent full-screen touch workstation (`/ralion/cashier` and `/cashier`) operating decoupled from the Ralion OS management dashboard.
+- **Fast Barcode & Touch Scanning**: Focus-first hardware barcode scanning with instant SKU/name lookup, touch category chips, and visual stock badges.
+- **Tender & Change Calculation**: Cash, external EFTPOS card, and bank transfer tender shortcuts with live change-due computation.
+- **Thermal 80mm Receipt Printing**: Physical receipt printing modal (`window.print()`) with clean POS receipt layouts.
+- **Manager-Controlled Overrides**: PIN-gated discounts (> 10%), cart voids, and security exception controls.
+- **Cashier-Specific Mari Assistant**: Non-blocking drawer assistant providing real-time stock checks, approved selling price inquiries (strictly masking confidential purchase costs), and deterministic walk-in quotation generation with 1-click cart loading and atomic quotation-to-sale conversion.
+- **Role Lockdown**: Server-enforced capability checks and client-level automatic redirection preventing staff with the `CASHIER` role from accessing administrative dashboard views.
+
 ---
 
 ## 💎 License & Subscription Tiers

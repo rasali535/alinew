@@ -30,6 +30,7 @@
     "test:whatsapp": "node ./scripts/verify-mari-whatsapp-gateway.js",
     "test:retail": "node ./scripts/verify-ralion-retail-hardware-store.js",
     "test:retail:contract": "node ./scripts/verify-retail-contract-alignment.js",
+    "test:retail:cashier": "node ./scripts/verify-retail-cashier-workstation.js",
     "test:retail:live-auth": "node ./scripts/verify-ralion-retail-live-auth-and-hydration.js",
     "test:retail:integration": "node ./scripts/test-retail-database-integration.js",
     "test:navigation": "node ./scripts/verify-navigation-and-admin-restructure.js",
