@@ -394,6 +394,11 @@ export default function CashierWorkstationPage() {
     const productItem = cart.find(i => i.product.id === productId);
     if (!productItem) return;
 
+    if (requestedDiscount > 50) {
+      alert('STORE POLICY LIMIT: Maximum allowable discount under store policy is 50%. Cannot request discount exceeding store ceiling.');
+      return;
+    }
+
     // Over 10% discount requires manager approval
     if (requestedDiscount > 10) {
       setPendingAction('DISCOUNT_OVERRIDE');
@@ -426,6 +431,12 @@ export default function CashierWorkstationPage() {
     setManagerApproving(true);
     setManagerPinError(null);
 
+    const projectedCartItems = cart.map((item) => ({
+      productId: item.product.id,
+      quantity: item.quantity,
+      discountRate: pendingAction === 'DISCOUNT_OVERRIDE' && pendingDiscountValue !== null ? pendingDiscountValue : item.discountRate || 0,
+    }));
+
     try {
       const res = await authFetch('/api/retail/pos/manager-approval', {
         method: 'POST',
@@ -437,6 +448,8 @@ export default function CashierWorkstationPage() {
           managerPassword: managerAuthMode === 'credentials' ? managerPassword : undefined,
           details: {
             discountRate: pendingDiscountValue,
+            terminalId,
+            cartItems: projectedCartItems,
           },
           reason: managerPinReason,
         }),

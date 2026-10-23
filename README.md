@@ -58,9 +58,20 @@ alinew/
 - **Fast Barcode & Touch Scanning**: Focus-first hardware barcode scanning with instant SKU/name lookup, touch category chips, and visual stock badges.
 - **Tender & Change Calculation**: Cash, external EFTPOS card, and bank transfer tender shortcuts with live change-due computation.
 - **Thermal 80mm Receipt Printing**: Physical receipt printing modal (`window.print()`) with clean POS receipt layouts.
-- **Manager-Controlled Overrides**: PIN-gated discounts (> 10%), cart voids, and security exception controls.
+- **Server-Enforced Manager Approvals**:
+  - Independent `POS_MANAGER_APPROVAL_SIGNING_SECRET` (minimum 32 characters; fails closed if missing or insecure).
+  - Cryptographic HMAC-SHA256 signed approval tokens with 5-minute TTL, strictly bound to tenant organization, workspace, cashier actor ID, terminal ID, and cart payload hash.
+  - Strict single-use nonce consumption rejecting replay attacks (`TOKEN_ALREADY_CONSUMED`).
+  - Salted KDF PIN verification using PBKDF2 (SHA-512, 100,000 iterations, 16-byte random salt, `<salt>:<hash>` format) with constant-time verification (`crypto.timingSafeEqual`) and anti-brute-force lockout (15 minutes after 5 consecutive failed attempts).
+  - Multi-tenant role verification against authoritative `workspace_members` schema.
+  - Mandatory durable security audit logging persisted to `security_audit_logs` (fails closed if audit persistence fails).
+  - Store policy discount ceiling (default 50% max) strictly enforced on the server.
+- **Authoritative Server Pricing & Payment Validation**:
+  - Authoritative currency derived from workspace Retail settings/entitlements.
+  - Server recalculates line subtotals, taxes, and grand totals directly from database product records, ignoring client-supplied unit prices or unit costs.
+  - Client payment totals are untrusted; checkout strictly verifies that total tendered covers the authoritative grand total (`INSUFFICIENT_PAYMENT` guard).
 - **Cashier-Specific Mari Assistant**: Non-blocking drawer assistant providing real-time stock checks, approved selling price inquiries (strictly masking confidential purchase costs), and deterministic walk-in quotation generation with 1-click cart loading and atomic quotation-to-sale conversion.
-- **Role Lockdown**: Server-enforced capability checks and client-level automatic redirection preventing staff with the `CASHIER` role from accessing administrative dashboard views.
+- **Server-Side Administrative Lockdown**: Management APIs (`expenses`, `payroll/runs`, `reports`, `demo-data`, `purchasing/orders`) independently deny access with HTTP 403 for `CASHIER` accounts, backed by client-level dashboard redirects.
 
 ---
 

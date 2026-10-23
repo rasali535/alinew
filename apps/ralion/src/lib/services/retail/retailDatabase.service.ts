@@ -646,7 +646,7 @@ export class RetailDatabaseService {
         cashierUserId: params.cashierUserId,
         cashierName: params.cashierName,
         status: 'COMPLETED',
-        currency: 'USD',
+        currency: params.currency,
         subtotal,
         taxTotal,
         discountTotal,
