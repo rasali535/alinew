@@ -50,11 +50,11 @@ export interface AtomicSaleParams {
   currency: RetailCurrency;
   items: Array<{
     productId: string;
-    productName: string;
-    sku: string;
+    productName?: string;
+    sku?: string;
     quantity: number;
-    unitPrice: number;
-    unitCost: number;
+    unitPrice?: number;
+    unitCost?: number;
     taxRate?: number;
     discountRate?: number;
   }>;

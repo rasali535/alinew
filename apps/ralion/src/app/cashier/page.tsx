@@ -121,9 +121,21 @@ export default function CashierWorkstationPage() {
   const [shiftClosingCash, setShiftClosingCash] = useState('0.00');
   const [shiftNotes, setShiftNotes] = useState('');
 
-  // Manager Approval Modal
+  // Lock / Unlock Screen State
+  const [unlockPassword, setUnlockPassword] = useState('');
+  const [unlockError, setUnlockError] = useState<string | null>(null);
+  const [unlockLoading, setUnlockLoading] = useState(false);
+
+  // Manager Approval Modal (Server-Verified & Action-Bound)
   const [showManagerPinModal, setShowManagerPinModal] = useState(false);
+  const [managerApprovalToken, setManagerApprovalToken] = useState<string | null>(null);
   const [managerPin, setManagerPin] = useState('');
+  const [managerEmail, setManagerEmail] = useState('');
+  const [managerPassword, setManagerPassword] = useState('');
+  const [managerAuthMode, setManagerAuthMode] = useState<'pin' | 'credentials'>('pin');
+  const [pendingAction, setPendingAction] = useState<'DISCOUNT_OVERRIDE' | 'CART_VOID' | 'REFUND'>('DISCOUNT_OVERRIDE');
+  const [pendingDiscountValue, setPendingDiscountValue] = useState<number>(0);
+  const [managerApproving, setManagerApproving] = useState(false);
   const [managerPinAction, setManagerPinAction] = useState<(() => void) | null>(null);
   const [managerPinReason, setManagerPinReason] = useState('');
   const [managerPinError, setManagerPinError] = useState<string | null>(null);
@@ -284,10 +296,34 @@ export default function CashierWorkstationPage() {
     }
   };
 
-  // Switch Cashier / Lock Station
-  const handleLockUnlock = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    setIsStationLocked(prev => !prev);
+  // Secure Workstation Unlock
+  const handleUnlockWorkstation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!unlockPassword.trim()) {
+      setUnlockError('Staff password is required to unlock terminal.');
+      return;
+    }
+    setUnlockLoading(true);
+    setUnlockError(null);
+    try {
+      const email = currentUser?.email;
+      if (!email) {
+        setIsStationLocked(false);
+        return;
+      }
+      const res = await AuthService.login(email, unlockPassword.trim());
+      if (res.user) {
+        setIsStationLocked(false);
+        setUnlockPassword('');
+        setUnlockError(null);
+      } else {
+        setUnlockError('Incorrect password. Terminal remains securely locked.');
+      }
+    } catch {
+      setUnlockError('Incorrect password. Terminal remains securely locked.');
+    } finally {
+      setUnlockLoading(false);
+    }
   };
 
   const handleCashierLogout = async () => {
@@ -297,6 +333,7 @@ export default function CashierWorkstationPage() {
       setCurrentUser(null);
       setCart([]);
       setActiveShift(null);
+      setManagerApprovalToken(null);
     } catch {
       window.location.reload();
     }
@@ -352,14 +389,16 @@ export default function CashierWorkstationPage() {
     setCart((prev) => prev.filter((item) => item.product.id !== productId));
   };
 
-  // Manager-Controlled Discount check
+  // Manager-Controlled Discount check (Server-enforced)
   const requestDiscountUpdate = (productId: string, requestedDiscount: number) => {
     const productItem = cart.find(i => i.product.id === productId);
     if (!productItem) return;
 
     // Over 10% discount requires manager approval
     if (requestedDiscount > 10) {
-      setManagerPinReason(`Manager approval required for ${requestedDiscount}% discount on "${productItem.product.name}" (Limit: 10%).`);
+      setPendingAction('DISCOUNT_OVERRIDE');
+      setPendingDiscountValue(requestedDiscount);
+      setManagerPinReason(`Manager approval required for ${requestedDiscount}% discount on "${productItem.product.name}" (Policy Limit: 10%).`);
       setManagerPinAction(() => () => {
         setCart(prev => prev.map(item => item.product.id === productId ? { ...item, discountRate: requestedDiscount } : item));
       });
@@ -371,24 +410,54 @@ export default function CashierWorkstationPage() {
 
   const requestVoidCart = () => {
     if (cart.length === 0) return;
+    setPendingAction('CART_VOID');
     setManagerPinReason('Manager approval required to void active cart transaction.');
     setManagerPinAction(() => () => {
       setCart([]);
       setTenderAmount('');
+      setManagerApprovalToken(null);
     });
     setShowManagerPinModal(true);
   };
 
-  const handleManagerPinSubmit = (e: React.FormEvent) => {
+  // Server-Verified Manager Approval Submit (Zero Client Hardcoded PINs)
+  const handleManagerApprovalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Default manager PIN for demo / emergency override or verified against manager role
-    if (managerPin === '1234' || managerPin === '9999' || currentUser?.role === 'admin' || currentUser?.role === 'owner') {
-      if (managerPinAction) managerPinAction();
-      setShowManagerPinModal(false);
-      setManagerPin('');
-      setManagerPinError(null);
-    } else {
-      setManagerPinError('Incorrect Manager PIN. Access denied.');
+    setManagerApproving(true);
+    setManagerPinError(null);
+
+    try {
+      const res = await authFetch('/api/retail/pos/manager-approval', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: pendingAction,
+          pin: managerAuthMode === 'pin' ? managerPin : undefined,
+          managerEmail: managerAuthMode === 'credentials' ? managerEmail : undefined,
+          managerPassword: managerAuthMode === 'credentials' ? managerPassword : undefined,
+          details: {
+            discountRate: pendingDiscountValue,
+          },
+          reason: managerPinReason,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success && data.approvalToken) {
+        setManagerApprovalToken(data.approvalToken);
+        if (managerPinAction) managerPinAction();
+        setShowManagerPinModal(false);
+        setManagerPin('');
+        setManagerEmail('');
+        setManagerPassword('');
+        setManagerPinError(null);
+      } else {
+        setManagerPinError(data.error || 'Server rejected manager authorization.');
+      }
+    } catch (err: any) {
+      setManagerPinError(err.message || 'Error communicating with manager approval service.');
+    } finally {
+      setManagerApproving(false);
     }
   };
 
@@ -469,10 +538,7 @@ export default function CashierWorkstationPage() {
           productName: item.product.name,
           sku: item.product.sku,
           quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          unitCost: item.product.purchaseCost,
-          discountRate: item.discountRate,
-          taxRate: item.product.vatRate || 0,
+          discountRate: item.discountRate || 0,
         })),
         payments: [
           {
@@ -481,6 +547,7 @@ export default function CashierWorkstationPage() {
             reference: `${paymentMethod} POS Payment (Terminal ${terminalId})`,
           },
         ],
+        managerApprovalToken: managerApprovalToken || undefined,
         idempotencyKey,
       };
 
@@ -489,6 +556,7 @@ export default function CashierWorkstationPage() {
         headers: {
           'Content-Type': 'application/json',
           'Idempotency-Key': idempotencyKey,
+          ...(managerApprovalToken ? { 'x-manager-approval-token': managerApprovalToken } : {}),
         },
         body: JSON.stringify(payload),
       });
@@ -499,6 +567,7 @@ export default function CashierWorkstationPage() {
         setSaleChangeDue(paymentMethod === 'CASH' ? changeDue : 0);
         setCart([]);
         setTenderAmount('');
+        setManagerApprovalToken(null);
         // Refresh catalogue stock
         void checkAuthAndLoad();
       } else {
@@ -859,25 +928,49 @@ export default function CashierWorkstationPage() {
           </div>
           <h2 className="text-lg font-bold text-white">Workstation Locked</h2>
           <p className="text-xs text-zinc-400 mt-1">Terminal {terminalId} • {currentUser?.displayName || currentUser?.email}</p>
-          <p className="text-[11px] text-zinc-500 mt-3">Press Unlock or enter PIN to resume checkout session.</p>
+          <p className="text-[11px] text-zinc-500 mt-2">Enter staff password to resume secure checkout session.</p>
 
-          <div className="mt-6 space-y-3">
+          {unlockError && (
+            <div role="alert" className="mt-3 rounded-lg border border-red-500/30 bg-red-950/40 p-2 text-xs text-red-300">
+              {unlockError}
+            </div>
+          )}
+
+          <form onSubmit={handleUnlockWorkstation} className="mt-4 space-y-3">
+            <input
+              type="password"
+              autoFocus
+              value={unlockPassword}
+              onChange={(e) => setUnlockPassword(e.target.value)}
+              placeholder="Enter password to unlock..."
+              className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500 text-center"
+            />
+
             <button
-              type="button"
-              onClick={() => setIsStationLocked(false)}
-              className="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+              type="submit"
+              disabled={unlockLoading}
+              className="w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
-              <Unlock className="w-4 h-4" />
-              <span>Unlock Workstation (F8)</span>
+              {unlockLoading ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Verifying Credentials...</span>
+                </>
+              ) : (
+                <>
+                  <Unlock className="w-4 h-4" />
+                  <span>Unlock Workstation</span>
+                </>
+              )}
             </button>
             <button
               type="button"
               onClick={handleCashierLogout}
-              className="w-full py-2 text-xs text-zinc-500 hover:text-zinc-300"
+              className="w-full py-1 text-xs text-zinc-500 hover:text-zinc-300 cursor-pointer"
             >
               Sign Out Cashier
             </button>
-          </div>
+          </form>
         </div>
       </div>
     );
@@ -1571,29 +1664,80 @@ export default function CashierWorkstationPage() {
             </p>
 
             {managerPinError && (
-              <div className="mb-3 text-xs text-red-400 font-semibold">{managerPinError}</div>
+              <div role="alert" className="mb-3 text-xs text-red-400 font-semibold bg-red-950/40 p-2.5 rounded-lg border border-red-500/30">
+                {managerPinError}
+              </div>
             )}
 
-            <form onSubmit={handleManagerPinSubmit} className="space-y-4">
-              <div>
-                <label className="block text-[11px] font-semibold text-zinc-400 mb-1">Enter Manager PIN</label>
-                <input
-                  type="password"
-                  autoFocus
-                  maxLength={6}
-                  value={managerPin}
-                  onChange={(e) => setManagerPin(e.target.value)}
-                  placeholder="••••"
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-2 text-center text-lg font-mono tracking-widest text-white focus:outline-none focus:border-amber-500"
-                />
-              </div>
+            {/* Auth Mode Toggle */}
+            <div className="flex rounded-lg bg-zinc-950 p-1 mb-4 border border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setManagerAuthMode('pin')}
+                className={`flex-1 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
+                  managerAuthMode === 'pin' ? 'bg-amber-600 text-white' : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                Manager PIN
+              </button>
+              <button
+                type="button"
+                onClick={() => setManagerAuthMode('credentials')}
+                className={`flex-1 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
+                  managerAuthMode === 'credentials' ? 'bg-amber-600 text-white' : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                Manager Password
+              </button>
+            </div>
 
-              <div className="flex gap-2">
+            <form onSubmit={handleManagerApprovalSubmit} className="space-y-4">
+              {managerAuthMode === 'pin' ? (
+                <div>
+                  <label className="block text-[11px] font-semibold text-zinc-400 mb-1">Enter 4-6 Digit Manager PIN</label>
+                  <input
+                    type="password"
+                    autoFocus
+                    maxLength={6}
+                    value={managerPin}
+                    onChange={(e) => setManagerPin(e.target.value)}
+                    placeholder="••••"
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-2 text-center text-lg font-mono tracking-widest text-white focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              ) : (
+                <div className="space-y-2.5 text-left">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-zinc-400 mb-1">Manager Email</label>
+                    <input
+                      type="email"
+                      value={managerEmail}
+                      onChange={(e) => setManagerEmail(e.target.value)}
+                      placeholder="manager@store.ralion.com"
+                      className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-zinc-400 mb-1">Manager Password</label>
+                    <input
+                      type="password"
+                      value={managerPassword}
+                      onChange={(e) => setManagerPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-1">
                 <button
                   type="button"
                   onClick={() => {
                     setShowManagerPinModal(false);
                     setManagerPin('');
+                    setManagerEmail('');
+                    setManagerPassword('');
                     setManagerPinError(null);
                   }}
                   className="flex-1 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-semibold cursor-pointer"
@@ -1602,9 +1746,17 @@ export default function CashierWorkstationPage() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold cursor-pointer"
+                  disabled={managerApproving}
+                  className="flex-1 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
-                  Approve Exception
+                  {managerApproving ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Verifying...</span>
+                    </>
+                  ) : (
+                    <span>Approve Exception</span>
+                  )}
                 </button>
               </div>
             </form>

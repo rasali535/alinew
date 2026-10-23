@@ -31,13 +31,32 @@ export async function GET(request: NextRequest) {
     const query = searchParams.get('q') || undefined;
     const barcode = searchParams.get('barcode') || undefined;
 
+    const isCashierOrRestricted = !entitlement.canAccessInventory || entitlement.effectiveRole === 'CASHIER';
+
     if (barcode) {
       const product = await RetailDatabaseService.getProductByBarcode(context.workspace.id, barcode);
+      if (product && isCashierOrRestricted) {
+        delete (product as any).purchase_cost;
+        delete (product as any).purchaseCost;
+        delete (product as any).unit_cost;
+        delete (product as any).unitCost;
+      }
       return corsJsonResponse({ success: true, product }, undefined, request);
     }
 
     const products = await RetailDatabaseService.listProducts(context.workspace.id, { category, query });
-    return corsJsonResponse({ success: true, products }, undefined, request);
+    const sanitizedProducts = isCashierOrRestricted
+      ? products.map((p) => {
+          const copy = { ...p } as any;
+          delete copy.purchase_cost;
+          delete copy.purchaseCost;
+          delete copy.unit_cost;
+          delete copy.unitCost;
+          return copy;
+        })
+      : products;
+
+    return corsJsonResponse({ success: true, products: sanitizedProducts }, undefined, request);
   } catch (err: any) {
     return corsJsonResponse({ success: false, error: err.message }, { status: 500 }, request);
   }
