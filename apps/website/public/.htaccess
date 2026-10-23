@@ -39,12 +39,16 @@ Options -Indexes +FollowSymLinks
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteRule ^admin/?.*$ /admin/index.html [L]
 
-  # 5. Ralion Next.js Sub-application (/ralion/...)
+  # 5. Direct Cashier Workstation routing (avoid directory slash redirect loops and marketing SPA interception)
+  RewriteRule ^cashier/?$ /ralion/cashier [R=301,L]
+  RewriteRule ^ralion/cashier/?$ /ralion/cashier.html [L]
+
+  # 6. Ralion Next.js Sub-application (/ralion/...)
   RewriteCond %{REQUEST_URI} ^/ralion [NC]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteRule ^ralion/?.*$ /ralion/index.html [L]
 
-  # 6. Root Marketing SPA Rewrite Rules
+  # 7. Root Marketing SPA Rewrite Rules
   RewriteRule ^index\.html$ - [L]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d

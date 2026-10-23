@@ -1,5 +1,9 @@
 DirectoryIndex index.html
 
+<IfModule mod_dir.c>
+  DirectorySlash Off
+</IfModule>
+
 Options -Indexes +FollowSymLinks
 
 <IfModule mod_authz_core.c>
@@ -21,6 +25,9 @@ Options -Indexes +FollowSymLinks
   # Use a relative substitution so this sub-app does not depend on a root-level
   # /api_proxy.php file being present in Hostinger's document root.
   RewriteRule ^api/(.*)$ api_proxy.php?__proxy_path=api/$1 [QSA,L]
+
+  # Direct route for Cashier Workstation (avoid mod_dir directory trailing slash 301 loop)
+  RewriteRule ^cashier/?$ cashier.html [L]
 
   # 2. Do NOT rewrite existing static assets
   RewriteCond %{REQUEST_URI} !^/ralion/api/ [NC]

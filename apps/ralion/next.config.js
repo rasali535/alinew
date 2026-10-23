@@ -91,6 +91,12 @@ const nextConfig = {
         basePath: false,
       },
       {
+        source: '/cashier',
+        destination: '/ralion/cashier',
+        permanent: false,
+        basePath: false,
+      },
+      {
         source: '/dashboard',
         destination: '/ralion/dashboard',
         permanent: false,

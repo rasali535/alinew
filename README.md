@@ -53,6 +53,35 @@ alinew/
 - **Strict JSON Contract**: Enforces JSON response types (`application/json`) across all HTTP statuses (`200`, `401`, `403`, `500`), preventing HTML rewrite parsing errors.
 - **Zero Cross-Tenant Leakage**: All analytics, CRM statistics, and audit logs are cryptographically scoped by tenant and workspace IDs.
 
+### 5. Ralion Retail Cashier Workstation (Issue #153)
+- **Dedicated POS Terminal**: Independent full-screen touch workstation (`/ralion/cashier` and `/cashier`) operating decoupled from the Ralion OS management dashboard.
+- **Fast Barcode & Touch Scanning**: Focus-first hardware barcode scanning with instant SKU/name lookup, touch category chips, and visual stock badges.
+- **Tender & Change Calculation**: Cash, external EFTPOS card, and bank transfer tender shortcuts with live change-due computation.
+- **Thermal 80mm Receipt Printing**: Physical receipt printing modal (`window.print()`) with clean POS receipt layouts.
+- **Server-Enforced Manager Approvals & Same-Transaction Nonce Claim**:
+  - Independent `POS_MANAGER_APPROVAL_SIGNING_SECRET` (minimum 32 characters; fails closed if missing or insecure).
+  - Cryptographic HMAC-SHA256 signed approval tokens with 5-minute TTL, strictly bound to tenant organization, workspace, cashier actor ID, mandatory terminal ID, and mandatory cart composition SHA-256 hash.
+  - **Single PostgreSQL Transaction Atomicity**: The approval token nonce is claimed, verified, and recorded in `retail_pos_consumed_tokens` inside the **SAME** ACID transaction (`execute_atomic_retail_sale`) as the sale, stock deduction, and payments. If two concurrent requests attempt to redeem the same approval token, PostgreSQL unique constraint violation (`23505`) rolls back the entire transaction atomically—guaranteeing that no duplicate discounted sale or double inventory deduction can ever occur.
+  - **Idempotency Preservation**: Safe retries of identical checkouts using the same `idempotencyKey` return the existing sale without re-executing token consumption or failing with replay errors.
+  - **Atomic Multi-Instance Rate Limiting**: Anti-brute-force lockout is managed via atomic PostgreSQL RPC `record_pos_failed_attempt` (`ON CONFLICT DO UPDATE` row-level lock) in table `retail_pos_lockouts`. Lockout status and failure recording **fail closed** if the database is unreachable, eliminating bypasses from process resets or in-memory undercounts.
+  - Salted KDF PIN verification using PBKDF2 (SHA-512, 100,000 iterations, 16-byte random salt, `<salt>:<hash>` format) with constant-time verification (`crypto.timingSafeEqual`). Plaintext PINs are strictly rejected.
+  - Multi-tenant role verification against authoritative `workspace_members` schema for `OWNER` or `ADMINISTRATOR` roles.
+  - Mandatory durable security audit logging persisted to `security_audit_logs` (fails closed if audit persistence fails).
+  - Store policy discount ceiling (50% max) strictly enforced on the server for all callers, including direct store owners and administrators.
+- **Authoritative Server Pricing & Database-Persisted Tender Settlement**:
+  - Authoritative currency derived from workspace Retail settings/entitlements.
+  - Server recalculates line subtotals, taxes, and grand totals directly from database product records, ignoring client-supplied unit prices or unit costs.
+  - Strict tender validation rejecting invalid, NaN, negative, or zero payment entries.
+  - Client payment totals are untrusted; checkout strictly verifies that total tendered covers the authoritative grand total (`INSUFFICIENT_PAYMENT` guard).
+  - **Database-Persisted Verifiable Settlement State**: External tenders (`CARD_EXTERNAL` or `BANK_TRANSFER`) lack automated settlement proof at the POS register and are recorded directly into `retail_sales(payment_status)` as `'PARTIAL'` with payment references tagged `[UNVERIFIED_EXTERNAL_SETTLEMENT: Pending Reconciliation]`. Pure cash tenders are recorded as `'PAID'`. The settlement status is enforced and persisted in the database transaction, not merely patched in the JSON response.
+- **Database Migrations & Dedicated Rollback Script Storage**:
+  - **Canonical Forward Migration**: `supabase/migrations/20261025000000_retail_pos_security_hardening.sql` (and mirrored in `packages/database/migrations/`) creates `retail_pos_consumed_tokens`, `retail_pos_lockouts`, `record_pos_failed_attempt`, and replaces `execute_atomic_retail_sale` with single-transaction approval nonce claim.
+  - **Privileged `SECURITY DEFINER` RPC Lockdown**: `REVOKE EXECUTE` from `PUBLIC`, `anon`, and `authenticated` on all privileged POS RPCs (`execute_atomic_retail_sale`, `record_pos_failed_attempt`, `reset_pos_lockout`, `execute_atomic_goods_receipt`, `execute_atomic_quotation_conversion`, `execute_atomic_sale_refund`). Only `service_role` is granted `EXECUTE`. Direct Supabase client RPC calls from browser/cashier devices are rejected with PostgreSQL error `42501` (permission denied), ensuring all checkouts and approvals must pass through the trusted Next.js server route.
+  - **Safe Rollback Script Location**: Stored strictly outside auto-applied migration folders in `docs/rollback/20261025000000_retail_pos_security_hardening_rollback.sql`. Supabase migration runners (`supabase db push`) only track canonical forward migrations, preventing accidental rollback execution or version collision. In the event of emergency rollback, the script can be manually applied via `psql -f docs/rollback/20261025000000_retail_pos_security_hardening_rollback.sql`.
+  - **CI Migration Replay**: The Retail POS security migration raises the expected public-table count from 125 to 127. `scripts/security/test-preview-migration-replay.mjs` also asserts the presence of `retail_pos_consumed_tokens` and `retail_pos_lockouts` so future schema omissions are caught.
+- **Cashier-Specific Mari Assistant**: Non-blocking drawer assistant providing real-time stock checks, approved selling price inquiries (strictly masking confidential purchase costs), and deterministic walk-in quotation generation with 1-click cart loading and atomic quotation-to-sale conversion.
+- **Server-Side Administrative Lockdown**: Management APIs (`expenses`, `payroll/runs`, `reports`, `demo-data`, `purchasing/orders`) independently deny access with HTTP 403 for `CASHIER` accounts, backed by client-level dashboard redirects.
+
 ---
 
 ## 💎 License & Subscription Tiers

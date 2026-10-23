@@ -289,13 +289,253 @@ export async function POST(request: NextRequest) {
     const requestId = body.requestId || `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const { mode: capabilityMode, intent: detectedIntent } = classifyCapabilityMode(cleanQuery);
 
-    // Deterministic, tenant-scoped Retail inventory answers: never substitute model guesses.
+    // Deterministic, tenant-scoped Retail inventory & price answers: never substitute model guesses.
     const inventoryQuestion = /\b(stock|instock|inventory|in\s+stock|on\s+hand|how\s+many|available\s+(?:units?|pieces?))\b/i.test(cleanQuery)
       && /\b(stock|instock|inventory|pipes?|products?|items?|units?|pieces?|available)\b/i.test(cleanQuery)
       && !/\b(stock\s+market|share\s+price|stock\s+exchange)\b/i.test(cleanQuery);
+
+    const priceQuestion = !inventoryQuestion && /\b(price|pricing|how\s+much\s+(?:is|for)|what\s+does\s+.*cost|rate\s+for)\b/i.test(cleanQuery)
+      && /\b(price|pricing|rate|pipe|elbow|connector|fitting|product|item|sku|board|cement|timber|wire|paint|nail|screw)\b/i.test(cleanQuery)
+      && !/\b(quotation|quote|estimate)\b/i.test(cleanQuery);
+
+    const quotationQuestion = /\b(quotation|quote|estimate|walk-in\s+quote|prepare\s+(?:a\s+)?quotation|create\s+(?:a\s+)?quotation|draft\s+(?:a\s+)?quote)\b/i.test(cleanQuery);
+
+    if (quotationQuestion) {
+      const retail = await RetailEntitlementService.verifyEntitlement(serverCtx);
+      if (!retail.isEntitled || (!retail.canAccessQuotations && !retail.canAccessPOS)) {
+        return corsJsonResponse({
+          success: false,
+          code: 'RETAIL_QUOTATIONS_ACCESS_DENIED',
+          error: 'Quotation drafting is not permitted for your current role.',
+        }, { status: 403 }, request);
+      }
+
+      const db = getServiceSupabase();
+      const { data: products, error: productError } = await db
+        .from('retail_products')
+        .select('id, name, sku, category, selling_price, vat_rate, min_selling_price, is_pilot_demo, status')
+        .eq('organization_id', orgId)
+        .eq('workspace_id', workspaceId)
+        .eq('status', 'ACTIVE')
+        .limit(500);
+
+      if (productError || !products) {
+        return corsJsonResponse({
+          success: false,
+          code: 'RETAIL_PRODUCTS_LOOKUP_FAILED',
+          error: 'Catalogue items could not be retrieved to draft quotation.',
+        }, { status: 503 }, request);
+      }
+
+      // Customer name extraction
+      const custMatch = cleanQuery.match(/\bfor\s+(?:customer|contractor|client|walk-in\s+customer)?\s*([A-Za-z0-9\s'-]+?)(?:[:,\n]|$|\bwith\b|\bfor\b|\b\d+\b)/i);
+      let customerName = custMatch && custMatch[1]?.trim() ? custMatch[1].trim() : 'Walk-in Customer';
+      if (/^(a|the|our|me)\b/i.test(customerName)) customerName = 'Walk-in Customer';
+
+      // Parse quantity and product terms
+      // Splits on commas, 'and', semicolons, newlines
+      const clauses = cleanQuery
+        .replace(/^(prepare|create|draft|make|give\s+me)\s+(a\s+)?(quotation|quote|estimate)\s+(for\s+.*?)?[:\n]?/i, '')
+        .split(/,|\band\b|;|\n/)
+        .map(c => c.trim())
+        .filter(Boolean);
+
+      const draftItems: Array<{
+        productId: string;
+        productName: string;
+        sku: string;
+        quantity: number;
+        unitPrice: number;
+        discountRate: number;
+        taxRate: number;
+        lineTotal: number;
+      }> = [];
+
+      const disambiguations: Array<{ queryTerm: string; matches: Array<{ id: string; name: string; sku: string; price: number }> }> = [];
+
+      for (const clause of clauses) {
+        const qtyMatch = clause.match(/(\d+)\s*(?:x\s*|units?\s+of\s+|pieces?\s+of\s+|pcs?\s+of\s+)?(.*)/i);
+        const quantity = qtyMatch ? Math.max(1, parseInt(qtyMatch[1], 10)) : 1;
+        const rawTerm = (qtyMatch ? qtyMatch[2] : clause)
+          .replace(/\b(for\s+customer\s+[A-Za-z0-9\s]+|walk-in|please|thanks)\b/gi, '')
+          .trim();
+
+        if (!rawTerm || rawTerm.length < 2) continue;
+
+        const termTokens = rawTerm.toLowerCase().split(/\s+/).filter(Boolean).map(t => t.endsWith('s') && t.length > 3 ? t.slice(0, -1) : t);
+        const matchedProducts = products.filter((p: any) => {
+          const haystack = `${p.name || ''} ${p.sku || ''} ${p.category || ''}`.toLowerCase();
+          return termTokens.every(tok => haystack.includes(tok));
+        });
+
+        if (matchedProducts.length === 1) {
+          const prod = matchedProducts[0];
+          const unitPrice = Number(prod.selling_price || 0);
+          const taxRate = Number(prod.vat_rate || 0);
+          const lineSubtotal = quantity * unitPrice;
+          const lineTax = lineSubtotal * (taxRate / 100);
+          const lineTotal = lineSubtotal + lineTax;
+
+          draftItems.push({
+            productId: prod.id,
+            productName: prod.name,
+            sku: prod.sku,
+            quantity,
+            unitPrice,
+            discountRate: 0,
+            taxRate,
+            lineTotal: Math.round(lineTotal * 100) / 100,
+          });
+        } else if (matchedProducts.length > 1) {
+          // Select closest match and offer disambiguations
+          const primary = matchedProducts[0];
+          const unitPrice = Number(primary.selling_price || 0);
+          const taxRate = Number(primary.vat_rate || 0);
+          const lineSubtotal = quantity * unitPrice;
+          const lineTax = lineSubtotal * (taxRate / 100);
+          const lineTotal = lineSubtotal + lineTax;
+
+          draftItems.push({
+            productId: primary.id,
+            productName: primary.name,
+            sku: primary.sku,
+            quantity,
+            unitPrice,
+            discountRate: 0,
+            taxRate,
+            lineTotal: Math.round(lineTotal * 100) / 100,
+          });
+
+          disambiguations.push({
+            queryTerm: rawTerm,
+            matches: matchedProducts.slice(0, 4).map((p: any) => ({
+              id: p.id,
+              name: p.name,
+              sku: p.sku,
+              price: Number(p.selling_price || 0),
+            })),
+          });
+        }
+      }
+
+      if (draftItems.length === 0) {
+        return corsJsonResponse({
+          success: true,
+          answer: `I could not match any catalogue products from your quotation request. Please specify the product name, SKU or quantities (e.g. "Prepare quotation for 10 copper pipes and 5 elbows for customer Sipho").`,
+          responseSource: 'retail_quotation_builder',
+        }, undefined, request);
+      }
+
+      const subtotal = draftItems.reduce((acc, it) => acc + (it.quantity * it.unitPrice), 0);
+      const taxTotal = draftItems.reduce((acc, it) => acc + ((it.quantity * it.unitPrice) * (it.taxRate / 100)), 0);
+      const totalAmount = subtotal + taxTotal;
+      const currency = retail.defaultCurrency || 'USD';
+
+      const quotationDraft = {
+        id: `quote_draft_${Date.now()}`,
+        customerName,
+        items: draftItems,
+        subtotal: Math.round(subtotal * 100) / 100,
+        taxTotal: Math.round(taxTotal * 100) / 100,
+        totalAmount: Math.round(totalAmount * 100) / 100,
+        currency,
+      };
+
+      const itemsTable = draftItems
+        .map(it => `• **${it.quantity}x** ${it.productName} [${it.sku}] @ $${it.unitPrice.toFixed(2)} = **$${it.lineTotal.toFixed(2)}**`)
+        .join('\n');
+
+      const textAnswer = [
+        `Here is the quotation draft for **${customerName}**:`,
+        '',
+        itemsTable,
+        '',
+        `• **Subtotal:** $${subtotal.toFixed(2)}`,
+        taxTotal > 0 ? `• **VAT/Tax:** $${taxTotal.toFixed(2)}` : null,
+        `• **Total Quotation Amount:** $${totalAmount.toFixed(2)} ${currency}`,
+        '',
+        'You can save this quotation, load it directly into the cashier cart, or convert it to a completed sale without re-entering products.',
+      ].filter(Boolean).join('\n');
+
+      return corsJsonResponse({
+        success: true,
+        answer: textAnswer,
+        quotationDraft,
+        disambiguations: disambiguations.length > 0 ? disambiguations : undefined,
+        responseSource: 'retail_quotation_builder',
+        contextSources: ['retail_products', 'retail_stock_levels'],
+      }, undefined, request);
+    }
+
+    if (priceQuestion) {
+      const retail = await RetailEntitlementService.verifyEntitlement(serverCtx);
+      if (!retail.isEntitled || (!retail.canAccessInventory && !retail.canAccessPOS)) {
+        return corsJsonResponse({
+          success: false,
+          code: 'RETAIL_PRICE_LOOKUP_DENIED',
+          error: 'Retail price lookup is not available for your current workspace or role.',
+        }, { status: 403 }, request);
+      }
+
+      const normalized = cleanQuery
+        .replace(/[^\w\s-]/g, ' ')
+        .replace(/\b(what|is|the|price|cost|how|much|rate|for|of|check|tell|me|a|an|please)\b/gi, ' ')
+        .replace(/\s+/g, ' ').trim();
+
+      const db = getServiceSupabase();
+      const tokens = normalized.toLowerCase().split(/\s+/).filter(Boolean).map(token => token.endsWith('s') && token.length > 3 ? token.slice(0, -1) : token);
+      const { data: products, error: productError } = await db
+        .from('retail_products')
+        .select('id, name, sku, selling_price, vat_rate, is_pilot_demo, status')
+        .eq('organization_id', orgId)
+        .eq('workspace_id', workspaceId)
+        .eq('status', 'ACTIVE')
+        .limit(500);
+
+      if (productError) {
+        return corsJsonResponse({ success: false, code: 'RETAIL_PRICE_LOOKUP_FAILED', error: 'Product prices could not be read right now.' }, { status: 503 }, request);
+      }
+
+      const matches = (products || []).filter((p: any) => {
+        const haystack = String(p.name || '') + ' ' + String(p.sku || '');
+        return tokens.every(token => haystack.toLowerCase().includes(token));
+      }).slice(0, 10);
+
+      if (!matches.length) {
+        return corsJsonResponse({
+          success: true,
+          answer: `I couldn't find an active catalogue item matching "${normalized}".`,
+          responseSource: 'retail_price_lookup',
+        }, undefined, request);
+      }
+
+      const { data: stock } = await db
+        .from('retail_stock_levels')
+        .select('product_id, quantity_on_hand, quantity_reserved')
+        .eq('organization_id', orgId)
+        .eq('workspace_id', workspaceId)
+        .in('product_id', matches.map((p: any) => p.id));
+
+      const priceAnswers = matches.map((p: any) => {
+        const rows = (stock || []).filter((s: any) => s.product_id === p.id);
+        const onHand = rows.reduce((sum: number, s: any) => sum + Number(s.quantity_on_hand || 0), 0);
+        const reserved = rows.reduce((sum: number, s: any) => sum + Number(s.quantity_reserved || 0), 0);
+        const available = onHand - reserved;
+        const price = Number(p.selling_price || 0).toFixed(2);
+        return `• **${p.name}** [${p.sku}]: **$${price}** (Approved Selling Price) — ${available} units available in stock.`;
+      });
+
+      return corsJsonResponse({
+        success: true,
+        answer: `Approved pricing and availability:\n\n${priceAnswers.join('\n')}`,
+        responseSource: 'retail_price_lookup',
+        contextSources: ['retail_products', 'retail_stock_levels'],
+      }, undefined, request);
+    }
+
     if (inventoryQuestion) {
       const retail = await RetailEntitlementService.verifyEntitlement(serverCtx);
-      if (!retail.isEntitled || !retail.canAccessInventory) {
+      if (!retail.isEntitled || (!retail.canAccessInventory && !retail.canAccessPOS)) {
         return corsJsonResponse({
           success: false,
           code: 'RETAIL_INVENTORY_ACCESS_DENIED',
@@ -320,7 +560,7 @@ export async function POST(request: NextRequest) {
       const tokens = normalized.toLowerCase().split(/\s+/).filter(Boolean).map(token => token.endsWith('s') && token.length > 3 ? token.slice(0, -1) : token);
       const { data: products, error: productError } = await db
         .from('retail_products')
-        .select('id, name, sku, is_pilot_demo, status')
+        .select('id, name, sku, selling_price, is_pilot_demo, status')
         .eq('organization_id', orgId)
         .eq('workspace_id', workspaceId)
         .eq('status', 'ACTIVE')
@@ -353,7 +593,8 @@ export async function POST(request: NextRequest) {
         const onHand = rows.reduce((sum: number, s: any) => sum + Number(s.quantity_on_hand || 0), 0);
         const reserved = rows.reduce((sum: number, s: any) => sum + Number(s.quantity_reserved || 0), 0);
         const suffix = p.is_pilot_demo ? ' (pilot/demo inventory)' : '';
-        return `${p.name} [${p.sku}]: ${onHand - reserved} available, ${onHand} on hand, ${reserved} reserved${suffix}.`;
+        const priceStr = p.selling_price != null ? ` at $${Number(p.selling_price).toFixed(2)}` : '';
+        return `${p.name} [${p.sku}]: ${onHand - reserved} available${priceStr}, ${onHand} on hand, ${reserved} reserved${suffix}.`;
       });
       return corsJsonResponse({
         success: true,

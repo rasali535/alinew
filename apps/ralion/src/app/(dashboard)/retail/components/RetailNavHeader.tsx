@@ -56,7 +56,8 @@ export const RetailNavHeader: React.FC<RetailNavHeaderProps> = ({
 
   // Standalone cashier machine: do not show admin navigation or demo-data seeding.
   // Operational permissions remain enforced by server-side Retail APIs.
-  const isCashierTerminal = pathname === '/cashier' || pathname === '/ralion/cashier';
+  const cleanPath = (pathname || '').replace(/\/+$/, '');
+  const isCashierTerminal = cleanPath === '/cashier' || cleanPath === '/ralion/cashier';
   if (isCashierTerminal) {
     return (
       <header className="sticky top-0 z-30 border-b border-emerald-500/20 bg-zinc-900 px-5 py-3 text-zinc-100">

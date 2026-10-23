@@ -50,11 +50,11 @@ export interface AtomicSaleParams {
   currency: RetailCurrency;
   items: Array<{
     productId: string;
-    productName: string;
-    sku: string;
+    productName?: string;
+    sku?: string;
     quantity: number;
-    unitPrice: number;
-    unitCost: number;
+    unitPrice?: number;
+    unitCost?: number;
     taxRate?: number;
     discountRate?: number;
   }>;
@@ -66,6 +66,14 @@ export interface AtomicSaleParams {
   idempotencyKey?: string;
   notes?: string;
   isPilotDemo?: boolean;
+  paymentStatus?: 'PAID' | 'PARTIAL' | 'UNPAID';
+  approvalToken?: {
+    tokenId: string;
+    action: string;
+    actionPayloadHash: string;
+    terminalId: string;
+    expiresAt: number;
+  };
 }
 
 export interface AtomicReceiveParams {
@@ -592,7 +600,26 @@ export class RetailDatabaseService {
 
     const totalAmount = subtotal - discountTotal + taxTotal;
     const paidAmount = params.payments.reduce((sum, p) => sum + p.amount, 0);
-    const paymentStatus = paidAmount >= totalAmount ? 'PAID' : paidAmount > 0 ? 'PARTIAL' : 'UNPAID';
+
+    const hasUnverifiedExternalTender = params.payments.some(
+      (p) => p.paymentMethod === 'CARD_EXTERNAL' || p.paymentMethod === 'BANK_TRANSFER'
+    );
+
+    // Strict verifiable settlement state determination:
+    let paymentStatus: 'PAID' | 'PARTIAL' | 'UNPAID';
+    if (params.paymentStatus) {
+      paymentStatus = params.paymentStatus;
+    } else if (hasUnverifiedExternalTender) {
+      paymentStatus = paidAmount > 0 ? 'PARTIAL' : 'UNPAID';
+    } else {
+      paymentStatus = paidAmount >= totalAmount ? 'PAID' : paidAmount > 0 ? 'PARTIAL' : 'UNPAID';
+    }
+
+    // Invariant: External unverified tender CAN NEVER be recorded as PAID in DB
+    if (hasUnverifiedExternalTender && paymentStatus === 'PAID') {
+      paymentStatus = 'PARTIAL';
+    }
+
     const primaryPaymentMethod = params.payments.length > 1 ? 'SPLIT' : params.payments[0]?.paymentMethod || 'CASH';
 
     const paymentsPayload = params.payments.map((p) => ({
@@ -626,6 +653,13 @@ export class RetailDatabaseService {
       p_items: itemsPayload,
       p_payments: paymentsPayload,
       p_is_pilot_demo: params.isPilotDemo || false,
+      p_approval_token_id: params.approvalToken?.tokenId || null,
+      p_approval_action: params.approvalToken?.action || null,
+      p_approval_action_payload_hash: params.approvalToken?.actionPayloadHash || null,
+      p_approval_terminal_id: params.approvalToken?.terminalId || null,
+      p_approval_expires_at: params.approvalToken?.expiresAt
+        ? new Date(params.approvalToken.expiresAt).toISOString()
+        : null,
     });
 
     if (rpcError) {
@@ -646,7 +680,7 @@ export class RetailDatabaseService {
         cashierUserId: params.cashierUserId,
         cashierName: params.cashierName,
         status: 'COMPLETED',
-        currency: 'USD',
+        currency: params.currency,
         subtotal,
         taxTotal,
         discountTotal,
