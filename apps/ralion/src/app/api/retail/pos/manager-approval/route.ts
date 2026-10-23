@@ -39,6 +39,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Mandatory Workstation Terminal Binding (FAIL-CLOSED)
+    const terminalId = details?.terminalId;
+    if (!terminalId || typeof terminalId !== 'string' || !terminalId.trim()) {
+      return corsJsonResponse(
+        { success: false, error: 'TERMINAL_BINDING_REQUIRED: Terminal ID is required to bind manager approval to workstation.' },
+        { status: 400 },
+        request
+      );
+    }
+
     // 1. Server-Side Policy Enforcements by Action
     const storeMaxDiscountCeiling = 50; // Store policy ceiling (50% max)
     let maxDiscountRate: number | undefined = undefined;
@@ -67,23 +77,28 @@ export async function POST(request: NextRequest) {
       }
       maxDiscountRate = requestedDiscount;
 
-      // Bind to cart hash or cart items if supplied by POS terminal
-      if (details?.cartItems && Array.isArray(details.cartItems)) {
-        actionPayloadHash = crypto
-          .createHash('sha256')
-          .update(
-            JSON.stringify(
-              details.cartItems.map((i: any) => ({
-                productId: String(i.productId),
-                quantity: Math.max(1, Number(i.quantity || 1)),
-                discountRate: Math.max(0, Math.min(100, Number(i.discountRate || 0))),
-              }))
-            )
-          )
-          .digest('hex');
-      } else if (details?.cartHash) {
-        actionPayloadHash = String(details.cartHash);
+      // Mandatory server-validated cart composition
+      const cartItems = details?.cartItems;
+      if (!cartItems || !Array.isArray(cartItems) || cartItems.length === 0) {
+        return corsJsonResponse(
+          { success: false, error: 'CART_COMPOSITION_REQUIRED: Complete cart items must be provided to bind approval to cart state.' },
+          { status: 400 },
+          request
+        );
       }
+
+      actionPayloadHash = crypto
+        .createHash('sha256')
+        .update(
+          JSON.stringify(
+            cartItems.map((i: any) => ({
+              productId: String(i.productId),
+              quantity: Math.max(1, Number(i.quantity || 1)),
+              discountRate: Math.max(0, Math.min(100, Number(i.discountRate || 0))),
+            }))
+          )
+        )
+        .digest('hex');
     } else if (action === 'CART_VOID') {
       if (!reason || String(reason).trim().length < 5) {
         return corsJsonResponse(
@@ -92,9 +107,27 @@ export async function POST(request: NextRequest) {
           request
         );
       }
-      if (details?.cartHash) {
-        actionPayloadHash = String(details.cartHash);
+      const cartItems = details?.cartItems;
+      if (!cartItems || !Array.isArray(cartItems) || cartItems.length === 0) {
+        return corsJsonResponse(
+          { success: false, error: 'CART_COMPOSITION_REQUIRED: Complete cart items must be provided to void cart transaction.' },
+          { status: 400 },
+          request
+        );
       }
+
+      actionPayloadHash = crypto
+        .createHash('sha256')
+        .update(
+          JSON.stringify(
+            cartItems.map((i: any) => ({
+              productId: String(i.productId),
+              quantity: Math.max(1, Number(i.quantity || 1)),
+              discountRate: Math.max(0, Math.min(100, Number(i.discountRate || 0))),
+            }))
+          )
+        )
+        .digest('hex');
     } else if (action === 'REFUND') {
       const originalSaleId = details?.originalSaleId;
       const refundAmount = Number(details?.refundAmount || 0);
@@ -156,6 +189,14 @@ export async function POST(request: NextRequest) {
         .digest('hex');
     }
 
+    if (!actionPayloadHash) {
+      return corsJsonResponse(
+        { success: false, error: 'UNBOUND_ACTION_HASH: Failed to compute authoritative action payload hash.' },
+        { status: 400 },
+        request
+      );
+    }
+
     // 2. Server-Side Manager Credential Verification
     const verification = await PosManagerApprovalService.verifyManagerCredentials({
       workspaceId: context.workspace.id,
@@ -182,11 +223,11 @@ export async function POST(request: NextRequest) {
       details: {
         ...(details || {}),
         actionPayloadHash,
-        terminalId: details?.terminalId,
+        terminalId: terminalId.trim(),
       },
     });
 
-    // 4. Token Issuance Bound to Actor, Organization, Action, and Cart Hash
+    // 4. Token Issuance Bound to Actor, Organization, Action, Terminal, and Cart Hash
     const approvalToken = PosManagerApprovalService.createApprovalToken({
       workspaceId: context.workspace.id,
       organizationId: context.organization.id,
@@ -194,7 +235,7 @@ export async function POST(request: NextRequest) {
       approvedByUserId: verification.approvedByUserId,
       action,
       maxDiscountRate,
-      terminalId: details?.terminalId,
+      terminalId: terminalId.trim(),
       actionPayloadHash,
       reason,
       ttlSeconds: 300, // 5 minutes

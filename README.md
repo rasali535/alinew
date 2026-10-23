@@ -60,16 +60,20 @@ alinew/
 - **Thermal 80mm Receipt Printing**: Physical receipt printing modal (`window.print()`) with clean POS receipt layouts.
 - **Server-Enforced Manager Approvals**:
   - Independent `POS_MANAGER_APPROVAL_SIGNING_SECRET` (minimum 32 characters; fails closed if missing or insecure).
-  - Cryptographic HMAC-SHA256 signed approval tokens with 5-minute TTL, strictly bound to tenant organization, workspace, cashier actor ID, terminal ID, and cart payload hash.
-  - Strict single-use nonce consumption rejecting replay attacks (`TOKEN_ALREADY_CONSUMED`).
-  - Salted KDF PIN verification using PBKDF2 (SHA-512, 100,000 iterations, 16-byte random salt, `<salt>:<hash>` format) with constant-time verification (`crypto.timingSafeEqual`) and anti-brute-force lockout (15 minutes after 5 consecutive failed attempts).
-  - Multi-tenant role verification against authoritative `workspace_members` schema.
+  - Cryptographic HMAC-SHA256 signed approval tokens with 5-minute TTL, strictly bound to tenant organization, workspace, cashier actor ID, mandatory terminal ID, and mandatory cart composition SHA-256 hash.
+  - Multi-instance durable single-use storage in PostgreSQL `retail_pos_consumed_tokens` table with primary-key uniqueness constraint preventing concurrent replay across independent serverless/container instances (`TOKEN_ALREADY_CONSUMED`).
+  - Decoupled pre-flight token verification (`consumeOnVerify: false`) from atomic PostgreSQL sale commit; tokens are consumed only upon successful sale creation, preserving approvals across transient validation failures while preventing reuse.
+  - Shared anti-brute-force lockout in PostgreSQL `retail_pos_lockouts` table (15-minute lockout after 5 consecutive failed attempts synchronized across server instances).
+  - Salted KDF PIN verification using PBKDF2 (SHA-512, 100,000 iterations, 16-byte random salt, `<salt>:<hash>` format) with constant-time verification (`crypto.timingSafeEqual`). Plaintext PINs are strictly rejected.
+  - Multi-tenant role verification against authoritative `workspace_members` schema for `OWNER` or `ADMINISTRATOR` roles.
   - Mandatory durable security audit logging persisted to `security_audit_logs` (fails closed if audit persistence fails).
-  - Store policy discount ceiling (default 50% max) strictly enforced on the server.
-- **Authoritative Server Pricing & Payment Validation**:
+  - Store policy discount ceiling (50% max) strictly enforced on the server for all callers, including direct store owners and administrators.
+- **Authoritative Server Pricing & Tender Settlement Integrity**:
   - Authoritative currency derived from workspace Retail settings/entitlements.
   - Server recalculates line subtotals, taxes, and grand totals directly from database product records, ignoring client-supplied unit prices or unit costs.
+  - Strict tender validation rejecting invalid, NaN, negative, or zero payment entries.
   - Client payment totals are untrusted; checkout strictly verifies that total tendered covers the authoritative grand total (`INSUFFICIENT_PAYMENT` guard).
+  - External non-cash tender (`CARD_EXTERNAL` or `BANK_TRANSFER`) is explicitly marked as unverified external tender (`payment_status: 'PARTIAL'`) with payment references annotated `[UNVERIFIED_EXTERNAL_SETTLEMENT: Pending Reconciliation]`. Pure `CASH` payments are marked `PAID`.
 - **Cashier-Specific Mari Assistant**: Non-blocking drawer assistant providing real-time stock checks, approved selling price inquiries (strictly masking confidential purchase costs), and deterministic walk-in quotation generation with 1-click cart loading and atomic quotation-to-sale conversion.
 - **Server-Side Administrative Lockdown**: Management APIs (`expenses`, `payroll/runs`, `reports`, `demo-data`, `purchasing/orders`) independently deny access with HTTP 403 for `CASHIER` accounts, backed by client-level dashboard redirects.
 

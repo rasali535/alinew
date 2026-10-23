@@ -546,6 +546,7 @@ export default function CashierWorkstationPage() {
         saleNumber: `POS-${Date.now().toString().slice(-6)}`,
         customerName: customerName || 'Walk-in Customer',
         shiftId: activeShift.id,
+        terminalId,
         items: cart.map((item) => ({
           productId: item.product.id,
           productName: item.product.name,

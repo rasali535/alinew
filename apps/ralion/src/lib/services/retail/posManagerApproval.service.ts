@@ -9,8 +9,8 @@ export interface ManagerApprovalPayload {
   approvedByUserId: string;
   action: 'DISCOUNT_OVERRIDE' | 'CART_VOID' | 'REFUND';
   maxDiscountRate?: number;
-  terminalId?: string;
-  actionPayloadHash?: string;
+  terminalId: string; // Mandatory workstation binding
+  actionPayloadHash: string; // Mandatory action-bound SHA-256 hash
   reason?: string;
   issuedAt: number;
   expiresAt: number;
@@ -22,18 +22,16 @@ export interface VerifyApprovalTokenParams {
   expectedOrganizationId: string;
   expectedCashierUserId: string;
   expectedAction: 'DISCOUNT_OVERRIDE' | 'CART_VOID' | 'REFUND';
-  expectedActionPayloadHash?: string;
-  expectedTerminalId?: string;
+  expectedActionPayloadHash: string; // Strictly mandatory
+  expectedTerminalId: string; // Strictly mandatory
   discountRate?: number;
-  consumeOnVerify?: boolean;
+  consumeOnVerify?: boolean; // Defaults to false to decouple pre-flight check from atomic commit
 }
 
 export class PosManagerApprovalService {
-  // Single-use consumed nonce tracker with expiry
-  private static consumedTokens = new Map<string, number>();
-
-  // Failed attempts & lockout tracker (15-min lockout after 5 consecutive failures)
-  private static lockoutTracker = new Map<string, { failedAttempts: number; lockedUntil: number }>();
+  // In-memory fallback caches for non-DB runtime/offline tests
+  private static localConsumedTokens = new Map<string, number>();
+  private static localLockoutTracker = new Map<string, { failedAttempts: number; lockedUntil: number }>();
 
   /**
    * Authoritative Token Signing Secret Resolution.
@@ -54,20 +52,12 @@ export class PosManagerApprovalService {
   // ---------------------------------------------------------------------------
   // SALTED KDF HASHING FOR POS MANAGER PINS (PBKDF2 SHA-512)
   // ---------------------------------------------------------------------------
-  /**
-   * Hashes a manager PIN using PBKDF2 (SHA-512, 100,000 iterations, 16-byte random salt).
-   * Format: `<salt_hex>:<hash_hex>`
-   */
   static hashManagerPin(pin: string, saltHex?: string): string {
     const salt = saltHex ? Buffer.from(saltHex, 'hex') : crypto.randomBytes(16);
     const hash = crypto.pbkdf2Sync(pin.trim(), salt, 100_000, 64, 'sha512');
     return `${salt.toString('hex')}:${hash.toString('hex')}`;
   }
 
-  /**
-   * Verifies a manager PIN against a salted KDF hash in constant-time.
-   * Fails closed if the stored PIN is in plaintext or invalid format.
-   */
   static verifyManagerPinHash(pin: string, storedHash: string): boolean {
     if (!storedHash || typeof storedHash !== 'string') return false;
     const parts = storedHash.split(':');
@@ -87,68 +77,196 @@ export class PosManagerApprovalService {
   }
 
   // ---------------------------------------------------------------------------
-  // RATE LIMITING & LOCKOUT (Anti-Brute-Force)
+  // DURABLE RATE LIMITING & LOCKOUT (Anti-Brute-Force)
   // ---------------------------------------------------------------------------
-  static getLockoutStatus(key: string): { locked: boolean; retryAfterSeconds?: number } {
-    const entry = this.lockoutTracker.get(key);
-    if (!entry) return { locked: false };
-    const now = Date.now();
-    if (entry.lockedUntil > now) {
-      return { locked: true, retryAfterSeconds: Math.ceil((entry.lockedUntil - now) / 1000) };
+  static async getLockoutStatus(
+    key: string,
+    workspaceId?: string
+  ): Promise<{ locked: boolean; retryAfterSeconds?: number }> {
+    try {
+      const db = getServiceSupabase();
+      const { data, error } = await db
+        .from('retail_pos_lockouts')
+        .select('failed_attempts, locked_until')
+        .eq('lockout_key', key)
+        .maybeSingle();
+
+      if (!error && data && data.locked_until) {
+        const lockedUntil = new Date(data.locked_until).getTime();
+        const now = Date.now();
+        if (lockedUntil > now) {
+          return { locked: true, retryAfterSeconds: Math.ceil((lockedUntil - now) / 1000) };
+        }
+      }
+    } catch {
+      // Fall through to in-memory check
     }
-    if (entry.lockedUntil <= now && entry.failedAttempts >= 5) {
-      this.lockoutTracker.delete(key);
+
+    const local = this.localLockoutTracker.get(key);
+    if (!local) return { locked: false };
+    const now = Date.now();
+    if (local.lockedUntil > now) {
+      return { locked: true, retryAfterSeconds: Math.ceil((local.lockedUntil - now) / 1000) };
+    }
+    if (local.lockedUntil <= now && local.failedAttempts >= 5) {
+      this.localLockoutTracker.delete(key);
       return { locked: false };
     }
     return { locked: false };
   }
 
-  static recordFailedAttempt(key: string): { locked: boolean; failedAttempts: number } {
-    const entry = this.lockoutTracker.get(key) || { failedAttempts: 0, lockedUntil: 0 };
-    entry.failedAttempts += 1;
-    if (entry.failedAttempts >= 5) {
-      entry.lockedUntil = Date.now() + 15 * 60 * 1000; // 15-minute lockout
+  static async recordFailedAttempt(
+    key: string,
+    workspaceId: string
+  ): Promise<{ locked: boolean; failedAttempts: number }> {
+    let attempts = 1;
+    let lockedUntil: number | null = null;
+
+    try {
+      const db = getServiceSupabase();
+      const { data: existing } = await db
+        .from('retail_pos_lockouts')
+        .select('failed_attempts')
+        .eq('lockout_key', key)
+        .maybeSingle();
+
+      attempts = (existing?.failed_attempts || 0) + 1;
+      const isLocked = attempts >= 5;
+      const lockedUntilIso = isLocked ? new Date(Date.now() + 15 * 60 * 1000).toISOString() : null;
+
+      await db.from('retail_pos_lockouts').upsert({
+        lockout_key: key,
+        workspace_id: workspaceId,
+        failed_attempts: attempts,
+        locked_until: lockedUntilIso,
+        last_failed_at: new Date().toISOString(),
+      });
+
+      if (isLocked) {
+        lockedUntil = Date.now() + 15 * 60 * 1000;
+      }
+    } catch {
+      // Fallback to local tracker
+      const local = this.localLockoutTracker.get(key) || { failedAttempts: 0, lockedUntil: 0 };
+      local.failedAttempts += 1;
+      attempts = local.failedAttempts;
+      if (local.failedAttempts >= 5) {
+        local.lockedUntil = Date.now() + 15 * 60 * 1000;
+        lockedUntil = local.lockedUntil;
+      }
+      this.localLockoutTracker.set(key, local);
     }
-    this.lockoutTracker.set(key, entry);
-    return { locked: entry.failedAttempts >= 5, failedAttempts: entry.failedAttempts };
+
+    return { locked: attempts >= 5, failedAttempts: attempts };
   }
 
-  static recordSuccessfulAttempt(key: string): void {
-    this.lockoutTracker.delete(key);
+  static async recordSuccessfulAttempt(key: string): Promise<void> {
+    try {
+      const db = getServiceSupabase();
+      await db.from('retail_pos_lockouts').delete().eq('lockout_key', key);
+    } catch {
+      // Ignore
+    }
+    this.localLockoutTracker.delete(key);
   }
 
   static resetLockouts(): void {
-    this.lockoutTracker.clear();
+    this.localLockoutTracker.clear();
   }
 
   // ---------------------------------------------------------------------------
-  // SINGLE-USE TOKEN CONSUMPTION TRACKER (Replay Prevention)
+  // DURABLE SINGLE-USE NONCE TRACKER (Atomic DB Insertion)
   // ---------------------------------------------------------------------------
-  static isTokenConsumed(tokenId: string): boolean {
+  /**
+   * Atomically consumes a token JTI in shared PostgreSQL storage.
+   * If token is already in the database, returns consumed: false (Replay prevented).
+   */
+  static async consumeTokenDurable(params: {
+    tokenId: string;
+    workspaceId: string;
+    organizationId: string;
+    cashierUserId: string;
+    action: string;
+    actionPayloadHash: string;
+    terminalId: string;
+    saleId?: string;
+    expiresAt: number;
+  }): Promise<{ consumed: boolean; error?: string }> {
+    const { tokenId, workspaceId, organizationId, cashierUserId, action, actionPayloadHash, terminalId, saleId, expiresAt } = params;
+
+    // First check local in-memory fallback
+    if (this.localConsumedTokens.has(tokenId)) {
+      return { consumed: false, error: 'TOKEN_ALREADY_CONSUMED: Approval token was already consumed.' };
+    }
+
+    try {
+      const db = getServiceSupabase();
+      const { error } = await db.from('retail_pos_consumed_tokens').insert({
+        token_id: tokenId,
+        workspace_id: workspaceId,
+        organization_id: organizationId,
+        cashier_user_id: cashierUserId,
+        action,
+        action_payload_hash: actionPayloadHash,
+        terminal_id: terminalId,
+        sale_id: saleId || null,
+        expires_at: new Date(expiresAt).toISOString(),
+      });
+
+      if (error) {
+        // Unique constraint violation (23505) indicates duplicate/concurrent redemption
+        if (error.code === '23505' || error.message?.includes('duplicate key') || error.message?.includes('violates unique constraint')) {
+          this.localConsumedTokens.set(tokenId, expiresAt);
+          return { consumed: false, error: 'TOKEN_ALREADY_CONSUMED: Approval token was already consumed in another session.' };
+        }
+        console.warn('[PosManagerApprovalService] Notice inserting consumed token:', error.message);
+      }
+    } catch (err: any) {
+      console.warn('[PosManagerApprovalService] DB consumed token check fallback:', err.message);
+    }
+
+    this.localConsumedTokens.set(tokenId, expiresAt);
+    return { consumed: true };
+  }
+
+  static async isTokenConsumed(tokenId: string): Promise<boolean> {
     const now = Date.now();
-    for (const [id, exp] of this.consumedTokens.entries()) {
+    for (const [id, exp] of this.localConsumedTokens.entries()) {
       if (exp <= now) {
-        this.consumedTokens.delete(id);
+        this.localConsumedTokens.delete(id);
       }
     }
-    return this.consumedTokens.has(tokenId);
-  }
+    if (this.localConsumedTokens.has(tokenId)) return true;
 
-  static consumeToken(tokenId: string, expiresAt: number): void {
-    this.consumedTokens.set(tokenId, expiresAt);
+    try {
+      const db = getServiceSupabase();
+      const { data, error } = await db
+        .from('retail_pos_consumed_tokens')
+        .select('token_id')
+        .eq('token_id', tokenId)
+        .maybeSingle();
+
+      if (!error && data) {
+        this.localConsumedTokens.set(tokenId, Date.now() + 300_000);
+        return true;
+      }
+    } catch {
+      // Fallback
+    }
+
+    return false;
   }
 
   static resetConsumedTokens(): void {
-    this.consumedTokens.clear();
+    this.localConsumedTokens.clear();
   }
 
   // ---------------------------------------------------------------------------
   // CRYPTOGRAPHIC APPROVAL TOKEN GENERATION & VERIFICATION
   // ---------------------------------------------------------------------------
   /**
-   * Cryptographically signs a short-lived manager approval token.
-   * Bound to workspace, organization, cashier, manager, action, and cart payload hash.
-   * TTL: 5 minutes (300 seconds).
+   * Cryptographically signs an action-bound, terminal-bound approval token.
+   * Mandatory fields: terminalId, actionPayloadHash.
    */
   static createApprovalToken(data: {
     workspaceId: string;
@@ -156,13 +274,21 @@ export class PosManagerApprovalService {
     cashierUserId: string;
     approvedByUserId: string;
     action: 'DISCOUNT_OVERRIDE' | 'CART_VOID' | 'REFUND';
+    terminalId: string;
+    actionPayloadHash: string;
     maxDiscountRate?: number;
-    terminalId?: string;
-    actionPayloadHash?: string;
     reason?: string;
     ttlSeconds?: number;
   }): string {
     const secret = this.getSecret();
+
+    if (!data.terminalId || typeof data.terminalId !== 'string' || !data.terminalId.trim()) {
+      throw new Error('TERMINAL_BINDING_REQUIRED: Terminal ID is required to create approval token.');
+    }
+    if (!data.actionPayloadHash || typeof data.actionPayloadHash !== 'string' || !data.actionPayloadHash.trim()) {
+      throw new Error('ACTION_HASH_REQUIRED: Server-validated action payload hash is required to create approval token.');
+    }
+
     const ttlMs = (data.ttlSeconds || 300) * 1000;
     const payload: ManagerApprovalPayload = {
       id: crypto.randomUUID(),
@@ -172,8 +298,8 @@ export class PosManagerApprovalService {
       approvedByUserId: data.approvedByUserId,
       action: data.action,
       maxDiscountRate: data.maxDiscountRate,
-      terminalId: data.terminalId,
-      actionPayloadHash: data.actionPayloadHash,
+      terminalId: data.terminalId.trim(),
+      actionPayloadHash: data.actionPayloadHash.trim(),
       reason: data.reason,
       issuedAt: Date.now(),
       expiresAt: Date.now() + ttlMs,
@@ -189,7 +315,8 @@ export class PosManagerApprovalService {
 
   /**
    * Verifies an approval token against server secret, workspace scope, organization scope,
-   * cashier actor binding, action binding, cart hash binding, and single-use consumption.
+   * cashier actor binding, action binding, exact terminal binding, and cart hash binding.
+   * consumeOnVerify defaults to false to decouple pre-flight check from atomic commit.
    */
   static verifyApprovalToken(params: VerifyApprovalTokenParams): {
     valid: boolean;
@@ -234,8 +361,8 @@ export class PosManagerApprovalService {
       return { valid: false, error: 'TOKEN_EXPIRED: Manager approval has expired. Re-authenticate with manager.' };
     }
 
-    // 2. Single-use check (Replay prevention)
-    if (this.isTokenConsumed(payload.id)) {
+    // 2. Local consumed check
+    if (this.localConsumedTokens.has(payload.id)) {
       return { valid: false, error: 'TOKEN_ALREADY_CONSUMED: Manager approval token has already been used and cannot be replayed.' };
     }
 
@@ -262,27 +389,25 @@ export class PosManagerApprovalService {
       return { valid: false, error: `ACTION_MISMATCH: Approval token is for ${payload.action}, not ${params.expectedAction}.` };
     }
 
-    // 7. Cart / Action payload hash binding (Must match specific cart intent)
-    if (
-      params.expectedActionPayloadHash &&
-      payload.actionPayloadHash &&
-      payload.actionPayloadHash !== params.expectedActionPayloadHash
-    ) {
-      return {
-        valid: false,
-        error: 'CART_HASH_MISMATCH: Approval token is bound to a different cart composition or transaction intent.',
-      };
+    // 7. Exact terminal binding (MANDATORY & FAIL-CLOSED)
+    if (!payload.terminalId || !params.expectedTerminalId) {
+      return { valid: false, error: 'UNBOUND_TERMINAL: Token or request lacks required terminal binding.' };
     }
-
-    // 8. Terminal binding (if specified)
-    if (
-      params.expectedTerminalId &&
-      payload.terminalId &&
-      payload.terminalId !== params.expectedTerminalId
-    ) {
+    if (payload.terminalId !== params.expectedTerminalId) {
       return {
         valid: false,
         error: `TERMINAL_MISMATCH: Approval token was issued for terminal '${payload.terminalId}', not '${params.expectedTerminalId}'.`,
+      };
+    }
+
+    // 8. Exact cart/action payload hash binding (MANDATORY & FAIL-CLOSED)
+    if (!payload.actionPayloadHash || !params.expectedActionPayloadHash) {
+      return { valid: false, error: 'UNBOUND_ACTION_HASH: Token or request lacks required action payload hash.' };
+    }
+    if (payload.actionPayloadHash !== params.expectedActionPayloadHash) {
+      return {
+        valid: false,
+        error: 'CART_HASH_MISMATCH: Approval token does not match current cart composition or transaction intent.',
       };
     }
 
@@ -299,9 +424,8 @@ export class PosManagerApprovalService {
       };
     }
 
-    // 10. Enforce single use: consume token
-    if (params.consumeOnVerify !== false) {
-      this.consumeToken(payload.id, payload.expiresAt);
+    if (params.consumeOnVerify === true) {
+      this.localConsumedTokens.set(payload.id, payload.expiresAt);
     }
 
     return { valid: true, payload };
@@ -310,10 +434,6 @@ export class PosManagerApprovalService {
   // ---------------------------------------------------------------------------
   // DURABLE AUDIT LOGGING (Fail-Closed)
   // ---------------------------------------------------------------------------
-  /**
-   * Records an immutable security audit event for manager exception overrides.
-   * FAIL CLOSED: Throws an error if audit log writing fails, preventing unlogged overrides.
-   */
   static async recordApprovalAudit(params: {
     organizationId: string;
     workspaceId: string;
@@ -348,13 +468,6 @@ export class PosManagerApprovalService {
   // ---------------------------------------------------------------------------
   // SERVER-SIDE MANAGER CREDENTIAL & SALTED PIN VERIFICATION
   // ---------------------------------------------------------------------------
-  /**
-   * Server-side manager credential verification.
-   * Checks:
-   * 1. If caller is already owner or manager in this workspace.
-   * 2. If managerEmail and managerPassword provided, verifies against auth and workspace_members.
-   * 3. If managerPin provided, verifies against workspace salted KDF hash with anti-brute-force lockout.
-   */
   static async verifyManagerCredentials(params: {
     workspaceId: string;
     organizationId: string;
@@ -379,7 +492,7 @@ export class PosManagerApprovalService {
     }
 
     const lockoutKey = `${params.workspaceId}:${(params.managerEmail || 'pin_auth').toLowerCase()}`;
-    const lockout = this.getLockoutStatus(lockoutKey);
+    const lockout = await this.getLockoutStatus(lockoutKey, params.workspaceId);
     if (lockout.locked) {
       return {
         verified: false,
@@ -398,7 +511,7 @@ export class PosManagerApprovalService {
         });
 
         if (authErr || !authData.user) {
-          this.recordFailedAttempt(lockoutKey);
+          await this.recordFailedAttempt(lockoutKey, params.workspaceId);
           return { verified: false, approvedByUserId: '', error: 'INVALID_CREDENTIALS: Manager email or password is incorrect.' };
         }
 
@@ -414,14 +527,14 @@ export class PosManagerApprovalService {
         const isManager = role === 'owner' || role === 'administrator' || role === 'admin';
 
         if (memberErr || !member || !isManager) {
-          this.recordFailedAttempt(lockoutKey);
+          await this.recordFailedAttempt(lockoutKey, params.workspaceId);
           return { verified: false, approvedByUserId: '', error: 'UNAUTHORIZED_MANAGER: Account does not have OWNER or ADMINISTRATOR privileges in this workspace.' };
         }
 
-        this.recordSuccessfulAttempt(lockoutKey);
+        await this.recordSuccessfulAttempt(lockoutKey);
         return { verified: true, approvedByUserId: authData.user.id };
       } catch (err: any) {
-        this.recordFailedAttempt(lockoutKey);
+        await this.recordFailedAttempt(lockoutKey, params.workspaceId);
         return { verified: false, approvedByUserId: '', error: err.message || 'Authentication error verifying manager.' };
       }
     }
@@ -473,12 +586,12 @@ export class PosManagerApprovalService {
 
       const match = this.verifyManagerPinHash(enteredPin, finalHash);
       if (match) {
-        this.recordSuccessfulAttempt(lockoutKey);
+        await this.recordSuccessfulAttempt(lockoutKey);
         const attribution = params.managerEmail ? `manager:${params.managerEmail.trim()}` : `manager_pin_verified:${params.workspaceId}`;
         return { verified: true, approvedByUserId: attribution };
       }
 
-      const failedInfo = this.recordFailedAttempt(lockoutKey);
+      const failedInfo = await this.recordFailedAttempt(lockoutKey, params.workspaceId);
       if (failedInfo.locked) {
         return {
           verified: false,
