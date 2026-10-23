@@ -31,7 +31,15 @@ try {
     catch (error) { throw new Error(`Migration ${file} failed: ${error.message}`, { cause: error }); }
   }
   const scalar = async sql => (await database.query(sql)).rows[0].value;
-  assert.equal(await scalar(`SELECT count(*)::int AS value FROM pg_tables WHERE schemaname='public'`), 125);
+  // The Retail POS security migration adds two durable tables to the 125-table baseline.
+  assert.equal(await scalar(`SELECT count(*)::int AS value FROM pg_tables WHERE schemaname='public'`), 127);
+  for (const table of ['retail_pos_consumed_tokens', 'retail_pos_lockouts']) {
+    assert.equal(
+      await scalar(`SELECT count(*)::int AS value FROM pg_tables WHERE schemaname='public' AND tablename='${table}'`),
+      1,
+      `Retail POS security table ${table} must be present after migration replay.`
+    );
+  }
   for (const table of ['profiles', 'organizations', 'workspaces', 'social_connections', 'social_posts', 'platform_admins']) {
     assert.equal(await scalar(`SELECT count(*)::int AS value FROM public.${table}`), 0, `Preview must not copy production ${table} rows.`);
   }
@@ -86,7 +94,7 @@ try {
   await assert.rejects(database.query(`SELECT public.ralion_finalize_credits($1,'charged-once',true)`, [orgA]), error => error.code === '42501');
   await database.exec('RESET ROLE');
   console.log('PASS: actual credit procedures charge once, release failed/stale requests, reject insufficient balance and direct client RPCs, and isolate two tenant wallets.');
-  console.log(`PASS: ${files.length} migrations replay; 125 tables; no production tenant/admin rows; signup provisioning and anonymous RPC denial; baseline preserves existing rows.`);
+  console.log(`PASS: ${files.length} migrations replay; 127 tables; no production tenant/admin rows; signup provisioning and anonymous RPC denial; baseline preserves existing rows.`);
 } finally {
   await database.close();
 }
