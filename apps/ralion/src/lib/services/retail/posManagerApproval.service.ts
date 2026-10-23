@@ -77,7 +77,7 @@ export class PosManagerApprovalService {
   }
 
   // ---------------------------------------------------------------------------
-  // DURABLE RATE LIMITING & LOCKOUT (Anti-Brute-Force)
+  // DURABLE RATE LIMITING & LOCKOUT (Anti-Brute-Force — Atomic PostgreSQL Function)
   // ---------------------------------------------------------------------------
   static async getLockoutStatus(
     key: string,
@@ -91,81 +91,60 @@ export class PosManagerApprovalService {
         .eq('lockout_key', key)
         .maybeSingle();
 
-      if (!error && data && data.locked_until) {
+      if (error) {
+        throw new Error(`LOCKOUT_STORE_ERROR: ${error.message}`);
+      }
+
+      if (data && data.locked_until) {
         const lockedUntil = new Date(data.locked_until).getTime();
         const now = Date.now();
         if (lockedUntil > now) {
           return { locked: true, retryAfterSeconds: Math.ceil((lockedUntil - now) / 1000) };
         }
       }
-    } catch {
-      // Fall through to in-memory check
-    }
-
-    const local = this.localLockoutTracker.get(key);
-    if (!local) return { locked: false };
-    const now = Date.now();
-    if (local.lockedUntil > now) {
-      return { locked: true, retryAfterSeconds: Math.ceil((local.lockedUntil - now) / 1000) };
-    }
-    if (local.lockedUntil <= now && local.failedAttempts >= 5) {
-      this.localLockoutTracker.delete(key);
       return { locked: false };
+    } catch (err: any) {
+      console.error('[PosManagerApprovalService] Lockout check failed closed:', err.message);
+      // Fail closed when shared store is unavailable
+      throw new Error(`LOCKOUT_STORE_UNAVAILABLE: Authentication rate-limiting store is currently unreachable (${err.message}). Request rejected (fail-closed).`);
     }
-    return { locked: false };
   }
 
   static async recordFailedAttempt(
     key: string,
     workspaceId: string
-  ): Promise<{ locked: boolean; failedAttempts: number }> {
-    let attempts = 1;
-    let lockedUntil: number | null = null;
-
+  ): Promise<{ locked: boolean; failedAttempts: number; retryAfterSeconds?: number }> {
     try {
       const db = getServiceSupabase();
-      const { data: existing } = await db
-        .from('retail_pos_lockouts')
-        .select('failed_attempts')
-        .eq('lockout_key', key)
-        .maybeSingle();
-
-      attempts = (existing?.failed_attempts || 0) + 1;
-      const isLocked = attempts >= 5;
-      const lockedUntilIso = isLocked ? new Date(Date.now() + 15 * 60 * 1000).toISOString() : null;
-
-      await db.from('retail_pos_lockouts').upsert({
-        lockout_key: key,
-        workspace_id: workspaceId,
-        failed_attempts: attempts,
-        locked_until: lockedUntilIso,
-        last_failed_at: new Date().toISOString(),
+      const { data, error } = await db.rpc('record_pos_failed_attempt', {
+        p_lockout_key: key,
+        p_workspace_id: workspaceId,
+        p_max_attempts: 5,
+        p_lockout_minutes: 15,
       });
 
-      if (isLocked) {
-        lockedUntil = Date.now() + 15 * 60 * 1000;
+      if (error) {
+        throw new Error(`LOCKOUT_STORE_ERROR: ${error.message}`);
       }
-    } catch {
-      // Fallback to local tracker
-      const local = this.localLockoutTracker.get(key) || { failedAttempts: 0, lockedUntil: 0 };
-      local.failedAttempts += 1;
-      attempts = local.failedAttempts;
-      if (local.failedAttempts >= 5) {
-        local.lockedUntil = Date.now() + 15 * 60 * 1000;
-        lockedUntil = local.lockedUntil;
-      }
-      this.localLockoutTracker.set(key, local);
-    }
 
-    return { locked: attempts >= 5, failedAttempts: attempts };
+      return {
+        locked: Boolean(data?.locked),
+        failedAttempts: Number(data?.failed_attempts || 1),
+        retryAfterSeconds: Number(data?.retry_after_seconds || 0),
+      };
+    } catch (err: any) {
+      console.error('[PosManagerApprovalService] Lockout atomic increment failed closed:', err.message);
+      // Fail closed: reject request rather than allowing uncounted brute-force attempts
+      throw new Error(`LOCKOUT_STORE_UNAVAILABLE: Authentication rate-limiting store is currently unreachable (${err.message}). Request rejected (fail-closed).`);
+    }
   }
 
   static async recordSuccessfulAttempt(key: string): Promise<void> {
     try {
       const db = getServiceSupabase();
-      await db.from('retail_pos_lockouts').delete().eq('lockout_key', key);
-    } catch {
-      // Ignore
+      await db.rpc('reset_pos_lockout', { p_lockout_key: key });
+    } catch (err: any) {
+      console.warn('[PosManagerApprovalService] Notice resetting lockout:', err.message);
     }
     this.localLockoutTracker.delete(key);
   }
@@ -492,12 +471,20 @@ export class PosManagerApprovalService {
     }
 
     const lockoutKey = `${params.workspaceId}:${(params.managerEmail || 'pin_auth').toLowerCase()}`;
-    const lockout = await this.getLockoutStatus(lockoutKey, params.workspaceId);
-    if (lockout.locked) {
+    try {
+      const lockout = await this.getLockoutStatus(lockoutKey, params.workspaceId);
+      if (lockout.locked) {
+        return {
+          verified: false,
+          approvedByUserId: '',
+          error: `RATE_LIMIT_EXCEEDED: Too many failed manager approval attempts. Account locked for ${lockout.retryAfterSeconds} seconds.`,
+        };
+      }
+    } catch (err: any) {
       return {
         verified: false,
         approvedByUserId: '',
-        error: `RATE_LIMIT_EXCEEDED: Too many failed manager approval attempts. Account locked for ${lockout.retryAfterSeconds} seconds.`,
+        error: `SERVICE_UNAVAILABLE: Rate limiting and authentication security store is unreachable (${err.message}). Request rejected (fail-closed).`,
       };
     }
 
@@ -511,7 +498,9 @@ export class PosManagerApprovalService {
         });
 
         if (authErr || !authData.user) {
-          await this.recordFailedAttempt(lockoutKey, params.workspaceId);
+          try {
+            await this.recordFailedAttempt(lockoutKey, params.workspaceId);
+          } catch {}
           return { verified: false, approvedByUserId: '', error: 'INVALID_CREDENTIALS: Manager email or password is incorrect.' };
         }
 
@@ -527,14 +516,18 @@ export class PosManagerApprovalService {
         const isManager = role === 'owner' || role === 'administrator' || role === 'admin';
 
         if (memberErr || !member || !isManager) {
-          await this.recordFailedAttempt(lockoutKey, params.workspaceId);
+          try {
+            await this.recordFailedAttempt(lockoutKey, params.workspaceId);
+          } catch {}
           return { verified: false, approvedByUserId: '', error: 'UNAUTHORIZED_MANAGER: Account does not have OWNER or ADMINISTRATOR privileges in this workspace.' };
         }
 
         await this.recordSuccessfulAttempt(lockoutKey);
         return { verified: true, approvedByUserId: authData.user.id };
       } catch (err: any) {
-        await this.recordFailedAttempt(lockoutKey, params.workspaceId);
+        try {
+          await this.recordFailedAttempt(lockoutKey, params.workspaceId);
+        } catch {}
         return { verified: false, approvedByUserId: '', error: err.message || 'Authentication error verifying manager.' };
       }
     }
@@ -591,20 +584,28 @@ export class PosManagerApprovalService {
         return { verified: true, approvedByUserId: attribution };
       }
 
-      const failedInfo = await this.recordFailedAttempt(lockoutKey, params.workspaceId);
-      if (failedInfo.locked) {
+      try {
+        const failedInfo = await this.recordFailedAttempt(lockoutKey, params.workspaceId);
+        if (failedInfo.locked) {
+          return {
+            verified: false,
+            approvedByUserId: '',
+            error: 'RATE_LIMIT_EXCEEDED: Maximum consecutive failed attempts reached. Workstation manager approval locked for 15 minutes.',
+          };
+        }
+
         return {
           verified: false,
           approvedByUserId: '',
-          error: 'RATE_LIMIT_EXCEEDED: Maximum consecutive failed attempts reached. Workstation manager approval locked for 15 minutes.',
+          error: `INCORRECT_PIN: Invalid Manager PIN. (${5 - failedInfo.failedAttempts} attempts remaining before lockout)`,
+        };
+      } catch (err: any) {
+        return {
+          verified: false,
+          approvedByUserId: '',
+          error: `SERVICE_UNAVAILABLE: Authentication rate-limiting store is currently unreachable (${err.message}). Request rejected (fail-closed).`,
         };
       }
-
-      return {
-        verified: false,
-        approvedByUserId: '',
-        error: `INCORRECT_PIN: Invalid Manager PIN. (${5 - failedInfo.failedAttempts} attempts remaining before lockout)`,
-      };
     }
 
     return {

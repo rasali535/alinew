@@ -58,22 +58,25 @@ alinew/
 - **Fast Barcode & Touch Scanning**: Focus-first hardware barcode scanning with instant SKU/name lookup, touch category chips, and visual stock badges.
 - **Tender & Change Calculation**: Cash, external EFTPOS card, and bank transfer tender shortcuts with live change-due computation.
 - **Thermal 80mm Receipt Printing**: Physical receipt printing modal (`window.print()`) with clean POS receipt layouts.
-- **Server-Enforced Manager Approvals**:
+- **Server-Enforced Manager Approvals & Same-Transaction Nonce Claim**:
   - Independent `POS_MANAGER_APPROVAL_SIGNING_SECRET` (minimum 32 characters; fails closed if missing or insecure).
   - Cryptographic HMAC-SHA256 signed approval tokens with 5-minute TTL, strictly bound to tenant organization, workspace, cashier actor ID, mandatory terminal ID, and mandatory cart composition SHA-256 hash.
-  - Multi-instance durable single-use storage in PostgreSQL `retail_pos_consumed_tokens` table with primary-key uniqueness constraint preventing concurrent replay across independent serverless/container instances (`TOKEN_ALREADY_CONSUMED`).
-  - Decoupled pre-flight token verification (`consumeOnVerify: false`) from atomic PostgreSQL sale commit; tokens are consumed only upon successful sale creation, preserving approvals across transient validation failures while preventing reuse.
-  - Shared anti-brute-force lockout in PostgreSQL `retail_pos_lockouts` table (15-minute lockout after 5 consecutive failed attempts synchronized across server instances).
+  - **Single PostgreSQL Transaction Atomicity**: The approval token nonce is claimed, verified, and recorded in `retail_pos_consumed_tokens` inside the **SAME** ACID transaction (`execute_atomic_retail_sale`) as the sale, stock deduction, and payments. If two concurrent requests attempt to redeem the same approval token, PostgreSQL unique constraint violation (`23505`) rolls back the entire transaction atomically—guaranteeing that no duplicate discounted sale or double inventory deduction can ever occur.
+  - **Idempotency Preservation**: Safe retries of identical checkouts using the same `idempotencyKey` return the existing sale without re-executing token consumption or failing with replay errors.
+  - **Atomic Multi-Instance Rate Limiting**: Anti-brute-force lockout is managed via atomic PostgreSQL RPC `record_pos_failed_attempt` (`ON CONFLICT DO UPDATE` row-level lock) in table `retail_pos_lockouts`. Lockout status and failure recording **fail closed** if the database is unreachable, eliminating bypasses from process resets or in-memory undercounts.
   - Salted KDF PIN verification using PBKDF2 (SHA-512, 100,000 iterations, 16-byte random salt, `<salt>:<hash>` format) with constant-time verification (`crypto.timingSafeEqual`). Plaintext PINs are strictly rejected.
   - Multi-tenant role verification against authoritative `workspace_members` schema for `OWNER` or `ADMINISTRATOR` roles.
   - Mandatory durable security audit logging persisted to `security_audit_logs` (fails closed if audit persistence fails).
   - Store policy discount ceiling (50% max) strictly enforced on the server for all callers, including direct store owners and administrators.
-- **Authoritative Server Pricing & Tender Settlement Integrity**:
+- **Authoritative Server Pricing & Database-Persisted Tender Settlement**:
   - Authoritative currency derived from workspace Retail settings/entitlements.
   - Server recalculates line subtotals, taxes, and grand totals directly from database product records, ignoring client-supplied unit prices or unit costs.
   - Strict tender validation rejecting invalid, NaN, negative, or zero payment entries.
   - Client payment totals are untrusted; checkout strictly verifies that total tendered covers the authoritative grand total (`INSUFFICIENT_PAYMENT` guard).
-  - External non-cash tender (`CARD_EXTERNAL` or `BANK_TRANSFER`) is explicitly marked as unverified external tender (`payment_status: 'PARTIAL'`) with payment references annotated `[UNVERIFIED_EXTERNAL_SETTLEMENT: Pending Reconciliation]`. Pure `CASH` payments are marked `PAID`.
+  - **Database-Persisted Verifiable Settlement State**: External tenders (`CARD_EXTERNAL` or `BANK_TRANSFER`) lack automated settlement proof at the POS register and are recorded directly into `retail_sales(payment_status)` as `'PARTIAL'` with payment references tagged `[UNVERIFIED_EXTERNAL_SETTLEMENT: Pending Reconciliation]`. Pure cash tenders are recorded as `'PAID'`. The settlement status is enforced and persisted in the database transaction, not merely patched in the JSON response.
+- **Database Migrations & Safe Rollback Ordering**:
+  - Forward Migration: `20261025000000_retail_pos_security_hardening.sql` (creates `retail_pos_consumed_tokens`, `retail_pos_lockouts`, `record_pos_failed_attempt`, and replaces `execute_atomic_retail_sale` with single-transaction approval nonce claim).
+  - Rollback Migration: `20261025000000_retail_pos_security_hardening_rollback.sql` (cleanly restores baseline 23-parameter `execute_atomic_retail_sale` and drops security tables without impacting retail core operations).
 - **Cashier-Specific Mari Assistant**: Non-blocking drawer assistant providing real-time stock checks, approved selling price inquiries (strictly masking confidential purchase costs), and deterministic walk-in quotation generation with 1-click cart loading and atomic quotation-to-sale conversion.
 - **Server-Side Administrative Lockdown**: Management APIs (`expenses`, `payroll/runs`, `reports`, `demo-data`, `purchasing/orders`) independently deny access with HTTP 403 for `CASHIER` accounts, backed by client-level dashboard redirects.
 

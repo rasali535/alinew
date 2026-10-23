@@ -853,6 +853,190 @@ async function main() {
 
     console.log(green('✅ [10/10] Expenses, payroll, and non-double-counting P&L accounting verified.\n'));
 
+    // -----------------------------------------------------------------------
+    // [11/11] Security Hardening Migration, Concurrent Nonce Atomicity & Rollback
+    // -----------------------------------------------------------------------
+    console.log('⏳ [11/11] Testing Security Hardening Migration & Real Multi-Instance Concurrency Suite...');
+
+    const hardeningPath = path.resolve(__dirname, '../packages/database/migrations/20261025000000_retail_pos_security_hardening.sql');
+    const hardeningSql = fs.readFileSync(hardeningPath, 'utf8');
+
+    // 1. Apply Migration Run 1
+    await client.query(hardeningSql);
+    console.log('  ' + green('✓') + ' Run 1: Security hardening migration applied cleanly.');
+
+    // 2. Apply Migration Run 2 (Idempotency)
+    await client.query(hardeningSql);
+    console.log('  ' + green('✓') + ' Run 2: Security hardening repeat execution completed without error.');
+    assert(true, 'Security hardening migration idempotency verified');
+
+    // Seed dedicated product for concurrency approval test: High-Grade Circular Saw
+    const sawProductId = '6a7b8c9d-1111-2222-3333-444455556666';
+    await client.query(`
+      INSERT INTO public.retail_products (
+        id, organization_id, workspace_id, name, sku, barcode, category, unit_of_measure,
+        selling_price, purchase_cost, reorder_level
+      ) VALUES (
+        $1, $2, $3, 'High-Grade Industrial Circular Saw', 'TOOL-CS-001', '885911777777', 'Power Tools', 'UNIT',
+        300.00, 180.00, 5
+      );
+    `, [sawProductId, PROINSIGHT_ORG_ID, PROINSIGHT_WORKSPACE_ID]);
+
+    await client.query(`
+      INSERT INTO public.retail_stock_levels (
+        organization_id, workspace_id, product_id, quantity_on_hand, quantity_reserved
+      ) VALUES ($2, $3, $1, 10, 0);
+    `, [sawProductId, PROINSIGHT_ORG_ID, PROINSIGHT_WORKSPACE_ID]);
+
+    // 3. Test Simultaneous Real Authenticated Checkouts with the SAME Approval Token Nonce
+    const sharedApprovalTokenId = 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d';
+    const testTerminalId = 'pos_term_proinsight_01';
+    const testActionPayloadHash = 'hash_saw_discount_approved_40_percent';
+
+    const clientA = new Client({ connectionString: CONNECTION_STRING });
+    const clientB = new Client({ connectionString: CONNECTION_STRING });
+    await clientA.connect();
+    await clientB.connect();
+
+    const sawItem = [{
+      product_id: sawProductId,
+      product_name: 'High-Grade Industrial Circular Saw',
+      sku: 'TOOL-CS-001',
+      quantity: 1,
+      unit_price: 300.00,
+      unit_cost: 180.00,
+      tax_rate: 0,
+      discount_rate: 40, // 40% approved manager discount
+      line_total: 180.00,
+      line_cost: 180.00
+    }];
+
+    const pA = clientA.query(`
+      SELECT execute_atomic_retail_sale(
+        $1, $2, 'SALE-APPR-001', 'INV-APPR-001', 'POS', NULL, 'Concurrent Buyer A',
+        $3, 'Cashier A', NULL, 'USD', 300.00, 0, 120.00, 180.00, 180.00,
+        'CASH', 'PAID', 'idem-appr-001', 'Sale with manager approval',
+        $4::jsonb, $5::jsonb, false,
+        $6, 'DISCOUNT_OVERRIDE', $7, $8, NOW() + INTERVAL '5 minutes'
+      );
+    `, [
+      PROINSIGHT_ORG_ID, PROINSIGHT_WORKSPACE_ID, cashierUserId,
+      JSON.stringify(sawItem), JSON.stringify([{ payment_method: 'CASH', amount: 180.00 }]),
+      sharedApprovalTokenId, testActionPayloadHash, testTerminalId
+    ]).then(r => ({ ok: true, data: r.rows[0].execute_atomic_retail_sale })).catch(e => ({ ok: false, error: e.message }));
+
+    const pB = clientB.query(`
+      SELECT execute_atomic_retail_sale(
+        $1, $2, 'SALE-APPR-002', 'INV-APPR-002', 'POS', NULL, 'Concurrent Buyer B',
+        $3, 'Cashier B', NULL, 'USD', 300.00, 0, 120.00, 180.00, 180.00,
+        'CASH', 'PAID', 'idem-appr-002', 'Competing sale with reused token',
+        $4::jsonb, $5::jsonb, false,
+        $6, 'DISCOUNT_OVERRIDE', $7, $8, NOW() + INTERVAL '5 minutes'
+      );
+    `, [
+      PROINSIGHT_ORG_ID, PROINSIGHT_WORKSPACE_ID, cashier2UserId,
+      JSON.stringify(sawItem), JSON.stringify([{ payment_method: 'CASH', amount: 180.00 }]),
+      sharedApprovalTokenId, testActionPayloadHash, testTerminalId
+    ]).then(r => ({ ok: true, data: r.rows[0].execute_atomic_retail_sale })).catch(e => ({ ok: false, error: e.message }));
+
+    const [resA, resB] = await Promise.all([pA, pB]);
+    await clientA.end();
+    await clientB.end();
+
+    const apprSuccessCount = (resA.ok ? 1 : 0) + (resB.ok ? 1 : 0);
+    const apprFailCount = (!resA.ok ? 1 : 0) + (!resB.ok ? 1 : 0);
+    const failErrorMsg = (resA.error || resB.error || '');
+
+    assert(apprSuccessCount === 1, 'Exactly one concurrent checkout with manager approval succeeded');
+    assert(apprFailCount === 1, 'Competing concurrent checkout with reused approval token was rejected');
+    assert(failErrorMsg.includes('TOKEN_ALREADY_CONSUMED'), 'Replay rejection strictly threw TOKEN_ALREADY_CONSUMED');
+
+    // Verify database state: Stock decremented by EXACTLY 1 (initial 10 - 1 = 9), not double deducted!
+    const stockAfterAppr = await client.query(`
+      SELECT quantity_on_hand FROM public.retail_stock_levels WHERE product_id = $1;
+    `, [sawProductId]);
+    assert(Number(stockAfterAppr.rows[0].quantity_on_hand) === 9, 'Stock was decremented only once (9 remaining)');
+
+    // Verify token was recorded in retail_pos_consumed_tokens exactly once
+    const tokenQuery = await client.query(`
+      SELECT COUNT(*) as count FROM public.retail_pos_consumed_tokens WHERE token_id = $1;
+    `, [sharedApprovalTokenId]);
+    assert(Number(tokenQuery.rows[0].count) === 1, 'Approval token nonce recorded exactly once in durable storage');
+
+    // 4. Test Safe Idempotent Replay of Successful Sale
+    const successfulSaleId = (resA.ok ? resA.data?.sale_id : resB.data?.sale_id);
+    const successfulIdemKey = (resA.ok ? 'idem-appr-001' : 'idem-appr-002');
+    const replayRes = await client.query(`
+      SELECT execute_atomic_retail_sale(
+        $1, $2, 'SALE-APPR-REPLAY', 'INV-APPR-REPLAY', 'POS', NULL, 'Concurrent Buyer',
+        $3, 'Cashier', NULL, 'USD', 300.00, 0, 120.00, 180.00, 180.00,
+        'CASH', 'PAID', $4, 'Idempotent retry of sale',
+        $5::jsonb, $6::jsonb, false,
+        $7, 'DISCOUNT_OVERRIDE', $8, $9, NOW() + INTERVAL '5 minutes'
+      );
+    `, [
+      PROINSIGHT_ORG_ID, PROINSIGHT_WORKSPACE_ID, cashierUserId,
+      successfulIdemKey, JSON.stringify(sawItem), JSON.stringify([{ payment_method: 'CASH', amount: 180.00 }]),
+      sharedApprovalTokenId, testActionPayloadHash, testTerminalId
+    ]);
+    const replayData = replayRes.rows[0].execute_atomic_retail_sale;
+    assert(replayData.success === true && replayData.idempotent_replay === true, 'Idempotent replay safely returns existing sale without error');
+    assert(replayData.sale_id === successfulSaleId, 'Idempotent replay matches original sale_id exactly');
+
+    // 5. Test Verifiable Settlement Persistence (External Tender cannot be PAID in DB)
+    const extTenderSaleRes = await client.query(`
+      SELECT execute_atomic_retail_sale(
+        $1, $2, 'SALE-EXT-TENDER-001', 'INV-EXT-001', 'POS', NULL, 'Walk-in Card Customer',
+        $3, 'Cashier', NULL, 'USD', 300.00, 0, 0, 300.00, 180.00,
+        'CARD_EXTERNAL', 'PAID', 'idem-ext-tender-001', 'External terminal payment',
+        $4::jsonb, $5::jsonb, false
+      );
+    `, [
+      PROINSIGHT_ORG_ID, PROINSIGHT_WORKSPACE_ID, cashierUserId,
+      JSON.stringify([{ product_id: sawProductId, quantity: 1, unit_price: 300, unit_cost: 180, tax_rate: 0, discount_rate: 0, line_total: 300, line_cost: 180 }]),
+      JSON.stringify([{ payment_method: 'CARD_EXTERNAL', amount: 300.00, reference: '[UNVERIFIED_EXTERNAL_SETTLEMENT]' }])
+    ]);
+    const extSaleId = extTenderSaleRes.rows[0].execute_atomic_retail_sale.sale_id;
+
+    // Direct database query on retail_sales table row
+    const dbSaleRow = await client.query(`
+      SELECT id, payment_status, payment_method FROM public.retail_sales WHERE id = $1;
+    `, [extSaleId]);
+    assert(dbSaleRow.rows[0].payment_status === 'PARTIAL', 'Database persisted payment_status is PARTIAL for unverified external tender (never cosmetic)');
+
+    // 6. Test Atomic Lockout Function (record_pos_failed_attempt)
+    const lockoutKey = `test_ws_atomic_lockout:${Date.now()}`;
+    for (let i = 0; i < 5; i++) {
+      await client.query(`
+        SELECT public.record_pos_failed_attempt($1, $2, 5, 15) as res;
+      `, [lockoutKey, PROINSIGHT_WORKSPACE_ID]);
+    }
+
+    const checkLockout = await client.query(`
+      SELECT failed_attempts, (locked_until > NOW()) as is_locked FROM public.retail_pos_lockouts WHERE lockout_key = $1;
+    `, [lockoutKey]);
+    assert(Number(checkLockout.rows[0].failed_attempts) === 5, 'Atomic failed attempts reached exactly 5 without lost updates');
+    assert(checkLockout.rows[0].is_locked === true, 'Account lockout triggered after 5 failed attempts');
+
+    // 7. Test Rollback Migration
+    const rollbackPath = path.resolve(__dirname, '../packages/database/migrations/20261025000000_retail_pos_security_hardening_rollback.sql');
+    const rollbackSql = fs.readFileSync(rollbackPath, 'utf8');
+    await client.query(rollbackSql);
+    console.log('  ' + green('✓') + ' Rollback migration applied cleanly.');
+
+    const checkTablesDropped = await client.query(`
+      SELECT to_regclass('public.retail_pos_consumed_tokens') as t1,
+             to_regclass('public.retail_pos_lockouts') as t2;
+    `);
+    assert(checkTablesDropped.rows[0].t1 === null, 'Table retail_pos_consumed_tokens dropped cleanly during rollback');
+    assert(checkTablesDropped.rows[0].t2 === null, 'Table retail_pos_lockouts dropped cleanly during rollback');
+
+    // Re-apply hardening to leave database in clean production state
+    await client.query(hardeningSql);
+    console.log('  ' + green('✓') + ' Security hardening re-applied cleanly following rollback test.');
+
+    console.log(green('✅ [11/11] Security Hardening Migration, Concurrency Nonce Atomicity & Rollback verified.\n'));
+
     console.log(cyan('========================================================================'));
     console.log(green(`🏆 ALL DATABASE INTEGRATION TESTS PASSED: ${passCount}/${testCount} checks`));
     console.log(cyan('========================================================================\n'));

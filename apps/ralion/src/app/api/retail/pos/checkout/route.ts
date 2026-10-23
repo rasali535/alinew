@@ -325,29 +325,29 @@ export async function POST(request: NextRequest) {
       idempotencyKey,
       notes: auditNotes || undefined,
       isPilotDemo: Boolean(isPilotDemo),
+      paymentStatus: authoritativePaymentStatus,
+      approvalToken: verifiedApprovalPayload
+        ? {
+            tokenId: verifiedApprovalPayload.id,
+            action: verifiedApprovalPayload.action,
+            actionPayloadHash: verifiedApprovalPayload.actionPayloadHash,
+            terminalId: verifiedApprovalPayload.terminalId,
+            expiresAt: verifiedApprovalPayload.expiresAt,
+          }
+        : undefined,
     });
 
     if (!result.success || !result.sale) {
-      return corsJsonResponse({ success: false, error: result.error || 'Sale execution failed.' }, { status: 400 }, request);
-    }
-
-    // 7. Atomically Consume Approval Token Nonce in Shared DB Storage Upon Successful Sale
-    if (verifiedApprovalPayload) {
-      const consumeRes = await PosManagerApprovalService.consumeTokenDurable({
-        tokenId: verifiedApprovalPayload.id,
-        workspaceId: context.workspace.id,
-        organizationId: context.organization.id,
-        cashierUserId: context.user.id,
-        action: verifiedApprovalPayload.action,
-        actionPayloadHash: verifiedApprovalPayload.actionPayloadHash,
-        terminalId: verifiedApprovalPayload.terminalId,
-        saleId: result.sale.id,
-        expiresAt: verifiedApprovalPayload.expiresAt,
-      });
-
-      if (!consumeRes.consumed) {
-        console.error('[CheckoutRoute] Notice: Concurrent duplicate token consumption prevented:', consumeRes.error);
-      }
+      const isReplayOrTokenError = result.error?.includes('TOKEN_ALREADY_CONSUMED') || result.error?.includes('APPROVAL_TOKEN');
+      return corsJsonResponse(
+        {
+          success: false,
+          code: isReplayOrTokenError ? 'MANAGER_APPROVAL_REPLAY_PREVENTED' : 'SALE_EXECUTION_FAILED',
+          error: result.error || 'Sale execution failed.',
+        },
+        { status: isReplayOrTokenError ? 403 : 400 },
+        request
+      );
     }
 
     return corsJsonResponse(
@@ -355,7 +355,7 @@ export async function POST(request: NextRequest) {
         success: true,
         sale: {
           ...result.sale,
-          paymentStatus: authoritativePaymentStatus,
+          paymentStatus: result.sale.paymentStatus,
           containsUnverifiedExternalTender,
         },
       },

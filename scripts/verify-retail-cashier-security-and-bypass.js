@@ -357,14 +357,22 @@ check('Manager approval route enforces mandatory terminalId and complete cartIte
 });
 
 // -----------------------------------------------------------------------------
-// 7. DECOUPLED PRE-FLIGHT VERIFICATION & ATOMIC SALE COMMIT
 // -----------------------------------------------------------------------------
-console.log('\n7. Verifying Decoupled Pre-Flight Token Check & Atomic Sale Commit...');
+// 7. SINGLE-TRANSACTION ATOMIC SALE & MANAGER APPROVAL CLAIM
+// -----------------------------------------------------------------------------
+console.log('\n7. Verifying Single-Transaction Atomic Sale & Approval Nonce Claim...');
 
-check('Checkout route performs pre-flight verify without burning token and consumes upon sale commit', () => {
+check('Checkout route decouples pre-flight verify and executes sale and token claim in the SAME transaction', () => {
   const content = fs.readFileSync(path.join(rootDir, 'apps/ralion/src/app/api/retail/pos/checkout/route.ts'), 'utf8');
   assert(content.includes('consumeOnVerify: false'), 'Must verify pre-flight with consumeOnVerify: false');
-  assert(content.includes('consumeTokenDurable'), 'Must call consumeTokenDurable after successful sale');
+  assert(content.includes('approvalToken: verifiedApprovalPayload'), 'Must pass approvalToken into executeAtomicSale');
+  assert(content.includes('paymentStatus: authoritativePaymentStatus'), 'Must pass authoritativePaymentStatus into executeAtomicSale');
+});
+
+check('RetailDatabaseService passes approvalToken and verifiable settlement status to PostgreSQL RPC', () => {
+  const content = fs.readFileSync(path.join(rootDir, 'apps/ralion/src/lib/services/retail/retailDatabase.service.ts'), 'utf8');
+  assert(content.includes('p_approval_token_id: params.approvalToken?.tokenId'), 'Must pass p_approval_token_id to execute_atomic_retail_sale');
+  assert(content.includes('hasUnverifiedExternalTender && paymentStatus === \'PAID\''), 'Must enforce settlement invariant preventing PAID status for unverified tenders');
 });
 
 // -----------------------------------------------------------------------------
@@ -402,22 +410,33 @@ check('Checkout route enforces 50% discount ceiling even for direct store owners
 });
 
 // -----------------------------------------------------------------------------
-// 10. DATABASE MIGRATIONS & SCHEMA INTEGRITY
+// 10. DATABASE MIGRATIONS, SCHEMA INTEGRITY & ROLLBACK
 // -----------------------------------------------------------------------------
-console.log('\n10. Verifying Durable PostgreSQL Migrations & Schema Integrity...');
+console.log('\n10. Verifying Durable PostgreSQL Migrations, Schema Integrity & Rollback...');
 
 const migrationPath1 = path.join(rootDir, 'supabase/migrations/20261025000000_retail_pos_security_hardening.sql');
 const migrationPath2 = path.join(rootDir, 'packages/database/migrations/20261025000000_retail_pos_security_hardening.sql');
+const rollbackPath1 = path.join(rootDir, 'supabase/migrations/20261025000000_retail_pos_security_hardening_rollback.sql');
+const rollbackPath2 = path.join(rootDir, 'packages/database/migrations/20261025000000_retail_pos_security_hardening_rollback.sql');
 
-check('Migration creates retail_pos_consumed_tokens and retail_pos_lockouts tables', () => {
+check('Migration creates retail_pos_consumed_tokens, lockouts, and atomic functions', () => {
   assert(fs.existsSync(migrationPath1), 'Migration must exist in supabase/migrations');
   assert(fs.existsSync(migrationPath2), 'Migration must exist in packages/database/migrations');
+  assert(fs.existsSync(rollbackPath1), 'Rollback migration must exist in supabase/migrations');
+  assert(fs.existsSync(rollbackPath2), 'Rollback migration must exist in packages/database/migrations');
 
   const sql = fs.readFileSync(migrationPath1, 'utf8');
   assert(sql.includes('CREATE TABLE IF NOT EXISTS public.retail_pos_consumed_tokens'), 'Must create retail_pos_consumed_tokens table');
   assert(sql.includes('token_id UUID PRIMARY KEY'), 'token_id must be PRIMARY KEY for atomic replay rejection');
   assert(sql.includes('CREATE TABLE IF NOT EXISTS public.retail_pos_lockouts'), 'Must create retail_pos_lockouts table');
-  assert(sql.includes('lockout_key TEXT PRIMARY KEY'), 'lockout_key must be PRIMARY KEY');
+  assert(sql.includes('record_pos_failed_attempt'), 'Must define record_pos_failed_attempt atomic function');
+  assert(sql.includes('p_approval_token_id UUID DEFAULT NULL'), 'execute_atomic_retail_sale must accept approval token parameters');
+});
+
+check('PosManagerApprovalService implements atomic lockout via record_pos_failed_attempt and fails closed', () => {
+  assert(approvalServiceContent.includes('record_pos_failed_attempt'), 'Must call record_pos_failed_attempt atomic RPC');
+  assert(approvalServiceContent.includes('LOCKOUT_STORE_UNAVAILABLE'), 'Must throw LOCKOUT_STORE_UNAVAILABLE on DB failure (fail closed)');
+  assert(!approvalServiceContent.includes('this.localLockoutTracker.set(key, local)'), 'Must NOT fall back to local blank tracker allowing lockout bypass');
 });
 
 check('PosManagerApprovalService queries workspace_members table for OWNER/ADMINISTRATOR roles', () => {
