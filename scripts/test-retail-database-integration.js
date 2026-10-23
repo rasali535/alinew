@@ -1018,11 +1018,96 @@ async function main() {
     assert(Number(checkLockout.rows[0].failed_attempts) === 5, 'Atomic failed attempts reached exactly 5 without lost updates');
     assert(checkLockout.rows[0].is_locked === true, 'Account lockout triggered after 5 failed attempts');
 
-    // 7. Test Rollback Migration
-    const rollbackPath = path.resolve(__dirname, '../packages/database/migrations/20261025000000_retail_pos_security_hardening_rollback.sql');
+    // 7. Test Privileged SECURITY DEFINER RPC Lockdown (Permission denied for authenticated and anon)
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+          CREATE ROLE anon NOLOGIN;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+          CREATE ROLE authenticated NOLOGIN;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+          CREATE ROLE service_role NOLOGIN;
+        END IF;
+      END $$;
+      GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+    `);
+
+    async function testRoleRpcExecution(roleName, rpcQuery, rpcParams = []) {
+      const roleClient = new Client({ connectionString: CONNECTION_STRING });
+      await roleClient.connect();
+      try {
+        await roleClient.query(`SET ROLE ${roleName};`);
+        await roleClient.query(rpcQuery, rpcParams);
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, code: err.code, message: err.message };
+      } finally {
+        await roleClient.end().catch(() => {});
+      }
+    }
+
+    // Direct client bypass attempt for execute_atomic_retail_sale
+    const saleBypassQuery = `
+      SELECT public.execute_atomic_retail_sale(
+        $1, $2, 'SALE-BYPASS-01', 'INV-01', 'POS', NULL, 'Bypass Buyer',
+        $3, 'Cashier', NULL, 'USD', 100.00, 0, 0, 100.00, 50.00,
+        'CASH', 'PAID', 'idem-bypass-01', 'Direct RPC bypass attempt',
+        '[]'::jsonb, '[]'::jsonb, false
+      );
+    `;
+    const saleBypassParams = [PROINSIGHT_ORG_ID, PROINSIGHT_WORKSPACE_ID, cashierUserId];
+
+    const authSaleRes = await testRoleRpcExecution('authenticated', saleBypassQuery, saleBypassParams);
+    assert(authSaleRes.ok === false && authSaleRes.code === '42501', 'execute_atomic_retail_sale strictly denied to authenticated role (42501)');
+
+    const anonSaleRes = await testRoleRpcExecution('anon', saleBypassQuery, saleBypassParams);
+    assert(anonSaleRes.ok === false && anonSaleRes.code === '42501', 'execute_atomic_retail_sale strictly denied to anon role (42501)');
+
+    // Direct client bypass attempt for record_pos_failed_attempt
+    const lockoutAttemptQuery = `SELECT public.record_pos_failed_attempt('bypass-key', $1, 5, 15);`;
+    const authLockoutRes = await testRoleRpcExecution('authenticated', lockoutAttemptQuery, [PROINSIGHT_WORKSPACE_ID]);
+    assert(authLockoutRes.ok === false && authLockoutRes.code === '42501', 'record_pos_failed_attempt strictly denied to authenticated role (42501)');
+
+    const anonLockoutRes = await testRoleRpcExecution('anon', lockoutAttemptQuery, [PROINSIGHT_WORKSPACE_ID]);
+    assert(anonLockoutRes.ok === false && anonLockoutRes.code === '42501', 'record_pos_failed_attempt strictly denied to anon role (42501)');
+
+    // Direct client bypass attempt for reset_pos_lockout
+    const resetLockoutQuery = `SELECT public.reset_pos_lockout('bypass-key');`;
+    const authResetRes = await testRoleRpcExecution('authenticated', resetLockoutQuery);
+    assert(authResetRes.ok === false && authResetRes.code === '42501', 'reset_pos_lockout strictly denied to authenticated role (42501)');
+
+    const anonResetRes = await testRoleRpcExecution('anon', resetLockoutQuery);
+    assert(anonResetRes.ok === false && anonResetRes.code === '42501', 'reset_pos_lockout strictly denied to anon role (42501)');
+
+    // Direct client bypass attempt for execute_atomic_goods_receipt
+    const grnBypassQuery = `SELECT public.execute_atomic_goods_receipt($1, $2, $3, 'GRN-BYPASS', $4, 'notes', '[]'::jsonb);`;
+    const authGrnRes = await testRoleRpcExecution('authenticated', grnBypassQuery, [PROINSIGHT_ORG_ID, PROINSIGHT_WORKSPACE_ID, poId, cashierUserId]);
+    assert(authGrnRes.ok === false && authGrnRes.code === '42501', 'execute_atomic_goods_receipt strictly denied to authenticated role (42501)');
+
+    // Direct client bypass attempt for execute_atomic_quotation_conversion
+    const quoteConvBypassQuery = `SELECT public.execute_atomic_quotation_conversion($1, $2, $3, $4, 'cashier', 'CASH', NULL, 'idem-bypass');`;
+    const authQuoteRes = await testRoleRpcExecution('authenticated', quoteConvBypassQuery, [PROINSIGHT_ORG_ID, PROINSIGHT_WORKSPACE_ID, quoteId, cashierUserId]);
+    assert(authQuoteRes.ok === false && authQuoteRes.code === '42501', 'execute_atomic_quotation_conversion strictly denied to authenticated role (42501)');
+
+    // Direct client bypass attempt for execute_atomic_sale_refund
+    const refundBypassQuery = `SELECT public.execute_atomic_sale_refund($1, $2, $3, 'bypass reason', false, $4);`;
+    const authRefundRes = await testRoleRpcExecution('authenticated', refundBypassQuery, [PROINSIGHT_ORG_ID, PROINSIGHT_WORKSPACE_ID, saleIdToRefund, cashierUserId]);
+    assert(authRefundRes.ok === false && authRefundRes.code === '42501', 'execute_atomic_sale_refund strictly denied to authenticated role (42501)');
+
+    // Verify service_role permission is granted
+    const serviceRoleLockoutRes = await testRoleRpcExecution('service_role', lockoutAttemptQuery, [PROINSIGHT_WORKSPACE_ID]);
+    assert(serviceRoleLockoutRes.ok === true, 'record_pos_failed_attempt permitted to service_role');
+
+    console.log('  ' + green('✓') + ' Privileged POS RPC permissions strictly revoked from authenticated/anon and granted only to service_role (verified 42501 denials).');
+
+    // 8. Test Rollback Migration from docs/rollback/
+    const rollbackPath = path.resolve(__dirname, '../docs/rollback/20261025000000_retail_pos_security_hardening_rollback.sql');
     const rollbackSql = fs.readFileSync(rollbackPath, 'utf8');
     await client.query(rollbackSql);
-    console.log('  ' + green('✓') + ' Rollback migration applied cleanly.');
+    console.log('  ' + green('✓') + ' Rollback migration applied cleanly from docs/rollback/.');
 
     const checkTablesDropped = await client.query(`
       SELECT to_regclass('public.retail_pos_consumed_tokens') as t1,

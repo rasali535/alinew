@@ -1,6 +1,7 @@
 -- =====================================================================
 -- Ralion Retail POS Security Hardening: Rollback Script
--- Migration: 20261025000000_retail_pos_security_hardening_rollback.sql
+-- Location: docs/rollback/20261025000000_retail_pos_security_hardening_rollback.sql
+-- (DO NOT place in supabase/migrations/ or packages/database/migrations/)
 -- =====================================================================
 
 -- 1. Drop 28-parameter execute_atomic_retail_sale
@@ -219,17 +220,18 @@ BEGIN
 END;
 $$;
 
+-- Revoke all execute permissions from public/anon/authenticated; permit only service_role
 REVOKE EXECUTE ON FUNCTION public.execute_atomic_retail_sale(
     UUID, UUID, TEXT, TEXT, TEXT, TEXT, TEXT, UUID, TEXT, UUID, TEXT,
     NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, TEXT, TEXT, TEXT, TEXT,
     JSONB, JSONB, BOOLEAN
-) FROM PUBLIC, anon;
+) FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION public.execute_atomic_retail_sale(
     UUID, UUID, TEXT, TEXT, TEXT, TEXT, TEXT, UUID, TEXT, UUID, TEXT,
     NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, TEXT, TEXT, TEXT, TEXT,
     JSONB, JSONB, BOOLEAN
-) TO service_role, authenticated;
+) TO service_role;
 
 -- 3. Drop atomic lockout helper functions
 DROP FUNCTION IF EXISTS public.record_pos_failed_attempt(TEXT, UUID, INT, INT);

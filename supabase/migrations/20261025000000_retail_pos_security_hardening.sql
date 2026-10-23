@@ -107,8 +107,12 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.record_pos_failed_attempt(TEXT, UUID, INT, INT) TO service_role, authenticated;
-GRANT EXECUTE ON FUNCTION public.reset_pos_lockout(TEXT) TO service_role, authenticated;
+-- Revoke execution from PUBLIC, anon, and authenticated; restrict strictly to service_role
+REVOKE EXECUTE ON FUNCTION public.record_pos_failed_attempt(TEXT, UUID, INT, INT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.record_pos_failed_attempt(TEXT, UUID, INT, INT) TO service_role;
+
+REVOKE EXECUTE ON FUNCTION public.reset_pos_lockout(TEXT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.reset_pos_lockout(TEXT) TO service_role;
 
 -- 4. Drop legacy 23-parameter execute_atomic_retail_sale to prevent overloading ambiguity
 DROP FUNCTION IF EXISTS public.execute_atomic_retail_sale(
@@ -376,14 +380,25 @@ BEGIN
 END;
 $$;
 
+-- Revoke execution from PUBLIC, anon, and authenticated on execute_atomic_retail_sale; restrict strictly to service_role
 REVOKE EXECUTE ON FUNCTION public.execute_atomic_retail_sale(
     UUID, UUID, TEXT, TEXT, TEXT, TEXT, TEXT, UUID, TEXT, UUID, TEXT,
     NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, TEXT, TEXT, TEXT, TEXT,
     JSONB, JSONB, BOOLEAN, UUID, TEXT, TEXT, TEXT, TIMESTAMPTZ
-) FROM PUBLIC, anon;
+) FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION public.execute_atomic_retail_sale(
     UUID, UUID, TEXT, TEXT, TEXT, TEXT, TEXT, UUID, TEXT, UUID, TEXT,
     NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, TEXT, TEXT, TEXT, TEXT,
     JSONB, JSONB, BOOLEAN, UUID, TEXT, TEXT, TEXT, TIMESTAMPTZ
-) TO service_role, authenticated;
+) TO service_role;
+
+-- Revoke execution from PUBLIC, anon, and authenticated on all other privileged retail engine RPCs
+REVOKE EXECUTE ON FUNCTION public.execute_atomic_goods_receipt(UUID, UUID, UUID, TEXT, UUID, TEXT, JSONB) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.execute_atomic_goods_receipt(UUID, UUID, UUID, TEXT, UUID, TEXT, JSONB) TO service_role;
+
+REVOKE EXECUTE ON FUNCTION public.execute_atomic_quotation_conversion(UUID, UUID, UUID, UUID, TEXT, TEXT, UUID, TEXT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.execute_atomic_quotation_conversion(UUID, UUID, UUID, UUID, TEXT, TEXT, UUID, TEXT) TO service_role;
+
+REVOKE EXECUTE ON FUNCTION public.execute_atomic_sale_refund(UUID, UUID, UUID, TEXT, BOOLEAN, UUID) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.execute_atomic_sale_refund(UUID, UUID, UUID, TEXT, BOOLEAN, UUID) TO service_role;

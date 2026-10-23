@@ -414,23 +414,38 @@ check('Checkout route enforces 50% discount ceiling even for direct store owners
 // -----------------------------------------------------------------------------
 console.log('\n10. Verifying Durable PostgreSQL Migrations, Schema Integrity & Rollback...');
 
-const migrationPath1 = path.join(rootDir, 'supabase/migrations/20261025000000_retail_pos_security_hardening.sql');
-const migrationPath2 = path.join(rootDir, 'packages/database/migrations/20261025000000_retail_pos_security_hardening.sql');
-const rollbackPath1 = path.join(rootDir, 'supabase/migrations/20261025000000_retail_pos_security_hardening_rollback.sql');
-const rollbackPath2 = path.join(rootDir, 'packages/database/migrations/20261025000000_retail_pos_security_hardening_rollback.sql');
+const canonicalMigrationSupabase = path.join(rootDir, 'supabase/migrations/20261025000000_retail_pos_security_hardening.sql');
+const canonicalMigrationPackages = path.join(rootDir, 'packages/database/migrations/20261025000000_retail_pos_security_hardening.sql');
+const dedicatedRollbackDoc = path.join(rootDir, 'docs/rollback/20261025000000_retail_pos_security_hardening_rollback.sql');
 
-check('Migration creates retail_pos_consumed_tokens, lockouts, and atomic functions', () => {
-  assert(fs.existsSync(migrationPath1), 'Migration must exist in supabase/migrations');
-  assert(fs.existsSync(migrationPath2), 'Migration must exist in packages/database/migrations');
-  assert(fs.existsSync(rollbackPath1), 'Rollback migration must exist in supabase/migrations');
-  assert(fs.existsSync(rollbackPath2), 'Rollback migration must exist in packages/database/migrations');
+check('Single canonical forward migration exists and rollback SQL is stored strictly outside migration folders', () => {
+  assert(fs.existsSync(canonicalMigrationSupabase), 'Migration must exist in supabase/migrations');
+  assert(fs.existsSync(canonicalMigrationPackages), 'Migration must exist in packages/database/migrations');
+  assert(fs.existsSync(dedicatedRollbackDoc), 'Rollback SQL must exist in docs/rollback/');
 
-  const sql = fs.readFileSync(migrationPath1, 'utf8');
+  // Ensure NO rollback files exist in auto-applied migration folders
+  const supabaseFiles = fs.readdirSync(path.join(rootDir, 'supabase/migrations'));
+  const packageFiles = fs.readdirSync(path.join(rootDir, 'packages/database/migrations'));
+  assert(!supabaseFiles.some(f => f.toLowerCase().includes('rollback')), 'Found rollback SQL file in supabase/migrations! Must be removed to prevent auto-apply collisions.');
+  assert(!packageFiles.some(f => f.toLowerCase().includes('rollback')), 'Found rollback SQL file in packages/database/migrations! Must be removed to prevent auto-apply collisions.');
+});
+
+check('Privileged SECURITY DEFINER RPCs are strictly locked down to service_role (revoked from authenticated/anon/PUBLIC)', () => {
+  const sql = fs.readFileSync(canonicalMigrationSupabase, 'utf8');
   assert(sql.includes('CREATE TABLE IF NOT EXISTS public.retail_pos_consumed_tokens'), 'Must create retail_pos_consumed_tokens table');
   assert(sql.includes('token_id UUID PRIMARY KEY'), 'token_id must be PRIMARY KEY for atomic replay rejection');
   assert(sql.includes('CREATE TABLE IF NOT EXISTS public.retail_pos_lockouts'), 'Must create retail_pos_lockouts table');
   assert(sql.includes('record_pos_failed_attempt'), 'Must define record_pos_failed_attempt atomic function');
   assert(sql.includes('p_approval_token_id UUID DEFAULT NULL'), 'execute_atomic_retail_sale must accept approval token parameters');
+
+  // Verify privileged RPC grants: NO authenticated grants
+  assert(!sql.includes('GRANT EXECUTE ON FUNCTION public.execute_atomic_retail_sale') || !sql.includes('TO service_role, authenticated'), 'Must NOT grant execute_atomic_retail_sale to authenticated!');
+  assert(!sql.includes('GRANT EXECUTE ON FUNCTION public.record_pos_failed_attempt') || !sql.includes('TO service_role, authenticated'), 'Must NOT grant record_pos_failed_attempt to authenticated!');
+  assert(!sql.includes('GRANT EXECUTE ON FUNCTION public.reset_pos_lockout') || !sql.includes('TO service_role, authenticated'), 'Must NOT grant reset_pos_lockout to authenticated!');
+
+  // Verify strict service_role grants and revokes from authenticated
+  assert(sql.includes('FROM PUBLIC, anon, authenticated;'), 'Must revoke execute from PUBLIC, anon, authenticated on POS RPCs');
+  assert(sql.includes('TO service_role;'), 'Must grant execute strictly to service_role');
 });
 
 check('PosManagerApprovalService implements atomic lockout via record_pos_failed_attempt and fails closed', () => {
