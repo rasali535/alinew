@@ -820,7 +820,11 @@ export default function CashierWorkstationPage() {
       q === '' ||
       safeLowerCase(p.name).includes(q) ||
       safeLowerCase(p.sku).includes(q) ||
-      Boolean(p.barcode && p.barcode.includes(q));
+      Boolean(p.barcode && p.barcode.includes(q)) ||
+      safeLowerCase(p.brand).includes(q) ||
+      safeLowerCase(p.supplierName).includes(q) ||
+      safeLowerCase(p.category).includes(q) ||
+      safeLowerCase(p.subcategory).includes(q);
     return matchesCat && matchesQuery;
   });
 
@@ -1133,7 +1137,7 @@ export default function CashierWorkstationPage() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search catalog..."
+                placeholder="Name, brand, supplier, department, SKU..."
                 className="w-full bg-zinc-800/60 border border-zinc-700/80 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
               />
             </div>
@@ -1179,6 +1183,11 @@ export default function CashierWorkstationPage() {
                     <div className="text-xs font-semibold text-zinc-100 group-hover:text-emerald-300 transition-colors line-clamp-2">
                       {p.name}
                     </div>
+                    {(p.brand || p.supplierName || p.subcategory) && (
+                      <div className="text-[10px] text-zinc-500 mt-1 line-clamp-2">
+                        {[p.brand, p.subcategory, p.supplierName].filter(Boolean).join(' · ')}
+                      </div>
+                    )
                   </div>
 
                   <div className="mt-2 pt-2 border-t border-zinc-800/80 flex items-center justify-between">
