@@ -16,6 +16,7 @@ import {
   Tag,
   DollarSign,
   TrendingUp,
+  Layers,
 } from 'lucide-react';
 import { RetailNavHeader } from '../components/RetailNavHeader';
 import { RetailAccessErrorCard, RetailErrorState } from '../components/RetailAccessErrorCard';
@@ -42,9 +43,20 @@ export default function RetailInventoryPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAdjustModal, setShowAdjustModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showPackagesModal, setShowPackagesModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<NormalizedRetailProduct | null>(null);
   const [movements, setMovements] = useState<NormalizedRetailStockMovement[]>([]);
   const [loadingMovements, setLoadingMovements] = useState(false);
+
+  // Packaging variant form
+  const [packForm, setPackForm] = useState({
+    label: '',
+    baseUnitsPerPack: 12,
+    barcode: '',
+    sellingPrice: '',
+    purchaseCost: '',
+  });
+  const [creatingPack, setCreatingPack] = useState(false);
 
   // Form states
   const [newProduct, setNewProduct] = useState({
@@ -71,7 +83,7 @@ export default function RetailInventoryPage() {
     try {
       setLoading(true);
       setErrorState(null);
-      const res = await authFetch('/api/retail/products');
+      const res = await authFetch('/api/retail/catalogue/search?channel=PURCHASE&limit=200');
       if (!res.ok) {
         let errJson: any = null;
         try { errJson = await res.json(); } catch {}
@@ -83,7 +95,7 @@ export default function RetailInventoryPage() {
         return;
       }
       const data = await res.json();
-      if (data.success && data.products) {
+      if (data.products) {
         setProducts(normalizeProducts(data.products));
       } else {
         setErrorState({
@@ -101,6 +113,52 @@ export default function RetailInventoryPage() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreatePackage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedProduct) return;
+    if (!packForm.label.trim() || Number(packForm.baseUnitsPerPack) <= 1) {
+      alert('Pack label and a conversion factor greater than 1 are required.');
+      return;
+    }
+
+    try {
+      setCreatingPack(true);
+      const res = await authFetch('/api/retail/catalogue/packages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productId: selectedProduct.id,
+          label: packForm.label.trim(),
+          baseUnitsPerPack: Number(packForm.baseUnitsPerPack),
+          barcode: packForm.barcode.trim() || undefined,
+          sellingPrice: packForm.sellingPrice ? parseFloat(packForm.sellingPrice) : undefined,
+          purchaseCost: packForm.purchaseCost ? parseFloat(packForm.purchaseCost) : undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setActionSuccess(`Packaging "${packForm.label}" created for ${selectedProduct.name}.`);
+        setTimeout(() => setActionSuccess(null), 3500);
+        setPackForm({
+          label: '',
+          baseUnitsPerPack: 12,
+          barcode: '',
+          sellingPrice: '',
+          purchaseCost: '',
+        });
+        setShowPackagesModal(false);
+        fetchProducts();
+      } else {
+        alert(data.error || 'Failed to create packaging');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error creating packaging');
+    } finally {
+      setCreatingPack(false);
     }
   };
 
@@ -316,20 +374,21 @@ export default function RetailInventoryPage() {
                   <th className="py-3.5 px-4 text-right">Selling Price</th>
                   <th className="py-3.5 px-4 text-right">Margin</th>
                   <th className="py-3.5 px-4 text-center">Stock Level</th>
+                  <th className="py-3.5 px-4 text-center">Packs</th>
                   <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800/60">
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-zinc-500">
+                    <td colSpan={8} className="py-12 text-center text-zinc-500">
                       <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-emerald-500" />
                       Loading inventory items...
                     </td>
                   </tr>
                 ) : filteredProducts.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-zinc-500">
+                    <td colSpan={8} className="py-12 text-center text-zinc-500">
                       No hardware items found matching your filters.
                     </td>
                   </tr>
@@ -344,7 +403,14 @@ export default function RetailInventoryPage() {
                     return (
                       <tr key={p.id} className="hover:bg-zinc-800/30 transition-colors">
                         <td className="py-3 px-4">
-                          <div className="font-medium text-zinc-100">{p.name}</div>
+                          <div className="font-medium text-zinc-100 flex items-center gap-1.5">
+                            <span>{p.name}</span>
+                            {p.brand && (
+                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 font-sans">
+                                {p.brand}
+                              </span>
+                            )}
+                          </div>
                           <div className="text-xs text-zinc-400 font-mono flex items-center gap-2 mt-0.5">
                             <span>SKU: {p.sku}</span>
                             {p.barcode && <span>• Barcode: {p.barcode}</span>}
@@ -352,7 +418,7 @@ export default function RetailInventoryPage() {
                         </td>
                         <td className="py-3 px-4">
                           <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-zinc-800 text-zinc-300 border border-zinc-700/60">
-                            {p.category}
+                            {p.department || p.category}
                           </span>
                         </td>
                         <td className="py-3 px-4 text-right font-mono text-zinc-300">
@@ -381,6 +447,20 @@ export default function RetailInventoryPage() {
                               </span>
                             )}
                           </div>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedProduct(p);
+                              setShowPackagesModal(true);
+                            }}
+                            className="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-500/30 text-emerald-300 transition inline-flex items-center gap-1 cursor-pointer"
+                            title="Manage packaging variants"
+                          >
+                            <Layers className="w-3 h-3" />
+                            <span>{p.packs?.length || 0}</span>
+                          </button>
                         </td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-2">
@@ -721,6 +801,153 @@ export default function RetailInventoryPage() {
                   ))
                 )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* PACKAGING VARIANTS & CONVERSION MODAL */}
+        {showPackagesModal && selectedProduct && (
+          <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
+              <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                <div>
+                  <h3 className="text-base font-bold text-zinc-100 flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-emerald-400" />
+                    Packaging Variants & Conversions
+                  </h3>
+                  <p className="text-xs text-zinc-400">
+                    {selectedProduct.name} • Base Unit: <strong className="text-zinc-200">{selectedProduct.unitOfMeasure || 'unit'}</strong>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPackagesModal(false)}
+                  className="text-zinc-500 hover:text-zinc-300 p-1"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Existing Packages List */}
+              <div className="space-y-2 flex-1 overflow-y-auto pr-1">
+                <div className="text-xs font-semibold text-zinc-300 mb-1">Configured Packaging Variants</div>
+                {!selectedProduct.packs || selectedProduct.packs.length === 0 ? (
+                  <div className="p-4 bg-zinc-950/60 rounded-xl text-center text-xs text-zinc-500">
+                    No packaging variants defined. Only sold/purchased in base units ({selectedProduct.unitOfMeasure || 'units'}).
+                  </div>
+                ) : (
+                  selectedProduct.packs.map((pk) => (
+                    <div
+                      key={pk.id}
+                      className="p-3 bg-zinc-950/70 border border-zinc-800 rounded-xl flex items-center justify-between text-xs font-mono"
+                    >
+                      <div>
+                        <div className="font-bold text-zinc-100 font-sans flex items-center gap-2">
+                          <span>{pk.label}</span>
+                          {pk.barcode && (
+                            <span className="text-[10px] text-zinc-500 font-mono">Barcode: {pk.barcode}</span>
+                          )}
+                        </div>
+                        <div className="text-zinc-400 text-[11px] mt-0.5 font-sans">
+                          1 {pk.label} = <strong className="text-emerald-400">{pk.baseUnitsPerPack}</strong> {selectedProduct.unitOfMeasure || 'units'}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        {pk.sellingPrice && (
+                          <div className="text-emerald-400 font-bold">Sell: {formatPrice(pk.sellingPrice)}</div>
+                        )}
+                        {pk.purchaseCost && (
+                          <div className="text-zinc-400 text-[10px]">Cost: {formatPrice(pk.purchaseCost)}</div>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Add New Packaging Variant Form */}
+              <form onSubmit={handleCreatePackage} className="pt-3 border-t border-zinc-800 space-y-3 text-xs">
+                <div className="text-xs font-semibold text-zinc-200">Add Packaging Variant</div>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="text-zinc-400 block mb-1">Pack Label *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Box of 12 / Carton"
+                      value={packForm.label}
+                      onChange={(e) => setPackForm({ ...packForm, label: e.target.value })}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-zinc-400 block mb-1">Base Units Per Pack *</label>
+                    <input
+                      type="number"
+                      min="2"
+                      required
+                      placeholder="12"
+                      value={packForm.baseUnitsPerPack}
+                      onChange={(e) => setPackForm({ ...packForm, baseUnitsPerPack: parseInt(e.target.value) || 2 })}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2.5">
+                  <div>
+                    <label className="text-zinc-400 block mb-1">Pack Barcode</label>
+                    <input
+                      type="text"
+                      placeholder="Optional"
+                      value={packForm.barcode}
+                      onChange={(e) => setPackForm({ ...packForm, barcode: e.target.value })}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-zinc-400 block mb-1">Pack Sell Price ($)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="Optional"
+                      value={packForm.sellingPrice}
+                      onChange={(e) => setPackForm({ ...packForm, sellingPrice: e.target.value })}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-zinc-400 block mb-1">Pack Cost ($)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="Optional"
+                      value={packForm.purchaseCost}
+                      onChange={(e) => setPackForm({ ...packForm, purchaseCost: e.target.value })}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowPackagesModal(false)}
+                    className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium"
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={creatingPack}
+                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold disabled:opacity-50"
+                  >
+                    {creatingPack ? 'Saving...' : 'Add Packaging Variant'}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}
