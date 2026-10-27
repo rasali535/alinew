@@ -209,7 +209,7 @@ export class RetailDatabaseService {
         .filter(s => s.name.toLocaleLowerCase().includes(term))
         .map(s => s.id);
       const escaped = options.query.trim().replace(/[,%().*\\]/g, ' ').trim();
-      const terms = escaped.split(/\\s+/).filter(Boolean);
+      const terms = escaped.split(/\s+/).filter(Boolean);
       if (terms.length && !matchingSuppliers.length) {
         const phrase = terms.join(' ');
         query = query.or(`name.ilike.%${phrase}%,sku.ilike.%${phrase}%,barcode.ilike.%${phrase}%,brand.ilike.%${phrase}%,category.ilike.%${phrase}%,subcategory.ilike.%${phrase}%`);
