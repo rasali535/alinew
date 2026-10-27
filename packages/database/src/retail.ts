@@ -640,3 +640,142 @@ export interface RetailFinancialMetrics {
   expenseBreakdown: Array<{ category: string; amount: number }>;
   bestSellers: Array<{ productId: string; name: string; quantitySold: number; revenue: number }>;
 }
+
+// ---------------------------------------------------------------------------
+// 13. MARI Smart Stock Receiving Contracts
+// ---------------------------------------------------------------------------
+export type SmartReceiptDocumentType = 'INVOICE' | 'PACKING_LIST' | 'COMBINED';
+
+export type SmartReceiptDraftStatus =
+  | 'PENDING_EXTRACTION'
+  | 'PROCESSING'
+  | 'EXTRACTED'
+  | 'READY_FOR_REVIEW'
+  | 'POSTING'
+  | 'POSTED'
+  | 'FAILED'
+  | 'REJECTED';
+
+export type SmartReceiptMatchStatus =
+  | 'EXACT'
+  | 'HIGH_CONFIDENCE'
+  | 'NEEDS_REVIEW'
+  | 'UNMATCHED'
+  | 'PROPOSED_NEW';
+
+export interface RetailSmartReceiptDraft {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  documentType: SmartReceiptDocumentType;
+  status: SmartReceiptDraftStatus;
+  fileName: string;
+  filePath: string;
+  fileSizeBytes: number;
+  mimeType: string;
+  fileSha256: string;
+  supplierId?: string;
+  supplierName?: string;
+  extractedSupplierName?: string;
+  extractedSupplierTaxId?: string;
+  extractedDocumentNumber?: string;
+  extractedPoNumber?: string;
+  purchaseOrderId?: string;
+  documentDate?: string;
+  currency: RetailCurrency;
+  subtotal: number;
+  taxTotal: number;
+  totalAmount: number;
+  confidenceScore: number;
+  extractionRaw?: any;
+  extractionError?: string;
+  createdBy?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  postedBy?: string;
+  postedAt?: string;
+  goodsReceiptId?: string;
+  postingNonce?: string;
+  createdAt: string;
+  updatedAt: string;
+  items?: RetailSmartReceiptItem[];
+  attachments?: RetailSmartReceiptAttachment[];
+}
+
+export interface RetailSmartReceiptItem {
+  id: string;
+  draftId: string;
+  organizationId: string;
+  workspaceId: string;
+  lineNumber: number;
+  rawDescription: string;
+  rawSku?: string;
+  rawBarcode?: string;
+  statedQuantity: number;
+  receivedQuantity: number;
+  damagedQuantity: number;
+  missingQuantity: number;
+  unitOfMeasure: string;
+  packLabel?: string;
+  packSize: number;
+  calculatedBaseQuantity: number;
+  unitCost?: number;
+  taxRate: number;
+  lineTotal: number;
+  matchedProductId?: string;
+  matchedProductName?: string;
+  matchedPackageId?: string;
+  matchedPoItemId?: string;
+  matchConfidence: number;
+  matchStatus: SmartReceiptMatchStatus;
+  reviewNotes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RetailSmartReceiptAttachment {
+  id: string;
+  draftId: string;
+  organizationId: string;
+  workspaceId: string;
+  documentType: 'INVOICE' | 'PACKING_LIST' | 'DELIVERY_NOTE' | 'OTHER';
+  fileName: string;
+  filePath: string;
+  fileSizeBytes: number;
+  mimeType: string;
+  fileSha256: string;
+  createdAt: string;
+}
+
+export interface ExecuteAtomicSmartStockReceiptItem {
+  id?: string;
+  product_id: string;
+  package_id?: string | null;
+  quantity_received: number;
+  pack_size?: number;
+  unit_cost?: number;
+}
+
+export interface ExecuteAtomicSmartStockReceiptParams {
+  organizationId: string;
+  workspaceId: string;
+  draftId: string;
+  approvedBy: string;
+  nonce: string;
+  notes?: string;
+  items: ExecuteAtomicSmartStockReceiptItem[];
+}
+
+export interface ExecuteAtomicSmartStockReceiptResult {
+  success: boolean;
+  draft_id: string;
+  receipt_id: string;
+  receipt_number: string;
+  purchase_order_id?: string;
+  po_number?: string;
+  lines_posted?: number;
+  base_units_added?: number;
+  idempotent_replay?: boolean;
+  message?: string;
+}
+

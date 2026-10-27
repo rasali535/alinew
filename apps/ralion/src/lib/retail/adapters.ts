@@ -1118,3 +1118,125 @@ export type NormalizedExpense = NormalizedRetailExpense;
 export type NormalizedEmployee = NormalizedRetailEmployee;
 export type NormalizedPayrollRun = NormalizedRetailPayrollRun;
 
+// ---------------------------------------------------------------------------
+// 10. Smart Stock Receiving Normalizers
+// ---------------------------------------------------------------------------
+export interface NormalizedSmartReceiptItem {
+  id: string;
+  draftId: string;
+  lineNumber: number;
+  rawDescription: string;
+  rawSku?: string;
+  rawBarcode?: string;
+  statedQuantity: number;
+  receivedQuantity: number;
+  damagedQuantity: number;
+  missingQuantity: number;
+  unitOfMeasure: string;
+  packLabel?: string;
+  packSize: number;
+  calculatedBaseQuantity: number;
+  unitCost?: number;
+  taxRate: number;
+  lineTotal: number;
+  matchedProductId?: string;
+  matchedProductName?: string;
+  matchedPackageId?: string;
+  matchConfidence: number;
+  matchStatus: 'EXACT' | 'HIGH_CONFIDENCE' | 'NEEDS_REVIEW' | 'UNMATCHED' | 'PROPOSED_NEW';
+  reviewNotes?: string;
+}
+
+export interface NormalizedSmartReceiptDraft {
+  id: string;
+  documentType: 'INVOICE' | 'PACKING_LIST' | 'COMBINED';
+  status: 'PENDING_EXTRACTION' | 'PROCESSING' | 'EXTRACTED' | 'READY_FOR_REVIEW' | 'POSTING' | 'POSTED' | 'FAILED' | 'REJECTED';
+  fileName: string;
+  filePath: string;
+  fileSizeBytes: number;
+  mimeType: string;
+  fileSha256: string;
+  supplierId?: string;
+  supplierName?: string;
+  extractedSupplierName?: string;
+  extractedDocumentNumber?: string;
+  extractedPoNumber?: string;
+  purchaseOrderId?: string;
+  documentDate?: string;
+  currency: string;
+  subtotal: number;
+  taxTotal: number;
+  totalAmount: number;
+  confidenceScore: number;
+  extractionError?: string;
+  goodsReceiptId?: string;
+  createdAt: string;
+  items?: NormalizedSmartReceiptItem[];
+}
+
+export function normalizeSmartReceiptItem(raw: any): NormalizedSmartReceiptItem {
+  const statedQty = parseStrictNumber(raw.statedQuantity ?? raw.stated_quantity) ?? 0;
+  const receivedQty = parseStrictNumber(raw.receivedQuantity ?? raw.received_quantity) ?? statedQty;
+  const damagedQty = parseStrictNumber(raw.damagedQuantity ?? raw.damaged_quantity) ?? 0;
+  const missingQty = parseStrictNumber(raw.missingQuantity ?? raw.missing_quantity) ?? 0;
+  const packSize = parseStrictNumber(raw.packSize ?? raw.pack_size) ?? 1;
+  const unitCost = parseStrictNumber(raw.unitCost ?? raw.unit_cost);
+
+  return {
+    id: safeString(raw.id),
+    draftId: safeString(raw.draftId || raw.draft_id),
+    lineNumber: parseStrictNumber(raw.lineNumber ?? raw.line_number) ?? 1,
+    rawDescription: safeString(raw.rawDescription || raw.raw_description, 'Hardware Item'),
+    rawSku: raw.rawSku || raw.raw_sku ? safeString(raw.rawSku || raw.raw_sku) : undefined,
+    rawBarcode: raw.rawBarcode || raw.raw_barcode ? safeString(raw.rawBarcode || raw.raw_barcode) : undefined,
+    statedQuantity: statedQty,
+    receivedQuantity: receivedQty,
+    damagedQuantity: damagedQty,
+    missingQuantity: missingQty,
+    unitOfMeasure: safeString(raw.unitOfMeasure || raw.unit_of_measure, 'units'),
+    packLabel: raw.packLabel || raw.pack_label ? safeString(raw.packLabel || raw.pack_label) : undefined,
+    packSize,
+    calculatedBaseQuantity: parseStrictNumber(raw.calculatedBaseQuantity ?? raw.calculated_base_quantity) ?? Math.round(receivedQty * packSize * 100) / 100,
+    unitCost: unitCost !== null ? unitCost : undefined,
+    taxRate: parseStrictNumber(raw.taxRate ?? raw.tax_rate) ?? 0,
+    lineTotal: parseStrictNumber(raw.lineTotal ?? raw.line_total) ?? (unitCost !== null ? Math.round(receivedQty * unitCost * 100) / 100 : 0),
+    matchedProductId: raw.matchedProductId || raw.matched_product_id ? safeString(raw.matchedProductId || raw.matched_product_id) : undefined,
+    matchedProductName: raw.matchedProductName || raw.matched_product_name || raw.matched_product?.name ? safeString(raw.matchedProductName || raw.matched_product_name || raw.matched_product?.name) : undefined,
+    matchedPackageId: raw.matchedPackageId || raw.matched_package_id ? safeString(raw.matchedPackageId || raw.matched_package_id) : undefined,
+    matchConfidence: parseStrictNumber(raw.matchConfidence ?? raw.match_confidence) ?? 0,
+    matchStatus: raw.matchStatus || raw.match_status || 'UNMATCHED',
+    reviewNotes: raw.reviewNotes || raw.review_notes ? safeString(raw.reviewNotes || raw.review_notes) : undefined,
+  };
+}
+
+export function normalizeSmartReceiptDraft(raw: any): NormalizedSmartReceiptDraft {
+  const items = Array.isArray(raw.items) ? raw.items.map(normalizeSmartReceiptItem) : undefined;
+  return {
+    id: safeString(raw.id),
+    documentType: raw.documentType || raw.document_type || 'INVOICE',
+    status: raw.status || 'PENDING_EXTRACTION',
+    fileName: safeString(raw.fileName || raw.file_name, 'document'),
+    filePath: safeString(raw.filePath || raw.file_path, ''),
+    fileSizeBytes: parseStrictNumber(raw.fileSizeBytes ?? raw.file_size_bytes) ?? 0,
+    mimeType: safeString(raw.mimeType || raw.mime_type, 'application/octet-stream'),
+    fileSha256: safeString(raw.fileSha256 || raw.file_sha256, ''),
+    supplierId: raw.supplierId || raw.supplier_id ? safeString(raw.supplierId || raw.supplier_id) : undefined,
+    supplierName: raw.supplierName || raw.supplier_name || raw.supplier?.name || raw.extractedSupplierName || raw.extracted_supplier_name || undefined,
+    extractedSupplierName: raw.extractedSupplierName || raw.extracted_supplier_name ? safeString(raw.extractedSupplierName || raw.extracted_supplier_name) : undefined,
+    extractedDocumentNumber: raw.extractedDocumentNumber || raw.extracted_document_number ? safeString(raw.extractedDocumentNumber || raw.extracted_document_number) : undefined,
+    extractedPoNumber: raw.extractedPoNumber || raw.extracted_po_number ? safeString(raw.extractedPoNumber || raw.extracted_po_number) : undefined,
+    purchaseOrderId: raw.purchaseOrderId || raw.purchase_order_id ? safeString(raw.purchaseOrderId || raw.purchase_order_id) : undefined,
+    documentDate: raw.documentDate || raw.document_date ? safeString(raw.documentDate || raw.document_date) : undefined,
+    currency: safeString(raw.currency, 'USD'),
+    subtotal: parseStrictNumber(raw.subtotal) ?? 0,
+    taxTotal: parseStrictNumber(raw.taxTotal ?? raw.tax_total) ?? 0,
+    totalAmount: parseStrictNumber(raw.totalAmount ?? raw.total_amount) ?? 0,
+    confidenceScore: parseStrictNumber(raw.confidenceScore ?? raw.confidence_score) ?? 100,
+    extractionError: raw.extractionError || raw.extraction_error ? safeString(raw.extractionError || raw.extraction_error) : undefined,
+    goodsReceiptId: raw.goodsReceiptId || raw.goods_receipt_id ? safeString(raw.goodsReceiptId || raw.goods_receipt_id) : undefined,
+    createdAt: safeString(raw.createdAt || raw.created_at, new Date().toISOString()),
+    items,
+  };
+}
+
+

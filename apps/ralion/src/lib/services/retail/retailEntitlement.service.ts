@@ -37,6 +37,8 @@ export interface RetailEntitlementCheck {
   canManageSettings: boolean;
   canAccessPOS: boolean;
   canAccessInventory: boolean;
+  canManageInventory: boolean;
+  canManagePurchasing: boolean;
   canAccessQuotations: boolean;
   canAccessSales: boolean;
   canAccessExpenses: boolean;
@@ -68,6 +70,8 @@ export class RetailEntitlementService {
         canManageSettings: false,
         canAccessPOS: false,
         canAccessInventory: false,
+        canManageInventory: false,
+        canManagePurchasing: false,
         canAccessQuotations: false,
         canAccessSales: false,
         canAccessExpenses: false,
@@ -99,6 +103,8 @@ export class RetailEntitlementService {
         canManageSettings: false,
         canAccessPOS: false,
         canAccessInventory: false,
+        canManageInventory: false,
+        canManagePurchasing: false,
         canAccessQuotations: false,
         canAccessSales: false,
         canAccessExpenses: false,
@@ -124,6 +130,8 @@ export class RetailEntitlementService {
           canManageSettings: false,
           canAccessPOS: false,
           canAccessInventory: false,
+          canManageInventory: false,
+          canManagePurchasing: false,
           canAccessQuotations: false,
           canAccessSales: false,
           canAccessExpenses: false,
@@ -151,6 +159,8 @@ export class RetailEntitlementService {
           canManageSettings: false,
           canAccessPOS: false,
           canAccessInventory: false,
+          canManageInventory: false,
+          canManagePurchasing: false,
           canAccessQuotations: false,
           canAccessSales: false,
           canAccessExpenses: false,
@@ -172,6 +182,8 @@ export class RetailEntitlementService {
           canManageSettings: false,
           canAccessPOS: false,
           canAccessInventory: false,
+          canManageInventory: false,
+          canManagePurchasing: false,
           canAccessQuotations: false,
           canAccessSales: false,
           canAccessExpenses: false,
@@ -202,6 +214,8 @@ export class RetailEntitlementService {
           canManageSettings: false,
           canAccessPOS: false,
           canAccessInventory: false,
+          canManageInventory: false,
+          canManagePurchasing: false,
           canAccessQuotations: false,
           canAccessSales: false,
           canAccessExpenses: false,
@@ -221,6 +235,8 @@ export class RetailEntitlementService {
         canManageSettings: true,
         canAccessPOS: true,
         canAccessInventory: true,
+        canManageInventory: true,
+        canManagePurchasing: true,
         canAccessQuotations: true,
         canAccessSales: true,
         canAccessExpenses: true,
@@ -315,6 +331,8 @@ export class RetailEntitlementService {
         canManageSettings: false,
         canAccessPOS: false,
         canAccessInventory: false,
+        canManageInventory: false,
+        canManagePurchasing: false,
         canAccessQuotations: false,
         canAccessSales: false,
         canAccessExpenses: false,
@@ -349,6 +367,8 @@ export class RetailEntitlementService {
     const canManageSettings = isOwner || isPlatformAdmin;
     const canAccessPOS = isOwner || isManager || isCashier;
     const canAccessInventory = isOwner || isManager || isInventoryClerk;
+    const canManageInventory = isOwner || isManager;
+    const canManagePurchasing = isOwner || isManager;
     const canAccessQuotations = isOwner || isManager || isCashier;
     const canAccessSales = isOwner || isManager || isCashier;
     const canAccessExpenses = isOwner || isManager;
@@ -374,6 +394,8 @@ export class RetailEntitlementService {
       canManageSettings,
       canAccessPOS,
       canAccessInventory,
+      canManageInventory,
+      canManagePurchasing,
       canAccessQuotations,
       canAccessSales,
       canAccessExpenses,
@@ -403,6 +425,8 @@ export class RetailEntitlementService {
       canManageSettings: false,
       canAccessPOS: false,
       canAccessInventory: false,
+      canManageInventory: false,
+      canManagePurchasing: false,
       canAccessQuotations: false,
       canAccessSales: false,
       canAccessExpenses: false,
