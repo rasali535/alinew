@@ -160,6 +160,99 @@ export interface RetailSupplier {
   updatedAt: string;
 }
 
+export interface RetailTaxCode {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  code: string;
+  name: string;
+  rate: number;
+  isDefault: boolean;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RetailDepartment {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  name: string;
+  code?: string;
+  sortOrder: number;
+  isActive: boolean;
+  subdepartments?: RetailSubdepartment[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RetailSubdepartment {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  departmentId: string;
+  name: string;
+  code?: string;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RetailBrand {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  name: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RetailProductSupplier {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  productId: string;
+  supplierId: string;
+  supplierName?: string;
+  supplierSku?: string;
+  isPreferred: boolean;
+  lastCost?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RetailProductPackage {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  productId: string;
+  label: string;
+  kind: 'SALES' | 'PURCHASE' | 'BOTH';
+  baseUnitsPerPack: number;
+  barcode?: string;
+  sellingPrice?: number;
+  purchaseCost?: number;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface RetailGoodsReceiptItem {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  goodsReceiptId: string;
+  poItemId: string;
+  productId: string;
+  quantityReceived: number;
+  packSize: number;
+  baseQuantity: number;
+  unitCost: number;
+  createdAt?: string;
+}
+
 // ---------------------------------------------------------------------------
 // 4. Products & Stock
 // ---------------------------------------------------------------------------
@@ -172,6 +265,10 @@ export interface RetailProduct {
   barcode?: string;
   category: string;
   subcategory?: string;
+  departmentId?: string;
+  subdepartmentId?: string;
+  brandId?: string;
+  taxCodeId?: string;
   description?: string;
   brand?: string;
   supplierId?: string;
@@ -186,6 +283,8 @@ export interface RetailProduct {
   status: 'ACTIVE' | 'DISCONTINUED' | 'DRAFT';
   imageUrl?: string;
   isPilotDemo?: boolean;
+  packages?: RetailProductPackage[];
+  suppliers?: RetailProductSupplier[];
   createdAt: string;
   updatedAt: string;
 }
@@ -233,6 +332,9 @@ export interface RetailPoItem {
   quantityReceived: number;
   unitCost: number;
   lineTotal: number;
+  packageId?: string;
+  packLabel?: string;
+  packSize?: number;
   createdAt?: string;
 }
 
@@ -264,6 +366,7 @@ export interface RetailGoodsReceipt {
   receiptNumber: string;
   receivedBy?: string;
   notes?: string;
+  items?: RetailGoodsReceiptItem[];
   receivedAt: string;
 }
 
@@ -283,6 +386,10 @@ export interface RetailQuoteItem {
   discountRate: number;
   taxRate: number;
   lineTotal: number;
+  packageId?: string;
+  packLabel?: string;
+  packSize?: number;
+  baseQuantity?: number;
   createdAt?: string;
 }
 
@@ -347,6 +454,10 @@ export interface RetailSaleItem {
   discountRate: number;
   lineTotal: number;
   lineCost: number;
+  packageId?: string;
+  packLabel?: string;
+  packSize?: number;
+  baseQuantity?: number;
   createdAt?: string;
 }
 

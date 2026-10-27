@@ -57,6 +57,9 @@ export interface AtomicSaleParams {
     unitCost?: number;
     taxRate?: number;
     discountRate?: number;
+    packageId?: string;
+    packLabel?: string;
+    packSize?: number;
   }>;
   payments: Array<{
     paymentMethod: 'CASH' | 'CARD_EXTERNAL' | 'BANK_TRANSFER' | 'SPLIT';
@@ -84,6 +87,7 @@ export interface AtomicReceiveParams {
   receivedBy?: string;
   items: Array<{
     productId: string;
+    poItemId?: string;
     quantityReceivedNow: number;
     unitCost?: number;
   }>;
@@ -516,6 +520,19 @@ export class RetailDatabaseService {
       return { success: false, error: `Failed to retrieve authoritative product data: ${prodErr?.message || 'Not found'}` };
     }
 
+    const packageIds = Array.from(new Set(params.items.map((i) => i.packageId).filter(Boolean)));
+    let packageMap = new Map<string, any>();
+    if (packageIds.length > 0) {
+      const { data: dbPackages } = await supabase
+        .from('retail_product_packages')
+        .select('*')
+        .eq('workspace_id', params.workspaceId)
+        .in('id', packageIds);
+      if (dbPackages) {
+        packageMap = new Map<string, any>(dbPackages.map((p) => [p.id, p]));
+      }
+    }
+
     const productMap = new Map<string, any>(dbProducts.map((p) => [p.id, p]));
 
     let subtotal = 0;
@@ -550,10 +567,33 @@ export class RetailDatabaseService {
       }
 
       // Authoritative pricing and cost from database — NEVER trust client-supplied unitPrice or unitCost!
-      const authoritativeUnitPrice = Number(dbProd.selling_price || 0);
-      const authoritativeUnitCost = Number(dbProd.purchase_cost || 0);
-      const minSellingPrice = Number(dbProd.min_selling_price || 0);
+      let authoritativeUnitPrice = Number(dbProd.selling_price || 0);
+      let authoritativeUnitCost = Number(dbProd.purchase_cost || 0);
+      let minSellingPrice = Number(dbProd.min_selling_price || 0);
       const taxRate = Number(dbProd.vat_rate || 0);
+
+      let pkgRecord: any = null;
+      if (item.packageId) {
+        pkgRecord = packageMap.get(item.packageId);
+        if (
+          !pkgRecord ||
+          pkgRecord.product_id !== dbProd.id ||
+          !pkgRecord.is_active ||
+          (pkgRecord.kind !== 'SALES' && pkgRecord.kind !== 'BOTH')
+        ) {
+          return {
+            success: false,
+            error: `INVALID_PACKAGE: Selected package is not an active sales pack for '${dbProd.name}'.`,
+          };
+        }
+        const packSize = Number(pkgRecord.base_units_per_pack);
+        authoritativeUnitPrice =
+          pkgRecord.selling_price !== null && pkgRecord.selling_price !== undefined
+            ? Number(pkgRecord.selling_price)
+            : Math.round(authoritativeUnitPrice * packSize * 100) / 100;
+        authoritativeUnitCost = Math.round(authoritativeUnitCost * packSize * 100) / 100;
+        minSellingPrice = Math.round(minSellingPrice * packSize * 100) / 100;
+      }
 
       const discountRate = Number(item.discountRate || 0);
       if (!Number.isFinite(discountRate) || discountRate < 0 || discountRate > 100) {
@@ -595,6 +635,7 @@ export class RetailDatabaseService {
         discount_rate: discountRate,
         line_total: lineTotal,
         line_cost: lineCost,
+        package_id: pkgRecord ? pkgRecord.id : null,
       });
     }
 
@@ -743,6 +784,10 @@ export class RetailDatabaseService {
         discountRate: Number(it.discount_rate || 0),
         lineTotal: Number(it.line_total),
         lineCost: Number(it.line_cost || 0),
+        packageId: it.package_id || undefined,
+        packLabel: it.pack_label || undefined,
+        packSize: it.pack_size ? Number(it.pack_size) : 1,
+        baseQuantity: it.base_quantity !== null && it.base_quantity !== undefined ? Number(it.base_quantity) : undefined,
       })),
       payments: (s.retail_sale_payments || []).map((p: any) => ({
         id: p.id,
@@ -770,6 +815,7 @@ export class RetailDatabaseService {
 
     const itemsPayload = params.items.map((it) => ({
       product_id: it.productId,
+      po_item_id: it.poItemId || null,
       quantity_received: it.quantityReceivedNow,
       unit_cost: it.unitCost || 0,
     }));
@@ -888,6 +934,10 @@ export class RetailDatabaseService {
         quantityReceived: Number(it.quantity_received || 0),
         unitCost: Number(it.unit_cost || 0),
         lineTotal: Number(it.line_total || 0),
+        packageId: it.package_id || undefined,
+        packLabel: it.pack_label || undefined,
+        packSize: it.pack_size ? Number(it.pack_size) : 1,
+        baseQuantity: it.base_quantity !== null && it.base_quantity !== undefined ? Number(it.base_quantity) : undefined,
       })),
       createdAt: po.created_at,
       updatedAt: po.updated_at,
@@ -923,6 +973,9 @@ export class RetailDatabaseService {
       quantity_received: 0,
       unit_cost: it.unitCost,
       line_total: it.lineTotal,
+      package_id: it.packageId || null,
+      pack_label: it.packLabel || null,
+      pack_size: it.packSize || 1,
     }));
 
     await supabase.from('retail_po_items').insert(itemsToInsert);
@@ -972,6 +1025,10 @@ export class RetailDatabaseService {
         discountRate: Number(it.discount_rate || 0),
         taxRate: Number(it.tax_rate || 0),
         lineTotal: Number(it.line_total),
+        packageId: it.package_id || undefined,
+        packLabel: it.pack_label || undefined,
+        packSize: it.pack_size ? Number(it.pack_size) : 1,
+        baseQuantity: it.base_quantity !== null && it.base_quantity !== undefined ? Number(it.base_quantity) : undefined,
       })),
       createdAt: q.created_at,
       updatedAt: q.updated_at,
@@ -996,6 +1053,19 @@ export class RetailDatabaseService {
       throw new Error(`Failed to retrieve authoritative product data for quote: ${prodErr?.message || 'Not found'}`);
     }
 
+    const packageIds = Array.from(new Set(items.map((i) => i.packageId).filter(Boolean)));
+    let packageMap = new Map<string, any>();
+    if (packageIds.length > 0) {
+      const { data: dbPackages } = await supabase
+        .from('retail_product_packages')
+        .select('*')
+        .eq('workspace_id', quote.workspaceId)
+        .in('id', packageIds);
+      if (dbPackages) {
+        packageMap = new Map<string, any>(dbPackages.map((p) => [p.id, p]));
+      }
+    }
+
     const productMap = new Map<string, any>(dbProducts.map((p) => [p.id, p]));
 
     let subtotal = 0;
@@ -1015,10 +1085,38 @@ export class RetailDatabaseService {
         throw new Error(`PRODUCT_NOT_IN_WORKSPACE: Product '${it.productId}' does not exist in this workspace catalogue.`);
       }
 
+      let pkgRecord: any = null;
+      let packSize = 1;
+      let packLabel: string | undefined = undefined;
+
+      if (it.packageId) {
+        pkgRecord = packageMap.get(it.packageId);
+        if (
+          !pkgRecord ||
+          pkgRecord.product_id !== dbProd.id ||
+          !pkgRecord.is_active ||
+          (pkgRecord.kind !== 'SALES' && pkgRecord.kind !== 'BOTH')
+        ) {
+          throw new Error(`INVALID_PACKAGE: Selected package is not an active sales pack for '${dbProd.name}'.`);
+        }
+        packSize = Number(pkgRecord.base_units_per_pack);
+        packLabel = pkgRecord.label;
+      }
+
       // Authoritative cost is ALWAYS fetched from DB — never trust client-supplied cost!
-      const authoritativeUnitCost = Number(dbProd.purchase_cost || 0);
-      const minSellingPrice = Number(dbProd.min_selling_price || 0);
-      const standardSellingPrice = Number(dbProd.selling_price || 0);
+      let authoritativeUnitCost = Number(dbProd.purchase_cost || 0);
+      let minSellingPrice = Number(dbProd.min_selling_price || 0);
+      let standardSellingPrice = Number(dbProd.selling_price || 0);
+
+      if (pkgRecord) {
+        authoritativeUnitCost = Math.round(authoritativeUnitCost * packSize * 100) / 100;
+        minSellingPrice = Math.round(minSellingPrice * packSize * 100) / 100;
+        standardSellingPrice =
+          pkgRecord.selling_price !== null && pkgRecord.selling_price !== undefined
+            ? Number(pkgRecord.selling_price)
+            : Math.round(standardSellingPrice * packSize * 100) / 100;
+      }
+
       const unitPrice = Number(it.unitPrice) > 0 ? Number(it.unitPrice) : standardSellingPrice;
       const taxRate = Number(it.taxRate ?? dbProd.vat_rate ?? 0);
       const discountRate = Number(it.discountRate || 0);
@@ -1044,6 +1142,8 @@ export class RetailDatabaseService {
       discountTotal += lineDiscount;
       taxTotal += lineTax;
 
+      const baseQuantity = Math.round(quantity * packSize * 100) / 100;
+
       validatedItems.push({
         id: it.id || `qi_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
         quotationId: quote.id,
@@ -1057,6 +1157,10 @@ export class RetailDatabaseService {
         discountRate,
         taxRate,
         lineTotal,
+        packageId: pkgRecord ? pkgRecord.id : undefined,
+        packLabel: packLabel || undefined,
+        packSize,
+        baseQuantity,
       });
     }
 
@@ -1098,6 +1202,10 @@ export class RetailDatabaseService {
       discount_rate: it.discountRate || 0,
       tax_rate: it.taxRate || 0,
       line_total: it.lineTotal,
+      package_id: it.packageId || null,
+      pack_label: it.packLabel || null,
+      pack_size: it.packSize || 1,
+      base_quantity: it.baseQuantity || (it.quantity * (it.packSize || 1)),
     }));
 
     await supabase.from('retail_quote_items').insert(quoteItemsPayload);

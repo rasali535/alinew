@@ -40,12 +40,18 @@ export default function RetailPurchasingPage() {
   const [errorState, setErrorState] = useState<RetailErrorState | null>(null);
   const [search, setSearch] = useState('');
 
+  // Merchandising metadata
+  const [departments, setDepartments] = useState<Array<{ id: string; name: string }>>([]);
+  const [brands, setBrands] = useState<Array<{ id: string; name: string }>>([]);
+  const [taxCodes, setTaxCodes] = useState<Array<{ id: string; code: string; rate: number }>>([]);
+
   // Modals
   const [showAddSupplierModal, setShowAddSupplierModal] = useState(false);
   const [showCreatePOModal, setShowCreatePOModal] = useState(false);
+  const [showCreateProductModal, setShowCreateProductModal] = useState(false);
   const [showReceiveModal, setShowReceiveModal] = useState(false);
   const [selectedPO, setSelectedPO] = useState<NormalizedRetailPurchaseOrder | null>(null);
-  const [receivingItems, setReceivingItems] = useState<{ [productId: string]: number }>({});
+  const [receivingItems, setReceivingItems] = useState<{ [key: string]: number }>({});
   const [receivingLoading, setReceivingLoading] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
 
@@ -62,21 +68,53 @@ export default function RetailPurchasingPage() {
   const [newPO, setNewPO] = useState<{
     supplier_id: string;
     expected_delivery: string;
-    items: { product_id: string; product_name: string; quantity: number; unit_cost: number }[];
+    items: {
+      product_id: string;
+      product_name: string;
+      quantity: number;
+      unit_cost: number;
+      package_id?: string;
+      pack_label?: string;
+      pack_size?: number;
+      base_quantity?: number;
+    }[];
   }>({
     supplier_id: '',
     expected_delivery: '',
     items: [],
   });
 
+  // Create Product In PO Form (Zero opening stock)
+  const [newProductForm, setNewProductForm] = useState({
+    name: '',
+    sku: '',
+    barcode: '',
+    unitOfMeasure: 'each',
+    sellingPrice: '',
+    purchaseCost: '',
+    departmentId: '',
+    brandId: '',
+    taxCodeId: '',
+    supplierSku: '',
+  });
+  const [creatingProduct, setCreatingProduct] = useState(false);
+
+  // Catalogue Search Picker in PO
+  const [poSearchQuery, setPoSearchQuery] = useState('');
+  const [poSearchResults, setPoSearchResults] = useState<NormalizedRetailProduct[]>([]);
+  const [isSearchingCatalogue, setIsSearchingCatalogue] = useState(false);
+
   const fetchData = async () => {
     try {
       setLoading(true);
       setErrorState(null);
-      const [resOrders, resSuppliers, resProducts] = await Promise.all([
+      const [resOrders, resSuppliers, resProducts, resHierarchy, resBrands, resTaxCodes] = await Promise.all([
         authFetch('/api/retail/purchasing/orders'),
         authFetch('/api/retail/suppliers'),
-        authFetch('/api/retail/products'),
+        authFetch('/api/retail/catalogue/search?channel=PURCHASE&limit=50'),
+        authFetch('/api/retail/catalogue/hierarchy'),
+        authFetch('/api/retail/catalogue/brands'),
+        authFetch('/api/retail/catalogue/tax-codes'),
       ]);
 
       if (!resOrders.ok) {
@@ -96,7 +134,20 @@ export default function RetailPurchasingPage() {
 
       if (dataOrders.success) setOrders(normalizePurchaseOrders(dataOrders.orders || []));
       if (dataSuppliers.success) setSuppliers(normalizeSuppliers(dataSuppliers.suppliers || []));
-      if (dataProducts.success) setProducts(normalizeProducts(dataProducts.products || []));
+      if (dataProducts.products) setProducts(normalizeProducts(dataProducts.products));
+
+      if (resHierarchy.ok) {
+        const d = await resHierarchy.json();
+        if (d.departments) setDepartments(d.departments);
+      }
+      if (resBrands.ok) {
+        const b = await resBrands.json();
+        if (b.brands) setBrands(b.brands);
+      }
+      if (resTaxCodes.ok) {
+        const t = await resTaxCodes.json();
+        if (t.taxCodes) setTaxCodes(t.taxCodes);
+      }
     } catch (e: any) {
       console.error('Failed to fetch purchasing data', e);
       setErrorState({
@@ -153,6 +204,103 @@ export default function RetailPurchasingPage() {
     }
   };
 
+  const handleSearchCatalogue = async (q: string) => {
+    setPoSearchQuery(q);
+    if (!q.trim()) {
+      setPoSearchResults([]);
+      return;
+    }
+    try {
+      setIsSearchingCatalogue(true);
+      const res = await authFetch(`/api/retail/catalogue/search?channel=PURCHASE&q=${encodeURIComponent(q.trim())}&limit=20`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.products) {
+          setPoSearchResults(normalizeProducts(data.products));
+        }
+      }
+    } catch (err) {
+      console.error('Catalogue search error:', err);
+    } finally {
+      setIsSearchingCatalogue(false);
+    }
+  };
+
+  const handleCreateProductInPO = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProductForm.name.trim() || !newProductForm.sku.trim()) {
+      alert('Product Name and SKU are required.');
+      return;
+    }
+
+    try {
+      setCreatingProduct(true);
+      const res = await authFetch('/api/retail/purchasing/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newProductForm.name.trim(),
+          sku: newProductForm.sku.trim(),
+          barcode: newProductForm.barcode.trim() || undefined,
+          unitOfMeasure: newProductForm.unitOfMeasure || 'each',
+          sellingPrice: parseFloat(newProductForm.sellingPrice) || 0,
+          purchaseCost: parseFloat(newProductForm.purchaseCost) || 0,
+          departmentId: newProductForm.departmentId || undefined,
+          brandId: newProductForm.brandId || undefined,
+          taxCodeId: newProductForm.taxCodeId || undefined,
+          supplierId: newPO.supplier_id || undefined,
+          supplierSku: newProductForm.supplierSku.trim() || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.product) {
+        const created = data.product;
+        setShowCreateProductModal(false);
+        setNotification(`Product "${created.name}" created with 0 opening stock (ready for PO).`);
+        setTimeout(() => setNotification(null), 4000);
+
+        // Auto-add line item to PO
+        const cost = parseFloat(newProductForm.purchaseCost) || 0;
+        setNewPO((prev) => ({
+          ...prev,
+          items: [
+            ...prev.items,
+            {
+              product_id: created.id,
+              product_name: created.name,
+              quantity: 1,
+              unit_cost: cost,
+              pack_size: 1,
+              base_quantity: 1,
+            },
+          ],
+        }));
+
+        setNewProductForm({
+          name: '',
+          sku: '',
+          barcode: '',
+          unitOfMeasure: 'each',
+          sellingPrice: '',
+          purchaseCost: '',
+          departmentId: '',
+          brandId: '',
+          taxCodeId: '',
+          supplierSku: '',
+        });
+
+        void fetchData();
+      } else {
+        alert(data.error || 'Failed to create product.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error creating product.');
+    } finally {
+      setCreatingProduct(false);
+    }
+  };
+
   const handleCreatePO = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPO.supplier_id) {
@@ -180,6 +328,14 @@ export default function RetailPurchasingPage() {
           quantity_ordered: it.quantity,
           unitCost: it.unit_cost,
           unit_cost: it.unit_cost,
+          packageId: it.package_id,
+          package_id: it.package_id,
+          packLabel: it.pack_label,
+          pack_label: it.pack_label,
+          packSize: it.pack_size || 1,
+          pack_size: it.pack_size || 1,
+          baseQuantity: it.base_quantity || (it.quantity * (it.pack_size || 1)),
+          base_quantity: it.base_quantity || (it.quantity * (it.pack_size || 1)),
         })),
       };
 
@@ -206,13 +362,13 @@ export default function RetailPurchasingPage() {
 
   const openReceiveModal = (po: NormalizedRetailPurchaseOrder) => {
     setSelectedPO(po);
-    const initialMap: { [productId: string]: number } = {};
+    const initialMap: { [key: string]: number } = {};
     if (po.items) {
       po.items.forEach((item) => {
-        const id = item.productId || item.product_id;
+        const key = item.id || `${item.productId || item.product_id}_${item.packageId || 'base'}`;
         const ordered = item.quantityOrdered ?? item.quantity_ordered ?? 0;
         const received = item.quantityReceived ?? item.quantity_received ?? 0;
-        initialMap[id] = Math.max(0, ordered - received);
+        initialMap[key] = Math.max(0, ordered - received);
       });
     }
     setReceivingItems(initialMap);
@@ -226,12 +382,20 @@ export default function RetailPurchasingPage() {
       setReceivingLoading(true);
       const itemsToReceive = Object.entries(receivingItems)
         .filter(([_, qty]) => qty > 0)
-        .map(([productId, qty]) => ({
-          productId,
-          product_id: productId,
-          quantityReceived: qty,
-          quantityReceivedNow: qty,
-        }));
+        .map(([key, qty]) => {
+          const poItem = selectedPO.items?.find(
+            (it) => it.id === key || `${it.productId || it.product_id}_${it.packageId || 'base'}` === key || (it.productId || it.product_id) === key
+          );
+          return {
+            poItemId: poItem?.id,
+            po_item_id: poItem?.id,
+            productId: poItem ? (poItem.productId || poItem.product_id) : key,
+            product_id: poItem ? (poItem.productId || poItem.product_id) : key,
+            quantityReceived: qty,
+            quantityReceivedNow: qty,
+            quantity_received: qty,
+          };
+        });
 
       if (itemsToReceive.length === 0) {
         alert('Please specify quantity received for at least one item.');
@@ -523,53 +687,142 @@ export default function RetailPurchasingPage() {
                   </div>
                 </div>
 
-                {/* Add Product Line Items */}
-                <div className="bg-zinc-950/60 border border-zinc-800/80 p-3 rounded-xl space-y-2">
+                {/* Add Product Line Items with Unified Search & Create Product Modal */}
+                <div className="bg-zinc-950/60 border border-zinc-800/80 p-3 rounded-xl space-y-2.5">
                   <div className="text-xs font-semibold text-zinc-300 flex items-center justify-between">
                     <span>Add Inventory Items to PO</span>
-                    <span className="text-zinc-500 font-mono">Catalog: {products.length} products</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateProductModal(true)}
+                      className="px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-[11px] font-semibold flex items-center gap-1 cursor-pointer transition"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>Create New Product</span>
+                    </button>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {products.slice(0, 6).map((prod) => (
-                      <button
-                        key={prod.id}
-                        type="button"
-                        onClick={() => {
-                          const existing = newPO.items.find((it) => it.product_id === prod.id);
-                          const unitCost = prod.purchaseCost ?? prod.unit_cost;
-                          if (existing) {
-                            setNewPO({
-                              ...newPO,
-                              items: newPO.items.map((it) =>
-                                it.product_id === prod.id ? { ...it, quantity: it.quantity + 1 } : it
-                              ),
-                            });
-                          } else {
-                            setNewPO({
-                              ...newPO,
-                              items: [
-                                ...newPO.items,
-                                {
-                                  product_id: prod.id,
-                                  product_name: prod.name,
-                                  quantity: 1,
-                                  unit_cost: unitCost,
-                                },
-                              ],
-                            });
-                          }
-                        }}
-                        className="p-2 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-emerald-500/50 text-left text-xs transition group"
-                      >
-                        <div className="font-medium text-zinc-200 group-hover:text-emerald-300 truncate">
-                          {prod.name}
+
+                  {/* Catalogue Search Input */}
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-2.5" />
+                    <input
+                      type="text"
+                      value={poSearchQuery}
+                      onChange={(e) => handleSearchCatalogue(e.target.value)}
+                      placeholder="Search existing products by name, SKU, brand to add..."
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-8 pr-7 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
+                    />
+                    {isSearchingCatalogue && (
+                      <RefreshCw className="w-3.5 h-3.5 text-emerald-400 absolute right-2.5 top-2.5 animate-spin" />
+                    )}
+                  </div>
+
+                  {/* Product Cards & Packaging Variants */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto pr-1">
+                    {(poSearchQuery.trim() ? poSearchResults : products.slice(0, 8)).map((prod) => {
+                      const baseCost = prod.purchaseCost ?? prod.unit_cost ?? 0;
+                      const hasPacks = Array.isArray(prod.packs) && prod.packs.length > 0;
+
+                      return (
+                        <div
+                          key={prod.id}
+                          className="p-2.5 rounded-lg bg-zinc-900 border border-zinc-800 flex flex-col justify-between text-xs space-y-1.5"
+                        >
+                          <div>
+                            <div className="flex items-center justify-between text-[10px] text-zinc-500 font-mono">
+                              <span>{prod.sku}</span>
+                              {prod.brand && <span className="text-zinc-400">{prod.brand}</span>}
+                            </div>
+                            <div className="font-medium text-zinc-200 truncate mt-0.5">{prod.name}</div>
+                            <div className="text-[10px] text-zinc-500 font-mono flex justify-between mt-0.5">
+                              <span>Base Cost: {formatPrice(baseCost)}</span>
+                              <span>Stock: {prod.currentStock ?? prod.current_stock ?? 0}</span>
+                            </div>
+                          </div>
+
+                          <div className="pt-1 border-t border-zinc-800 flex flex-wrap gap-1">
+                            {/* Add Base Unit */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const existingIdx = newPO.items.findIndex(
+                                  (it) => it.product_id === prod.id && !it.package_id
+                                );
+                                if (existingIdx >= 0) {
+                                  const updated = [...newPO.items];
+                                  updated[existingIdx].quantity += 1;
+                                  updated[existingIdx].base_quantity = updated[existingIdx].quantity;
+                                  setNewPO({ ...newPO, items: updated });
+                                } else {
+                                  setNewPO({
+                                    ...newPO,
+                                    items: [
+                                      ...newPO.items,
+                                      {
+                                        product_id: prod.id,
+                                        product_name: prod.name,
+                                        quantity: 1,
+                                        unit_cost: baseCost,
+                                        pack_size: 1,
+                                        base_quantity: 1,
+                                      },
+                                    ],
+                                  });
+                                }
+                              }}
+                              className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-[10px] text-zinc-300 font-medium transition cursor-pointer"
+                            >
+                              + Base Unit ({formatPrice(baseCost)})
+                            </button>
+
+                            {/* Add Packaging Variants */}
+                            {hasPacks &&
+                              prod.packs!.map((pk) => {
+                                const packCost =
+                                  pk.purchaseCost ?? Math.round(baseCost * pk.baseUnitsPerPack * 100) / 100;
+                                return (
+                                  <button
+                                    key={pk.id}
+                                    type="button"
+                                    onClick={() => {
+                                      const existingIdx = newPO.items.findIndex(
+                                        (it) => it.product_id === prod.id && it.package_id === pk.id
+                                      );
+                                      if (existingIdx >= 0) {
+                                        const updated = [...newPO.items];
+                                        updated[existingIdx].quantity += 1;
+                                        updated[existingIdx].base_quantity =
+                                          updated[existingIdx].quantity * pk.baseUnitsPerPack;
+                                        setNewPO({ ...newPO, items: updated });
+                                      } else {
+                                        setNewPO({
+                                          ...newPO,
+                                          items: [
+                                            ...newPO.items,
+                                            {
+                                              product_id: prod.id,
+                                              product_name: prod.name,
+                                              quantity: 1,
+                                              unit_cost: packCost,
+                                              package_id: pk.id,
+                                              pack_label: pk.label,
+                                              pack_size: pk.baseUnitsPerPack,
+                                              base_quantity: pk.baseUnitsPerPack,
+                                            },
+                                          ],
+                                        });
+                                      }
+                                    }}
+                                    className="px-2 py-0.5 rounded bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-500/30 text-[10px] text-emerald-300 font-medium transition cursor-pointer"
+                                    title={`Add ${pk.label} (${pk.baseUnitsPerPack} base units)`}
+                                  >
+                                    + {pk.label} ({formatPrice(packCost)})
+                                  </button>
+                                );
+                              })}
+                          </div>
                         </div>
-                        <div className="text-zinc-500 font-mono mt-0.5 flex justify-between">
-                          <span>{formatPrice(prod.purchaseCost ?? prod.unit_cost)}</span>
-                          <span>Stock: {prod.currentStock ?? prod.current_stock ?? 0}</span>
-                        </div>
-                      </button>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -579,74 +832,92 @@ export default function RetailPurchasingPage() {
                     <thead>
                       <tr className="bg-zinc-950/80 text-zinc-400 border-b border-zinc-800">
                         <th className="p-2.5">Item</th>
-                        <th className="p-2.5 text-center w-24">Qty</th>
-                        <th className="p-2.5 text-right w-28">Cost ($)</th>
-                        <th className="p-2.5 text-right w-28">Total ($)</th>
-                        <th className="p-2.5 text-center w-10"></th>
+                        <th className="p-2.5 text-center">Packaging</th>
+                        <th className="p-2.5 text-center w-20">Order Qty</th>
+                        <th className="p-2.5 text-center w-24">Base Units</th>
+                        <th className="p-2.5 text-right w-24">Cost ($)</th>
+                        <th className="p-2.5 text-right w-24">Total ($)</th>
+                        <th className="p-2.5 text-center w-8"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-800/50">
                       {newPO.items.length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="p-6 text-center text-zinc-500">
-                            No items added yet. Click catalog items above to add to this PO.
+                          <td colSpan={7} className="p-6 text-center text-zinc-500">
+                            No items added yet. Search or click catalogue items above to add to this PO.
                           </td>
                         </tr>
                       ) : (
-                        newPO.items.map((item, idx) => (
-                          <tr key={idx} className="hover:bg-zinc-800/20">
-                            <td className="p-2.5 font-medium text-zinc-200">{item.product_name}</td>
-                            <td className="p-2.5 text-center">
-                              <input
-                                type="number"
-                                min="1"
-                                value={item.quantity}
-                                onChange={(e) => {
-                                  const qty = parseInt(e.target.value) || 0;
-                                  const updated = [...newPO.items];
-                                  if (qty <= 0) {
+                        newPO.items.map((item, idx) => {
+                          const baseUnits = item.quantity * (item.pack_size || 1);
+                          return (
+                            <tr key={idx} className="hover:bg-zinc-800/20">
+                              <td className="p-2.5 font-medium text-zinc-200">{item.product_name}</td>
+                              <td className="p-2.5 text-center">
+                                {item.pack_label ? (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 font-semibold">
+                                    {item.pack_label} (x{item.pack_size})
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-zinc-500">Base Unit</span>
+                                )}
+                              </td>
+                              <td className="p-2.5 text-center">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={item.quantity}
+                                  onChange={(e) => {
+                                    const qty = parseInt(e.target.value) || 0;
+                                    const updated = [...newPO.items];
+                                    if (qty <= 0) {
+                                      updated.splice(idx, 1);
+                                    } else {
+                                      updated[idx].quantity = qty;
+                                      updated[idx].base_quantity = qty * (updated[idx].pack_size || 1);
+                                    }
+                                    setNewPO({ ...newPO, items: updated });
+                                  }}
+                                  className="w-16 bg-zinc-950 border border-zinc-700 rounded px-2 py-1 text-center font-mono text-zinc-100"
+                                />
+                              </td>
+                              <td className="p-2.5 text-center font-mono text-zinc-400">
+                                {baseUnits} units
+                              </td>
+                              <td className="p-2.5 text-right">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={item.unit_cost}
+                                  onChange={(e) => {
+                                    const cost = parseFloat(e.target.value) || 0;
+                                    const updated = [...newPO.items];
+                                    updated[idx].unit_cost = cost;
+                                    setNewPO({ ...newPO, items: updated });
+                                  }}
+                                  className="w-20 bg-zinc-950 border border-zinc-700 rounded px-2 py-1 text-right font-mono text-zinc-100"
+                                />
+                              </td>
+                              <td className="p-2.5 text-right font-mono font-bold text-emerald-400">
+                                {formatPrice(item.quantity * item.unit_cost)}
+                              </td>
+                              <td className="p-2.5 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updated = [...newPO.items];
                                     updated.splice(idx, 1);
-                                  } else {
-                                    updated[idx].quantity = qty;
-                                  }
-                                  setNewPO({ ...newPO, items: updated });
-                                }}
-                                className="w-16 bg-zinc-950 border border-zinc-700 rounded px-2 py-1 text-center font-mono text-zinc-100"
-                              />
-                            </td>
-                            <td className="p-2.5 text-right">
-                              <input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                value={item.unit_cost}
-                                onChange={(e) => {
-                                  const cost = parseFloat(e.target.value) || 0;
-                                  const updated = [...newPO.items];
-                                  updated[idx].unit_cost = cost;
-                                  setNewPO({ ...newPO, items: updated });
-                                }}
-                                className="w-20 bg-zinc-950 border border-zinc-700 rounded px-2 py-1 text-right font-mono text-zinc-100"
-                              />
-                            </td>
-                            <td className="p-2.5 text-right font-mono font-bold text-emerald-400">
-                              {formatPrice(item.quantity * item.unit_cost)}
-                            </td>
-                            <td className="p-2.5 text-center">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const updated = [...newPO.items];
-                                  updated.splice(idx, 1);
-                                  setNewPO({ ...newPO, items: updated });
-                                }}
-                                className="text-zinc-500 hover:text-rose-400 p-1"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))
+                                    setNewPO({ ...newPO, items: updated });
+                                  }}
+                                  className="text-zinc-500 hover:text-rose-400 p-1"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
                       )}
                     </tbody>
                   </table>
@@ -714,31 +985,51 @@ export default function RetailPurchasingPage() {
                 <div className="space-y-2 max-h-60 overflow-y-auto">
                   {selectedPO.items && selectedPO.items.length > 0 ? (
                     selectedPO.items.map((item) => {
-                      const itemId = item.productId || item.product_id;
+                      const lineKey =
+                        item.id || `${item.productId || item.product_id}_${item.packageId || 'base'}`;
                       const ordered = item.quantityOrdered ?? item.quantity_ordered ?? 0;
+                      const alreadyReceived = item.quantityReceived ?? item.quantity_received ?? 0;
+                      const remaining = Math.max(0, ordered - alreadyReceived);
                       const cost = item.unitCost ?? item.unit_cost;
+                      const packLabel = item.packLabel;
+                      const packSize = item.packSize || 1;
+                      const currentQtyVal =
+                        receivingItems[lineKey] !== undefined ? receivingItems[lineKey] : remaining;
+
                       return (
                         <div
-                          key={itemId}
+                          key={lineKey}
                           className="bg-zinc-950 p-3 rounded-xl border border-zinc-800 flex items-center justify-between text-xs"
                         >
                           <div>
-                            <div className="font-medium text-zinc-200">{item.productName || item.product_name}</div>
-                            <div className="text-zinc-500 font-mono">
-                              Ordered: {ordered} • Unit Cost: {formatPrice(cost)}
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-zinc-200">{item.productName || item.product_name}</span>
+                              {packLabel && (
+                                <span className="px-1.5 py-0.2 rounded text-[10px] bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 font-semibold">
+                                  {packLabel} (x{packSize})
+                                </span>
+                              )}
                             </div>
+                            <div className="text-zinc-500 font-mono mt-0.5">
+                              Ordered: {ordered} • Received: {alreadyReceived} • Cost: {formatPrice(cost)}
+                            </div>
+                            {packSize > 1 && (
+                              <div className="text-[10px] text-zinc-400 mt-0.5">
+                                Base Units to receive: {currentQtyVal * packSize} units
+                              </div>
+                            )}
                           </div>
                           <div className="flex items-center gap-2">
-                            <label className="text-zinc-400 text-xs">Qty Received:</label>
+                            <label className="text-zinc-400 text-xs">Packs to Receive:</label>
                             <input
                               type="number"
-                              min="1"
-                              max={ordered}
-                              value={receivingItems[itemId] !== undefined ? receivingItems[itemId] : ordered}
+                              min="0"
+                              max={remaining}
+                              value={currentQtyVal}
                               onChange={(e) =>
                                 setReceivingItems({
                                   ...receivingItems,
-                                  [itemId]: parseInt(e.target.value) || 0,
+                                  [lineKey]: parseInt(e.target.value) || 0,
                                 })
                               }
                               className="w-20 bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-center font-mono text-zinc-100"
@@ -775,164 +1066,177 @@ export default function RetailPurchasingPage() {
           </div>
         )}
 
-        {/* CREATE PURCHASE ORDER MODAL */}
-        {showCreatePOModal && (
-          <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4">
+        {/* CREATE PRODUCT IN PO FLOW MODAL (Zero Opening Stock) */}
+        {showCreateProductModal && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
               <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-                <h3 className="text-base font-bold text-zinc-100 flex items-center gap-2">
-                  <Truck className="w-4 h-4 text-emerald-400" />
-                  Create Purchase Order
-                </h3>
+                <div className="flex items-center gap-2">
+                  <Plus className="w-5 h-5 text-emerald-400" />
+                  <h3 className="text-base font-bold text-zinc-100">Create New Catalogue Product</h3>
+                </div>
                 <button
-                  onClick={() => setShowCreatePOModal(false)}
+                  type="button"
+                  onClick={() => setShowCreateProductModal(false)}
                   className="text-zinc-500 hover:text-zinc-300 p-1"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <form onSubmit={handleCreatePO} className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
+              <div className="bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-xl text-xs text-emerald-300">
+                <strong>Zero Opening Stock Invariant:</strong> New products start with 0 physical stock. Inventory will only increase after you receive goods on this Purchase Order.
+              </div>
+
+              <form onSubmit={handleCreateProductInPO} className="space-y-3 text-xs flex-1 overflow-y-auto pr-1">
+                <div>
+                  <label className="text-zinc-400 block mb-1">Product Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newProductForm.name}
+                    onChange={(e) => setNewProductForm({ ...newProductForm, name: e.target.value })}
+                    placeholder="e.g. Copper Pipe 15mm x 5.5m"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5">
                   <div>
-                    <label className="text-xs text-zinc-400 block mb-1">Supplier *</label>
-                    <select
+                    <label className="text-zinc-400 block mb-1">SKU *</label>
+                    <input
+                      type="text"
                       required
-                      value={newPO.supplier_id}
-                      onChange={(e) => setNewPO({ ...newPO, supplier_id: e.target.value })}
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500"
+                      value={newProductForm.sku}
+                      onChange={(e) => setNewProductForm({ ...newProductForm, sku: e.target.value })}
+                      placeholder="e.g. CP-15MM"
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-zinc-400 block mb-1">Barcode (Optional)</label>
+                    <input
+                      type="text"
+                      value={newProductForm.barcode}
+                      onChange={(e) => setNewProductForm({ ...newProductForm, barcode: e.target.value })}
+                      placeholder="e.g. 6001234567890"
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2.5">
+                  <div>
+                    <label className="text-zinc-400 block mb-1">Unit of Measure</label>
+                    <input
+                      type="text"
+                      value={newProductForm.unitOfMeasure}
+                      onChange={(e) => setNewProductForm({ ...newProductForm, unitOfMeasure: e.target.value })}
+                      placeholder="each / m / kg"
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-zinc-400 block mb-1">Purchase Cost ($)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={newProductForm.purchaseCost}
+                      onChange={(e) => setNewProductForm({ ...newProductForm, purchaseCost: e.target.value })}
+                      placeholder="0.00"
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-zinc-400 block mb-1">Selling Price ($)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={newProductForm.sellingPrice}
+                      onChange={(e) => setNewProductForm({ ...newProductForm, sellingPrice: e.target.value })}
+                      placeholder="0.00"
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="text-zinc-400 block mb-1">Department</label>
+                    <select
+                      value={newProductForm.departmentId}
+                      onChange={(e) => setNewProductForm({ ...newProductForm, departmentId: e.target.value })}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500"
                     >
-                      <option value="">Select Supplier...</option>
-                      {suppliers.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
+                      <option value="">-- None --</option>
+                      {departments.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.name}
                         </option>
                       ))}
                     </select>
                   </div>
                   <div>
-                    <label className="text-xs text-zinc-400 block mb-1">Expected Delivery Date</label>
+                    <label className="text-zinc-400 block mb-1">Brand</label>
+                    <select
+                      value={newProductForm.brandId}
+                      onChange={(e) => setNewProductForm({ ...newProductForm, brandId: e.target.value })}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500"
+                    >
+                      <option value="">-- None --</option>
+                      {brands.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="text-zinc-400 block mb-1">Tax Code</label>
+                    <select
+                      value={newProductForm.taxCodeId}
+                      onChange={(e) => setNewProductForm({ ...newProductForm, taxCodeId: e.target.value })}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500"
+                    >
+                      <option value="">-- Standard VAT --</option>
+                      {taxCodes.map((tc) => (
+                        <option key={tc.id} value={tc.id}>
+                          {tc.code} ({tc.rate}%)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-zinc-400 block mb-1">Supplier SKU</label>
                     <input
-                      type="date"
-                      value={newPO.expected_delivery}
-                      onChange={(e) => setNewPO({ ...newPO, expected_delivery: e.target.value })}
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500"
+                      type="text"
+                      value={newProductForm.supplierSku}
+                      onChange={(e) => setNewProductForm({ ...newProductForm, supplierSku: e.target.value })}
+                      placeholder="Supplier part #"
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500"
                     />
                   </div>
                 </div>
 
-                {/* Add Item Row */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs text-zinc-400 font-semibold">Items to Order</label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const firstProd = products[0];
-                        if (firstProd) {
-                          setNewPO({
-                            ...newPO,
-                            items: [
-                              ...newPO.items,
-                              {
-                                product_id: firstProd.id,
-                                product_name: firstProd.name,
-                                quantity: 1,
-                                unit_cost: firstProd.purchaseCost || firstProd.unit_cost || 0,
-                              },
-                            ],
-                          });
-                        }
-                      }}
-                      className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
-                    >
-                      <Plus className="w-3.5 h-3.5" /> Add Product
-                    </button>
-                  </div>
-
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {newPO.items.length === 0 ? (
-                      <div className="text-xs text-zinc-500 p-3 bg-zinc-950/60 rounded-xl text-center">
-                        No products added yet. Click &quot;Add Product&quot; to specify stock items.
-                      </div>
-                    ) : (
-                      newPO.items.map((item, idx) => (
-                        <div key={idx} className="bg-zinc-950 p-2.5 rounded-xl border border-zinc-800/80 flex items-center gap-2 text-xs">
-                          <select
-                            value={item.product_id}
-                            onChange={(e) => {
-                              const sel = products.find((p) => p.id === e.target.value);
-                              const updated = [...newPO.items];
-                              updated[idx] = {
-                                ...updated[idx],
-                                product_id: e.target.value,
-                                product_name: sel?.name || '',
-                                unit_cost: sel?.purchaseCost || sel?.unit_cost || 0,
-                              };
-                              setNewPO({ ...newPO, items: updated });
-                            }}
-                            className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-zinc-200"
-                          >
-                            {products.map((p) => (
-                              <option key={p.id} value={p.id}>
-                                {p.name}
-                              </option>
-                            ))}
-                          </select>
-                          <input
-                            type="number"
-                            min="1"
-                            value={item.quantity}
-                            onChange={(e) => {
-                              const updated = [...newPO.items];
-                              updated[idx].quantity = parseInt(e.target.value) || 1;
-                              setNewPO({ ...newPO, items: updated });
-                            }}
-                            className="w-16 bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-center font-mono text-zinc-200"
-                            placeholder="Qty"
-                          />
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0.01"
-                            value={item.unit_cost}
-                            onChange={(e) => {
-                              const updated = [...newPO.items];
-                              updated[idx].unit_cost = parseFloat(e.target.value) || 0;
-                              setNewPO({ ...newPO, items: updated });
-                            }}
-                            className="w-20 bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-right font-mono text-zinc-200"
-                            placeholder="Cost"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const updated = newPO.items.filter((_, i) => i !== idx);
-                              setNewPO({ ...newPO, items: updated });
-                            }}
-                            className="text-zinc-500 hover:text-rose-400 p-1"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-2.5 pt-3 border-t border-zinc-800">
+                <div className="flex justify-end gap-2 pt-3 border-t border-zinc-800">
                   <button
                     type="button"
-                    onClick={() => setShowCreatePOModal(false)}
-                    className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-medium transition"
+                    onClick={() => setShowCreateProductModal(false)}
+                    className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium transition"
+                    disabled={creatingProduct}
+                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold disabled:opacity-50"
                   >
-                    Place Purchase Order
+                    {creatingProduct ? 'Creating...' : 'Create & Add to PO'}
                   </button>
                 </div>
               </form>

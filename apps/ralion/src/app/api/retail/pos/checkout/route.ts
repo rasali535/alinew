@@ -139,6 +139,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const packageIds = Array.from(new Set(items.map((i: any) => i.packageId).filter(Boolean)));
+    let packageMap = new Map<string, any>();
+    if (packageIds.length > 0) {
+      const { data: dbPackages, error: pkgErr } = await db
+        .from('retail_product_packages')
+        .select('*')
+        .eq('workspace_id', context.workspace.id)
+        .in('id', packageIds);
+      if (pkgErr) {
+        return corsJsonResponse(
+          {
+            success: false,
+            error: `PACKAGE_LOOKUP_FAILED: Failed to load packaging variants: ${pkgErr.message}`,
+          },
+          { status: 400 },
+          request
+        );
+      }
+      if (dbPackages) {
+        packageMap = new Map<string, any>(dbPackages.map((p) => [p.id, p]));
+      }
+    }
+
     const prodMap = new Map<string, any>(dbProducts.map((p) => [p.id, p]));
 
     let calculatedSubtotal = 0;
@@ -149,8 +172,24 @@ export async function POST(request: NextRequest) {
       const prod = prodMap.get(String(i.productId));
       const quantity = Math.max(1, Number(i.quantity || 1));
       const discountRate = Math.max(0, Math.min(100, Number(i.discountRate || 0)));
-      const unitPrice = Number(prod?.selling_price || 0);
+      let unitPrice = Number(prod?.selling_price || 0);
       const taxRate = Number(prod?.vat_rate || 0);
+
+      let pkg: any = null;
+      let packSize = 1;
+      let packLabel: string | undefined = undefined;
+
+      if (i.packageId) {
+        pkg = packageMap.get(String(i.packageId));
+        if (pkg && pkg.product_id === prod?.id && pkg.is_active && (pkg.kind === 'SALES' || pkg.kind === 'BOTH')) {
+          packSize = Number(pkg.base_units_per_pack);
+          packLabel = pkg.label;
+          unitPrice =
+            pkg.selling_price !== null && pkg.selling_price !== undefined
+              ? Number(pkg.selling_price)
+              : Math.round(unitPrice * packSize * 100) / 100;
+        }
+      }
 
       const lineSubtotal = quantity * unitPrice;
       const lineDiscount = lineSubtotal * (discountRate / 100);
@@ -165,6 +204,9 @@ export async function POST(request: NextRequest) {
         productId: String(i.productId),
         quantity,
         discountRate,
+        packageId: pkg ? String(pkg.id) : undefined,
+        packLabel: packLabel || undefined,
+        packSize,
         productName: prod?.name || (i.productName ? String(i.productName) : undefined),
         sku: prod?.sku || (i.sku ? String(i.sku) : undefined),
       };
@@ -185,7 +227,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Cart Hash for Action-Binding Verification
+    // 4. Cart Hash for Action-Binding Verification (includes packageId to prevent pack swapping)
     const cartHash = crypto
       .createHash('sha256')
       .update(
@@ -194,6 +236,7 @@ export async function POST(request: NextRequest) {
             productId: i.productId,
             quantity: i.quantity,
             discountRate: i.discountRate,
+            packageId: i.packageId || null,
           }))
         )
       )
