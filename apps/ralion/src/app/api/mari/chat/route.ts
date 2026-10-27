@@ -561,8 +561,6 @@ export async function POST(request: NextRequest) {
         responseSource: 'retail_inventory_lookup',
         contextSources: ['retail_products', 'retail_product_packages', 'retail_stock_levels'],
       }, undefined, request);
-    }ucts', 'retail_stock_levels'],
-      }, undefined, request);
     }
 
     if (detectedIntent === 'GREETING') {
