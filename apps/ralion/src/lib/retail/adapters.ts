@@ -457,6 +457,10 @@ export function normalizeQuoteItem(raw: any): NormalizedQuoteItem {
 
   return {
     id: raw.id ? safeString(raw.id) : undefined,
+    packageId: raw.packageId || raw.package_id || undefined,
+    packLabel: raw.packLabel || raw.pack_label || undefined,
+    packSize: parseStrictNumber(raw.packSize ?? raw.pack_size) ?? undefined,
+    baseQuantity: parseStrictNumber(raw.baseQuantity ?? raw.base_quantity) ?? undefined,
     productId: safeString(raw.productId || raw.product_id),
     product_id: safeString(raw.productId || raw.product_id),
     productName: safeString(raw.productName || raw.product_name, 'Hardware Item'),
@@ -538,6 +542,10 @@ export function normalizeQuotations(rawList: unknown): NormalizedRetailQuotation
 
 export interface NormalizedPoItem {
   id?: string;
+  packageId?: string;
+  packLabel?: string;
+  packSize?: number;
+  baseQuantity?: number;
   productId: string;
   product_id: string;
   productName: string;
