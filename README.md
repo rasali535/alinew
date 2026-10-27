@@ -54,6 +54,7 @@ alinew/
 - **Zero Cross-Tenant Leakage**: All analytics, CRM statistics, and audit logs are cryptographically scoped by tenant and workspace IDs.
 
 ### 5. Ralion Retail Cashier Workstation (Issue #153)
+- **Catalogue Search (Issue #156, Phase 1)**: Cashier lookup supports partial product names, SKU, barcode, brand, department (existing category), subdepartment (subcategory), and workspace-scoped supplier name, displaying brand, subdepartment and supplier on item cards. Product search also supports these attributes through the authenticated Retail API; purchase costs stay hidden for restricted cashier roles. Master-data management, purchasing product creation and stock packaging follow in separate reviewed stages.
 - **Dedicated POS Terminal**: Independent full-screen touch workstation (`/ralion/cashier` and `/cashier`) operating decoupled from the Ralion OS management dashboard.
 - **Fast Barcode & Touch Scanning**: Focus-first hardware barcode scanning with instant SKU/name lookup, touch category chips, and visual stock badges.
 - **Tender & Change Calculation**: Cash, external EFTPOS card, and bank transfer tender shortcuts with live change-due computation.
