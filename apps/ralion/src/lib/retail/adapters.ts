@@ -166,6 +166,7 @@ export interface NormalizedRetailProduct {
     baseUnitsPerPack: number;
     barcode?: string | null;
     sellingPrice?: number;
+    purchaseCost?: number; // Present only when supplied by a manager-authorized API.
   }>;
   createdAt?: string;
   updatedAt?: string;
@@ -227,6 +228,7 @@ export function normalizeProduct(raw: any): NormalizedRetailProduct {
               : pk.selling_price !== undefined && pk.selling_price !== null
                 ? Number(pk.selling_price)
                 : undefined,
+          purchaseCost: parseStrictNumber(pk.purchaseCost ?? pk.purchase_cost) ?? undefined,
         }))
       : undefined,
     imageUrl: raw.imageUrl || raw.image_url || undefined,
