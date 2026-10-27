@@ -991,8 +991,8 @@ export default function RetailPurchasingPage() {
                       const alreadyReceived = item.quantityReceived ?? item.quantity_received ?? 0;
                       const remaining = Math.max(0, ordered - alreadyReceived);
                       const cost = item.unitCost ?? item.unit_cost;
-                      const packLabel = item.packLabel || item.pack_label;
-                      const packSize = item.packSize || item.pack_size || 1;
+                      const packLabel = item.packLabel;
+                      const packSize = item.packSize || 1;
                       const currentQtyVal =
                         receivingItems[lineKey] !== undefined ? receivingItems[lineKey] : remaining;
 
