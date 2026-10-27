@@ -44,6 +44,10 @@ export interface RetailEntitlementCheck {
   canAccessExpenses: boolean;
   canAccessPayroll: boolean;
   canViewSalaries: boolean;
+  isFloorManager: boolean;
+  canApproveReturns: boolean;
+  canApproveVoids: boolean;
+  canAccessReports: boolean;
   reason?: string;
   source?: 'DATABASE_VERIFIED' | 'STRICT_PILOT_VERIFIED';
 }
@@ -77,6 +81,10 @@ export class RetailEntitlementService {
         canAccessExpenses: false,
         canAccessPayroll: false,
         canViewSalaries: false,
+        isFloorManager: false,
+        canApproveReturns: false,
+        canApproveVoids: false,
+        canAccessReports: false,
         reason: 'Authentication and workspace context are required.',
       };
     }
@@ -110,6 +118,10 @@ export class RetailEntitlementService {
         canAccessExpenses: false,
         canAccessPayroll: false,
         canViewSalaries: false,
+        isFloorManager: false,
+        canApproveReturns: false,
+        canApproveVoids: false,
+        canAccessReports: false,
         reason: 'User lacks an authorized membership in the requested workspace.',
       };
     }
@@ -137,6 +149,10 @@ export class RetailEntitlementService {
           canAccessExpenses: false,
           canAccessPayroll: false,
           canViewSalaries: false,
+          isFloorManager: false,
+          canApproveReturns: false,
+          canApproveVoids: false,
+          canAccessReports: false,
           reason: 'Access to internal preview workspaces is strictly restricted to platform administrators.',
         };
       }
@@ -166,6 +182,10 @@ export class RetailEntitlementService {
           canAccessExpenses: false,
           canAccessPayroll: false,
           canViewSalaries: false,
+          isFloorManager: false,
+          canApproveReturns: false,
+          canApproveVoids: false,
+          canAccessReports: false,
           reason: `Internal preview session rejected: ${validation.error || 'Server-authorized session required'}.`,
         };
       }
@@ -189,6 +209,10 @@ export class RetailEntitlementService {
           canAccessExpenses: false,
           canAccessPayroll: false,
           canViewSalaries: false,
+          isFloorManager: false,
+          canApproveReturns: false,
+          canApproveVoids: false,
+          canAccessReports: false,
           reason: `Retail OS preview rejected: Active preview session is for ${validation.session?.product || 'another product'}, not retail.`,
         };
       }
@@ -221,6 +245,10 @@ export class RetailEntitlementService {
           canAccessExpenses: false,
           canAccessPayroll: false,
           canViewSalaries: false,
+          isFloorManager: false,
+          canApproveReturns: false,
+          canApproveVoids: false,
+          canAccessReports: false,
           reason: 'Internal preview workspace lacks an active database entitlement record.',
         };
       }
@@ -242,6 +270,10 @@ export class RetailEntitlementService {
         canAccessExpenses: true,
         canAccessPayroll: true,
         canViewSalaries: true,
+        isFloorManager: true,
+        canApproveReturns: true,
+        canApproveVoids: true,
+        canAccessReports: true,
         source: 'DATABASE_VERIFIED',
       };
     }
@@ -338,6 +370,10 @@ export class RetailEntitlementService {
         canAccessExpenses: false,
         canAccessPayroll: false,
         canViewSalaries: false,
+        isFloorManager: false,
+        canApproveReturns: false,
+        canApproveVoids: false,
+        canAccessReports: false,
         reason: failureReason || 'Workspace does not possess an active database-verified retail entitlement.',
       };
     }
@@ -374,6 +410,10 @@ export class RetailEntitlementService {
     const canAccessExpenses = isOwner || isManager;
     const canAccessPayroll = isOwner || isPayrollManager;
     const canViewSalaries = isOwner || isPayrollManager;
+    const isFloorManager = isOwner || isManager;
+    const canApproveReturns = isOwner || isManager;
+    const canApproveVoids = isOwner || isManager;
+    const canAccessReports = isOwner || isManager;
 
     let roleDenied = false;
     if (requiredRole) {
@@ -401,6 +441,10 @@ export class RetailEntitlementService {
       canAccessExpenses,
       canAccessPayroll,
       canViewSalaries,
+      isFloorManager,
+      canApproveReturns,
+      canApproveVoids,
+      canAccessReports,
       reason: roleDenied
         ? `Insufficient permissions: '${requiredRole}' capability required.`
         : undefined,
@@ -432,6 +476,10 @@ export class RetailEntitlementService {
       canAccessExpenses: false,
       canAccessPayroll: false,
       canViewSalaries: false,
+      isFloorManager: false,
+      canApproveReturns: false,
+      canApproveVoids: false,
+      canAccessReports: false,
       reason: 'Retail OS access strictly requires asynchronous database verification via verifyEntitlement().',
     };
   }

@@ -33,6 +33,10 @@ import {
   RetailSettings,
   RetailFinancialMetrics,
   RetailCurrency,
+  RetailCashupReport,
+  RetailReturn,
+  RetailReturnItem,
+  RetailVoidedSale,
 } from '@ralion/database';
 import { getPrivilegedSupabase } from '../../supabase/server';
 
@@ -731,6 +735,32 @@ export class RetailDatabaseService {
         paymentStatus,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
+        items: itemsPayload.map((it: any, idx: number) => ({
+          id: `${saleId}_item_${idx}`,
+          saleId,
+          productId: it.product_id,
+          productName: it.product_name,
+          sku: it.sku,
+          quantity: it.quantity,
+          unitPrice: it.unit_price,
+          unitCost: it.unit_cost,
+          taxRate: it.tax_rate,
+          discountRate: it.discount_rate,
+          lineTotal: it.line_total,
+          lineCost: it.line_cost,
+          packageId: it.package_id || undefined,
+          packLabel: it.pack_label || undefined,
+          packSize: it.pack_size || 1,
+          baseQuantity: it.base_quantity || (it.quantity * (it.pack_size || 1)),
+        })),
+        payments: paymentsPayload.map((p: any, idx: number) => ({
+          id: `${saleId}_pay_${idx}`,
+          saleId,
+          paymentMethod: p.payment_method,
+          amount: p.amount,
+          reference: p.reference,
+          recordedAt: new Date().toISOString(),
+        })),
       },
     };
   }
@@ -799,6 +829,247 @@ export class RetailDatabaseService {
       })),
       createdAt: s.created_at,
       updatedAt: s.updated_at,
+    }));
+  }
+
+  static async getSaleByIdOrNumber(workspaceId: string, identifier: string): Promise<RetailSale | null> {
+    const supabase = getPrivilegedSupabase();
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier);
+
+    let query = supabase
+      .from('retail_sales')
+      .select(`
+        *,
+        retail_sale_items (*),
+        retail_sale_payments (*)
+      `)
+      .eq('workspace_id', workspaceId);
+
+    if (isUuid) {
+      query = query.eq('id', identifier);
+    } else {
+      query = query.eq('sale_number', identifier);
+    }
+
+    const { data: s, error } = await query.maybeSingle();
+    if (error || !s) return null;
+
+    // Catalogue fallback for missing/blank product names
+    const missingProductIds = (s.retail_sale_items || [])
+      .filter((it: any) => !it.product_name || it.product_name === 'Item')
+      .map((it: any) => it.product_id);
+
+    let nameFallbackMap = new Map<string, string>();
+    if (missingProductIds.length > 0) {
+      const { data: prods } = await supabase
+        .from('retail_products')
+        .select('id, name')
+        .eq('workspace_id', workspaceId)
+        .in('id', missingProductIds);
+      if (prods) {
+        nameFallbackMap = new Map<string, string>(prods.map((p) => [p.id, p.name]));
+      }
+    }
+
+    return {
+      id: s.id,
+      organizationId: s.organization_id,
+      workspaceId: s.workspace_id,
+      saleNumber: s.sale_number,
+      invoiceNumber: s.invoice_number,
+      source: s.source,
+      customerId: s.customer_id,
+      customerName: s.customer_name,
+      cashierUserId: s.cashier_user_id,
+      cashierName: s.cashier_name,
+      status: s.status,
+      currency: s.currency || 'USD',
+      subtotal: Number(s.subtotal || 0),
+      taxTotal: Number(s.tax_total || 0),
+      discountTotal: Number(s.discount_total || 0),
+      totalAmount: Number(s.total_amount || 0),
+      totalCost: Number(s.total_cost || 0),
+      paymentMethod: s.payment_method,
+      paymentStatus: s.payment_status,
+      idempotencyKey: s.idempotency_key,
+      notes: s.notes,
+      items: (s.retail_sale_items || []).map((it: any) => ({
+        id: it.id,
+        saleId: it.sale_id,
+        productId: it.product_id,
+        productName: it.product_name && it.product_name !== 'Item'
+          ? it.product_name
+          : nameFallbackMap.get(it.product_id) || it.product_name || 'Hardware Product',
+        sku: it.sku,
+        quantity: Number(it.quantity),
+        unitPrice: Number(it.unit_price),
+        unitCost: Number(it.unit_cost || 0),
+        taxRate: Number(it.tax_rate || 0),
+        discountRate: Number(it.discount_rate || 0),
+        lineTotal: Number(it.line_total),
+        lineCost: Number(it.line_cost || 0),
+        packageId: it.package_id || undefined,
+        packLabel: it.pack_label || undefined,
+        packSize: it.pack_size ? Number(it.pack_size) : 1,
+        baseQuantity: it.base_quantity !== null && it.base_quantity !== undefined ? Number(it.base_quantity) : undefined,
+      })),
+      payments: (s.retail_sale_payments || []).map((p: any) => ({
+        id: p.id,
+        saleId: p.sale_id,
+        paymentMethod: p.payment_method,
+        amount: Number(p.amount),
+        reference: p.reference,
+        recordedAt: p.recorded_at,
+      })),
+      createdAt: s.created_at,
+      updatedAt: s.updated_at,
+    };
+  }
+
+  static async executeReturnAndRefund(params: {
+    organizationId: string;
+    workspaceId: string;
+    saleId: string;
+    returnNumber?: string;
+    cashierUserId: string;
+    cashierName: string;
+    approvedByUserId: string;
+    approvedByName: string;
+    shiftId?: string;
+    reason: string;
+    refundPaymentMethod: string;
+    refundReference?: string;
+    returnItems: Array<{
+      saleItemId: string;
+      quantityReturned: number;
+      condition?: 'SELLABLE' | 'DAMAGED' | 'DEFECTIVE';
+      inspectionNotes?: string;
+    }>;
+  }): Promise<{ success: boolean; returnRecord?: any; error?: string }> {
+    const supabase = getPrivilegedSupabase();
+    const returnNumber = params.returnNumber || `RET-${Date.now().toString().slice(-6)}`;
+
+    const rpcPayload = params.returnItems.map((it) => ({
+      sale_item_id: it.saleItemId,
+      quantity_returned: it.quantityReturned,
+      condition: it.condition || 'SELLABLE',
+      inspection_notes: it.inspectionNotes || null,
+    }));
+
+    const { data, error } = await supabase.rpc('execute_atomic_sale_return_and_refund', {
+      p_organization_id: params.organizationId,
+      p_workspace_id: params.workspaceId,
+      p_sale_id: params.saleId,
+      p_return_number: returnNumber,
+      p_cashier_user_id: params.cashierUserId,
+      p_cashier_name: params.cashierName,
+      p_approved_by_user_id: params.approvedByUserId,
+      p_approved_by_name: params.approvedByName,
+      p_shift_id: params.shiftId || null,
+      p_reason: params.reason,
+      p_refund_payment_method: params.refundPaymentMethod,
+      p_refund_reference: params.refundReference || null,
+      p_return_items: rpcPayload,
+    });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return {
+      success: true,
+      returnRecord: data,
+    };
+  }
+
+  static async executeVoidSale(params: {
+    organizationId: string;
+    workspaceId: string;
+    saleId: string;
+    cashierUserId: string;
+    cashierName: string;
+    approvedByUserId: string;
+    approvedByName: string;
+    shiftId?: string;
+    reason: string;
+  }): Promise<{ success: boolean; voidRecord?: any; error?: string }> {
+    const supabase = getPrivilegedSupabase();
+
+    const { data, error } = await supabase.rpc('execute_atomic_void_sale', {
+      p_organization_id: params.organizationId,
+      p_workspace_id: params.workspaceId,
+      p_sale_id: params.saleId,
+      p_cashier_user_id: params.cashierUserId,
+      p_cashier_name: params.cashierName,
+      p_approved_by_user_id: params.approvedByUserId,
+      p_approved_by_name: params.approvedByName,
+      p_shift_id: params.shiftId || null,
+      p_reason: params.reason,
+    });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return {
+      success: true,
+      voidRecord: data,
+    };
+  }
+
+  static async listReturns(workspaceId: string): Promise<RetailReturn[]> {
+    const supabase = getPrivilegedSupabase();
+    const { data, error } = await supabase
+      .from('retail_returns')
+      .select(`
+        *,
+        retail_return_items (*)
+      `)
+      .eq('workspace_id', workspaceId)
+      .order('created_at', { ascending: false });
+
+    if (error || !data) return [];
+
+    return data.map((r: any) => ({
+      id: r.id,
+      organizationId: r.organization_id,
+      workspaceId: r.workspace_id,
+      returnNumber: r.return_number,
+      saleId: r.sale_id,
+      receiptNumber: r.receipt_number,
+      customerName: r.customer_name,
+      cashierUserId: r.cashier_user_id,
+      cashierName: r.cashier_name,
+      approvedByUserId: r.approved_by_user_id,
+      approvedByName: r.approved_by_name,
+      shiftId: r.shift_id,
+      reason: r.reason,
+      totalRefundAmount: Number(r.total_refund_amount || 0),
+      refundPaymentMethod: r.refund_payment_method,
+      refundReference: r.refund_reference,
+      status: r.status,
+      items: (r.retail_return_items || []).map((it: any) => ({
+        id: it.id,
+        returnId: it.return_id,
+        saleItemId: it.sale_item_id,
+        productId: it.product_id,
+        productName: it.product_name,
+        sku: it.sku,
+        packageId: it.package_id,
+        packLabel: it.pack_label,
+        packSize: Number(it.pack_size || 1),
+        quantityReturned: Number(it.quantity_returned),
+        baseQuantityReturned: Number(it.base_quantity_returned),
+        unitPrice: Number(it.unit_price),
+        taxRate: Number(it.tax_rate || 0),
+        discountRate: Number(it.discount_rate || 0),
+        refundLineTotal: Number(it.refund_line_total),
+        condition: it.condition,
+        restocked: Boolean(it.restocked),
+        inspectionNotes: it.inspection_notes,
+        createdAt: it.created_at,
+      })),
+      createdAt: r.created_at,
     }));
   }
 
@@ -1335,16 +1606,18 @@ export class RetailDatabaseService {
   }
 
   static async closeShift(
-    workspaceIdOrParams: string | { shiftId: string; closingCashActual: number; notes?: string },
+    workspaceIdOrParams: string | { shiftId: string; closingCashActual: number; notes?: string; closedByUserId?: string; managerApprovalUserId?: string },
     shiftIdParam?: string,
     closingCashActualParam?: number,
     notesParam?: string
-  ): Promise<{ success: boolean; shift?: RetailCashierShift; error?: string }> {
+  ): Promise<{ success: boolean; shift?: RetailCashierShift; report?: RetailCashupReport; error?: string }> {
     try {
       let workspaceId: string | undefined;
       let shiftId: string;
       let closingCashActual: number;
       let notes: string | undefined;
+      let closedByUserId: string | undefined;
+      let managerApprovalUserId: string | undefined;
 
       if (typeof workspaceIdOrParams === 'string') {
         workspaceId = workspaceIdOrParams;
@@ -1355,6 +1628,8 @@ export class RetailDatabaseService {
         shiftId = workspaceIdOrParams.shiftId;
         closingCashActual = workspaceIdOrParams.closingCashActual;
         notes = workspaceIdOrParams.notes;
+        closedByUserId = (workspaceIdOrParams as any).closedByUserId;
+        managerApprovalUserId = (workspaceIdOrParams as any).managerApprovalUserId;
       }
 
       const supabase = getPrivilegedSupabase();
@@ -1363,62 +1638,222 @@ export class RetailDatabaseService {
       if (workspaceId) {
         shiftQuery = shiftQuery.eq('workspace_id', workspaceId);
       }
-      const { data: shift, error: fetchErr } = await shiftQuery.single();
+      const { data: shift, error: fetchErr } = await shiftQuery.maybeSingle();
 
       if (fetchErr || !shift) {
         return { success: false, error: 'Shift not found in workspace' };
       }
 
-      // Aggregate cash sales during this shift
-      const { data: cashSales } = await supabase
-        .from('retail_sales')
-        .select('total_amount')
-        .eq('shift_id', shiftId)
-        .eq('payment_method', 'CASH')
-        .eq('status', 'COMPLETED');
+      // Call atomic stored procedure to reconcile cash, calculate variance, and save immutable cash-up report
+      const { data: rpcResult, error: rpcErr } = await supabase.rpc('execute_atomic_close_shift_cashup', {
+        p_organization_id: shift.organization_id,
+        p_workspace_id: shift.workspace_id,
+        p_shift_id: shiftId,
+        p_closed_by_user_id: closedByUserId || shift.cashier_user_id,
+        p_closing_cash_actual: closingCashActual,
+        p_manager_approval_user_id: managerApprovalUserId || null,
+        p_notes: notes || null,
+      });
 
-      const totalCashSales = (cashSales || []).reduce((sum, s) => sum + Number(s.total_amount || 0), 0);
-      const expectedCash = Number(shift.opening_cash) + totalCashSales;
-      const variance = closingCashActual - expectedCash;
+      if (rpcErr || !rpcResult?.success) {
+        return { success: false, error: rpcErr?.message || rpcResult?.error || 'Failed to close shift and generate cash-up.' };
+      }
 
-      const { data: updated, error: updateErr } = await supabase
-        .from('retail_cashier_shifts')
-        .update({
-          closed_at: new Date().toISOString(),
-          closing_cash_actual: closingCashActual,
-          expected_cash: expectedCash,
-          variance,
-          status: 'CLOSED',
-          notes,
-        })
-        .eq('id', shiftId)
-        .select()
-        .single();
+      // Fetch the generated immutable cash-up report
+      let normalizedReport: RetailCashupReport | undefined;
+      if (rpcResult.report_id) {
+        const { data: reportRow } = await supabase
+          .from('retail_cashier_cashup_reports')
+          .select('*')
+          .eq('id', rpcResult.report_id)
+          .maybeSingle();
 
-      if (updateErr) return { success: false, error: updateErr.message };
+        if (reportRow) {
+          normalizedReport = {
+            id: reportRow.id,
+            organizationId: reportRow.organization_id,
+            workspaceId: reportRow.workspace_id,
+            shiftId: reportRow.shift_id,
+            cashierUserId: reportRow.cashier_user_id,
+            cashierName: reportRow.cashier_name,
+            terminalId: reportRow.terminal_id,
+            startedAt: reportRow.started_at,
+            closedAt: reportRow.closed_at,
+            openingFloat: Number(reportRow.opening_float),
+            salesCount: Number(reportRow.sales_count),
+            grossSales: Number(reportRow.gross_sales),
+            discountTotal: Number(reportRow.discount_total),
+            taxTotal: Number(reportRow.tax_total),
+            netSales: Number(reportRow.net_sales),
+            cashSales: Number(reportRow.cash_sales),
+            cardSales: Number(reportRow.card_sales),
+            transferSales: Number(reportRow.transfer_sales),
+            otherSales: Number(reportRow.other_sales),
+            cashRefunds: Number(reportRow.cash_refunds),
+            noncashRefunds: Number(reportRow.noncash_refunds),
+            refundCount: Number(reportRow.refund_count),
+            returnsCount: Number(reportRow.returns_count),
+            voidCount: Number(reportRow.void_count),
+            voidTotal: Number(reportRow.void_total),
+            paidIn: Number(reportRow.paid_in),
+            paidOut: Number(reportRow.paid_out),
+            expectedCash: Number(reportRow.expected_cash),
+            closingCashActual: Number(reportRow.closing_cash_actual),
+            variance: Number(reportRow.variance),
+            currency: reportRow.currency,
+            closedByUserId: reportRow.closed_by_user_id,
+            managerApprovalUserId: reportRow.manager_approval_user_id,
+            notes: reportRow.notes,
+            createdAt: reportRow.created_at,
+          };
+        }
+      }
 
       return {
         success: true,
         shift: {
-          id: updated.id,
-          organizationId: updated.organization_id,
-          workspaceId: updated.workspace_id,
-          cashierUserId: updated.cashier_user_id,
-          cashierName: updated.cashier_name,
-          startedAt: updated.started_at,
-          closedAt: updated.closed_at,
-          openingCash: Number(updated.opening_cash),
-          closingCashActual: Number(updated.closing_cash_actual),
-          expectedCash: Number(updated.expected_cash),
-          variance: Number(updated.variance),
+          id: shift.id,
+          organizationId: shift.organization_id,
+          workspaceId: shift.workspace_id,
+          cashierUserId: shift.cashier_user_id,
+          cashierName: shift.cashier_name,
+          startedAt: shift.started_at,
+          closedAt: rpcResult.closed_at || new Date().toISOString(),
+          openingCash: Number(shift.opening_cash),
+          closingCashActual: Number(rpcResult.closing_cash_actual ?? closingCashActual),
+          expectedCash: Number(rpcResult.expected_cash ?? 0),
+          variance: Number(rpcResult.variance ?? 0),
           status: 'CLOSED',
-          notes: updated.notes,
-          createdAt: updated.created_at,
+          notes,
+          createdAt: shift.created_at,
         },
+        report: normalizedReport,
       };
     } catch (err: any) {
       return { success: false, error: err.message };
     }
+  }
+
+  static async listCashupReports(workspaceId: string): Promise<RetailCashupReport[]> {
+    const supabase = getPrivilegedSupabase();
+    const { data, error } = await supabase
+      .from('retail_cashier_cashup_reports')
+      .select('*')
+      .eq('workspace_id', workspaceId)
+      .order('closed_at', { ascending: false });
+
+    if (error || !data) return [];
+
+    return data.map((r: any) => ({
+      id: r.id,
+      organizationId: r.organization_id,
+      workspaceId: r.workspace_id,
+      shiftId: r.shift_id,
+      cashierUserId: r.cashier_user_id,
+      cashierName: r.cashier_name,
+      terminalId: r.terminal_id,
+      startedAt: r.started_at,
+      closedAt: r.closed_at,
+      openingFloat: Number(r.opening_float),
+      salesCount: Number(r.sales_count),
+      grossSales: Number(r.gross_sales),
+      discountTotal: Number(r.discount_total),
+      taxTotal: Number(r.tax_total),
+      netSales: Number(r.net_sales),
+      cashSales: Number(r.cash_sales),
+      cardSales: Number(r.card_sales),
+      transferSales: Number(r.transfer_sales),
+      otherSales: Number(r.other_sales),
+      cashRefunds: Number(r.cash_refunds),
+      noncashRefunds: Number(r.noncash_refunds),
+      refundCount: Number(r.refund_count),
+      returnsCount: Number(r.returns_count),
+      voidCount: Number(r.void_count),
+      voidTotal: Number(r.void_total),
+      paidIn: Number(r.paid_in),
+      paidOut: Number(r.paid_out),
+      expectedCash: Number(r.expected_cash),
+      closingCashActual: Number(r.closing_cash_actual),
+      variance: Number(r.variance),
+      currency: r.currency,
+      closedByUserId: r.closed_by_user_id,
+      managerApprovalUserId: r.manager_approval_user_id,
+      notes: r.notes,
+      createdAt: r.created_at,
+    }));
+  }
+
+  static async getCashupReport(workspaceId: string, reportIdOrShiftId: string): Promise<RetailCashupReport | null> {
+    const supabase = getPrivilegedSupabase();
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reportIdOrShiftId);
+    if (!isUuid) return null;
+
+    const { data: r, error } = await supabase
+      .from('retail_cashier_cashup_reports')
+      .select('*')
+      .eq('workspace_id', workspaceId)
+      .or(`id.eq.${reportIdOrShiftId},shift_id.eq.${reportIdOrShiftId}`)
+      .maybeSingle();
+
+    if (error || !r) return null;
+
+    return {
+      id: r.id,
+      organizationId: r.organization_id,
+      workspaceId: r.workspace_id,
+      shiftId: r.shift_id,
+      cashierUserId: r.cashier_user_id,
+      cashierName: r.cashier_name,
+      terminalId: r.terminal_id,
+      startedAt: r.started_at,
+      closedAt: r.closed_at,
+      openingFloat: Number(r.opening_float),
+      salesCount: Number(r.sales_count),
+      grossSales: Number(r.gross_sales),
+      discountTotal: Number(r.discount_total),
+      taxTotal: Number(r.tax_total),
+      netSales: Number(r.net_sales),
+      cashSales: Number(r.cash_sales),
+      cardSales: Number(r.card_sales),
+      transferSales: Number(r.transfer_sales),
+      otherSales: Number(r.other_sales),
+      cashRefunds: Number(r.cash_refunds),
+      noncashRefunds: Number(r.noncash_refunds),
+      refundCount: Number(r.refund_count),
+      returnsCount: Number(r.returns_count),
+      voidCount: Number(r.void_count),
+      voidTotal: Number(r.void_total),
+      paidIn: Number(r.paid_in),
+      paidOut: Number(r.paid_out),
+      expectedCash: Number(r.expected_cash),
+      closingCashActual: Number(r.closing_cash_actual),
+      variance: Number(r.variance),
+      currency: r.currency,
+      closedByUserId: r.closed_by_user_id,
+      managerApprovalUserId: r.manager_approval_user_id,
+      notes: r.notes,
+      createdAt: r.created_at,
+    };
+  }
+
+  static async getShiftTransactionDrilldown(workspaceId: string, shiftId: string) {
+    const supabase = getPrivilegedSupabase();
+
+    const [shiftRes, salesRes, returnsRes, voidsRes, cashupRes] = await Promise.all([
+      supabase.from('retail_cashier_shifts').select('*').eq('id', shiftId).eq('workspace_id', workspaceId).maybeSingle(),
+      supabase.from('retail_sales').select('*, retail_sale_items(*), retail_sale_payments(*)').eq('shift_id', shiftId).eq('workspace_id', workspaceId).order('created_at', { ascending: false }),
+      supabase.from('retail_returns').select('*, retail_return_items(*)').eq('shift_id', shiftId).eq('workspace_id', workspaceId).order('created_at', { ascending: false }),
+      supabase.from('retail_voided_sales').select('*').eq('shift_id', shiftId).eq('workspace_id', workspaceId).order('voided_at', { ascending: false }),
+      supabase.from('retail_cashier_cashup_reports').select('*').eq('shift_id', shiftId).eq('workspace_id', workspaceId).maybeSingle(),
+    ]);
+
+    return {
+      shift: shiftRes.data,
+      sales: salesRes.data || [],
+      returns: returnsRes.data || [],
+      voids: voidsRes.data || [],
+      cashupReport: cashupRes.data || null,
+    };
   }
 
   // ---------------------------------------------------------------------------

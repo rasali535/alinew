@@ -779,3 +779,110 @@ export interface ExecuteAtomicSmartStockReceiptResult {
   message?: string;
 }
 
+// ---------------------------------------------------------------------------
+// 12. Cashier Cash-Up Reports (Immutable Reconciliation)
+// ---------------------------------------------------------------------------
+export interface RetailCashupReport {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  shiftId: string;
+  cashierUserId: string;
+  cashierName: string;
+  terminalId: string;
+  startedAt: string;
+  closedAt: string;
+  openingFloat: number;
+  salesCount: number;
+  grossSales: number;
+  discountTotal: number;
+  taxTotal: number;
+  netSales: number;
+  cashSales: number;
+  cardSales: number;
+  transferSales: number;
+  otherSales: number;
+  cashRefunds: number;
+  noncashRefunds: number;
+  refundCount: number;
+  returnsCount: number;
+  voidCount: number;
+  voidTotal: number;
+  paidIn: number;
+  paidOut: number;
+  expectedCash: number;
+  closingCashActual: number;
+  variance: number;
+  currency: string;
+  closedByUserId: string;
+  managerApprovalUserId?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// 13. Floor Manager Product Returns & Refunds
+// ---------------------------------------------------------------------------
+export type ReturnCondition = 'SELLABLE' | 'DAMAGED' | 'DEFECTIVE';
+export type ReturnStatus = 'PENDING' | 'APPROVED' | 'COMPLETED' | 'REJECTED';
+
+export interface RetailReturnItem {
+  id: string;
+  returnId: string;
+  saleItemId: string;
+  productId: string;
+  productName: string;
+  sku: string;
+  packageId?: string;
+  packLabel?: string;
+  packSize: number;
+  quantityReturned: number;
+  baseQuantityReturned: number;
+  unitPrice: number;
+  taxRate: number;
+  discountRate: number;
+  refundLineTotal: number;
+  condition: ReturnCondition;
+  restocked: boolean;
+  inspectionNotes?: string;
+  createdAt: string;
+}
+
+export interface RetailReturn {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  returnNumber: string;
+  saleId: string;
+  receiptNumber: string;
+  customerName: string;
+  cashierUserId: string;
+  cashierName: string;
+  approvedByUserId: string;
+  approvedByName: string;
+  shiftId?: string;
+  reason: string;
+  totalRefundAmount: number;
+  refundPaymentMethod: string;
+  refundReference?: string;
+  status: ReturnStatus;
+  items?: RetailReturnItem[];
+  createdAt: string;
+}
+
+export interface RetailVoidedSale {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  saleId: string;
+  saleNumber: string;
+  cashierUserId: string;
+  cashierName: string;
+  approvedByUserId: string;
+  approvedByName: string;
+  shiftId?: string;
+  reason: string;
+  amount: number;
+  voidedAt: string;
+}
+

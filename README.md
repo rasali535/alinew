@@ -105,6 +105,15 @@ alinew/
   - Simultaneously posts Goods Receipt, creates/updates PO lines, records durable stock movements (`RECEIVING` / `PURCHASE_ORDER`), updates physical stock (`retail_stock_levels`), and writes operational audit logs in a single ACID transaction.
   - RPC execution revoked from `PUBLIC`, `anon`, and `authenticated`; granted exclusively to `service_role`.
 
+### 7. Retail POS Simplification, Returns & Cash-Up Reporting (Issue #164)
+- **Empty Landing POS Design**: The cashier terminal opens to a clean, uncluttered interface with zero default product cards and no persistent category ribbon. A prominent unified search/barcode input displays: *"Scan a barcode or search for a product to begin."*
+- **Large Product Selection Popup**: Searching opens a dedicated modal displaying matching products across name, brand, specification, SKU, and packaging (individual, packs, cartons, boxes). Includes brand and department filter chips, keyboard navigation (Arrow keys, Enter to select, Escape to close), and out-of-stock badges. Absolutely no quantity entry inside the popup.
+- **Auto-Add & Cart Quantity Editing**: Selecting an item immediately adds it to the checkout cart with quantity 1, closes the popup, and returns focus to the search input. Selecting existing cart items increments quantity. Cashiers edit quantities directly in the cart via numeric input, plus/minus buttons, and trash removal with real-time total recalculation and package unit math.
+- **Snapshot Product Descriptions & Dual Receipt Printing**: Product names and packaging descriptions are snapstopped at transaction time to preserve historical integrity. Supports both **80mm thermal receipt** and **A4 full-page invoice** with isolated `@media print` CSS. Localized Botswana CAT time (`Africa/Gaborone`) is formatted for displays while retaining canonical UTC timestamps in PostgreSQL.
+- **Floor Manager Controls (Returns & Voids)**: Role-restricted controls (HTTP 403 Forbidden for ordinary cashiers). Original sales are located by receipt number. Floor managers inspect returns as either **SELLABLE** (restocked into available inventory) or **DAMAGED** (quarantined/written-off without inflating sellable inventory). Excessive or duplicate returns beyond originally sold quantities are strictly blocked. Completed sales can be reversed through auditable voids with restocking and permanent manager notes.
+- **Shift Cash Reconciliation & Immutable Cash-Up Reports**: Authoritative drawer calculation: `Expected Cash = Opening Float + Cash Sales - Cash Refunds`. Card payments and bank transfers are strictly excluded from physical drawer balance. Closing generates a permanent immutable record in `retail_cashier_cashup_reports` with instant 80mm/A4 printing and idempotent re-print protection.
+- **Reports & BI Cashier Cash-Ups Dashboard**: Dedicated management dashboard (`Reports & BI → Retail → Cashier Cash-Ups`) listing every cashier and shift (including open shifts and zero-sale shifts), metric-by-metric variance tracking, transaction-level drill-down modal (individual sales, returns, voids), and CSV export.
+
 ---
 
 ## 💎 License & Subscription Tiers

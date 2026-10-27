@@ -76,18 +76,18 @@ export async function POST(request: NextRequest) {
         return corsJsonResponse({ success: false, error: 'shiftId and closingCashActual are required to close shift.' }, { status: 400 }, request);
       }
 
-      const result = await RetailDatabaseService.closeShift(
-        context.workspace.id,
-        body.shiftId,
-        Number(body.closingCashActual),
-        body.notes
-      );
+      const result = await RetailDatabaseService.closeShift({
+        shiftId: body.shiftId,
+        closingCashActual: Number(body.closingCashActual),
+        notes: body.notes,
+        closedByUserId: context.user.id,
+      });
 
       if (!result.success) {
         return corsJsonResponse({ success: false, error: result.error }, { status: 400 }, request);
       }
 
-      return corsJsonResponse({ success: true, shift: result.shift }, undefined, request);
+      return corsJsonResponse({ success: true, shift: result.shift, report: result.report }, undefined, request);
     }
 
     return corsJsonResponse({ success: false, error: `Invalid shift action '${action}'.` }, { status: 400 }, request);
