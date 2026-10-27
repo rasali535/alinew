@@ -31,15 +31,23 @@ try {
     catch (error) { throw new Error(`Migration ${file} failed: ${error.message}`, { cause: error }); }
   }
   const scalar = async sql => (await database.query(sql)).rows[0].value;
-  // The Retail POS security migration adds two durable tables to the 125-table baseline.
-  assert.equal(await scalar(`SELECT count(*)::int AS value FROM pg_tables WHERE schemaname='public'`), 127);
-  for (const table of ['retail_pos_consumed_tokens', 'retail_pos_lockouts']) {
+  // The Retail POS security migration adds two durable tables to the 125-table baseline, and the
+  // Retail catalogue/packaging migration adds seven more (tax codes, departments, subdepartments,
+  // brands, product-supplier links, packages, goods-receipt lines).
+  assert.equal(await scalar(`SELECT count(*)::int AS value FROM pg_tables WHERE schemaname='public'`), 134);
+  for (const table of ['retail_pos_consumed_tokens', 'retail_pos_lockouts', 'retail_tax_codes', 'retail_departments', 'retail_subdepartments', 'retail_brands', 'retail_product_suppliers', 'retail_product_packages', 'retail_goods_receipt_items']) {
     assert.equal(
       await scalar(`SELECT count(*)::int AS value FROM pg_tables WHERE schemaname='public' AND tablename='${table}'`),
       1,
-      `Retail POS security table ${table} must be present after migration replay.`
+      `Retail table ${table} must be present after migration replay.`
     );
   }
+  for (const table of ['retail_tax_codes', 'retail_departments', 'retail_subdepartments', 'retail_brands', 'retail_product_suppliers', 'retail_product_packages', 'retail_goods_receipt_items']) {
+    assert.equal(await scalar(`SELECT has_table_privilege('authenticated','public.${table}','SELECT') AS value`), false, `${table} must not be readable by authenticated.`);
+    assert.equal(await scalar(`SELECT has_table_privilege('anon','public.${table}','SELECT') AS value`), false, `${table} must not be readable by anon.`);
+  }
+  assert.equal(await scalar(`SELECT has_function_privilege('authenticated','public.retail_search_catalogue(uuid,text,uuid,uuid,uuid,uuid,boolean,integer,text)','EXECUTE') AS value`), false);
+  assert.equal(await scalar(`SELECT has_function_privilege('authenticated','public.execute_atomic_goods_receipt(uuid,uuid,uuid,text,uuid,text,jsonb)','EXECUTE') AS value`), false);
   for (const table of ['profiles', 'organizations', 'workspaces', 'social_connections', 'social_posts', 'platform_admins']) {
     assert.equal(await scalar(`SELECT count(*)::int AS value FROM public.${table}`), 0, `Preview must not copy production ${table} rows.`);
   }
@@ -94,7 +102,7 @@ try {
   await assert.rejects(database.query(`SELECT public.ralion_finalize_credits($1,'charged-once',true)`, [orgA]), error => error.code === '42501');
   await database.exec('RESET ROLE');
   console.log('PASS: actual credit procedures charge once, release failed/stale requests, reject insufficient balance and direct client RPCs, and isolate two tenant wallets.');
-  console.log(`PASS: ${files.length} migrations replay; 127 tables; no production tenant/admin rows; signup provisioning and anonymous RPC denial; baseline preserves existing rows.`);
+  console.log(`PASS: ${files.length} migrations replay; 134 tables; no production tenant/admin rows; signup provisioning and anonymous RPC denial; baseline preserves existing rows.`);
 } finally {
   await database.close();
 }
