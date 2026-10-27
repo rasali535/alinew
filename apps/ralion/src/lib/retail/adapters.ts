@@ -155,6 +155,18 @@ export interface NormalizedRetailProduct {
   is_active: boolean;
   imageUrl?: string;
   isPilotDemo?: boolean;
+  departmentId?: string;
+  departmentName?: string;
+  subdepartmentId?: string;
+  subdepartmentName?: string;
+  brandId?: string;
+  packs?: Array<{
+    id: string;
+    label: string;
+    baseUnitsPerPack: number;
+    barcode?: string | null;
+    sellingPrice?: number;
+  }>;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -166,24 +178,24 @@ export function normalizeProduct(raw: any): NormalizedRetailProduct {
 
   const purchaseCostNum = parseStrictNumber(raw.purchaseCost ?? raw.unit_cost ?? raw.cost_price);
   const sellingPriceNum = parseStrictNumber(raw.sellingPrice ?? raw.selling_price);
-  const currentStockNum = parseStrictNumber(raw.currentStock ?? raw.current_stock) ?? 0;
+  const currentStockNum = parseStrictNumber(raw.currentStock ?? raw.current_stock ?? raw.stockOnHand ?? raw.stock_on_hand) ?? 0;
   const reorderLevelNum = parseStrictNumber(raw.reorderLevel ?? raw.min_stock_level) ?? 10;
-  const vatRateNum = parseStrictNumber(raw.vatRate ?? raw.tax_rate) ?? 0;
+  const vatRateNum = parseStrictNumber(raw.vatRate ?? raw.tax_rate ?? raw.taxRate) ?? 0;
   const minSellingPriceNum = parseStrictNumber(raw.minSellingPrice ?? raw.min_selling_price) ?? (sellingPriceNum ?? 0);
 
   const unitOfMeasure = safeString(raw.unitOfMeasure || raw.unit_of_measure, 'pcs');
 
   return {
-    id: safeString(raw.id),
+    id: safeString(raw.id || raw.productId || raw.product_id),
     sku: safeString(raw.sku),
     barcode: raw.barcode ? safeString(raw.barcode) : undefined,
     name: safeString(raw.name, 'Unnamed Product'),
-    category: safeString(raw.category, 'General Supplies'),
-    subcategory: raw.subcategory ? safeString(raw.subcategory) : undefined,
+    category: safeString(raw.category || raw.departmentName || raw.department_name, 'General Supplies'),
+    subcategory: raw.subcategory ? safeString(raw.subcategory) : (raw.subdepartmentName || raw.subdepartment_name ? safeString(raw.subdepartmentName || raw.subdepartment_name) : undefined),
     description: raw.description ? safeString(raw.description) : undefined,
     brand: raw.brand ? safeString(raw.brand) : undefined,
     supplierId: raw.supplierId || raw.supplier_id || undefined,
-    supplierName: raw.supplierName || raw.supplier_name || undefined,
+    supplierName: raw.supplierName || raw.supplier_name || raw.preferredSupplierName || raw.preferred_supplier_name || undefined,
     unitOfMeasure,
     unit_of_measure: unitOfMeasure,
     purchaseCost: purchaseCostNum ?? 0,
@@ -198,6 +210,25 @@ export function normalizeProduct(raw: any): NormalizedRetailProduct {
     current_stock: currentStockNum,
     status: safeString(raw.status, 'ACTIVE'),
     is_active: raw.is_active !== undefined ? Boolean(raw.is_active) : raw.status !== 'DISCONTINUED',
+    departmentId: raw.departmentId || raw.department_id || undefined,
+    departmentName: raw.departmentName || raw.department_name || undefined,
+    subdepartmentId: raw.subdepartmentId || raw.subdepartment_id || undefined,
+    subdepartmentName: raw.subdepartmentName || raw.subdepartment_name || undefined,
+    brandId: raw.brandId || raw.brand_id || undefined,
+    packs: Array.isArray(raw.packs)
+      ? raw.packs.map((pk: any) => ({
+          id: safeString(pk.id),
+          label: safeString(pk.label),
+          baseUnitsPerPack: Number(pk.baseUnitsPerPack ?? pk.base_units_per_pack ?? 1),
+          barcode: pk.barcode ? safeString(pk.barcode) : null,
+          sellingPrice:
+            pk.sellingPrice !== undefined && pk.sellingPrice !== null
+              ? Number(pk.sellingPrice)
+              : pk.selling_price !== undefined && pk.selling_price !== null
+                ? Number(pk.selling_price)
+                : undefined,
+        }))
+      : undefined,
     imageUrl: raw.imageUrl || raw.image_url || undefined,
     isPilotDemo: Boolean(raw.isPilotDemo || raw.is_pilot_demo),
     createdAt: raw.createdAt || raw.created_at,

@@ -116,6 +116,9 @@ export async function POST(request: NextRequest) {
         discountRate,
         taxRate,
         lineTotal,
+        packageId: it.packageId || it.package_id || undefined,
+        packLabel: it.packLabel || it.pack_label || undefined,
+        packSize: it.packSize || it.pack_size ? Number(it.packSize || it.pack_size) : 1,
       });
     }
 

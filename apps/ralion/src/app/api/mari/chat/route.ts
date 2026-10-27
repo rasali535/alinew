@@ -19,6 +19,7 @@ import { MariCreditsService } from '../../../../lib/services/mari/mariCredits.se
 import { RetailEntitlementService } from '../../../../lib/services/retail/retailEntitlement.service';
 import { getServiceSupabase } from '../../../../lib/auth/serverAuth';
 import { MariKnowledgeRetrievalService } from '../../../../lib/services/mari/mariKnowledgeRetrieval.service';
+import { RetailCatalogueService } from '../../../../lib/services/retail/retailCatalogue.service';
 
 setMariFacebookPageService(FacebookPageManagementService);
 
@@ -310,23 +311,6 @@ export async function POST(request: NextRequest) {
         }, { status: 403 }, request);
       }
 
-      const db = getServiceSupabase();
-      const { data: products, error: productError } = await db
-        .from('retail_products')
-        .select('id, name, sku, category, selling_price, vat_rate, min_selling_price, is_pilot_demo, status')
-        .eq('organization_id', orgId)
-        .eq('workspace_id', workspaceId)
-        .eq('status', 'ACTIVE')
-        .limit(500);
-
-      if (productError || !products) {
-        return corsJsonResponse({
-          success: false,
-          code: 'RETAIL_PRODUCTS_LOOKUP_FAILED',
-          error: 'Catalogue items could not be retrieved to draft quotation.',
-        }, { status: 503 }, request);
-      }
-
       // Customer name extraction
       const custMatch = cleanQuery.match(/\bfor\s+(?:customer|contractor|client|walk-in\s+customer)?\s*([A-Za-z0-9\s'-]+?)(?:[:,\n]|$|\bwith\b|\bfor\b|\b\d+\b)/i);
       let customerName = custMatch && custMatch[1]?.trim() ? custMatch[1].trim() : 'Walk-in Customer';
@@ -349,12 +333,15 @@ export async function POST(request: NextRequest) {
         discountRate: number;
         taxRate: number;
         lineTotal: number;
+        packageId?: string;
+        packLabel?: string;
+        packSize?: number;
       }> = [];
 
       const disambiguations: Array<{ queryTerm: string; matches: Array<{ id: string; name: string; sku: string; price: number }> }> = [];
 
       for (const clause of clauses) {
-        const qtyMatch = clause.match(/(\d+)\s*(?:x\s*|units?\s+of\s+|pieces?\s+of\s+|pcs?\s+of\s+)?(.*)/i);
+        const qtyMatch = clause.match(/(\d+)\s*(?:x\s*|cartons?\s+of\s+|boxes?\s+of\s+|packs?\s+of\s+|cases?\s+of\s+|units?\s+of\s+|pieces?\s+of\s+|pcs?\s+of\s+)?(.*)/i);
         const quantity = qtyMatch ? Math.max(1, parseInt(qtyMatch[1], 10)) : 1;
         const rawTerm = (qtyMatch ? qtyMatch[2] : clause)
           .replace(/\b(for\s+customer\s+[A-Za-z0-9\s]+|walk-in|please|thanks)\b/gi, '')
@@ -362,57 +349,57 @@ export async function POST(request: NextRequest) {
 
         if (!rawTerm || rawTerm.length < 2) continue;
 
-        const termTokens = rawTerm.toLowerCase().split(/\s+/).filter(Boolean).map(t => t.endsWith('s') && t.length > 3 ? t.slice(0, -1) : t);
-        const matchedProducts = products.filter((p: any) => {
-          const haystack = `${p.name || ''} ${p.sku || ''} ${p.category || ''}`.toLowerCase();
-          return termTokens.every(tok => haystack.includes(tok));
+        // Check if clause mentions a packaging label
+        const packMatch = clause.match(/\b(carton|box|pack|case|bundle|crate|bag|drum|roll)\b/i);
+        const wantedPackType = packMatch ? packMatch[1].toLowerCase() : null;
+
+        const hits = await RetailCatalogueService.search({
+          workspaceId,
+          query: rawTerm,
+          channel: 'SALES',
+          limit: 6,
         });
 
-        if (matchedProducts.length === 1) {
-          const prod = matchedProducts[0];
-          const unitPrice = Number(prod.selling_price || 0);
-          const taxRate = Number(prod.vat_rate || 0);
-          const lineSubtotal = quantity * unitPrice;
-          const lineTax = lineSubtotal * (taxRate / 100);
-          const lineTotal = lineSubtotal + lineTax;
+        if (hits.length === 0) continue;
 
-          draftItems.push({
-            productId: prod.id,
-            productName: prod.name,
-            sku: prod.sku,
-            quantity,
-            unitPrice,
-            discountRate: 0,
-            taxRate,
-            lineTotal: Math.round(lineTotal * 100) / 100,
-          });
-        } else if (matchedProducts.length > 1) {
-          // Select closest match and offer disambiguations
-          const primary = matchedProducts[0];
-          const unitPrice = Number(primary.selling_price || 0);
-          const taxRate = Number(primary.vat_rate || 0);
-          const lineSubtotal = quantity * unitPrice;
-          const lineTax = lineSubtotal * (taxRate / 100);
-          const lineTotal = lineSubtotal + lineTax;
+        const hit = hits[0];
+        let selectedPack: any = null;
+        if (wantedPackType && hit.packs && hit.packs.length > 0) {
+          selectedPack = hit.packs.find((pk: any) =>
+            pk.label.toLowerCase().includes(wantedPackType)
+          ) || hit.packs[0];
+        } else if (hit.matchedPackId && hit.packs) {
+          selectedPack = hit.packs.find((pk: any) => pk.id === hit.matchedPackId) || null;
+        }
 
-          draftItems.push({
-            productId: primary.id,
-            productName: primary.name,
-            sku: primary.sku,
-            quantity,
-            unitPrice,
-            discountRate: 0,
-            taxRate,
-            lineTotal: Math.round(lineTotal * 100) / 100,
-          });
+        const unitPrice = selectedPack ? selectedPack.sellingPrice : hit.sellingPrice;
+        const taxRate = hit.taxRate || 0;
+        const lineSubtotal = quantity * unitPrice;
+        const lineTax = lineSubtotal * (taxRate / 100);
+        const lineTotal = lineSubtotal + lineTax;
 
+        draftItems.push({
+          productId: hit.productId,
+          productName: hit.name + (selectedPack ? ` (${selectedPack.label})` : ''),
+          sku: hit.sku,
+          quantity,
+          unitPrice,
+          discountRate: 0,
+          taxRate,
+          lineTotal: Math.round(lineTotal * 100) / 100,
+          packageId: selectedPack ? selectedPack.id : undefined,
+          packLabel: selectedPack ? selectedPack.label : undefined,
+          packSize: selectedPack ? selectedPack.baseUnitsPerPack : 1,
+        });
+
+        if (hits.length > 1) {
           disambiguations.push({
             queryTerm: rawTerm,
-            matches: matchedProducts.slice(0, 4).map((p: any) => ({
-              id: p.id,
-              name: p.name,
-              sku: p.sku,
-              price: Number(p.selling_price || 0),
+            matches: hits.slice(0, 4).map((h) => ({
+              id: h.productId,
+              name: h.name + (h.brand ? ` [${h.brand}]` : ''),
+              sku: h.sku,
+              price: h.sellingPrice,
             })),
           });
         }
@@ -463,7 +450,7 @@ export async function POST(request: NextRequest) {
         quotationDraft,
         disambiguations: disambiguations.length > 0 ? disambiguations : undefined,
         responseSource: 'retail_quotation_builder',
-        contextSources: ['retail_products', 'retail_stock_levels'],
+        contextSources: ['retail_products', 'retail_product_packages', 'retail_stock_levels'],
       }, undefined, request);
     }
 
@@ -482,26 +469,14 @@ export async function POST(request: NextRequest) {
         .replace(/\b(what|is|the|price|cost|how|much|rate|for|of|check|tell|me|a|an|please)\b/gi, ' ')
         .replace(/\s+/g, ' ').trim();
 
-      const db = getServiceSupabase();
-      const tokens = normalized.toLowerCase().split(/\s+/).filter(Boolean).map(token => token.endsWith('s') && token.length > 3 ? token.slice(0, -1) : token);
-      const { data: products, error: productError } = await db
-        .from('retail_products')
-        .select('id, name, sku, selling_price, vat_rate, is_pilot_demo, status')
-        .eq('organization_id', orgId)
-        .eq('workspace_id', workspaceId)
-        .eq('status', 'ACTIVE')
-        .limit(500);
+      const hits = await RetailCatalogueService.search({
+        workspaceId,
+        query: normalized,
+        channel: 'SALES',
+        limit: 8,
+      });
 
-      if (productError) {
-        return corsJsonResponse({ success: false, code: 'RETAIL_PRICE_LOOKUP_FAILED', error: 'Product prices could not be read right now.' }, { status: 503 }, request);
-      }
-
-      const matches = (products || []).filter((p: any) => {
-        const haystack = String(p.name || '') + ' ' + String(p.sku || '');
-        return tokens.every(token => haystack.toLowerCase().includes(token));
-      }).slice(0, 10);
-
-      if (!matches.length) {
+      if (!hits.length) {
         return corsJsonResponse({
           success: true,
           answer: `I couldn't find an active catalogue item matching "${normalized}".`,
@@ -509,27 +484,22 @@ export async function POST(request: NextRequest) {
         }, undefined, request);
       }
 
-      const { data: stock } = await db
-        .from('retail_stock_levels')
-        .select('product_id, quantity_on_hand, quantity_reserved')
-        .eq('organization_id', orgId)
-        .eq('workspace_id', workspaceId)
-        .in('product_id', matches.map((p: any) => p.id));
-
-      const priceAnswers = matches.map((p: any) => {
-        const rows = (stock || []).filter((s: any) => s.product_id === p.id);
-        const onHand = rows.reduce((sum: number, s: any) => sum + Number(s.quantity_on_hand || 0), 0);
-        const reserved = rows.reduce((sum: number, s: any) => sum + Number(s.quantity_reserved || 0), 0);
-        const available = onHand - reserved;
-        const price = Number(p.selling_price || 0).toFixed(2);
-        return `• **${p.name}** [${p.sku}]: **$${price}** (Approved Selling Price) — ${available} units available in stock.`;
+      const priceAnswers = hits.map((p) => {
+        const brandStr = p.brand ? ` (${p.brand})` : '';
+        const deptStr = p.departmentName ? ` [${p.departmentName}]` : '';
+        const basePrice = `• **${p.name}**${brandStr} [${p.sku}]${deptStr}: **$${p.sellingPrice.toFixed(2)} / ${p.unitOfMeasure}** — **${p.stockOnHand}** ${p.unitOfMeasure} on hand.`;
+        if (p.packs && p.packs.length > 0) {
+          const packStrs = p.packs.map((pk) => `    └─ *${pk.label}* (${pk.baseUnitsPerPack} ${p.unitOfMeasure}): **$${pk.sellingPrice.toFixed(2)}**`);
+          return `${basePrice}\n${packStrs.join('\n')}`;
+        }
+        return basePrice;
       });
 
       return corsJsonResponse({
         success: true,
-        answer: `Approved pricing and availability:\n\n${priceAnswers.join('\n')}`,
+        answer: `Approved retail pricing & packaging availability:\n\n${priceAnswers.join('\n\n')}`,
         responseSource: 'retail_price_lookup',
-        contextSources: ['retail_products', 'retail_stock_levels'],
+        contextSources: ['retail_products', 'retail_product_packages', 'retail_stock_levels'],
       }, undefined, request);
     }
 
@@ -547,60 +517,51 @@ export async function POST(request: NextRequest) {
         .replace(/[^\w\s-]/g, ' ')
         .replace(/\b(how|many|much|do|does|we|have|currently|in|stock|instock|inventory|on|hand|are|there|is|the|our|what|quantity|of|available|please|tell|me|units|pieces)\b/gi, ' ')
         .replace(/\s+/g, ' ').trim();
+
       if (!normalized) {
         return corsJsonResponse({
           success: true,
-          answer: 'Which product or SKU would you like me to check in Retail inventory?',
+          answer: 'Which product, brand or SKU would you like me to check in Retail inventory?',
           responseSource: 'retail_inventory_lookup',
         }, undefined, request);
       }
-      const db = getServiceSupabase();
-      // The existing authenticated context and RetailEntitlementService authorize both
-      // organization and workspace. Never derive tenant identity from the prompt/body.
-      const tokens = normalized.toLowerCase().split(/\s+/).filter(Boolean).map(token => token.endsWith('s') && token.length > 3 ? token.slice(0, -1) : token);
-      const { data: products, error: productError } = await db
-        .from('retail_products')
-        .select('id, name, sku, selling_price, is_pilot_demo, status')
-        .eq('organization_id', orgId)
-        .eq('workspace_id', workspaceId)
-        .eq('status', 'ACTIVE')
-        .limit(500);
-      if (productError) {
-        return corsJsonResponse({ success: false, code: 'RETAIL_INVENTORY_LOOKUP_FAILED', error: 'Retail inventory could not be read right now.' }, { status: 503 }, request);
-      }
-      const matches = (products || []).filter((p: any) => {
-        const haystack = String(p.name || '') + ' ' + String(p.sku || '');
-        return tokens.every(token => haystack.toLowerCase().includes(token));
-      }).slice(0, 25);
-      if (!matches.length) {
+
+      const hits = await RetailCatalogueService.search({
+        workspaceId,
+        query: normalized,
+        channel: 'SALES',
+        limit: 10,
+      });
+
+      if (!hits.length) {
         return corsJsonResponse({
           success: true,
           answer: `I couldn't find a matching active product for "${normalized}" in this workspace's Retail inventory.`,
           responseSource: 'retail_inventory_lookup',
         }, undefined, request);
       }
-      const { data: stock, error: stockError } = await db
-        .from('retail_stock_levels')
-        .select('product_id, quantity_on_hand, quantity_reserved')
-        .eq('organization_id', orgId)
-        .eq('workspace_id', workspaceId)
-        .in('product_id', matches.map((p: any) => p.id));
-      if (stockError) {
-        return corsJsonResponse({ success: false, code: 'RETAIL_INVENTORY_LOOKUP_FAILED', error: 'Retail stock balances could not be read right now.' }, { status: 503 }, request);
-      }
-      const answers = matches.map((p: any) => {
-        const rows = (stock || []).filter((s: any) => s.product_id === p.id);
-        const onHand = rows.reduce((sum: number, s: any) => sum + Number(s.quantity_on_hand || 0), 0);
-        const reserved = rows.reduce((sum: number, s: any) => sum + Number(s.quantity_reserved || 0), 0);
-        const suffix = p.is_pilot_demo ? ' (pilot/demo inventory)' : '';
-        const priceStr = p.selling_price != null ? ` at $${Number(p.selling_price).toFixed(2)}` : '';
-        return `${p.name} [${p.sku}]: ${onHand - reserved} available${priceStr}, ${onHand} on hand, ${reserved} reserved${suffix}.`;
+
+      const answers = hits.map((p) => {
+        const brandStr = p.brand ? ` (${p.brand})` : '';
+        const baseStock = `• **${p.name}**${brandStr} [${p.sku}]: **${p.stockOnHand}** ${p.unitOfMeasure} available.`;
+        if (p.packs && p.packs.length > 0) {
+          const packPossibilities = p.packs.map((pk) => {
+            const numPacks = Math.floor(p.stockOnHand / pk.baseUnitsPerPack);
+            const remainder = Math.round((p.stockOnHand % pk.baseUnitsPerPack) * 100) / 100;
+            return `    └─ Equivalent to **${numPacks} ${pk.label}**` + (remainder > 0 ? ` + ${remainder} singles` : '');
+          });
+          return `${baseStock}\n${packPossibilities.join('\n')}`;
+        }
+        return baseStock;
       });
+
       return corsJsonResponse({
         success: true,
-        answer: answers.join('\n'),
+        answer: `Retail inventory levels:\n\n${answers.join('\n\n')}`,
         responseSource: 'retail_inventory_lookup',
-        contextSources: ['retail_products', 'retail_stock_levels'],
+        contextSources: ['retail_products', 'retail_product_packages', 'retail_stock_levels'],
+      }, undefined, request);
+    }ucts', 'retail_stock_levels'],
       }, undefined, request);
     }
 

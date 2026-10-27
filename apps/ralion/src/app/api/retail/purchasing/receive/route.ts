@@ -43,6 +43,7 @@ export async function POST(request: NextRequest) {
 
     const items = rawItems.map((it: any) => ({
       productId: it.productId || it.product_id,
+      poItemId: it.poItemId || it.po_item_id || it.id || undefined,
       quantityReceivedNow: Number(it.quantityReceivedNow ?? it.quantityReceived ?? it.quantity_received ?? it.quantity ?? 0),
       unitCost: Number(it.unitCost ?? it.unit_cost ?? 0),
     }));
