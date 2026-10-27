@@ -3,7 +3,6 @@ import { requireRalionContext } from '@/lib/auth/serverAuth';
 import { corsJsonResponse, handleCorsPreflight } from '@/lib/cors';
 import { RetailEntitlementService } from '@/lib/services/retail/retailEntitlement.service';
 import { RetailDatabaseService } from '@/lib/services/retail/retailDatabase.service';
-import { RetailCashierShift } from '@ralion/database';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,8 +57,7 @@ export async function POST(request: NextRequest) {
         return corsJsonResponse({ success: true, shift: existing, message: 'Existing active shift restored.' }, undefined, request);
       }
 
-      const shift: RetailCashierShift = {
-        id: `shift_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      const shift = {
         organizationId: context.organization.id,
         workspaceId: context.workspace.id,
         cashierUserId: context.user.id,

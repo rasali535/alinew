@@ -1294,11 +1294,9 @@ export class RetailDatabaseService {
     notes?: string;
   }): Promise<RetailCashierShift> {
     const supabase = getPrivilegedSupabase();
-    const id = (params as any).id || `shift_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const { data, error } = await supabase
       .from('retail_cashier_shifts')
       .insert({
-        id,
         organization_id: params.organizationId,
         workspace_id: params.workspaceId,
         cashier_user_id: params.cashierUserId,

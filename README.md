@@ -185,3 +185,7 @@ npm run desktop:dist:win
 
 ## 📄 License
 Proprietary — © Ras Ali Labs (Pty) Ltd. All Rights Reserved.
+
+### Retail cashier shift identifiers
+
+Cashier shifts use PostgreSQL-generated UUID primary keys (`retail_cashier_shifts.id`). The shift-start endpoint must not construct string IDs such as `shift_<timestamp>`; the database allocates the UUID and the returned shift ID is reused for checkout and shift close. If a deployment reports `invalid input syntax for type uuid` when opening a shift, verify that the shift route and Retail database service include this fix, then redeploy and retry opening the shift (no backfill or schema migration required).
