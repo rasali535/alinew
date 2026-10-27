@@ -418,7 +418,7 @@ export default function RetailInventoryPage() {
                         </td>
                         <td className="py-3 px-4">
                           <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-zinc-800 text-zinc-300 border border-zinc-700/60">
-                            {p.department || p.category}
+                            {p.departmentName || p.category}
                           </span>
                         </td>
                         <td className="py-3 px-4 text-right font-mono text-zinc-300">
