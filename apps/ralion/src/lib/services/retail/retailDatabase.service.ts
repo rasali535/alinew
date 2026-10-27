@@ -192,9 +192,33 @@ export class RetailDatabaseService {
     if (options?.category && options.category !== 'all' && options.category !== 'ALL') {
       query = query.eq('category', options.category);
     }
-    if (options?.query) {
-      const q = options.query.trim();
-      query = query.or(`name.ilike.%${q}%,sku.ilike.%${q}%,barcode.ilike.%${q}%`);
+    // Resolve supplier names within the same workspace, never from another tenant.
+    const { data: supplierRows, error: supplierError } = await supabase
+      .from('retail_suppliers')
+      .select('id, name')
+      .eq('workspace_id', workspaceId);
+    if (supplierError) {
+      throw new Error(`RETAIL_SUPPLIER_LOOKUP_FAILED: ${supplierError.message}`);
+    }
+    const suppliersById = new Map((supplierRows || []).map(s => [s.id, s.name]));
+    if (options?.query?.trim()) {
+      // Literal substring search: do not interpolate raw input into a PostgREST OR expression.
+      // Also resolves matches against supplier names without exposing supplier costs.
+      const term = options.query.trim().toLocaleLowerCase();
+      const matchingSuppliers = (supplierRows || [])
+        .filter(s => s.name.toLocaleLowerCase().includes(term))
+        .map(s => s.id);
+      const escaped = options.query.trim().replace(/[,%().*\\]/g, ' ').trim();
+      const terms = escaped.split(/\s+/).filter(Boolean);
+      if (terms.length && !matchingSuppliers.length) {
+        const phrase = terms.join(' ');
+        query = query.or(`name.ilike.%${phrase}%,sku.ilike.%${phrase}%,barcode.ilike.%${phrase}%,brand.ilike.%${phrase}%,category.ilike.%${phrase}%,subcategory.ilike.%${phrase}%`);
+      } else if (terms.length) {
+        const phrase = terms.join(' ');
+        query = query.or(`name.ilike.%${phrase}%,sku.ilike.%${phrase}%,barcode.ilike.%${phrase}%,brand.ilike.%${phrase}%,category.ilike.%${phrase}%,subcategory.ilike.%${phrase}%,supplier_id.in.(${matchingSuppliers.join(',')})`);
+      } else if (matchingSuppliers.length) {
+        query = query.in('supplier_id', matchingSuppliers);
+      }
     }
 
     const { data, error } = await query;
@@ -217,6 +241,7 @@ export class RetailDatabaseService {
         description: p.description,
         brand: p.brand,
         supplierId: p.supplier_id,
+        supplierName: suppliersById.get(p.supplier_id) || undefined,
         unitOfMeasure: p.unit_of_measure,
         purchaseCost: Number(p.purchase_cost || 0),
         sellingPrice: Number(p.selling_price || 0),
