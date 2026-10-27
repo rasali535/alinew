@@ -389,6 +389,7 @@ export interface RetailQuoteItem {
   packageId?: string;
   packLabel?: string;
   packSize?: number;
+  baseQuantity?: number;
   createdAt?: string;
 }
 

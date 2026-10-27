@@ -155,8 +155,10 @@ export interface NormalizedRetailProduct {
   is_active: boolean;
   imageUrl?: string;
   isPilotDemo?: boolean;
+  department?: string;
   departmentId?: string;
   departmentName?: string;
+  subdepartment?: string;
   subdepartmentId?: string;
   subdepartmentName?: string;
   brandId?: string;
@@ -211,8 +213,10 @@ export function normalizeProduct(raw: any): NormalizedRetailProduct {
     current_stock: currentStockNum,
     status: safeString(raw.status, 'ACTIVE'),
     is_active: raw.is_active !== undefined ? Boolean(raw.is_active) : raw.status !== 'DISCONTINUED',
+    department: raw.department || raw.departmentName || raw.department_name || undefined,
     departmentId: raw.departmentId || raw.department_id || undefined,
     departmentName: raw.departmentName || raw.department_name || undefined,
+    subdepartment: raw.subdepartment || raw.subdepartmentName || raw.subdepartment_name || undefined,
     subdepartmentId: raw.subdepartmentId || raw.subdepartment_id || undefined,
     subdepartmentName: raw.subdepartmentName || raw.subdepartment_name || undefined,
     brandId: raw.brandId || raw.brand_id || undefined,
@@ -396,6 +400,10 @@ export function normalizeSales(rawList: unknown): NormalizedRetailSale[] {
 
 export interface NormalizedQuoteItem {
   id?: string;
+  packageId?: string;
+  packLabel?: string;
+  packSize?: number;
+  baseQuantity?: number;
   productId: string;
   product_id: string;
   productName: string;
@@ -542,10 +550,6 @@ export function normalizeQuotations(rawList: unknown): NormalizedRetailQuotation
 
 export interface NormalizedPoItem {
   id?: string;
-  packageId?: string;
-  packLabel?: string;
-  packSize?: number;
-  baseQuantity?: number;
   productId: string;
   product_id: string;
   productName: string;
@@ -559,6 +563,14 @@ export interface NormalizedPoItem {
   unit_cost: number;
   lineTotal: number;
   line_total: number;
+  packageId?: string | null;
+  package_id?: string | null;
+  packLabel?: string | null;
+  pack_label?: string | null;
+  packSize?: number;
+  pack_size?: number;
+  baseQuantity?: number;
+  base_quantity?: number;
 }
 
 export interface NormalizedRetailPurchaseOrder {
@@ -588,6 +600,8 @@ export function normalizePoItem(raw: any): NormalizedPoItem {
   const qtyReceived = parseStrictNumber(raw.quantityReceived ?? raw.quantity_received) ?? 0;
   const unitCost = parseStrictNumber(raw.unitCost ?? raw.unit_cost) ?? 0;
   const lineTotal = parseStrictNumber(raw.lineTotal ?? raw.line_total) ?? (qtyOrdered * unitCost);
+  const packSize = parseStrictNumber(raw.packSize ?? raw.pack_size) ?? 1;
+  const baseQuantity = parseStrictNumber(raw.baseQuantity ?? raw.base_quantity) ?? (qtyOrdered * packSize);
 
   return {
     id: raw.id ? safeString(raw.id) : undefined,
@@ -604,6 +618,14 @@ export function normalizePoItem(raw: any): NormalizedPoItem {
     unit_cost: unitCost,
     lineTotal,
     line_total: lineTotal,
+    packageId: raw.packageId || raw.package_id || null,
+    package_id: raw.packageId || raw.package_id || null,
+    packLabel: raw.packLabel || raw.pack_label || null,
+    pack_label: raw.packLabel || raw.pack_label || null,
+    packSize,
+    pack_size: packSize,
+    baseQuantity,
+    base_quantity: baseQuantity,
   };
 }
 

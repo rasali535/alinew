@@ -1026,8 +1026,8 @@ export default function CashierWorkstationPage() {
       safeLowerCase(p.name).includes(q) ||
       safeLowerCase(p.sku).includes(q) ||
       safeLowerCase(p.brand).includes(q) ||
-      safeLowerCase(p.department).includes(q) ||
-      safeLowerCase(p.subdepartment).includes(q) ||
+      safeLowerCase(p.departmentName || p.department).includes(q) ||
+      safeLowerCase(p.subdepartmentName || p.subdepartment).includes(q) ||
       Boolean(p.barcode && p.barcode.includes(q)) ||
       Boolean(p.packs?.some((pk) => safeLowerCase(pk.label).includes(q) || (pk.barcode && pk.barcode.includes(q))));
     return matchesCat && matchesQuery;
@@ -1458,9 +1458,9 @@ export default function CashierWorkstationPage() {
                       <div className="text-xs font-semibold text-zinc-100 group-hover:text-emerald-300 transition-colors line-clamp-2">
                         {p.name}
                       </div>
-                      {(p.department || p.category) && (
+                      {(p.departmentName || p.department || p.category) && (
                         <div className="text-[10px] text-zinc-500 mt-0.5 truncate">
-                          {p.department || p.category}
+                          {p.departmentName || p.department || p.category}
                         </div>
                       )}
                     </div>
