@@ -82,6 +82,29 @@ alinew/
 - **Cashier-Specific Mari Assistant**: Non-blocking drawer assistant providing real-time stock checks, approved selling price inquiries (strictly masking confidential purchase costs), and deterministic walk-in quotation generation with 1-click cart loading and atomic quotation-to-sale conversion.
 - **Server-Side Administrative Lockdown**: Management APIs (`expenses`, `payroll/runs`, `reports`, `demo-data`, `purchasing/orders`) independently deny access with HTTP 403 for `CASHIER` accounts, backed by client-level dashboard redirects.
 
+### 6. MARI Smart Stock Receiving & Purchasing (Issue #161)
+- **Multi-Format Ingestion**: Ingests supplier invoices, packing lists, and delivery notes across PDF, scanned PNG/JPG, XLSX, and CSV documents with strict file signature magic-byte verification (rejecting executable or corrupt uploads) and SHA-256 duplicate detection.
+- **Human-in-the-Loop Draft-First Architecture**: Uploading a supplier document **NEVER** automatically increases stock or modifies inventory ledger balances. Uploads produce an immutable, reviewable draft (`PENDING_EXTRACTION` -> `READY_FOR_REVIEW`) awaiting authorized manager approval.
+- **Strict Role-Based Manager Approval**:
+  - Only authorized managerial accounts (`canManageInventory` / `canManagePurchasing`, `STORE_OWNER`, or `RETAIL_MANAGER`) can approve and post goods receipts.
+  - Cashier accounts attempting to review or post receipts receive immediate HTTP 403 Forbidden.
+- **Anti-Prompt-Injection & Untrusted Data Defense**:
+  - Untrusted supplier documents are treated strictly as passive, adversarial data.
+  - System instructions enforce strict schema-constrained structured output, rejecting instructional override attempts or prompt injection embedded in line item descriptions.
+- **Packing List Financial Defense**:
+  - Delivery packing lists without unit costs strictly retain `NULL` costs unless linked to an approved Purchase Order or catalogue record.
+  - The system **NEVER** fabricates, hallucinates, or estimates purchase costs or tax rates.
+- **Intelligent Catalogue Matching & Packaging Conversion**:
+  - Multi-tier matching engine: Barcode lookup -> Supplier SKU -> Product SKU -> Fuzzy name & brand matching.
+  - Automatic packaging conversion factor resolution (`stated_quantity * pack_size`) with integer-scaled base quantity calculation and precision guard (maximum 2 decimal places).
+  - Shortage and damaged item flagging with automated delta discrepancy tracking (`missing_quantity = stated_quantity - received_quantity - damaged_quantity`).
+- **Atomic Single-Transaction Goods Receipt Posting**:
+  - Driven by privileged PostgreSQL RPC `execute_atomic_smart_stock_receipt`.
+  - Row-level lock (`FOR UPDATE`) on draft and stock balances.
+  - Nonce-protected idempotency guard: repeated approvals with the same nonce return the existing receipt safely without double-receiving or stock inflation.
+  - Simultaneously posts Goods Receipt, creates/updates PO lines, records durable stock movements (`RECEIVING` / `PURCHASE_ORDER`), updates physical stock (`retail_stock_levels`), and writes operational audit logs in a single ACID transaction.
+  - RPC execution revoked from `PUBLIC`, `anon`, and `authenticated`; granted exclusively to `service_role`.
+
 ---
 
 ## 💎 License & Subscription Tiers
@@ -150,7 +173,16 @@ npx tsx scripts/benchmark-growth-center-performance.ts
 # 4. Command Center & Website Multi-Tenant Isolation Suite
 npx tsx scripts/test-command-center-and-website-isolation.ts
 
-# 5. Full TypeScript Typecheck
+# 5. Ralion Retail: MARI Smart Stock Receiving & Purchasing Acceptance Suite
+node scripts/test-retail-smart-receiving.js
+
+# 6. Ralion Retail: Catalogue Merchandising, Search & Packaging Suite
+node scripts/test-retail-catalogue-packaging.js
+
+# 7. Database Migration Replay & Security Isolation Suite (137 tables)
+node scripts/security/test-preview-migration-replay.mjs
+
+# 8. Full TypeScript Typecheck
 npm run typecheck --workspace=@ralion/app
 ```
 

@@ -16,6 +16,14 @@ import {
   RefreshCw,
   Clock,
   Layers,
+  UploadCloud,
+  FileText,
+  Check,
+  AlertTriangle,
+  AlertCircle,
+  Eye,
+  ShieldCheck,
+  Sparkles,
 } from 'lucide-react';
 import { RetailNavHeader } from '../components/RetailNavHeader';
 import { RetailAccessErrorCard, RetailErrorState } from '../components/RetailAccessErrorCard';
@@ -24,21 +32,46 @@ import {
   normalizePurchaseOrders,
   normalizeSuppliers,
   normalizeProducts,
+  normalizeSmartReceiptDraft,
   NormalizedRetailPurchaseOrder,
   NormalizedRetailSupplier,
   NormalizedRetailProduct,
+  NormalizedSmartReceiptDraft,
+  NormalizedSmartReceiptItem,
   formatPrice,
   safeLowerCase,
 } from '@/lib/retail/adapters';
 
 export default function RetailPurchasingPage() {
-  const [activeTab, setActiveTab] = useState<'orders' | 'suppliers'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'suppliers' | 'receiving'>('orders');
   const [orders, setOrders] = useState<NormalizedRetailPurchaseOrder[]>([]);
   const [suppliers, setSuppliers] = useState<NormalizedRetailSupplier[]>([]);
   const [products, setProducts] = useState<NormalizedRetailProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorState, setErrorState] = useState<RetailErrorState | null>(null);
   const [search, setSearch] = useState('');
+
+  // Smart Goods Receiving State
+  const [drafts, setDrafts] = useState<NormalizedSmartReceiptDraft[]>([]);
+  const [selectedDraft, setSelectedDraft] = useState<NormalizedSmartReceiptDraft | null>(null);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [uploadDocType, setUploadDocType] = useState<'INVOICE' | 'PACKING_LIST'>('INVOICE');
+  const [uploadSupplierId, setUploadSupplierId] = useState('');
+  const [uploadPOId, setUploadPOId] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [isPostingDraft, setIsPostingDraft] = useState(false);
+  const [reviewItems, setReviewItems] = useState<{
+    [itemId: string]: {
+      received_quantity: number;
+      damaged_quantity: number;
+      missing_quantity: number;
+      pack_size: number;
+      unit_cost?: number;
+      matched_product_id?: string;
+      matched_package_id?: string;
+    };
+  }>({});
 
   // Merchandising metadata
   const [departments, setDepartments] = useState<Array<{ id: string; name: string }>>([]);
@@ -104,6 +137,20 @@ export default function RetailPurchasingPage() {
   const [poSearchResults, setPoSearchResults] = useState<NormalizedRetailProduct[]>([]);
   const [isSearchingCatalogue, setIsSearchingCatalogue] = useState(false);
 
+  const fetchDrafts = async () => {
+    try {
+      const res = await authFetch('/api/retail/purchasing/smart-receiving/drafts');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.drafts) {
+          setDrafts(data.drafts.map(normalizeSmartReceiptDraft));
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch smart receiving drafts:', err);
+    }
+  };
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -148,6 +195,8 @@ export default function RetailPurchasingPage() {
         const t = await resTaxCodes.json();
         if (t.taxCodes) setTaxCodes(t.taxCodes);
       }
+
+      await fetchDrafts();
     } catch (e: any) {
       console.error('Failed to fetch purchasing data', e);
       setErrorState({
@@ -157,6 +206,128 @@ export default function RetailPurchasingPage() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsUploading(true);
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('document_type', uploadDocType);
+      if (uploadSupplierId) formData.append('supplier_id', uploadSupplierId);
+      if (uploadPOId) formData.append('purchase_order_id', uploadPOId);
+
+      const res = await authFetch('/api/retail/purchasing/smart-receiving/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Failed to upload document');
+        return;
+      }
+
+      setNotification(`Document "${file.name}" uploaded. Reviewable draft created without modifying stock.`);
+      setTimeout(() => setNotification(null), 4500);
+      await fetchDrafts();
+
+      // Automatically trigger extraction
+      if (data.draft?.id) {
+        await handleExtractDraft(data.draft.id);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error uploading document');
+    } finally {
+      setIsUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleExtractDraft = async (draftId: string) => {
+    try {
+      setIsExtracting(true);
+      const res = await authFetch(`/api/retail/purchasing/smart-receiving/drafts/${draftId}/extract`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (res.ok) {
+        await fetchDrafts();
+        if (selectedDraft?.id === draftId && data.draft) {
+          openReviewModal(normalizeSmartReceiptDraft(data.draft));
+        }
+      } else {
+        alert(data.error || 'Extraction failed');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to extract draft');
+    } finally {
+      setIsExtracting(false);
+    }
+  };
+
+  const openReviewModal = (draft: NormalizedSmartReceiptDraft) => {
+    setSelectedDraft(draft);
+    const initialReviewState: any = {};
+    draft.items?.forEach((item) => {
+      initialReviewState[item.id] = {
+        received_quantity: item.receivedQuantity,
+        damaged_quantity: item.damagedQuantity,
+        missing_quantity: item.missingQuantity,
+        pack_size: item.packSize,
+        unit_cost: item.unitCost,
+        matched_product_id: item.matchedProductId,
+        matched_package_id: item.matchedPackageId,
+      };
+    });
+    setReviewItems(initialReviewState);
+    setShowReviewModal(true);
+  };
+
+  const handlePostDraft = async () => {
+    if (!selectedDraft) return;
+
+    try {
+      setIsPostingDraft(true);
+      const itemsPayload = Object.entries(reviewItems).map(([itemId, values]) => ({
+        item_id: itemId,
+        product_id: values.matched_product_id,
+        package_id: values.matched_package_id,
+        received_quantity: values.received_quantity,
+        damaged_quantity: values.damaged_quantity,
+        missing_quantity: values.missing_quantity,
+        pack_size: values.pack_size,
+        unit_cost: values.unit_cost,
+      }));
+
+      const res = await authFetch(`/api/retail/purchasing/smart-receiving/drafts/${selectedDraft.id}/post`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: itemsPayload,
+          notes: `Posted from MARI Smart Stock Receiving: Draft ${selectedDraft.id}`,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Failed to post goods receipt');
+        return;
+      }
+
+      setShowReviewModal(false);
+      setSelectedDraft(null);
+      setNotification(`Goods receipt #${data.receipt?.receipt_number || 'posted'} approved and posted! Stock and ledger updated.`);
+      setTimeout(() => setNotification(null), 5000);
+      await fetchData();
+    } catch (err: any) {
+      alert(err.message || 'Error posting draft');
+    } finally {
+      setIsPostingDraft(false);
     }
   };
 
@@ -514,6 +685,20 @@ export default function RetailPurchasingPage() {
             <Building2 className="w-4 h-4" />
             Suppliers Directory ({suppliers.length})
           </button>
+          <button
+            onClick={() => setActiveTab('receiving')}
+            className={`pb-3 font-medium flex items-center gap-2 border-b-2 transition ${
+              activeTab === 'receiving'
+                ? 'border-emerald-500 text-emerald-400'
+                : 'border-transparent text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <UploadCloud className="w-4 h-4" />
+            Smart Goods Receiving ({drafts.length})
+            <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded font-mono font-semibold">
+              MARI
+            </span>
+          </button>
         </div>
 
         {/* ORDERS TAB */}
@@ -638,6 +823,410 @@ export default function RetailPurchasingPage() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* SMART GOODS RECEIVING TAB */}
+        {activeTab === 'receiving' && (
+          <div className="space-y-6">
+            {/* Upload Zone Card */}
+            <div className="bg-gradient-to-br from-zinc-900/90 to-zinc-950/80 border border-zinc-800/80 rounded-2xl p-6 backdrop-blur-sm space-y-4 shadow-xl">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800/80 pb-4">
+                <div>
+                  <h3 className="text-base font-bold text-zinc-100 flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-emerald-400" />
+                    MARI Smart Stock Receiving
+                  </h3>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Upload supplier invoices or packing lists. Automated OCR parsing, catalogue matching, and pack conversions.
+                  </p>
+                </div>
+                <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-xl text-xs font-medium text-emerald-300">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  <span>Draft First — Zero Automatic Stock Increase</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs text-zinc-400 block mb-1">Document Type *</label>
+                  <select
+                    value={uploadDocType}
+                    onChange={(e) => setUploadDocType(e.target.value as any)}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="INVOICE">Supplier Commercial Invoice (with prices)</option>
+                    <option value="PACKING_LIST">Delivery Packing List (quantity only)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-zinc-400 block mb-1">Associated Supplier (Optional)</label>
+                  <select
+                    value={uploadSupplierId}
+                    onChange={(e) => setUploadSupplierId(e.target.value)}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="">-- Auto-detect from document --</option>
+                    {suppliers.map((sup) => (
+                      <option key={sup.id} value={sup.id}>
+                        {sup.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-zinc-400 block mb-1">Link Purchase Order (Optional)</label>
+                  <select
+                    value={uploadPOId}
+                    onChange={(e) => setUploadPOId(e.target.value)}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="">-- Direct receiving / Auto PO --</option>
+                    {orders
+                      .filter((o) => o.status !== 'received')
+                      .map((po) => (
+                        <option key={po.id} value={po.id}>
+                          #{po.order_number || po.orderNumber} ({po.supplier_name || 'Supplier'})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Drag and Drop Zone */}
+              <div className="relative border-2 border-dashed border-zinc-800 hover:border-emerald-500/50 rounded-2xl p-6 text-center transition-colors bg-zinc-950/40">
+                <input
+                  type="file"
+                  id="smart-stock-file-input"
+                  accept=".pdf,.png,.jpg,.jpeg,.csv,.xlsx,application/pdf,image/png,image/jpeg,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  onChange={handleFileUpload}
+                  disabled={isUploading}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                />
+                <div className="flex flex-col items-center justify-center space-y-2 pointer-events-none">
+                  <div className="p-3 rounded-full bg-zinc-900 border border-zinc-800 text-emerald-400">
+                    <UploadCloud className={`w-6 h-6 ${isUploading ? 'animate-bounce' : ''}`} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-zinc-200">
+                      {isUploading ? 'Uploading & parsing document...' : 'Click or drag invoice / packing list to upload'}
+                    </p>
+                    <p className="text-xs text-zinc-500 mt-0.5">
+                      Supported formats: PDF, Scanned PNG/JPG, XLSX, CSV (Max 25MB)
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Receiving Drafts List */}
+            <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden backdrop-blur-sm">
+              <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
+                <h4 className="font-bold text-sm text-zinc-100 flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-emerald-400" />
+                  Receiving Drafts
+                </h4>
+                <button
+                  onClick={fetchDrafts}
+                  className="text-xs text-zinc-400 hover:text-zinc-200 flex items-center gap-1"
+                >
+                  <RefreshCw className="w-3 h-3" /> Refresh
+                </button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-zinc-800 text-xs font-semibold text-zinc-400 uppercase tracking-wider bg-zinc-950/40">
+                      <th className="py-3.5 px-4">Document / File</th>
+                      <th className="py-3.5 px-4">Type</th>
+                      <th className="py-3.5 px-4">Supplier</th>
+                      <th className="py-3.5 px-4 text-center">Status</th>
+                      <th className="py-3.5 px-4 text-right">Items</th>
+                      <th className="py-3.5 px-4 text-right">Total (USD)</th>
+                      <th className="py-3.5 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800/60">
+                    {drafts.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="py-12 text-center text-zinc-500">
+                          No receiving drafts uploaded yet. Upload an invoice or packing list above to get started.
+                        </td>
+                      </tr>
+                    ) : (
+                      drafts.map((draft) => {
+                        const statusColors: Record<string, string> = {
+                          PENDING_EXTRACTION: 'bg-zinc-800 text-zinc-300 border-zinc-700',
+                          PROCESSING: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+                          READY_FOR_REVIEW: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+                          POSTED: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+                          FAILED: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+                        };
+
+                        return (
+                          <tr key={draft.id} className="hover:bg-zinc-800/30 transition-colors">
+                            <td className="py-3.5 px-4">
+                              <div className="font-medium text-zinc-200">{draft.fileName}</div>
+                              <div className="text-xs text-zinc-500 font-mono">
+                                {draft.extractedDocumentNumber ? `Doc #${draft.extractedDocumentNumber}` : 'Pending parse'}
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-zinc-800 text-zinc-300 border border-zinc-700">
+                                {draft.documentType}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 font-medium text-zinc-200">
+                              {draft.supplierName || draft.extractedSupplierName || '—'}
+                            </td>
+                            <td className="py-3.5 px-4 text-center">
+                              <span
+                                className={`px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wider border ${
+                                  statusColors[draft.status] || 'bg-zinc-800 text-zinc-300'
+                                }`}
+                              >
+                                {draft.status.replace(/_/g, ' ')}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 text-right font-mono text-zinc-300">
+                              {draft.items?.length || 0}
+                            </td>
+                            <td className="py-3.5 px-4 text-right font-mono font-bold text-zinc-100">
+                              {draft.documentType === 'PACKING_LIST' && !draft.totalAmount
+                                ? '—'
+                                : formatPrice(draft.totalAmount)}
+                            </td>
+                            <td className="py-3.5 px-4 text-right space-x-2">
+                              {draft.status === 'READY_FOR_REVIEW' && (
+                                <button
+                                  onClick={() => openReviewModal(draft)}
+                                  className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition inline-flex items-center gap-1.5"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  Review & Approve
+                                </button>
+                              )}
+                              {draft.status === 'PENDING_EXTRACTION' && (
+                                <button
+                                  onClick={() => handleExtractDraft(draft.id)}
+                                  disabled={isExtracting}
+                                  className="px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition inline-flex items-center gap-1.5 disabled:opacity-50"
+                                >
+                                  <Sparkles className="w-3.5 h-3.5" />
+                                  Extract
+                                </button>
+                              )}
+                              {draft.status === 'POSTED' && (
+                                <span className="text-xs text-emerald-400 font-mono flex items-center justify-end gap-1">
+                                  <Check className="w-3.5 h-3.5" /> Posted
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* REVIEW AND POST DRAFT MODAL */}
+        {showReviewModal && selectedDraft && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-4xl w-full p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col">
+              <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                <div>
+                  <h3 className="text-base font-bold text-zinc-100 flex items-center gap-2">
+                    <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                    Review Smart Stock Receipt: {selectedDraft.fileName}
+                  </h3>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Doc Type: <strong>{selectedDraft.documentType}</strong> • Supplier:{' '}
+                    <strong>{selectedDraft.supplierName || selectedDraft.extractedSupplierName || 'Unknown'}</strong> •
+                    Authorized approval required to update stock.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowReviewModal(false)}
+                  className="text-zinc-500 hover:text-zinc-300 p-1"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {selectedDraft.documentType === 'PACKING_LIST' && (
+                <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl text-xs text-amber-300 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                  <span>
+                    <strong>Packing List Rule:</strong> Unit costs are not stated in packing slips. Costs will be linked from the Purchase Order or Catalogue. No prices will be fabricated.
+                  </span>
+                </div>
+              )}
+
+              {/* Line Items Table */}
+              <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                <div className="border border-zinc-800 rounded-xl overflow-hidden">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-zinc-800 bg-zinc-950/60 text-zinc-400 uppercase font-semibold">
+                        <th className="py-2.5 px-3">Item / Description</th>
+                        <th className="py-2.5 px-3">Matched Product</th>
+                        <th className="py-2.5 px-3 text-center">Stated</th>
+                        <th className="py-2.5 px-3 text-center">Received</th>
+                        <th className="py-2.5 px-3 text-center">Damaged</th>
+                        <th className="py-2.5 px-3 text-center">Missing</th>
+                        <th className="py-2.5 px-3 text-center">Pack Multiplier</th>
+                        <th className="py-2.5 px-3 text-right">Base Units</th>
+                        <th className="py-2.5 px-3 text-right">Unit Cost ($)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-800/60 font-mono">
+                      {selectedDraft.items?.map((item) => {
+                        const itemState = reviewItems[item.id] || {
+                          received_quantity: item.receivedQuantity,
+                          damaged_quantity: item.damagedQuantity,
+                          missing_quantity: item.missingQuantity,
+                          pack_size: item.packSize,
+                          unit_cost: item.unitCost,
+                          matched_product_id: item.matchedProductId,
+                          matched_package_id: item.matchedPackageId,
+                        };
+
+                        const baseUnits = Math.round(itemState.received_quantity * itemState.pack_size * 100) / 100;
+                        const hasShortage = itemState.missing_quantity > 0 || itemState.damaged_quantity > 0;
+
+                        return (
+                          <tr key={item.id} className="hover:bg-zinc-800/20">
+                            <td className="py-2 px-3 font-sans">
+                              <div className="font-medium text-zinc-200">{item.rawDescription}</div>
+                              <div className="text-[10px] text-zinc-500 font-mono">
+                                {item.rawSku ? `SKU: ${item.rawSku}` : ''} {item.rawBarcode ? `Barcode: ${item.rawBarcode}` : ''}
+                              </div>
+                            </td>
+                            <td className="py-2 px-3 font-sans">
+                              <select
+                                value={itemState.matched_product_id || ''}
+                                onChange={(e) =>
+                                  setReviewItems({
+                                    ...reviewItems,
+                                    [item.id]: { ...itemState, matched_product_id: e.target.value || undefined },
+                                  })
+                                }
+                                className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-100"
+                              >
+                                <option value="">-- Unmatched --</option>
+                                {products.map((p) => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.name} ({p.sku})
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="py-2 px-3 text-center text-zinc-400">
+                              {item.statedQuantity}
+                            </td>
+                            <td className="py-2 px-3 text-center">
+                              <input
+                                type="number"
+                                min="0"
+                                value={itemState.received_quantity}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value) || 0;
+                                  const missing = Math.max(0, item.statedQuantity - val - itemState.damaged_quantity);
+                                  setReviewItems({
+                                    ...reviewItems,
+                                    [item.id]: {
+                                      ...itemState,
+                                      received_quantity: val,
+                                      missing_quantity: missing,
+                                    },
+                                  });
+                                }}
+                                className="w-16 bg-zinc-950 border border-zinc-700 rounded px-1.5 py-0.5 text-center text-emerald-400 font-bold"
+                              />
+                            </td>
+                            <td className="py-2 px-3 text-center">
+                              <input
+                                type="number"
+                                min="0"
+                                value={itemState.damaged_quantity}
+                                onChange={(e) => {
+                                  const dmg = parseFloat(e.target.value) || 0;
+                                  setReviewItems({
+                                    ...reviewItems,
+                                    [item.id]: { ...itemState, damaged_quantity: dmg },
+                                  });
+                                }}
+                                className="w-14 bg-zinc-950 border border-zinc-800 rounded px-1.5 py-0.5 text-center text-amber-400"
+                              />
+                            </td>
+                            <td className="py-2 px-3 text-center text-rose-400 font-bold">
+                              {itemState.missing_quantity}
+                            </td>
+                            <td className="py-2 px-3 text-center">
+                              <input
+                                type="number"
+                                min="1"
+                                value={itemState.pack_size}
+                                onChange={(e) =>
+                                  setReviewItems({
+                                    ...reviewItems,
+                                    [item.id]: {
+                                      ...itemState,
+                                      pack_size: parseFloat(e.target.value) || 1,
+                                    },
+                                  })
+                                }
+                                className="w-14 bg-zinc-950 border border-zinc-800 rounded px-1.5 py-0.5 text-center text-zinc-200"
+                              />
+                            </td>
+                            <td className="py-2 px-3 text-right font-bold text-emerald-400">
+                              +{baseUnits}
+                            </td>
+                            <td className="py-2 px-3 text-right">
+                              {itemState.unit_cost !== undefined ? (
+                                formatPrice(itemState.unit_cost)
+                              ) : (
+                                <span className="text-zinc-500 italic">PO / Ref</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Approval & Post Actions */}
+              <div className="flex items-center justify-between pt-3 border-t border-zinc-800">
+                <div className="text-xs text-zinc-400">
+                  <span className="text-emerald-400 font-medium">Approval Policy:</span> Posting executes single-transaction stock ledger update.
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowReviewModal(false)}
+                    className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-medium transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handlePostDraft}
+                    disabled={isPostingDraft}
+                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold transition flex items-center gap-2 shadow-lg disabled:opacity-50"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    {isPostingDraft ? 'Posting Goods Receipt...' : 'Approve & Post Goods Receipt'}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
