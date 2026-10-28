@@ -14,6 +14,7 @@ import {
   RefreshCw,
   PieChart,
   ShieldCheck,
+  Truck,
 } from 'lucide-react';
 import { RetailNavHeader } from '../components/RetailNavHeader';
 import { RetailAccessErrorCard, RetailErrorState } from '../components/RetailAccessErrorCard';
@@ -24,7 +25,11 @@ import {
   type NormalizedFinancialMetrics,
 } from '@/lib/retail/adapters';
 
+import { CashierCashupsView } from '@/components/retail/CashierCashupsView';
+import { MultiBranchInventoryReportsView } from '@/components/retail/MultiBranchInventoryReportsView';
+
 export default function RetailReportsPage() {
+  const [mainTab, setMainTab] = useState<'PL' | 'CASHUPS' | 'DISTRIBUTION'>('PL');
   const [period, setPeriod] = useState<'today' | '7d' | '30d' | 'all'>('30d');
   const [metrics, setMetrics] = useState<NormalizedFinancialMetrics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -123,45 +128,93 @@ export default function RetailReportsPage() {
       <RetailNavHeader onRefresh={fetchReports} />
 
       <div role="region" aria-label="Financial BI and Executive Reports" className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-bold tracking-tight text-zinc-100 flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-emerald-400" />
-              Financial BI & Executive P&L Reports
-            </h2>
-            <p className="text-sm text-zinc-400">
-              Authoritative income statement with non-double-counted COGS, expenses, and payroll in USD ($).
-            </p>
-          </div>
+        {/* Navigation Tabs for Reports & BI */}
+        <div className="flex border-b border-zinc-800 gap-4">
+          <button
+            type="button"
+            onClick={() => setMainTab('PL')}
+            className={`pb-3 text-sm font-semibold flex items-center gap-2 border-b-2 transition-all ${
+              mainTab === 'PL'
+                ? 'border-emerald-500 text-emerald-400'
+                : 'border-transparent text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4" />
+            Store P&L Statement
+          </button>
 
-          <div className="flex items-center gap-3">
-            {/* Period selector */}
-            <div className="flex bg-zinc-900 border border-zinc-800 rounded-xl p-1 text-xs">
-              {(['today', '7d', '30d', 'all'] as const).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setPeriod(p)}
-                  className={`px-3 py-1 rounded-lg font-medium transition ${
-                    period === p
-                      ? 'bg-emerald-600 text-white shadow'
-                      : 'text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  {p === 'today' ? 'Today' : p === '7d' ? '7 Days' : p === '30d' ? '30 Days' : 'All Time'}
-                </button>
-              ))}
-            </div>
+          <button
+            type="button"
+            onClick={() => setMainTab('CASHUPS')}
+            className={`pb-3 text-sm font-semibold flex items-center gap-2 border-b-2 transition-all ${
+              mainTab === 'CASHUPS'
+                ? 'border-emerald-500 text-emerald-400'
+                : 'border-transparent text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4" />
+            Cashier Cash-Ups & Reconciliation
+          </button>
 
-            <button
-              onClick={handleExportCSV}
-              disabled={!metrics}
-              className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-medium text-xs flex items-center gap-2 transition border border-zinc-700/60 shadow-sm"
-            >
-              <Download className="w-4 h-4 text-emerald-400" />
-              Export P&L (CSV)
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setMainTab('DISTRIBUTION')}
+            className={`pb-3 text-sm font-semibold flex items-center gap-2 border-b-2 transition-all ${
+              mainTab === 'DISTRIBUTION'
+                ? 'border-emerald-500 text-emerald-400'
+                : 'border-transparent text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <Truck className="w-4 h-4" />
+            Multi-Branch Distribution & BI
+          </button>
         </div>
+
+        {mainTab === 'CASHUPS' ? (
+          <CashierCashupsView />
+        ) : mainTab === 'DISTRIBUTION' ? (
+          <MultiBranchInventoryReportsView />
+        ) : (
+          <>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-bold tracking-tight text-zinc-100 flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-emerald-400" />
+                  Financial BI & Executive P&L Reports
+                </h2>
+                <p className="text-sm text-zinc-400">
+                  Authoritative income statement with non-double-counted COGS, expenses, and payroll in USD ($).
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                {/* Period selector */}
+                <div className="flex bg-zinc-900 border border-zinc-800 rounded-xl p-1 text-xs">
+                  {(['today', '7d', '30d', 'all'] as const).map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => setPeriod(p)}
+                      className={`px-3 py-1 rounded-lg font-medium transition ${
+                        period === p
+                          ? 'bg-emerald-600 text-white shadow'
+                          : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      {p === 'today' ? 'Today' : p === '7d' ? '7 Days' : p === '30d' ? '30 Days' : 'All Time'}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  onClick={handleExportCSV}
+                  disabled={!metrics}
+                  className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-medium text-xs flex items-center gap-2 transition border border-zinc-700/60 shadow-sm"
+                >
+                  <Download className="w-4 h-4 text-emerald-400" />
+                  Export P&L (CSV)
+                </button>
+              </div>
+            </div>
 
         {/* Accounting Integrity Banner */}
         <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 flex items-start gap-3 text-xs text-emerald-300">
@@ -357,6 +410,8 @@ export default function RetailReportsPage() {
             </div>
           </div>
         )}
+        </>
+      )}
       </div>
     </div>
   );

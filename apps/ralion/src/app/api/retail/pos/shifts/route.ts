@@ -64,30 +64,31 @@ export async function POST(request: NextRequest) {
         cashierName: context.profile.fullName || 'Cashier',
         startedAt: new Date().toISOString(),
         openingCash: Number(body.openingCash) || 0,
+        locationId: body.locationId || null,
         status: 'OPEN',
         notes: body.notes,
         createdAt: new Date().toISOString(),
       };
 
-      const opened = await RetailDatabaseService.openShift(shift);
+      const opened = await RetailDatabaseService.openShift(shift as any);
       return corsJsonResponse({ success: true, shift: opened }, undefined, request);
     } else if (action === 'CLOSE') {
       if (!body.shiftId || body.closingCashActual === undefined) {
         return corsJsonResponse({ success: false, error: 'shiftId and closingCashActual are required to close shift.' }, { status: 400 }, request);
       }
 
-      const result = await RetailDatabaseService.closeShift(
-        context.workspace.id,
-        body.shiftId,
-        Number(body.closingCashActual),
-        body.notes
-      );
+      const result = await RetailDatabaseService.closeShift({
+        shiftId: body.shiftId,
+        closingCashActual: Number(body.closingCashActual),
+        notes: body.notes,
+        closedByUserId: context.user.id,
+      });
 
       if (!result.success) {
         return corsJsonResponse({ success: false, error: result.error }, { status: 400 }, request);
       }
 
-      return corsJsonResponse({ success: true, shift: result.shift }, undefined, request);
+      return corsJsonResponse({ success: true, shift: result.shift, report: result.report }, undefined, request);
     }
 
     return corsJsonResponse({ success: false, error: `Invalid shift action '${action}'.` }, { status: 400 }, request);

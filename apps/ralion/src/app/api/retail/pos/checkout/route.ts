@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
       return corsJsonResponse({ success: false, error: scopeCheck.error }, { status: 403 }, request);
     }
 
-    const { items, payments, customerName, customerId, shiftId, notes, isPilotDemo, terminalId } = body;
+    const { items, payments, customerName, customerId, shiftId, notes, isPilotDemo, terminalId, locationId } = body;
 
     if (!Array.isArray(items) || items.length === 0) {
       return corsJsonResponse({ success: false, error: 'Cart must contain at least one product.' }, { status: 400 }, request);
@@ -369,6 +369,7 @@ export async function POST(request: NextRequest) {
       notes: auditNotes || undefined,
       isPilotDemo: Boolean(isPilotDemo),
       paymentStatus: authoritativePaymentStatus,
+      locationId: locationId || undefined,
       approvalToken: verifiedApprovalPayload
         ? {
             tokenId: verifiedApprovalPayload.id,

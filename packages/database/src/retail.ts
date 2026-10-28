@@ -8,6 +8,8 @@
 
 export type RetailCurrency = 'USD' | 'BWP' | 'ZAR' | 'EUR' | 'GBP';
 
+export type RetailLocationType = 'WAREHOUSE' | 'RETAIL_BRANCH';
+
 export type RetailUnitOfMeasure =
   | 'EACH'
   | 'BAG'
@@ -133,10 +135,27 @@ export interface RetailLocation {
   workspaceId: string;
   name: string;
   code: string;
+  locationType: RetailLocationType;
   address?: string;
+  phone?: string;
+  email?: string;
+  managerName?: string;
+  managerUserId?: string;
   isDefault: boolean;
+  isActive?: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface RetailUserLocation {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  userId: string;
+  locationId: string;
+  role: 'STAFF' | 'CASHIER' | 'WAREHOUSE_OPERATOR' | 'BRANCH_MANAGER' | 'REGIONAL_MANAGER';
+  isPrimary: boolean;
+  createdAt: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -295,8 +314,11 @@ export interface RetailStockLevel {
   workspaceId: string;
   productId: string;
   locationId?: string;
+  locationName?: string;
   quantityOnHand: number;
   quantityReserved: number;
+  quantityInTransit?: number;
+  quantityDamaged?: number;
   updatedAt: string;
 }
 
@@ -308,11 +330,12 @@ export interface RetailStockMovement {
   productName?: string;
   productSku?: string;
   locationId?: string;
+  locationName?: string;
   movementType: StockMovementType;
   quantityChange: number;
   balanceAfter: number;
   unitCost: number;
-  referenceType?: 'PURCHASE_ORDER' | 'SALE_RECEIPT' | 'MANUAL_ADJUSTMENT' | 'STOCKTAKE' | 'INITIAL_IMPORT';
+  referenceType?: 'PURCHASE_ORDER' | 'SALE_RECEIPT' | 'MANUAL_ADJUSTMENT' | 'STOCKTAKE' | 'INITIAL_IMPORT' | 'STOCK_TRANSFER' | 'TRANSFER_DISPATCH' | 'TRANSFER_RECEIVE' | 'TRANSFER_DISCREPANCY';
   referenceId?: string;
   reason?: string;
   createdBy?: string;
@@ -434,6 +457,7 @@ export interface RetailCashierShift {
   expectedCash?: number;
   variance?: number;
   status: 'OPEN' | 'CLOSED';
+  locationId?: string;
   notes?: string;
   createdAt: string;
 }
@@ -778,4 +802,266 @@ export interface ExecuteAtomicSmartStockReceiptResult {
   idempotent_replay?: boolean;
   message?: string;
 }
+
+// ---------------------------------------------------------------------------
+// 12. Cashier Cash-Up Reports (Immutable Reconciliation)
+// ---------------------------------------------------------------------------
+export interface RetailCashupReport {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  shiftId: string;
+  cashierUserId: string;
+  cashierName: string;
+  terminalId: string;
+  startedAt: string;
+  closedAt: string;
+  openingFloat: number;
+  salesCount: number;
+  grossSales: number;
+  discountTotal: number;
+  taxTotal: number;
+  netSales: number;
+  cashSales: number;
+  cardSales: number;
+  transferSales: number;
+  otherSales: number;
+  cashRefunds: number;
+  noncashRefunds: number;
+  refundCount: number;
+  returnsCount: number;
+  voidCount: number;
+  voidTotal: number;
+  paidIn: number;
+  paidOut: number;
+  expectedCash: number;
+  closingCashActual: number;
+  variance: number;
+  currency: string;
+  closedByUserId: string;
+  managerApprovalUserId?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// 13. Floor Manager Product Returns & Refunds
+// ---------------------------------------------------------------------------
+export type ReturnCondition = 'SELLABLE' | 'DAMAGED' | 'DEFECTIVE';
+export type ReturnStatus = 'PENDING' | 'APPROVED' | 'COMPLETED' | 'REJECTED';
+
+export interface RetailReturnItem {
+  id: string;
+  returnId: string;
+  saleItemId: string;
+  productId: string;
+  productName: string;
+  sku: string;
+  packageId?: string;
+  packLabel?: string;
+  packSize: number;
+  quantityReturned: number;
+  baseQuantityReturned: number;
+  unitPrice: number;
+  taxRate: number;
+  discountRate: number;
+  refundLineTotal: number;
+  condition: ReturnCondition;
+  restocked: boolean;
+  inspectionNotes?: string;
+  createdAt: string;
+}
+
+export interface RetailReturn {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  returnNumber: string;
+  saleId: string;
+  receiptNumber: string;
+  customerName: string;
+  cashierUserId: string;
+  cashierName: string;
+  approvedByUserId: string;
+  approvedByName: string;
+  shiftId?: string;
+  reason: string;
+  totalRefundAmount: number;
+  refundPaymentMethod: string;
+  refundReference?: string;
+  status: ReturnStatus;
+  items?: RetailReturnItem[];
+  createdAt: string;
+}
+
+export interface RetailVoidedSale {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  saleId: string;
+  saleNumber: string;
+  cashierUserId: string;
+  cashierName: string;
+  approvedByUserId: string;
+  approvedByName: string;
+  shiftId?: string;
+  reason: string;
+  amount: number;
+  voidedAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// 14. Multi-Branch Stock Distribution, Transfers & Replenishment (Issue #165)
+// ---------------------------------------------------------------------------
+export type StockRequestStatus =
+  | 'DRAFT'
+  | 'REQUESTED'
+  | 'APPROVED'
+  | 'PARTIALLY_APPROVED'
+  | 'REJECTED'
+  | 'ALLOCATED'
+  | 'FULFILLED'
+  | 'CANCELLED';
+
+export type StockRequestPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
+
+export interface RetailStockRequestItem {
+  id: string;
+  requestId: string;
+  productId: string;
+  productName?: string;
+  sku?: string;
+  packageId?: string;
+  packLabel?: string;
+  packSize: number;
+  quantityRequested: number;
+  baseQuantityRequested: number;
+  quantityApproved: number;
+  baseQuantityApproved: number;
+  quantityFulfilled: number;
+  baseQuantityFulfilled: number;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface RetailStockRequest {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  requestNumber: string;
+  sourceLocationId: string;
+  sourceLocationName?: string;
+  destinationLocationId: string;
+  destinationLocationName?: string;
+  status: StockRequestStatus;
+  priority: StockRequestPriority;
+  requiredDate?: string;
+  requestedBy?: string;
+  requestedByName?: string;
+  approvedBy?: string;
+  approvedByName?: string;
+  approvedAt?: string;
+  rejectionReason?: string;
+  notes?: string;
+  items?: RetailStockRequestItem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type TransferType =
+  | 'WAREHOUSE_TO_BRANCH'
+  | 'BRANCH_TO_BRANCH'
+  | 'BRANCH_TO_WAREHOUSE_RETURN'
+  | 'WAREHOUSE_TO_WAREHOUSE';
+
+export type StockTransferStatus =
+  | 'DRAFT'
+  | 'REQUESTED'
+  | 'APPROVED'
+  | 'ALLOCATED'
+  | 'PICKING'
+  | 'DISPATCHED'
+  | 'IN_TRANSIT'
+  | 'PARTIALLY_RECEIVED'
+  | 'RECEIVED'
+  | 'CLOSED'
+  | 'CANCELLED'
+  | 'EXCEPTION';
+
+export interface RetailStockTransferItem {
+  id: string;
+  transferId: string;
+  productId: string;
+  productName?: string;
+  sku?: string;
+  packageId?: string;
+  packLabel?: string;
+  packSize: number;
+  quantityDispatched: number;
+  baseQuantityDispatched: number;
+  quantityReceived: number;
+  baseQuantityReceived: number;
+  quantityDamaged: number;
+  baseQuantityDamaged: number;
+  quantityShortage: number;
+  baseQuantityShortage: number;
+  quantitySurplus: number;
+  baseQuantitySurplus: number;
+  unitCost: number;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface RetailTransferDiscrepancy {
+  id: string;
+  transferId: string;
+  transferItemId: string;
+  productId: string;
+  productName?: string;
+  sku?: string;
+  discrepancyType: 'DAMAGED' | 'SHORTAGE' | 'SURPLUS' | 'REJECTED' | 'WRONG_ITEM';
+  quantity: number;
+  baseQuantity: number;
+  resolutionAction: 'QUARANTINE' | 'WRITE_OFF' | 'RETURN_TO_WAREHOUSE' | 'SUPPLIER_CLAIM' | 'ADJUST_INVENTORY';
+  resolutionNotes?: string;
+  resolvedBy?: string;
+  resolvedAt?: string;
+  createdAt: string;
+}
+
+export interface RetailStockTransfer {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  transferNumber: string;
+  requestId?: string;
+  sourceLocationId: string;
+  sourceLocationName?: string;
+  destinationLocationId: string;
+  destinationLocationName?: string;
+  transferType: TransferType;
+  status: StockTransferStatus;
+  dispatchedBy?: string;
+  dispatchedByName?: string;
+  dispatchedAt?: string;
+  receivedBy?: string;
+  receivedByName?: string;
+  receivedAt?: string;
+  carrierName?: string;
+  vehicleRegistration?: string;
+  trackingNumber?: string;
+  estimatedArrival?: string;
+  totalLines: number;
+  totalUnitsDispatched: number;
+  totalUnitsReceived: number;
+  totalUnitsDamaged: number;
+  totalUnitsShortage: number;
+  totalValuation: number;
+  notes?: string;
+  items?: RetailStockTransferItem[];
+  discrepancies?: RetailTransferDiscrepancy[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 

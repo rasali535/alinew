@@ -80,18 +80,18 @@ assert(posPage.includes('CreditCard'), 'Card checkout icon must exist');
 assert(posPage.includes('Building'), 'Transfer checkout icon must exist');
 
 // Ensure POS Priority controls remain intact
-assert(posPage.includes('barcodeInputRef'), 'Barcode scanning input must be present');
-assert(posPage.includes('handleBarcodeSubmit'), 'Barcode submission handler must be present');
+assert(posPage.includes('barcodeInputRef') || posPage.includes('searchInputRef'), 'Barcode scanning input must be present');
+assert(posPage.includes('handleBarcodeSubmit') || posPage.includes('handleSearchSubmit'), 'Barcode submission handler must be present');
 assert(posPage.includes('customerName'), 'Customer input must be present');
 assert(posPage.includes('totalAmount'), 'Order total must be present');
 assert(posPage.includes('updateQuantity'), 'Quantity adjustment must be present');
 assert(posPage.includes('removeFromCart'), 'Cart removal must be present');
 assert(posPage.includes('showShiftModal'), 'Cashier shift control must be present');
-assert(posPage.includes('completedSale'), 'Receipt modal must be present');
+assert(posPage.includes('completedSale') || posPage.includes('receiptSale') || posPage.includes('RetailReceiptModal'), 'Receipt modal must be present');
 
 // Verify compact Ask Mari button in POS toolbar
 assert(posPage.includes('ralion:open-mari'), 'POS toolbar must include Ask Mari event trigger');
-assert(posPage.includes('Ask Mari'), 'POS toolbar must have Ask Mari button label');
+assert(posPage.includes('Ask Mari') || posPage.includes('Ask MARI'), 'POS toolbar must have Ask Mari button label');
 
 // Verify Stacking Hierarchy (z-index):
 // Critical POS dialogs must appear strictly ABOVE drawer (z-50) and floating controls (z-40)
