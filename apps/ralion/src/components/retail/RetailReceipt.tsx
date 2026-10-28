@@ -72,7 +72,7 @@ export const RetailReceiptModal: React.FC<RetailReceiptModalProps> = ({
   const isCashup = Boolean(cashupReport);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
       {/* Print-specific style tag injecting isolated print boundaries */}
       <style jsx global>{`
         @media print {
