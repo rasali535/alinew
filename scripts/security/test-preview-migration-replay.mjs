@@ -33,16 +33,17 @@ try {
   const scalar = async sql => (await database.query(sql)).rows[0].value;
   // The Retail POS security migration adds two durable tables to the 125-table baseline, the
   // Retail catalogue/packaging migration adds seven more, the Smart Stock Receiving migration
-  // adds three tables, and the POS Cash-Up & Returns migration adds four tables (cashup reports, returns, return items, voided sales).
-  assert.equal(await scalar(`SELECT count(*)::int AS value FROM pg_tables WHERE schemaname='public'`), 141);
-  for (const table of ['retail_pos_consumed_tokens', 'retail_pos_lockouts', 'retail_tax_codes', 'retail_departments', 'retail_subdepartments', 'retail_brands', 'retail_product_suppliers', 'retail_product_packages', 'retail_goods_receipt_items', 'retail_smart_receipt_drafts', 'retail_smart_receipt_items', 'retail_smart_receipt_attachments', 'retail_cashier_cashup_reports', 'retail_returns', 'retail_return_items', 'retail_voided_sales']) {
+  // adds three tables, the POS Cash-Up & Returns migration adds four tables, and the Multi-Branch
+  // Stock Distribution migration adds six tables (user_locations, stock_requests, stock_request_items, stock_transfers, stock_transfer_items, transfer_discrepancies).
+  assert.equal(await scalar(`SELECT count(*)::int AS value FROM pg_tables WHERE schemaname='public'`), 147);
+  for (const table of ['retail_pos_consumed_tokens', 'retail_pos_lockouts', 'retail_tax_codes', 'retail_departments', 'retail_subdepartments', 'retail_brands', 'retail_product_suppliers', 'retail_product_packages', 'retail_goods_receipt_items', 'retail_smart_receipt_drafts', 'retail_smart_receipt_items', 'retail_smart_receipt_attachments', 'retail_cashier_cashup_reports', 'retail_returns', 'retail_return_items', 'retail_voided_sales', 'retail_user_locations', 'retail_stock_requests', 'retail_stock_request_items', 'retail_stock_transfers', 'retail_stock_transfer_items', 'retail_transfer_discrepancies']) {
     assert.equal(
       await scalar(`SELECT count(*)::int AS value FROM pg_tables WHERE schemaname='public' AND tablename='${table}'`),
       1,
       `Retail table ${table} must be present after migration replay.`
     );
   }
-  for (const table of ['retail_tax_codes', 'retail_departments', 'retail_subdepartments', 'retail_brands', 'retail_product_suppliers', 'retail_product_packages', 'retail_goods_receipt_items', 'retail_smart_receipt_drafts', 'retail_smart_receipt_items', 'retail_smart_receipt_attachments', 'retail_cashier_cashup_reports', 'retail_returns', 'retail_return_items', 'retail_voided_sales']) {
+  for (const table of ['retail_tax_codes', 'retail_departments', 'retail_subdepartments', 'retail_brands', 'retail_product_suppliers', 'retail_product_packages', 'retail_goods_receipt_items', 'retail_smart_receipt_drafts', 'retail_smart_receipt_items', 'retail_smart_receipt_attachments', 'retail_cashier_cashup_reports', 'retail_returns', 'retail_return_items', 'retail_voided_sales', 'retail_user_locations', 'retail_stock_requests', 'retail_stock_request_items', 'retail_stock_transfers', 'retail_stock_transfer_items', 'retail_transfer_discrepancies']) {
     assert.equal(await scalar(`SELECT has_table_privilege('authenticated','public.${table}','SELECT') AS value`), false, `${table} must not be readable by authenticated without RLS/privilege.`);
     assert.equal(await scalar(`SELECT has_table_privilege('anon','public.${table}','SELECT') AS value`), false, `${table} must not be readable by anon.`);
   }
@@ -52,6 +53,8 @@ try {
   assert.equal(await scalar(`SELECT has_function_privilege('authenticated','public.execute_atomic_sale_return_and_refund(uuid,uuid,uuid,text,uuid,text,uuid,text,uuid,text,text,text,jsonb)','EXECUTE') AS value`), false);
   assert.equal(await scalar(`SELECT has_function_privilege('authenticated','public.execute_atomic_void_sale(uuid,uuid,uuid,uuid,text,uuid,text,uuid,text)','EXECUTE') AS value`), false);
   assert.equal(await scalar(`SELECT has_function_privilege('authenticated','public.execute_atomic_close_shift_cashup(uuid,uuid,uuid,uuid,numeric,uuid,text)','EXECUTE') AS value`), false);
+  assert.equal(await scalar(`SELECT has_function_privilege('authenticated','public.execute_atomic_dispatch_stock_transfer(uuid,uuid,uuid,uuid,text,text,text,text,text,text)','EXECUTE') AS value`), false);
+  assert.equal(await scalar(`SELECT has_function_privilege('authenticated','public.execute_atomic_receive_stock_transfer(uuid,uuid,uuid,uuid,text,jsonb,text,text)','EXECUTE') AS value`), false);
   for (const table of ['profiles', 'organizations', 'workspaces', 'social_connections', 'social_posts', 'platform_admins']) {
     assert.equal(await scalar(`SELECT count(*)::int AS value FROM public.${table}`), 0, `Preview must not copy production ${table} rows.`);
   }

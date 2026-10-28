@@ -14,6 +14,7 @@ import {
   RefreshCw,
   PieChart,
   ShieldCheck,
+  Truck,
 } from 'lucide-react';
 import { RetailNavHeader } from '../components/RetailNavHeader';
 import { RetailAccessErrorCard, RetailErrorState } from '../components/RetailAccessErrorCard';
@@ -25,9 +26,10 @@ import {
 } from '@/lib/retail/adapters';
 
 import { CashierCashupsView } from '@/components/retail/CashierCashupsView';
+import { MultiBranchInventoryReportsView } from '@/components/retail/MultiBranchInventoryReportsView';
 
 export default function RetailReportsPage() {
-  const [mainTab, setMainTab] = useState<'PL' | 'CASHUPS'>('PL');
+  const [mainTab, setMainTab] = useState<'PL' | 'CASHUPS' | 'DISTRIBUTION'>('PL');
   const [period, setPeriod] = useState<'today' | '7d' | '30d' | 'all'>('30d');
   const [metrics, setMetrics] = useState<NormalizedFinancialMetrics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -153,10 +155,25 @@ export default function RetailReportsPage() {
             <ShieldCheck className="w-4 h-4" />
             Cashier Cash-Ups & Reconciliation
           </button>
+
+          <button
+            type="button"
+            onClick={() => setMainTab('DISTRIBUTION')}
+            className={`pb-3 text-sm font-semibold flex items-center gap-2 border-b-2 transition-all ${
+              mainTab === 'DISTRIBUTION'
+                ? 'border-emerald-500 text-emerald-400'
+                : 'border-transparent text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <Truck className="w-4 h-4" />
+            Multi-Branch Distribution & BI
+          </button>
         </div>
 
         {mainTab === 'CASHUPS' ? (
           <CashierCashupsView />
+        ) : mainTab === 'DISTRIBUTION' ? (
+          <MultiBranchInventoryReportsView />
         ) : (
           <>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

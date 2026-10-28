@@ -64,12 +64,13 @@ export async function POST(request: NextRequest) {
         cashierName: context.profile.fullName || 'Cashier',
         startedAt: new Date().toISOString(),
         openingCash: Number(body.openingCash) || 0,
+        locationId: body.locationId || null,
         status: 'OPEN',
         notes: body.notes,
         createdAt: new Date().toISOString(),
       };
 
-      const opened = await RetailDatabaseService.openShift(shift);
+      const opened = await RetailDatabaseService.openShift(shift as any);
       return corsJsonResponse({ success: true, shift: opened }, undefined, request);
     } else if (action === 'CLOSE') {
       if (!body.shiftId || body.closingCashActual === undefined) {

@@ -79,6 +79,7 @@ export const RetailNavHeader: React.FC<RetailNavHeaderProps> = ({
     { label: 'Overview', href: '/retail', icon: <LayoutDashboard className="w-4 h-4" /> },
     { label: 'Point of Sale (POS)', href: '/retail/pos', icon: <ShoppingCart className="w-4 h-4" /> },
     { label: 'Products & Stock', href: '/retail/inventory', icon: <Package className="w-4 h-4" /> },
+    { label: 'Stock Transfers', href: '/retail/transfers', icon: <Truck className="w-4 h-4" /> },
     { label: 'Quotations', href: '/retail/quotations', icon: <FileText className="w-4 h-4" /> },
     { label: 'Sales & Invoices', href: '/retail/sales', icon: <Receipt className="w-4 h-4" /> },
     { label: 'Purchasing & Suppliers', href: '/retail/purchasing', icon: <Truck className="w-4 h-4" /> },

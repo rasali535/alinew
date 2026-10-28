@@ -111,8 +111,26 @@ alinew/
 - **Auto-Add & Cart Quantity Editing**: Selecting an item immediately adds it to the checkout cart with quantity 1, closes the popup, and returns focus to the search input. Selecting existing cart items increments quantity. Cashiers edit quantities directly in the cart via numeric input, plus/minus buttons, and trash removal with real-time total recalculation and package unit math.
 - **Snapshot Product Descriptions & Dual Receipt Printing**: Product names and packaging descriptions are snapstopped at transaction time to preserve historical integrity. Supports both **80mm thermal receipt** and **A4 full-page invoice** with isolated `@media print` CSS. Localized Botswana CAT time (`Africa/Gaborone`) is formatted for displays while retaining canonical UTC timestamps in PostgreSQL.
 - **Floor Manager Controls (Returns & Voids)**: Role-restricted controls (HTTP 403 Forbidden for ordinary cashiers). Original sales are located by receipt number. Floor managers inspect returns as either **SELLABLE** (restocked into available inventory) or **DAMAGED** (quarantined/written-off without inflating sellable inventory). Excessive or duplicate returns beyond originally sold quantities are strictly blocked. Completed sales can be reversed through auditable voids with restocking and permanent manager notes.
-- **Shift Cash Reconciliation & Immutable Cash-Up Reports**: Authoritative drawer calculation: `Expected Cash = Opening Float + Cash Sales - Cash Refunds`. Card payments and bank transfers are strictly excluded from physical drawer balance. Closing generates a permanent immutable record in `retail_cashier_cashup_reports` with instant 80mm/A4 printing and idempotent re-print protection.
 - **Reports & BI Cashier Cash-Ups Dashboard**: Dedicated management dashboard (`Reports & BI → Retail → Cashier Cash-Ups`) listing every cashier and shift (including open shifts and zero-sale shifts), metric-by-metric variance tracking, transaction-level drill-down modal (individual sales, returns, voids), and CSV export.
+
+### 8. Multi-Branch Stock Distribution System (Issue #165)
+- **Central Warehouse & Multi-Branch Network**: Central warehouses (`location_type = 'WAREHOUSE'`) supply retail branches (`location_type = 'RETAIL_BRANCH'`) across a unified workspace catalogue and packaging structure, partitioned by `location_id`.
+- **Branch Replenishment Requests**: Branch managers submit stock requests with priority and notes. **Strict Invariant**: Stock requests NEVER alter or increase inventory balances anywhere in the network.
+- **Warehouse Approval, Picking & Atomic Dispatch**:
+  - Warehouse managers review, partially/fully approve, and dispatch transfers via atomic PostgreSQL stored procedure `execute_atomic_dispatch_stock_transfer`.
+  - Dispatches deduct warehouse on-hand stock (`quantity_on_hand`) exactly once, transition transfer status to `IN_TRANSIT`, increment destination branch `quantity_in_transit`, and append immutable audit entries to `retail_stock_movements`.
+  - Captures carrier name, driver name, vehicle registration plate, and dispatch note number.
+- **Destination Receiving & Damage Quarantine**:
+  - Destination branch managers physically inspect shipments against manifests via `execute_atomic_receive_stock_transfer`.
+  - **Damage Quarantine Guard**: Only undamaged, good units increment sellable `quantity_on_hand`. Damaged units are strictly quarantined into `quantity_damaged` and logged in `retail_transfer_discrepancies` (resolution action: `QUARANTINE`). Damaged stock is **NEVER** added to sellable POS inventory.
+  - In-transit balances (`quantity_in_transit`) decrement to zero.
+  - **Conservation of Network Inventory**: `Warehouse Stock + In-Transit + Branch Sellable Stock + Quarantined Damages = Total Network Stock`. Zero ghost inventory.
+- **POS Cashier Branch Location Isolation**:
+  - Cashier shifts are bound to an assigned retail branch (`retail_cashier_shifts.location_id`).
+  - Cashiers are strictly restricted to selling stock available at their assigned branch counter. If an item is out of stock at Branch B, checkout is blocked with an `INSUFFICIENT_STOCK` error even if the Central Warehouse or Branch A has hundreds of units on hand.
+- **Dual Documentation & Signatures**: Dual printable delivery documentation supporting standard **A4 Delivery Note / Manifest** (with carrier and receiving manager signature blocks) and **80mm thermal summary slips** (`@media print` clean layout).
+- **Reports & BI Multi-Branch Inventory Dashboard**: Dedicated tab (`Reports & BI → Multi-Branch Distribution & BI`) providing high-level distribution KPIs, location network matrix (warehouses vs retail branches), goods-in-transit manifests, damage discrepancy audit table, and CSV report export.
+- **Idempotency & Replay Defense**: Dispatch and receive procedures utilize nonces (`dispatch_nonce`, `receive_nonce`) to guarantee that retried network calls return existing transfer state safely without duplicate inventory deductions or double-receiving.
 
 ---
 
@@ -191,7 +209,10 @@ node scripts/test-retail-catalogue-packaging.js
 # 7. Database Migration Replay & Security Isolation Suite (137 tables)
 node scripts/security/test-preview-migration-replay.mjs
 
-# 8. Full TypeScript Typecheck
+# 8. Ralion Retail: Multi-Branch Stock Distribution System Acceptance Suite (Issue #165)
+node scripts/test-retail-multi-branch-transfers.mjs
+
+# 9. Full TypeScript Typecheck
 npm run typecheck --workspace=@ralion/app
 ```
 

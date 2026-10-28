@@ -27,7 +27,7 @@ import {
 import { RetailNavHeader } from '../components/RetailNavHeader';
 import { RetailAccessErrorCard, RetailErrorState } from '../components/RetailAccessErrorCard';
 import { authFetch } from '@/lib/api-config';
-import { RetailCashierShift, RetailSale, RetailReturn, RetailCashupReport } from '@ralion/database';
+import { RetailCashierShift, RetailSale, RetailReturn, RetailCashupReport, RetailLocation } from '@ralion/database';
 import {
   normalizeProducts,
   formatPrice,
@@ -55,6 +55,8 @@ export default function RetailPOSPage() {
   const [customerName, setCustomerName] = useState('Walk-in Customer');
   const [activeShift, setActiveShift] = useState<RetailCashierShift | null>(null);
   const [cashierUser, setCashierUser] = useState<{ id: string; name: string } | null>(null);
+  const [locations, setLocations] = useState<RetailLocation[]>([]);
+  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorState, setErrorState] = useState<RetailErrorState | null>(null);
   const [processingSale, setProcessingSale] = useState(false);
@@ -79,9 +81,10 @@ export default function RetailPOSPage() {
     try {
       setLoading(true);
       setErrorState(null);
-      const [prodRes, shiftRes] = await Promise.all([
+      const [prodRes, shiftRes, locRes] = await Promise.all([
         authFetch('/api/retail/products'),
         authFetch('/api/retail/pos/shifts'),
+        authFetch('/api/retail/locations').catch(() => null),
       ]);
 
       if (!prodRes.ok) {
@@ -108,12 +111,31 @@ export default function RetailPOSPage() {
         setProducts(normalizeProducts(prodData.products));
       }
 
+      let fetchedLocations: RetailLocation[] = [];
+      if (locRes && locRes.ok) {
+        const locData = await locRes.json();
+        if (locData.success && Array.isArray(locData.locations)) {
+          fetchedLocations = locData.locations;
+          setLocations(fetchedLocations);
+        }
+      }
+
       const shiftData = await shiftRes.json();
       if (shiftData.success) {
-        setActiveShift(shiftData.activeShift || null);
+        const shift: RetailCashierShift | null = shiftData.activeShift || null;
+        setActiveShift(shift);
         if (shiftData.cashierName) {
           setCashierUser({ id: shiftData.cashierId, name: shiftData.cashierName });
         }
+        if (shift?.locationId) {
+          setSelectedLocationId(shift.locationId);
+        } else if (fetchedLocations.length > 0) {
+          const defaultLoc = fetchedLocations.find((l) => l.isDefault) || fetchedLocations[0];
+          setSelectedLocationId(defaultLoc.id);
+        }
+      } else if (fetchedLocations.length > 0) {
+        const defaultLoc = fetchedLocations.find((l) => l.isDefault) || fetchedLocations[0];
+        setSelectedLocationId(defaultLoc.id);
       }
     } catch (e: any) {
       console.error('Failed to load POS data:', e);
@@ -292,6 +314,7 @@ export default function RetailPOSPage() {
         saleNumber: `POS-${Date.now().toString().slice(-6)}`,
         customerName,
         shiftId: activeShift?.id,
+        locationId: activeShift?.locationId || selectedLocationId || undefined,
         items: cart.map((item) => ({
           productId: item.product.id,
           productName: item.product.name,
@@ -349,6 +372,7 @@ export default function RetailPOSPage() {
         body: JSON.stringify({
           action: 'OPEN',
           openingCash: Number(shiftOpeningCash) || 0,
+          locationId: selectedLocationId || undefined,
         }),
       });
       const data = await res.json();
@@ -448,6 +472,17 @@ export default function RetailPOSPage() {
 
             {/* Secondary Action Buttons */}
             <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              {/* Branch Location Badge */}
+              <div
+                className="px-3 py-2 rounded-2xl text-xs font-semibold flex items-center gap-1.5 bg-zinc-800/80 text-zinc-200 border border-zinc-700/60"
+                title="Active Branch Location"
+              >
+                <Building className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="truncate max-w-[140px]">
+                  {locations.find((l) => l.id === (activeShift?.locationId || selectedLocationId))?.name || 'Main Branch'}
+                </span>
+              </div>
+
               {/* Floor Manager Controls Trigger */}
               <button
                 type="button"
@@ -824,7 +859,25 @@ export default function RetailPOSPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                <p className="text-xs text-zinc-400">Record the starting cash float in the cash drawer.</p>
+                <p className="text-xs text-zinc-400">Record the starting cash float and verify your assigned branch counter.</p>
+                {locations.length > 0 && (
+                  <div>
+                    <label className="text-[10px] text-zinc-400 block mb-1">
+                      Assigned Retail Branch / Location:
+                    </label>
+                    <select
+                      value={selectedLocationId || ''}
+                      onChange={(e) => setSelectedLocationId(e.target.value)}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-emerald-500"
+                    >
+                      {locations.map((loc) => (
+                        <option key={loc.id} value={loc.id}>
+                          {loc.name} ({loc.locationType || 'BRANCH'}) {loc.isDefault ? '— Default' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div>
                   <label className="text-[10px] text-zinc-400 block mb-1">
                     Opening Cash Float (USD):
