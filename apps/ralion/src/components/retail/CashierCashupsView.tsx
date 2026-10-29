@@ -29,6 +29,9 @@ interface ShiftItem {
   cashierName: string;
   terminalId: string;
   status: 'OPEN' | 'CLOSED';
+  reconciliationStatus?: 'ACTIVE' | 'RECONCILED' | 'MISSING_CASHUP';
+  isMissingCashup?: boolean;
+  hasCashupReport?: boolean;
   openedAt: string;
   closedAt?: string;
   openingCashFloat: number;
@@ -65,7 +68,33 @@ export const CashierCashupsView: React.FC = () => {
         return;
       }
 
-      setShifts(data.shifts || []);
+      const rawShifts: any[] = data.shifts || data.reports || [];
+      const normalizedShifts: ShiftItem[] = rawShifts.map((s: any) => {
+        const isClosed = s.status === 'CLOSED' || Boolean(s.closedAt || s.closed_at);
+        const hasReport = Boolean(s.hasCashupReport ?? (s.report && s.report.id));
+        const isMissingCashup = Boolean(s.isMissingCashup ?? (isClosed && !hasReport));
+        const recStatus = s.reconciliationStatus || (!isClosed ? 'ACTIVE' : (hasReport ? 'RECONCILED' : 'MISSING_CASHUP'));
+
+        return {
+          id: s.id || s.shiftId,
+          cashierId: s.cashierId || s.cashierUserId || s.cashier_user_id || '',
+          cashierName: s.cashierName || s.cashier_name || 'Cashier',
+          terminalId: s.terminalId || s.terminal_id || 'TILL-01',
+          status: isClosed ? 'CLOSED' : 'OPEN',
+          reconciliationStatus: recStatus,
+          isMissingCashup,
+          hasCashupReport: hasReport,
+          openedAt: s.openedAt || s.startedAt || s.started_at || new Date().toISOString(),
+          closedAt: s.closedAt || s.closed_at || undefined,
+          openingCashFloat: Number(s.openingCashFloat ?? s.openingFloat ?? s.opening_float ?? s.opening_cash ?? 0),
+          closingCashActual: s.closingCashActual !== undefined ? Number(s.closingCashActual) : (s.closing_cash_actual !== undefined ? Number(s.closing_cash_actual) : undefined),
+          expectedCash: s.expectedCash !== undefined ? Number(s.expectedCash) : (s.expected_cash !== undefined ? Number(s.expected_cash) : undefined),
+          variance: s.variance !== undefined ? Number(s.variance) : undefined,
+          report: s.report || (hasReport ? s : undefined),
+        };
+      });
+
+      setShifts(normalizedShifts);
     } catch (err: any) {
       setError(err.message || 'Network error loading cash-up reports.');
     } finally {
@@ -81,7 +110,7 @@ export const CashierCashupsView: React.FC = () => {
     setSelectedShiftId(shiftId);
     try {
       setDrilldownLoading(true);
-      const res = await authFetch(`/api/retail/pos/cashup?drilldownShiftId=${encodeURIComponent(shiftId)}`);
+      const res = await authFetch(`/api/retail/pos/cashup?shiftId=${encodeURIComponent(shiftId)}&drilldownShiftId=${encodeURIComponent(shiftId)}`);
       const data = await res.json();
       if (res.ok && data.success) {
         setDrilldownData(data.drilldown);
@@ -285,13 +314,15 @@ export const CashierCashupsView: React.FC = () => {
                         <div className="text-[10px] text-zinc-500 font-mono mt-0.5">
                           {s.terminalId || 'TILL-01'} •{' '}
                           <span
-                            className={`px-1.5 py-0.2 rounded font-semibold ${
+                            className={`px-1.5 py-0.5 rounded font-semibold text-[9px] uppercase tracking-wider ${
                               isOpen
-                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                                : 'bg-zinc-800 text-zinc-400'
+                                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                                : s.isMissingCashup
+                                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                                : 'bg-emerald-950/60 text-emerald-300 border border-emerald-500/30'
                             }`}
                           >
-                            {s.status}
+                            {isOpen ? 'Active Shift' : s.isMissingCashup ? 'Missing Cash-Up' : 'Reconciled'}
                           </span>
                         </div>
                       </td>
@@ -311,47 +342,90 @@ export const CashierCashupsView: React.FC = () => {
 
                       {/* Gross Sales */}
                       <td className="py-3 px-3 text-right font-mono text-zinc-200">
-                        {formatCurrencyUSD(Number(rep.grossSales || 0))}
+                        {s.isMissingCashup ? (
+                          <span className="text-zinc-500 italic">Unrecorded</span>
+                        ) : (
+                          formatCurrencyUSD(Number(rep.grossSales || 0))
+                        )}
                       </td>
 
                       {/* Discounts */}
                       <td className="py-3 px-3 text-right font-mono text-amber-400">
-                        {Number(rep.discountTotal || 0) > 0 ? `-${formatCurrencyUSD(Number(rep.discountTotal))}` : '—'}
+                        {s.isMissingCashup ? (
+                          <span className="text-zinc-500">—</span>
+                        ) : Number(rep.discountTotal || 0) > 0 ? (
+                          `-${formatCurrencyUSD(Number(rep.discountTotal))}`
+                        ) : (
+                          '—'
+                        )}
                       </td>
 
                       {/* Net Sales */}
                       <td className="py-3 px-3 text-right font-mono font-bold text-emerald-400">
-                        {formatCurrencyUSD(Number(rep.netSales || 0))}
+                        {s.isMissingCashup ? (
+                          <span className="text-zinc-500 italic">Unrecorded</span>
+                        ) : (
+                          formatCurrencyUSD(Number(rep.netSales || 0))
+                        )}
                       </td>
 
                       {/* Breakdown: Cash / Card / EFT */}
                       <td className="py-3 px-3 text-right font-mono text-[11px] text-zinc-400">
-                        <div>Cash: {formatCurrencyUSD(Number(rep.cashSales || 0))}</div>
-                        <div className="text-[10px] text-zinc-500">
-                          Card: {formatCurrencyUSD(Number(rep.cardSales || 0))} • EFT:{' '}
-                          {formatCurrencyUSD(Number(rep.transferSales || 0))}
-                        </div>
+                        {s.isMissingCashup ? (
+                          <span className="text-zinc-500 italic">No cash-up record</span>
+                        ) : (
+                          <>
+                            <div>Cash: {formatCurrencyUSD(Number(rep.cashSales || 0))}</div>
+                            <div className="text-[10px] text-zinc-500">
+                              Card: {formatCurrencyUSD(Number(rep.cardSales || 0))} • EFT:{' '}
+                              {formatCurrencyUSD(Number(rep.transferSales || 0))}
+                            </div>
+                          </>
+                        )}
                       </td>
 
                       {/* Refunds */}
                       <td className="py-3 px-3 text-right font-mono text-rose-400">
-                        {Number(rep.cashRefunds || 0) > 0 ? `-${formatCurrencyUSD(Number(rep.cashRefunds))}` : '—'}
+                        {s.isMissingCashup ? (
+                          <span className="text-zinc-500">—</span>
+                        ) : Number(rep.cashRefunds || 0) > 0 ? (
+                          `-${formatCurrencyUSD(Number(rep.cashRefunds))}`
+                        ) : (
+                          '—'
+                        )}
                       </td>
 
                       {/* Expected Drawer */}
                       <td className="py-3 px-3 text-right font-mono text-zinc-200">
-                        {isOpen ? '—' : formatCurrencyUSD(Number(s.expectedCash ?? rep.expectedDrawerCash ?? 0))}
+                        {isOpen ? (
+                          <span className="text-zinc-500">—</span>
+                        ) : s.isMissingCashup ? (
+                          <span className="text-amber-400/90 text-[11px] italic">Unreconciled</span>
+                        ) : (
+                          formatCurrencyUSD(Number(s.expectedCash ?? rep.expectedDrawerCash ?? 0))
+                        )}
                       </td>
 
                       {/* Counted Cash */}
                       <td className="py-3 px-3 text-right font-mono text-zinc-200">
-                        {isOpen ? '—' : formatCurrencyUSD(Number(s.closingCashActual ?? rep.actualCountedCash ?? 0))}
+                        {isOpen ? (
+                          <span className="text-zinc-500">—</span>
+                        ) : s.isMissingCashup ? (
+                          <span className="text-amber-400/90 text-[11px] italic">Not Counted</span>
+                        ) : (
+                          formatCurrencyUSD(Number(s.closingCashActual ?? rep.actualCountedCash ?? 0))
+                        )}
                       </td>
 
                       {/* Variance */}
                       <td className="py-3 px-3 text-right font-mono font-bold">
                         {isOpen ? (
                           <span className="text-zinc-500">—</span>
+                        ) : s.isMissingCashup ? (
+                          <span className="text-amber-400 flex items-center justify-end gap-1 text-[11px]">
+                            <AlertCircle className="w-3 h-3 text-amber-400" />
+                            Missing Cash-Up
+                          </span>
                         ) : isBalanced ? (
                           <span className="text-emerald-400 flex items-center justify-end gap-1">
                             <CheckCircle2 className="w-3.5 h-3.5" />
@@ -498,7 +572,7 @@ export const CashierCashupsView: React.FC = () => {
                                   {sl.customerName || 'Walk-in'}
                                 </td>
                                 <td className="py-2 px-3 font-sans text-zinc-400">
-                                  {sl.items?.map((it: any) => `${it.productName} ×${it.quantity}`).join(', ') ||
+                                  {sl.items?.map((it: any) => `${it.productName || it.product_name || 'Item'} ×${it.quantity}`).join(', ') ||
                                     '1 item'}
                                 </td>
                                 <td className="py-2 px-3 text-zinc-300 font-sans">{sl.paymentMethod}</td>

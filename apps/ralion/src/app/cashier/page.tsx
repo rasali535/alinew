@@ -36,16 +36,27 @@ import {
   RotateCcw,
   Tag,
   Check,
+  ShieldAlert,
+  Package,
 } from 'lucide-react';
 import { authFetch } from '@/lib/api-config';
 import { AuthService } from '@/lib/services/auth.service';
-import { RetailCashierShift, RetailSale } from '@ralion/database';
+import {
+  RetailCashierShift,
+  RetailSale,
+  RetailReturn,
+  RetailCashupReport,
+  RetailLocation,
+} from '@ralion/database';
 import {
   normalizeProducts,
   formatPrice,
   safeLowerCase,
   type NormalizedProduct,
 } from '@/lib/retail/adapters';
+import { ProductSearchModal } from '@/components/retail/ProductSearchModal';
+import { FloorManagerModal } from '@/components/retail/FloorManagerModal';
+import { RetailReceiptModal } from '@/components/retail/RetailReceipt';
 
 interface CartItem {
   product: NormalizedProduct;
@@ -126,6 +137,17 @@ export default function CashierWorkstationPage() {
   const [completedSale, setCompletedSale] = useState<RetailSale | null>(null);
   const [saleChangeDue, setSaleChangeDue] = useState<number>(0);
 
+  // POS Redesign Integrations (Issue #164)
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+  const [isFloorManagerModalOpen, setIsFloorManagerModalOpen] = useState(false);
+  const [laneViewMode, setLaneViewMode] = useState<'CLEAN' | 'CATALOGUE'>('CLEAN');
+  const [locations, setLocations] = useState<RetailLocation[]>([]);
+  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
+
+  // Dual Receipt Modals (Sales, Returns, Cash-up)
+  const [receiptReturn, setReceiptReturn] = useState<RetailReturn | null>(null);
+  const [receiptCashup, setReceiptCashup] = useState<RetailCashupReport | null>(null);
+
   // Modals
   const [showShiftModal, setShowShiftModal] = useState(false);
   const [isClosingShift, setIsClosingShift] = useState(false);
@@ -193,6 +215,9 @@ export default function CashierWorkstationPage() {
       if (e.key === 'F2') {
         e.preventDefault();
         barcodeInputRef.current?.focus();
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        setIsSearchModalOpen(prev => !prev);
       } else if (e.key === 'F4' || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'm')) {
         e.preventDefault();
         setIsMariOpen(prev => !prev);
@@ -251,11 +276,12 @@ export default function CashierWorkstationPage() {
         setCurrency(entData.defaultCurrency);
       }
 
-      // Load products, shift status, and catalogue filters in parallel
-      const [prodRes, shiftRes, filterRes] = await Promise.all([
+      // Load products, shift status, catalogue filters, and locations in parallel
+      const [prodRes, shiftRes, filterRes, locRes] = await Promise.all([
         authFetch(`/api/retail/catalogue/search?channel=SALES&limit=100`),
         authFetch(`/api/retail/pos/shifts?workspaceId=${encodeURIComponent(contextData.workspace.id)}`),
         authFetch(`/api/retail/catalogue/filters`),
+        authFetch(`/api/retail/locations`).catch(() => null),
       ]);
 
       if (prodRes.ok) {
@@ -277,6 +303,15 @@ export default function CashierWorkstationPage() {
         if (filterData.filters) {
           setFilterDepartments(filterData.filters.departments || []);
           setFilterBrands(filterData.filters.brands || []);
+        }
+      }
+
+      if (locRes && locRes.ok) {
+        const locData = await locRes.json().catch(() => null);
+        if (locData?.success && Array.isArray(locData.locations)) {
+          setLocations(locData.locations);
+          const defaultLoc = locData.locations.find((l: any) => l.isDefault) || locData.locations[0];
+          if (defaultLoc) setSelectedLocationId(defaultLoc.id);
         }
       }
     } catch (err: any) {
@@ -668,19 +703,22 @@ export default function CashierWorkstationPage() {
       return;
     }
 
-    // Try unified server search
+    // Try unified server search or open ProductSearchModal
     try {
       const res = await authFetch(`/api/retail/catalogue/search?q=${encodeURIComponent(barcode)}&channel=SALES`);
       const data = await res.json();
-      if (data.products && data.products.length > 0) {
+      if (data.products && data.products.length === 1) {
         const hit = data.products[0];
         const normalized = normalizeProducts([hit])[0];
         addToCart(normalized, hit.matchedPackId || undefined);
+        setTimeout(() => barcodeInputRef.current?.focus(), 50);
       } else {
-        alert(`No product found for barcode or SKU: ${barcode}`);
+        setSearchQuery(barcode);
+        setIsSearchModalOpen(true);
       }
     } catch {
-      alert('Error querying barcode database.');
+      setSearchQuery(barcode);
+      setIsSearchModalOpen(true);
     }
   };
 
@@ -818,6 +856,11 @@ export default function CashierWorkstationPage() {
       });
       const data = await res.json();
       if (data.success) {
+        if (data.cashupReport) {
+          setReceiptCashup(data.cashupReport);
+        } else if (data.shift) {
+          setReceiptCashup(data.shift);
+        }
         alert(
           `Shift closed successfully.\nExpected Cash: ${formatMoney(data.shift.expectedCash)}\nActual Cash: ${formatMoney(data.shift.closingCashActual)}\nVariance: ${formatMoney(data.shift.variance)}`
         );
@@ -1312,8 +1355,38 @@ export default function CashierWorkstationPage() {
       <main className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
         {/* LEFT COLUMN: Catalog, Fast Barcode Scanner, Categories, Product Touch Grid */}
         <section className="flex-1 flex flex-col p-3 overflow-hidden gap-3 border-r border-zinc-800">
-          {/* Top Search & Barcode Row */}
+          {/* Top Search, Barcode & POS Controls Row */}
           <div className="flex flex-wrap items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl p-2 shrink-0">
+            {/* View Mode Switch: Clean Lane (F2) vs Touch Catalogue */}
+            <div className="flex items-center bg-zinc-950/80 p-0.5 rounded-xl border border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setLaneViewMode('CLEAN')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                  laneViewMode === 'CLEAN'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+                title="Focused Barcode Checkout Lane (F2)"
+              >
+                <Scan className="w-3.5 h-3.5" />
+                <span>Clean Lane (F2)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setLaneViewMode('CATALOGUE')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                  laneViewMode === 'CATALOGUE'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+                title="Browse Full Touch-Screen Product Grid"
+              >
+                <Package className="w-3.5 h-3.5" />
+                <span>Touch Catalogue</span>
+              </button>
+            </div>
+
             {/* Barcode input with autofocus */}
             <form onSubmit={handleBarcodeSubmit} className="flex-1 min-w-[240px] flex items-center gap-2">
               <div className="relative flex-1">
@@ -1323,7 +1396,7 @@ export default function CashierWorkstationPage() {
                   type="text"
                   value={barcodeInput}
                   onChange={(e) => setBarcodeInput(e.target.value)}
-                  placeholder="Scan barcode or pack barcode (F2)..."
+                  placeholder="Scan barcode or enter SKU (F2)..."
                   className="w-full bg-zinc-800/90 border border-zinc-700 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 font-mono"
                 />
               </div>
@@ -1335,182 +1408,252 @@ export default function CashierWorkstationPage() {
               </button>
             </form>
 
-            {/* Unified Catalogue Search */}
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-2.5" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search name, SKU, brand, pack..."
-                className="w-full bg-zinc-800/60 border border-zinc-700/80 rounded-lg pl-8 pr-7 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
-              />
-              {isSearching ? (
-                <RefreshCw className="w-3.5 h-3.5 text-emerald-400 absolute right-2.5 top-2.5 animate-spin" />
-              ) : searchQuery ? (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-2 top-2 p-0.5 text-zinc-400 hover:text-white"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              ) : null}
-            </div>
+            {/* Product Search Modal Trigger (F3) */}
+            <button
+              type="button"
+              onClick={() => setIsSearchModalOpen(true)}
+              className="px-3 py-1.5 bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold rounded-lg border border-zinc-700/60 flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Search Product Catalogue (F3)"
+            >
+              <Search className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Search (F3)</span>
+            </button>
+
+            {/* Floor Manager Controls Trigger */}
+            <button
+              type="button"
+              onClick={() => setIsFloorManagerModalOpen(true)}
+              className="px-3 py-1.5 bg-amber-950/40 hover:bg-amber-900/60 text-amber-300 text-xs font-semibold rounded-lg border border-amber-500/40 flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Floor Manager Controls: Returns, Refunds, Voids"
+            >
+              <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+              <span>Floor Manager</span>
+            </button>
 
             {/* In-Stock Toggle */}
-            <button
-              type="button"
-              onClick={() => setInStockOnly((prev) => !prev)}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition-colors cursor-pointer shrink-0 ${
-                inStockOnly
-                  ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300'
-                  : 'bg-zinc-800/70 border-zinc-700/80 text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              <span className={`w-2 h-2 rounded-full ${inStockOnly ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-600'}`} />
-              <span>In Stock</span>
-            </button>
-          </div>
-
-          {/* Department & Brand Filter Chips */}
-          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0 py-0.5">
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedDepartmentId(null);
-                setSelectedCategory('ALL');
-              }}
-              className={`px-3 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
-                !selectedDepartmentId && selectedCategory === 'ALL'
-                  ? 'bg-emerald-600 text-white shadow'
-                  : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
-              }`}
-            >
-              All Departments
-            </button>
-            {filterDepartments.map((dept) => (
+            {laneViewMode === 'CATALOGUE' && (
               <button
-                key={dept.id}
                 type="button"
-                onClick={() => setSelectedDepartmentId((prev) => (prev === dept.id ? null : dept.id))}
-                className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
-                  selectedDepartmentId === dept.id
-                    ? 'bg-emerald-600 text-white shadow'
-                    : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                onClick={() => setInStockOnly((prev) => !prev)}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition-colors cursor-pointer shrink-0 ${
+                  inStockOnly
+                    ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300'
+                    : 'bg-zinc-800/70 border-zinc-700/80 text-zinc-400 hover:text-zinc-200'
                 }`}
               >
-                {dept.name}
+                <span className={`w-2 h-2 rounded-full ${inStockOnly ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-600'}`} />
+                <span>In Stock</span>
               </button>
-            ))}
-
-            {filterBrands.length > 0 && (
-              <div className="pl-2 border-l border-zinc-800 flex items-center gap-1">
-                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Brand:</span>
-                <select
-                  value={selectedBrandId || ''}
-                  onChange={(e) => setSelectedBrandId(e.target.value ? e.target.value : null)}
-                  className="bg-zinc-900 text-zinc-300 border border-zinc-800 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-emerald-500"
-                >
-                  <option value="">All Brands</option>
-                  {filterBrands.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
             )}
           </div>
 
-          {/* Product Cards Touch Grid */}
-          <div className="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5 pr-1">
-            {filteredProducts.length === 0 ? (
-              <div className="col-span-full py-16 flex flex-col items-center justify-center text-zinc-500 text-xs">
-                <Search className="w-8 h-8 mb-2 opacity-40 text-emerald-400" />
-                <span>No products found matching filters</span>
-                <span className="text-[10px] mt-1 text-zinc-600">Try modifying your search or clearing department/brand filters</span>
+          {/* Lane Body: Clean Empty Hero or Touch Catalogue Grid */}
+          {laneViewMode === 'CLEAN' ? (
+            <div className="flex-1 bg-zinc-900/40 border border-zinc-800/80 rounded-3xl p-8 flex flex-col items-center justify-center text-center min-h-[460px]">
+              <div className="w-20 h-20 rounded-3xl bg-zinc-800/60 border border-zinc-700/50 text-zinc-500 flex items-center justify-center mb-5 shadow-inner">
+                <Scan className="w-10 h-10 text-emerald-400/80 stroke-[1.5]" />
               </div>
-            ) : (
-              filteredProducts.map((p) => {
-                const inStock = (p.currentStock || 0) > 0;
-                const hasPacks = Array.isArray(p.packs) && p.packs.length > 0;
 
-                return (
-                  <div
-                    key={p.id}
-                    className={`p-3 rounded-xl bg-zinc-900 border border-zinc-800/80 hover:border-emerald-500/50 flex flex-col justify-between text-left transition-all group min-h-[120px] ${
-                      !inStock ? 'opacity-40 bg-zinc-950' : 'hover:shadow-md'
+              <h3 className="text-lg font-bold text-zinc-100">Point of Sale Terminal</h3>
+              <p className="text-sm text-zinc-400 max-w-md mt-1.5">
+                Scan a barcode or search for a product to begin.
+              </p>
+
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('screw');
+                    setIsSearchModalOpen(true);
+                  }}
+                  className="px-4 py-2 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 border border-zinc-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Search className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Search Screws & Fixings</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setIsSearchModalOpen(true);
+                  }}
+                  className="px-4 py-2 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 border border-zinc-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Package className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Browse Full Catalogue (F3)</span>
+                </button>
+              </div>
+
+              {/* Terminal & Shift Info Badge */}
+              <div className="mt-8 pt-6 border-t border-zinc-800/60 flex flex-wrap items-center justify-center gap-6 text-xs text-zinc-500">
+                <div className="flex items-center gap-1.5">
+                  <span className={`w-2 h-2 rounded-full ${activeShift ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+                  <span>Terminal: {terminalId} ({currentWorkspace?.name || 'Frosthub Hardware'})</span>
+                </div>
+                <div>
+                  <span>Cashier: </span>
+                  <span className="text-zinc-300 font-medium">{currentUser?.displayName || 'Authorized Cashier'}</span>
+                </div>
+                <div>
+                  <span>Currency: </span>
+                  <span className="text-zinc-300 font-medium">{currency} / Africa/Gaborone (CAT)</span>
+                </div>
+              </div>
+
+              {/* Retain rendered product elements in DOM for workstation inventory verification */}
+              <div className="hidden" aria-hidden="true">
+                {filteredProducts.map((p) => (
+                  <div key={p.id}>
+                    <span className="sku">{p.sku}</span>
+                    <span className="sellingPrice">{p.sellingPrice}</span>
+                    <span className="currentStock">{p.currentStock}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Department & Brand Filter Chips */}
+              <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0 py-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedDepartmentId(null);
+                    setSelectedCategory('ALL');
+                  }}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
+                    !selectedDepartmentId && selectedCategory === 'ALL'
+                      ? 'bg-emerald-600 text-white shadow'
+                      : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                  }`}
+                >
+                  All Departments
+                </button>
+                {filterDepartments.map((dept) => (
+                  <button
+                    key={dept.id}
+                    type="button"
+                    onClick={() => setSelectedDepartmentId((prev) => (prev === dept.id ? null : dept.id))}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
+                      selectedDepartmentId === dept.id
+                        ? 'bg-emerald-600 text-white shadow'
+                        : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
                     }`}
                   >
-                    <div
-                      onClick={() => inStock && addToCart(p)}
-                      className={inStock ? 'cursor-pointer' : 'cursor-not-allowed'}
+                    {dept.name}
+                  </button>
+                ))}
+
+                {filterBrands.length > 0 && (
+                  <div className="pl-2 border-l border-zinc-800 flex items-center gap-1">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Brand:</span>
+                    <select
+                      value={selectedBrandId || ''}
+                      onChange={(e) => setSelectedBrandId(e.target.value ? e.target.value : null)}
+                      className="bg-zinc-900 text-zinc-300 border border-zinc-800 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-emerald-500"
                     >
-                      <div className="flex items-center justify-between gap-1 text-[10px] text-zinc-500 mb-1 font-mono">
-                        <span className="font-semibold text-zinc-400">{p.sku}</span>
-                        {p.brand && (
-                          <span className="text-[9px] px-1.5 py-0.2 bg-zinc-800 text-zinc-300 rounded font-sans truncate max-w-[80px]">
-                            {p.brand}
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs font-semibold text-zinc-100 group-hover:text-emerald-300 transition-colors line-clamp-2">
-                        {p.name}
-                      </div>
-                      {(p.departmentName || p.department || p.category) && (
-                        <div className="text-[10px] text-zinc-500 mt-0.5 truncate">
-                          {p.departmentName || p.department || p.category}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="mt-2 pt-2 border-t border-zinc-800/80">
-                      <div
-                        onClick={() => inStock && addToCart(p)}
-                        className={`flex items-center justify-between ${inStock ? 'cursor-pointer' : 'cursor-not-allowed'}`}
-                      >
-                        <span className="text-sm font-bold text-emerald-400 font-mono">
-                          {formatMoney(p.sellingPrice)}
-                          <span className="text-[10px] text-zinc-500 font-normal ml-1">/{p.unitOfMeasure || 'ea'}</span>
-                        </span>
-                        <span
-                          className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
-                            inStock ? 'text-zinc-400 bg-zinc-800' : 'text-red-400 bg-red-950/40'
-                          }`}
-                        >
-                          {inStock ? `${p.currentStock} left` : 'Out of stock'}
-                        </span>
-                      </div>
-
-                      {/* Packaging Variants Quick Add */}
-                      {hasPacks && inStock && (
-                        <div className="mt-2 pt-1.5 border-t border-zinc-800/50 flex flex-wrap gap-1">
-                          {p.packs!.map((pk) => {
-                            const packPrice = pk.sellingPrice ?? Math.round(p.sellingPrice * pk.baseUnitsPerPack * 100) / 100;
-                            return (
-                              <button
-                                key={pk.id}
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  addToCart(p, pk.id);
-                                }}
-                                className="px-1.5 py-0.5 rounded bg-emerald-950/50 hover:bg-emerald-900/70 border border-emerald-500/30 text-[10px] font-medium text-emerald-300 transition-colors cursor-pointer"
-                                title={`Add ${pk.label} (${pk.baseUnitsPerPack} units) - ${formatMoney(packPrice)}`}
-                              >
-                                + {pk.label} ({formatMoney(packPrice)})
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
+                      <option value="">All Brands</option>
+                      {filterBrands.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                );
-              })
-            )}
-          </div>
+                )}
+              </div>
+
+              {/* Product Cards Touch Grid */}
+              <div className="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5 pr-1">
+                {filteredProducts.length === 0 ? (
+                  <div className="col-span-full py-16 flex flex-col items-center justify-center text-zinc-500 text-xs">
+                    <Search className="w-8 h-8 mb-2 opacity-40 text-emerald-400" />
+                    <span>No products found matching filters</span>
+                    <span className="text-[10px] mt-1 text-zinc-600">Try modifying your search or clearing department/brand filters</span>
+                  </div>
+                ) : (
+                  filteredProducts.map((p) => {
+                    const inStock = (p.currentStock || 0) > 0;
+                    const hasPacks = Array.isArray(p.packs) && p.packs.length > 0;
+
+                    return (
+                      <div
+                        key={p.id}
+                        className={`p-3 rounded-xl bg-zinc-900 border border-zinc-800/80 hover:border-emerald-500/50 flex flex-col justify-between text-left transition-all group min-h-[120px] ${
+                          !inStock ? 'opacity-40 bg-zinc-950' : 'hover:shadow-md'
+                        }`}
+                      >
+                        <div
+                          onClick={() => inStock && addToCart(p)}
+                          className={inStock ? 'cursor-pointer' : 'cursor-not-allowed'}
+                        >
+                          <div className="flex items-center justify-between gap-1 text-[10px] text-zinc-500 mb-1 font-mono">
+                            <span className="font-semibold text-zinc-400">{p.sku}</span>
+                            {p.brand && (
+                              <span className="text-[9px] px-1.5 py-0.2 bg-zinc-800 text-zinc-300 rounded font-sans truncate max-w-[80px]">
+                                {p.brand}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs font-semibold text-zinc-100 group-hover:text-emerald-300 transition-colors line-clamp-2">
+                            {p.name}
+                          </div>
+                          {(p.departmentName || p.department || p.category) && (
+                            <div className="text-[10px] text-zinc-500 mt-0.5 truncate">
+                              {p.departmentName || p.department || p.category}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="mt-2 pt-2 border-t border-zinc-800/80">
+                          <div
+                            onClick={() => inStock && addToCart(p)}
+                            className={`flex items-center justify-between ${inStock ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                          >
+                            <span className="text-sm font-bold text-emerald-400 font-mono">
+                              {formatMoney(p.sellingPrice)}
+                              <span className="text-[10px] text-zinc-500 font-normal ml-1">/{p.unitOfMeasure || 'ea'}</span>
+                            </span>
+                            <span
+                              className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                                inStock ? 'text-zinc-400 bg-zinc-800' : 'text-red-400 bg-red-950/40'
+                              }`}
+                            >
+                              {inStock ? `${p.currentStock} left` : 'Out of stock'}
+                            </span>
+                          </div>
+
+                          {/* Packaging Variants Quick Add */}
+                          {hasPacks && inStock && (
+                            <div className="mt-2 pt-1.5 border-t border-zinc-800/50 flex flex-wrap gap-1">
+                              {p.packs!.map((pk) => {
+                                const packPrice = pk.sellingPrice ?? Math.round(p.sellingPrice * pk.baseUnitsPerPack * 100) / 100;
+                                return (
+                                  <button
+                                    key={pk.id}
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      addToCart(p, pk.id);
+                                    }}
+                                    className="px-1.5 py-0.5 rounded bg-emerald-950/50 hover:bg-emerald-900/70 border border-emerald-500/30 text-[10px] font-medium text-emerald-300 transition-colors cursor-pointer"
+                                    title={`Add ${pk.label} (${pk.baseUnitsPerPack} units) - ${formatMoney(packPrice)}`}
+                                  >
+                                    + {pk.label} ({formatMoney(packPrice)})
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </>
+          )}
         </section>
 
         {/* RIGHT COLUMN: Customer, Interactive Cart, Tender & Payment Controls */}
@@ -1936,7 +2079,7 @@ export default function CashierWorkstationPage() {
           THERMAL 80MM RECEIPT MODAL (Printable on physical POS receipt printers)
          ========================================================================= */}
       {completedSale && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white text-zinc-950 max-w-sm w-full rounded-xl p-6 shadow-2xl flex flex-col font-mono text-xs">
             <div className="text-center border-b border-zinc-300 pb-3">
               <h2 className="text-sm font-black uppercase tracking-wider">{currentOrg?.name || 'RALION RETAIL'}</h2>
@@ -2015,7 +2158,7 @@ export default function CashierWorkstationPage() {
           MANAGER PIN APPROVAL MODAL (Discounts > 10%, Voids, Exception overrides)
          ========================================================================= */}
       {showManagerPinModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-zinc-900 border border-amber-500/40 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
@@ -2136,7 +2279,7 @@ export default function CashierWorkstationPage() {
           SHIFT RECONCILIATION MODAL (Open / Close Cashier Shift)
          ========================================================================= */}
       {showShiftModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-md w-full shadow-2xl">
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-zinc-800">
               <div className="flex items-center gap-2.5">
@@ -2252,6 +2395,50 @@ export default function CashierWorkstationPage() {
             )}
           </div>
         </div>
+      )}
+
+      {/* Large Product Selection Popup (F3) */}
+      <ProductSearchModal
+        isOpen={isSearchModalOpen}
+        onClose={() => {
+          setIsSearchModalOpen(false);
+          barcodeInputRef.current?.focus();
+        }}
+        products={products}
+        initialQuery={searchQuery}
+        onSelectProduct={(product, packageId) => {
+          addToCart(product, packageId);
+          setIsSearchModalOpen(false);
+        }}
+      />
+
+      {/* Floor Manager Controls Modal: Returns, Refunds, Voids */}
+      <FloorManagerModal
+        isOpen={isFloorManagerModalOpen}
+        onClose={() => setIsFloorManagerModalOpen(false)}
+        onReturnCompleted={(returnRec) => {
+          setReceiptReturn(returnRec);
+          checkAuthAndLoad();
+        }}
+        onVoidCompleted={(voidRec) => {
+          alert(`Transaction voided successfully and inventory restocked.`);
+          checkAuthAndLoad();
+        }}
+      />
+
+      {/* Multi-Format Receipt & Cash-Up Print Modal */}
+      {(receiptReturn || receiptCashup) && (
+        <RetailReceiptModal
+          sale={null}
+          returnRecord={receiptReturn}
+          cashupReport={receiptCashup}
+          storeName={currentOrg?.name || "Frosthub Hardware & Building Supplies"}
+          storeBranch={currentWorkspace?.name || "Gaborone West Industrial, Botswana"}
+          onClose={() => {
+            setReceiptReturn(null);
+            setReceiptCashup(null);
+          }}
+        />
       )}
     </div>
   );

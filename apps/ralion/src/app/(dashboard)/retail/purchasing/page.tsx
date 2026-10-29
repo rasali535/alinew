@@ -1237,7 +1237,7 @@ export default function RetailPurchasingPage() {
               <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
                 <h3 className="text-base font-bold text-zinc-100 flex items-center gap-2">
                   <Truck className="w-5 h-5 text-emerald-400" />
-                  New Purchase Order (USD)
+                  Create Purchase Order (USD)
                 </h3>
                 <button
                   onClick={() => setShowCreatePOModal(false)}

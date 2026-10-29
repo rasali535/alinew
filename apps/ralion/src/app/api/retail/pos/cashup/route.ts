@@ -21,15 +21,15 @@ export async function GET(request: NextRequest) {
     }
 
     const entitlement = await RetailEntitlementService.verifyEntitlement(context);
-    if (!entitlement.isEntitled || !entitlement.canAccessReports) {
+    if (!entitlement.isEntitled || (!entitlement.canAccessReports && !entitlement.canAccessPOS)) {
       return corsJsonResponse({
         success: false,
         code: 'FORBIDDEN_CASHUP_ACCESS',
-        error: 'Management authorization (Store Owner or Retail Manager) is required to access cashier cash-up reports.',
+        error: 'Point of Sale or Management authorization is required to access cash-up reports.',
       }, { status: 403 }, request);
     }
 
-    const shiftId = request.nextUrl.searchParams.get('shiftId')?.trim();
+    const shiftId = request.nextUrl.searchParams.get('shiftId')?.trim() || request.nextUrl.searchParams.get('drilldownShiftId')?.trim();
     const id = request.nextUrl.searchParams.get('id')?.trim();
 
     // If specific shiftId requested, return detailed transaction drill-down
@@ -47,9 +47,17 @@ export async function GET(request: NextRequest) {
       return corsJsonResponse({ success: true, report }, undefined, request);
     }
 
-    // Default: list all cash-up reports for this workspace
-    const reports = await RetailDatabaseService.listCashupReports(context.workspace.id);
-    return corsJsonResponse({ success: true, reports }, undefined, request);
+    // Default: list all shifts and cash-up reports for this workspace
+    const { shifts, reports } = await RetailDatabaseService.listShiftsWithCashups(context.workspace.id);
+
+    // If cashier without full report access, scope to own shifts
+    if (!entitlement.canAccessReports && entitlement.canAccessPOS) {
+      const myShifts = shifts.filter((s: any) => s.cashierId === context.user.id);
+      const myReports = reports.filter((r: any) => r.cashierUserId === context.user.id);
+      return corsJsonResponse({ success: true, shifts: myShifts, reports: myReports }, undefined, request);
+    }
+
+    return corsJsonResponse({ success: true, shifts, reports }, undefined, request);
   } catch (err: any) {
     return corsJsonResponse({ success: false, error: err.message }, { status: 500 }, request);
   }

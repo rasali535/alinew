@@ -183,7 +183,7 @@ export default function RetailTransfersPage() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100 pb-16">
       <RetailNavHeader storeName="Frosthub Hardware & Retail" onRefresh={loadData} />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-6">
+      <div role="region" aria-label="Stock Transfers" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-6">
         {errorState && <RetailAccessErrorCard error={errorState} onRetry={loadData} />}
 
         {actionSuccess && (
@@ -641,7 +641,7 @@ export default function RetailTransfersPage() {
             </div>
           </div>
         )}
-      </main>
+      </div>
 
       {/* Modals */}
       {showDocumentationModal && (
