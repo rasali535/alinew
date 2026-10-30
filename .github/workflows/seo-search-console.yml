@@ -1,0 +1,72 @@
+name: GSC manual connection test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Authenticate to Google without a JSON key
+        id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/webmasters.readonly
+
+      - name: Verify Search Console read-only access
+        env:
+          GSC_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          GSC_SITE_URL: ${{ vars.GSC_SITE_URL }}
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, sys, urllib.request, urllib.error
+          from urllib.parse import quote
+          token = os.environ['GSC_ACCESS_TOKEN']
+          site = os.environ['GSC_SITE_URL']
+          print('Project:', os.environ['GCP_PROJECT_ID'])
+          print('Property:', site)
+          base = 'https://www.googleapis.com/webmasters/v3'
+          def call(label, url, payload=None):
+              data = json.dumps(payload).encode() if payload is not None else None
+              headers = {'Authorization': 'Bearer ' + token, 'Accept': 'application/json'}
+              if data is not None: headers['Content-Type'] = 'application/json'
+              req = urllib.request.Request(url, data=data, headers=headers, method='POST' if data is not None else 'GET')
+              try:
+                  with urllib.request.urlopen(req, timeout=25) as resp:
+                      obj = json.load(resp)
+                  print(label + ': HTTP 200')
+                  return obj
+              except urllib.error.HTTPError as e:
+                  detail = e.read(2048).decode('utf-8', errors='replace')
+                  try: detail = json.loads(detail).get('error', {}).get('message', 'unknown')
+                  except Exception: detail = 'HTTP error'
+                  print(f'{label}: HTTP {e.code} — {detail}')
+                  return None
+          sites = call('sites.list', base + '/sites')
+          if sites is None: sys.exit(1)
+          entries = sites.get('siteEntry', [])
+          match = next((s for s in entries if s.get('siteUrl') == site), None)
+          print('Property accessible:', bool(match), '| permission:', match.get('permissionLevel') if match else 'not listed')
+          if not match: sys.exit(1)
+          encoded = quote(site, safe='')
+          sitemaps = call('sitemaps.list', base + '/sites/' + encoded + '/sitemaps')
+          if sitemaps is not None:
+              print('Sitemaps returned:', len(sitemaps.get('sitemap', [])))
+              for s in sitemaps.get('sitemap', [])[:5]:
+                  print('Sitemap:', s.get('path'), '| errors:', s.get('errors'), '| warnings:', s.get('warnings'))
+          query = call('searchanalytics.query', base + '/sites/' + encoded + '/searchAnalytics/query',
+                       {'startDate':'2026-10-01','endDate':'2026-10-25','dimensions':['date'],'rowLimit':1})
+          if query is not None: print('Search analytics accessible; returned rows:', len(query.get('rows', [])))
+          if sitemaps is None or query is None: sys.exit(1)
+          print('PASS: authenticated and read Search Console data')
+          PY
