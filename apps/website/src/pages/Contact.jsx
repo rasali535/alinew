@@ -1,10 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import SEO from '../components/common/SEO';
 import { Mail, MapPin, Phone, Send, Loader2, Sparkles, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
 import { companyInfo } from '../data/mock';
 
+const serviceQueryMap = {
+  'cybersecurity': 'Cybersecurity & Digital Protection',
+  'security': 'Cybersecurity & Digital Protection',
+  'partners': 'Technology Partnership & Ecosystem',
+  'partnership': 'Technology Partnership & Ecosystem',
+  'partner': 'Technology Partnership & Ecosystem',
+  'film-video': 'Film & Creative Production',
+  'film': 'Film & Creative Production',
+  'web-app-development': 'Web & App Development',
+  'web': 'Web & App Development',
+  'music-audio': 'Music & Audio Production',
+  'music': 'Music & Audio Production',
+  'ai-automation': 'AI & Enterprise Automation',
+  'ai': 'AI & Enterprise Automation',
+  'ralion': 'Ralion OS Enterprise Deployment',
+  'ralion-os': 'Ralion OS Enterprise Deployment'
+};
+
 const Contact = () => {
+  const [searchParams] = useSearchParams();
+  const queryService = searchParams.get('service');
+
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -13,6 +35,15 @@ const Contact = () => {
     subject: '',
     message: ''
   });
+
+  useEffect(() => {
+    if (queryService) {
+      const normalized = queryService.toLowerCase().trim();
+      if (serviceQueryMap[normalized]) {
+        setFormData((prev) => ({ ...prev, service: serviceQueryMap[normalized] }));
+      }
+    }
+  }, [queryService]);
   const [status, setStatus] = useState('idle'); // idle, loading, success, error
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -238,6 +269,8 @@ const Contact = () => {
                     >
                       <option value="Film & Creative Production">Film & Creative Production</option>
                       <option value="Web & App Development">Web & App Development</option>
+                      <option value="Cybersecurity & Digital Protection">Cybersecurity & Digital Protection</option>
+                      <option value="Technology Partnership & Ecosystem">Technology Partnership & Ecosystem</option>
                       <option value="Music & Audio Production">Music & Audio Production</option>
                       <option value="AI & Enterprise Automation">AI & Enterprise Automation</option>
                       <option value="Ralion OS Enterprise Deployment">Ralion OS Enterprise Deployment</option>

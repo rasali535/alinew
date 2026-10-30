@@ -10,12 +10,18 @@ const serviceIdMap = {
   'web-app-development': 'Web & App Development',
   'music-audio': 'Music & Audio Production',
   'ai-automation': 'AI & Automation Systems',
+  'cybersecurity': 'Cybersecurity & Digital Protection',
+  'security': 'Cybersecurity & Digital Protection',
+  'partners': 'Technology Partnership & Ecosystem',
+  'partnership': 'Technology Partnership & Ecosystem',
+  'partner': 'Technology Partnership & Ecosystem',
   'ralion': 'Ralion OS Enterprise Deployment',
   'ralion-os': 'Ralion OS Enterprise Deployment',
   '1': 'Film & Creative Production',
   '2': 'Web & App Development',
   '3': 'Music & Audio Production',
-  '4': 'AI & Automation Systems'
+  '4': 'AI & Automation Systems',
+  '5': 'Cybersecurity & Digital Protection'
 };
 
 const Booking = () => {
@@ -179,6 +185,8 @@ const Booking = () => {
                   <option value="" disabled>Select a capability</option>
                   <option value="Film & Creative Production">Film & Creative Production</option>
                   <option value="Web & App Development">Web & App Development</option>
+                  <option value="Cybersecurity & Digital Protection">Cybersecurity & Digital Protection</option>
+                  <option value="Technology Partnership & Ecosystem">Technology Partnership & Ecosystem</option>
                   <option value="Music & Audio Production">Music & Audio Production</option>
                   <option value="AI & Automation Systems">AI & Automation Systems</option>
                   <option value="Ralion OS Enterprise Deployment">Ralion OS Enterprise Deployment</option>

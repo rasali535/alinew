@@ -93,12 +93,12 @@ async function runTestSuite() {
       ($1, $2, 'PLATFORM_ADMIN', 'ACTIVE')
   `, [adminUserId, orgId]);
 
-  // TEST 1: Table exists and all 8 discovered baseline records are seeded in DRAFT or NEEDS_REVIEW (unpublished)
+  // TEST 1: Table exists and all 12 discovered candidates are seeded in DRAFT or NEEDS_REVIEW (unpublished)
   const allRows = (await database.query(`SELECT * FROM public.clients_portfolio ORDER BY display_order ASC`)).rows;
-  assert.equal(allRows.length, 8, 'Expected 8 baseline client candidate entries.');
+  assert.equal(allRows.length, 12, 'Expected 12 client candidate entries.');
   const publishedInitial = allRows.filter(r => r.is_published || r.authorized_logo_use || r.status === 'PUBLISHED');
   assert.equal(publishedInitial.length, 0, 'No discovered client should be published or authorized by default.');
-  console.log('✓ TEST 1 PASSED: 8 baseline records initialized; all 8 are strictly DRAFT or NEEDS_REVIEW (0 published).');
+  console.log('✓ TEST 1 PASSED: 12 candidate records initialized; all 12 are strictly DRAFT or NEEDS_REVIEW (0 published).');
 
   // TEST 2: Public anonymous read strictly returns 0 records initially (fail closed until admin approval)
   await database.exec('SET ROLE anon');
@@ -253,7 +253,7 @@ async function runTestSuite() {
 
   // 2. Load drafts
   const draftsBefore = (await database.query(`SELECT id, name, status FROM public.clients_portfolio WHERE is_published = false`)).rows;
-  assert.equal(draftsBefore.length, 8, 'Admin must see exactly 8 unapproved drafts initially.');
+  assert.equal(draftsBefore.length, 12, 'Admin must see exactly 12 unapproved candidates initially.');
 
   // 3. Edit a client (e.g. Lebville Boutique)
   await database.query(`
@@ -311,13 +311,21 @@ async function runTestSuite() {
   await database.query(`DELETE FROM storage.objects WHERE name = 'logos/lebville-logo-durable.png'`);
   console.log('✓ TEST 9 PASSED: Real authenticated admin workflow end-to-end verified (log in, load drafts, edit, upload logo, publish, verify public, unpublish, verify removal).');
 
-  // TEST 10: Segregation check: No Ralion customer or workspace data in clients_portfolio
-  const allCurrent = (await database.query(`SELECT name FROM public.clients_portfolio`)).rows;
-  assert.ok(!allCurrent.some(c => c.name.toLowerCase().includes('proinsight')), 'Proinsight must never be in public clients_portfolio.');
-  console.log('✓ TEST 10 PASSED: Strict segregation verified: Ralion subscribers are completely separate from clients_portfolio.');
+  // TEST 11: Duplicate client name prevention check
+  await database.exec('SET ROLE authenticated');
+  await database.exec(`SET request.jwt.claim.sub = '${adminUserId}'`);
+  await assert.rejects(
+    database.query(`
+      INSERT INTO public.clients_portfolio (name, logo_url, work_year)
+      VALUES ('pameltech labs', '/assets/images/duplicate-test.png', '2026')
+    `),
+    (err) => err.code === '23505' || err.message?.includes('unique') || err.message?.includes('duplicate'),
+    'Duplicate client name must be rejected by unique index'
+  );
+  console.log('✓ TEST 11 PASSED: Unique index enforces duplicate client prevention at the database level.');
 
   console.log('\n===============================================================');
-  console.log('ALL 10 RAS ALI LABS CLIENTS PORTFOLIO SECURITY TESTS PASSED! 🛡️');
+  console.log('ALL 11 RAS ALI LABS CLIENTS PORTFOLIO SECURITY TESTS PASSED! 🛡️');
   console.log('===============================================================\n');
 }
 

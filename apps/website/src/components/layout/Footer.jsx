@@ -81,6 +81,9 @@ const Footer = () => {
               <Link to="/services/ai-automation" className="text-white/70 hover:text-brand-gold transition-colors">
                 AI & Enterprise Automation
               </Link>
+              <Link to="/services/cybersecurity" className="text-white/70 hover:text-brand-gold transition-colors">
+                Cybersecurity & Digital Protection
+              </Link>
               <Link to="/services" className="text-brand-gold font-medium hover:underline transition-colors pt-1">
                 Explore All Services →
               </Link>
@@ -119,6 +122,9 @@ const Footer = () => {
             <div className="flex flex-col gap-2.5 text-xs">
               <Link to="/about" className="text-white/70 hover:text-brand-gold transition-colors">
                 About Ras Ali Labs
+              </Link>
+              <Link to="/partners" className="text-white/70 hover:text-brand-gold transition-colors">
+                Technology Partners
               </Link>
               <Link to="/work" className="text-white/70 hover:text-brand-gold transition-colors">
                 Selected Work

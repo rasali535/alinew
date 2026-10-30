@@ -111,6 +111,54 @@ export const DISCOVERED_CLIENT_CANDIDATES = [
     authorized_logo_use: false,
     status: 'NEEDS_REVIEW',
     notes: 'Logo asset in repo; requires verification of completion date and public display authorization before publishing.'
+  },
+  {
+    id: 'c1000000-0000-0000-0000-000000000009',
+    name: 'Foundations Academy',
+    logo_url: '/assets/images/foundations-academy-logo.jpg',
+    work_year: '2024–2025',
+    display_order: 9,
+    is_published: false,
+    verified_relationship: true,
+    authorized_logo_use: false,
+    status: 'DRAFT',
+    notes: 'Counselling and educational platform development (academyfoundations.com). Completed client engagement with verified online presence and counselling workflow architecture. Awaiting admin logo use signoff and publishing approval.'
+  },
+  {
+    id: 'c1000000-0000-0000-0000-000000000010',
+    name: 'Doves Funeral Parlour — Rebranding',
+    logo_url: '/assets/images/doves-funeral-logo.png',
+    work_year: '2022–2023',
+    display_order: 10,
+    is_published: false,
+    verified_relationship: true,
+    authorized_logo_use: false,
+    status: 'DRAFT',
+    notes: 'Historical client engagement via Themaplin Inc Group for corporate rebranding and visual identity design. Strictly distinguished from ongoing Ralion OS SaaS software subscriptions. Awaiting admin logo use signoff and publishing approval.'
+  },
+  {
+    id: 'c1000000-0000-0000-0000-000000000011',
+    name: 'Talent Centre',
+    logo_url: '/assets/images/talent-centre-logo.png',
+    work_year: '2024',
+    display_order: 11,
+    is_published: false,
+    verified_relationship: true,
+    authorized_logo_use: false,
+    status: 'DRAFT',
+    notes: 'Training and management consultancy online presence and corporate platform at talentcentre.co.za. Verified completed engagement. Awaiting admin logo use signoff and publishing approval.'
+  },
+  {
+    id: 'c1000000-0000-0000-0000-000000000012',
+    name: 'Pameltech Labs',
+    logo_url: '/assets/images/pameltech-labs-logo.png',
+    work_year: '2026',
+    display_order: 12,
+    is_published: false,
+    verified_relationship: true,
+    authorized_logo_use: false,
+    status: 'DRAFT',
+    notes: 'Enterprise systems engineering and technology innovation platform at pameltechlabs.com. Verified completed engagement. Awaiting admin logo use signoff and publishing approval.'
   }
 ];
 
@@ -162,6 +210,7 @@ export async function getAllClientsForAdmin() {
 /**
  * Save / Create a new client entry.
  * Direct database write. Reports actual database success or failure.
+ * Includes automated duplicate prevention.
  */
 export async function createClientEntry(clientData) {
   const newClient = {
@@ -188,6 +237,20 @@ export async function createClientEntry(clientData) {
     throw new Error('Public logo authorization must be confirmed before publishing.');
   }
 
+  // Duplicate client record prevention
+  const { data: existingClients, error: checkError } = await supabase
+    .from('clients_portfolio')
+    .select('id, name');
+
+  if (!checkError && Array.isArray(existingClients)) {
+    const duplicate = existingClients.find(
+      (c) => c.name.trim().toLowerCase() === newClient.name.toLowerCase() && c.id !== newClient.id
+    );
+    if (duplicate) {
+      throw new Error(`A client record with the name "${newClient.name}" already exists.`);
+    }
+  }
+
   const { data, error } = await supabase
     .from('clients_portfolio')
     .insert(newClient)
@@ -211,6 +274,24 @@ export async function updateClientEntry(id, updates) {
     ...updates,
     updated_at: new Date().toISOString()
   };
+
+  // Duplicate name check if name is being changed
+  if (payload.name) {
+    const trimmedName = payload.name.trim();
+    payload.name = trimmedName;
+    const { data: existingClients, error: checkError } = await supabase
+      .from('clients_portfolio')
+      .select('id, name');
+
+    if (!checkError && Array.isArray(existingClients)) {
+      const duplicate = existingClients.find(
+        (c) => c.name.trim().toLowerCase() === trimmedName.toLowerCase() && c.id !== id
+      );
+      if (duplicate) {
+        throw new Error(`A client record with the name "${trimmedName}" already exists.`);
+      }
+    }
+  }
 
   // Enforce policy: cannot be published without authorization
   if (payload.is_published && !payload.authorized_logo_use) {

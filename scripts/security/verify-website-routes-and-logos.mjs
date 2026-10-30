@@ -18,7 +18,7 @@ console.log('=== STARTING WEBSITE ROUTES & CLIENT LOGO ASSET VERIFICATION ===');
 const projectRoot = path.resolve('.');
 const websitePublic = path.join(projectRoot, 'apps', 'website', 'public');
 
-// 1. Validate all 8 client logo assets
+// 1. Validate all 12 client logo assets
 const clientLogos = [
   { name: 'Pula Pitch', path: 'assets/images/pula-pitch-logo.jpg', type: 'image/jpeg' },
   { name: 'The Melody Gospel TV Show', path: 'assets/images/melody-logo.jpg', type: 'image/jpeg' },
@@ -27,7 +27,11 @@ const clientLogos = [
   { name: 'Eagle Touch Tours', path: 'assets/images/eagle-touch-logo.png', type: 'image/png' },
   { name: 'BB Travel Tours', path: 'assets/images/bb-travel-logo.jpg', type: 'image/jpeg' },
   { name: 'Peregrine Tours and Safaris', path: 'assets/images/peregrine-logo.png', type: 'image/png' },
-  { name: 'Safari Butler', path: 'assets/images/safari-butler-logo.jpg', type: 'image/jpeg' }
+  { name: 'Safari Butler', path: 'assets/images/safari-butler-logo.jpg', type: 'image/jpeg' },
+  { name: 'Foundations Academy', path: 'assets/images/foundations-academy-logo.jpg', type: 'image/jpeg' },
+  { name: 'Doves Funeral Parlour', path: 'assets/images/doves-funeral-logo.png', type: 'image/png' },
+  { name: 'Talent Centre', path: 'assets/images/talent-centre-logo.png', type: 'image/png' },
+  { name: 'Pameltech Labs', path: 'assets/images/pameltech-labs-logo.png', type: 'image/png' }
 ];
 
 console.log('1. Checking client logo asset files on disk...');
@@ -96,6 +100,8 @@ async function runHttpChecks() {
       '/admin/clients',
       '/about',
       '/services',
+      '/services/cybersecurity',
+      '/partners',
       '/work',
       '/contact',
       '/pricing',
