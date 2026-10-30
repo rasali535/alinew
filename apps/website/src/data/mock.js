@@ -25,6 +25,7 @@ export const navLinks = [
         items: [
           { name: 'Web & App Development', href: '/services/web-app-development' },
           { name: 'AI & Automation Systems', href: '/services/ai-automation' },
+          { name: 'Cybersecurity & Digital Protection', href: '/services/cybersecurity' },
         ]
       }
     ]
@@ -32,8 +33,21 @@ export const navLinks = [
   { name: 'Ralion OS', href: '/products/ralion-os' },
   { name: 'Mari AI', href: '/mari-ai' },
   { name: 'Our Work', href: '/work' },
-  { name: 'Our Clients', href: '/clients' },
-  { name: 'About', href: '/about' },
+  { name: 'Partners', href: '/partners' },
+  {
+    name: 'About',
+    href: '/about',
+    dropdown: [
+      {
+        title: 'Company & Network',
+        items: [
+          { name: 'About Ras Ali Labs', href: '/about' },
+          { name: 'Technology Partners', href: '/partners' },
+          { name: 'Our Clients', href: '/clients' },
+        ]
+      }
+    ]
+  },
   { name: 'Contact', href: '/contact' }
 ];
 
@@ -130,6 +144,24 @@ export const capabilityPillars = [
       'API Integration & Process Automation',
       'Data Pipelines & Custom Business Telemetry',
       'Data Privacy Governance & Security Practices'
+    ]
+  },
+  {
+    id: 'cybersecurity',
+    title: 'Cybersecurity & Digital Protection',
+    tagline: 'Threat Resilience & Infrastructure Security',
+    description: 'Vulnerability assessments, web application and API reviews, cloud security, risk assessments, staff awareness training and security consulting.',
+    icon: 'ShieldCheck',
+    image: '/assets/images/service-security.png',
+    href: '/services/cybersecurity',
+    bookingId: 'cybersecurity',
+    items: [
+      'Vulnerability Assessments & Penetration Testing',
+      'Web Application & API Security Assessments',
+      'Network & Infrastructure Security Reviews',
+      'Cloud Security & Configuration Audits',
+      'Cybersecurity Risk Assessments & Threat Modeling',
+      'Security Awareness & Staff Training'
     ]
   }
 ];
@@ -577,6 +609,21 @@ export const services = [
       'Embedded AI Reasoning & LLM Systems',
       'Enterprise System Integration & APIs',
       'Data Privacy Governance & Security'
+    ]
+  },
+  {
+    id: 'cybersecurity',
+    numericId: 5,
+    title: 'Cybersecurity & Digital Protection',
+    description: 'Vulnerability assessments, web application and API reviews, cloud security, risk assessments, staff awareness training and security consulting.',
+    href: '/services/cybersecurity',
+    items: [
+      'Vulnerability Assessments & Penetration Testing',
+      'Web Application & API Security Audits',
+      'Network & Infrastructure Security Reviews',
+      'Cloud Security & Configuration Audits',
+      'Cybersecurity Risk Assessments & Threat Modeling',
+      'Security Awareness & Staff Training'
     ]
   }
 ];

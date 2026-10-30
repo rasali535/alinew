@@ -1,9 +1,9 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { services } from '../../data/mock';
-import { ArrowRight, Bot, Cpu, ShieldCheck, Layers, Sparkles, Database, Workflow, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, Bot, Cpu, ShieldCheck, Lock, Layers, Sparkles, Database, Workflow, CheckCircle2 } from 'lucide-react';
 
-const iconList = [Bot, Workflow, Cpu, ShieldCheck];
+const iconList = [Bot, Workflow, Cpu, ShieldCheck, Lock];
 
 const ServicesPageGrid = () => {
   return (
@@ -23,7 +23,7 @@ const ServicesPageGrid = () => {
         </div>
 
         {/* Grid Layout */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
           {services.map((service, index) => {
             const Icon = iconList[index % iconList.length];
             return (
@@ -59,7 +59,7 @@ const ServicesPageGrid = () => {
                 </div>
 
                 <Link
-                  to="/request-demo"
+                  to={service.href || "/request-demo"}
                   className="w-full py-3.5 rounded-xl bg-white/10 hover:bg-brand-gold hover:text-black font-bold text-xs transition-all flex items-center justify-center gap-2"
                 >
                   Consult on {service.title} <ArrowRight size={14} />

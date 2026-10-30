@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 100" fill="none">
+  <defs>
+    <linearGradient id="tcGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+    <linearGradient id="tcAccent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#2563EB"/>
+    </linearGradient>
+  </defs>
+  <!-- Talent Excellence Star & Growth Node Emblem -->
+  <g transform="translate(20, 16)">
+    <circle cx="34" cy="34" r="30" fill="#0F172A" stroke="#334155" stroke-width="1.5"/>
+    <!-- Growth Hexagon with Dynamic Nodes -->
+    <path d="M34 16 L50 25 V43 L34 52 L18 43 V25 Z" fill="#1E293B" stroke="url(#tcGrad)" stroke-width="2" stroke-linejoin="round"/>
+    <circle cx="34" cy="34" r="6" fill="url(#tcAccent)"/>
+    <path d="M34 22 V28 M34 40 V46 M22 28 L28 31 M40 37 L46 40 M22 40 L28 37 M40 31 L46 28" stroke="#F8FAFC" stroke-width="1.5" stroke-linecap="round"/>
+  </g>
+  <!-- Wordmark -->
+  <text x="96" y="44" font-family="'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="20" font-weight="800" fill="#FFFFFF" letter-spacing="0.5">
+    TALENT <tspan fill="#10B981">CENTRE</tspan>
+  </text>
+  <text x="96" y="64" font-family="'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="9" font-weight="600" fill="#94A3B8" letter-spacing="2.5">
+    MANAGEMENT &amp; TRAINING
+  </text>
+</svg>

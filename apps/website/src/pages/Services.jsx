@@ -3,13 +3,14 @@ import { Link } from 'react-router-dom';
 import SEO from '../components/common/SEO';
 import { organizationSchema, localBusinessSchema, makeBreadcrumbSchema } from '../lib/seoSchema';
 import { capabilityPillars, howWeWork } from '../data/mock';
-import { Video, Code, Music, Bot, CheckCircle2, ArrowRight, Sparkles, Layers } from 'lucide-react';
+import { Video, Code, Music, Bot, ShieldCheck, CheckCircle2, ArrowRight, Sparkles, Layers } from 'lucide-react';
 
 const iconMap = {
   'Video': Video,
   'Code': Code,
   'Music': Music,
-  'Bot': Bot
+  'Bot': Bot,
+  'ShieldCheck': ShieldCheck
 };
 
 const Services = () => {
@@ -43,12 +44,12 @@ const Services = () => {
             Technology & Creative Services in Botswana
           </h1>
           <p className="text-white/70 text-lg leading-relaxed">
-            Based in Gaborone, Ras Ali Labs provides custom software development, web and app development, AI automation, film and video production, and music and audio services for organisations across Botswana and Southern Africa.
+            Based in Gaborone, Ras Ali Labs provides custom software development, web and app development, AI automation, cybersecurity & digital protection, film and video production, and music and audio services for organisations across Botswana and Southern Africa.
           </p>
         </div>
 
-        {/* 4 Pillars Detailed Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-24">
+        {/* 5 Pillars Detailed Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-24">
           {capabilityPillars.map((pillar) => {
             const Icon = iconMap[pillar.icon] || Code;
             return (

@@ -6,7 +6,8 @@ import {
   createClientEntry,
   updateClientEntry,
   deleteClientEntry,
-  uploadClientLogo
+  uploadClientLogo,
+  DISCOVERED_CLIENT_CANDIDATES
 } from '../lib/clientsService';
 import {
   Building2,
@@ -24,7 +25,10 @@ import {
   ArrowUpDown,
   RefreshCw,
   FileCheck,
-  X
+  X,
+  ShieldCheck,
+  Filter,
+  Sparkles
 } from 'lucide-react';
 
 const AdminClients = () => {
@@ -33,6 +37,7 @@ const AdminClients = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('list'); // 'list' | 'create' | 'preview'
+  const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'PUBLISHED' | 'DRAFT' | 'NEEDS_REVIEW'
   const [editingClient, setEditingClient] = useState(null);
 
   // Form State
@@ -124,7 +129,8 @@ const AdminClients = () => {
     e.preventDefault();
     setErrorMsg(null);
 
-    if (!name.trim()) {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
       setErrorMsg('Client name is required.');
       return;
     }
@@ -141,26 +147,35 @@ const AdminClients = () => {
       return;
     }
 
+    // Client-side duplicate record check
+    const isDuplicate = clients.some(
+      (c) => c.name.trim().toLowerCase() === trimmedName.toLowerCase() && (!editingClient || c.id !== editingClient.id)
+    );
+    if (isDuplicate) {
+      setErrorMsg(`A client record with the name "${trimmedName}" already exists. Please edit the existing entry instead.`);
+      return;
+    }
+
     setSaving(true);
     try {
       const payload = {
-        name,
-        logo_url: logoUrl,
-        work_year: workYear,
+        name: trimmedName,
+        logo_url: logoUrl.trim(),
+        work_year: workYear.trim(),
         display_order: Number(displayOrder),
         is_published: isPublished,
         authorized_logo_use: authorizedLogoUse,
         verified_relationship: verifiedRelationship,
         status: isPublished && authorizedLogoUse ? 'PUBLISHED' : status,
-        notes
+        notes: notes.trim()
       };
 
       if (editingClient) {
         await updateClientEntry(editingClient.id, payload);
-        setSuccessMsg(`Successfully updated client: ${name}`);
+        setSuccessMsg(`Successfully updated client: ${trimmedName}`);
       } else {
         await createClientEntry(payload);
-        setSuccessMsg(`Successfully created client entry: ${name}`);
+        setSuccessMsg(`Successfully created client entry: ${trimmedName}`);
       }
 
       await fetchClients();
@@ -172,6 +187,47 @@ const AdminClients = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleToggleAuthorizeLogo = async (client) => {
+    try {
+      const newAuth = !client.authorized_logo_use;
+      const updates = {
+        authorized_logo_use: newAuth
+      };
+      if (!newAuth) {
+        // If revoking logo authorization, must immediately unpublish
+        updates.is_published = false;
+        updates.status = 'DRAFT';
+      }
+      await updateClientEntry(client.id, updates);
+      await fetchClients();
+      setSuccessMsg(
+        newAuth
+          ? `Authorized logo usage for ${client.name}. Ready for publication.`
+          : `Revoked logo usage authorization for ${client.name}. Record moved to Draft.`
+      );
+      setTimeout(() => setSuccessMsg(null), 3500);
+    } catch (err) {
+      setErrorMsg(err.message || 'Failed to update logo authorization.');
+    }
+  };
+
+  const handleImportCandidate = (candidate) => {
+    setName(candidate.name);
+    setLogoUrl(candidate.logo_url);
+    setWorkYear(candidate.work_year === 'Year Unverified' ? '' : candidate.work_year);
+    setDisplayOrder(candidate.display_order || clients.length + 1);
+    setIsPublished(false);
+    setAuthorizedLogoUse(false);
+    setVerifiedRelationship(candidate.verified_relationship ?? true);
+    setStatus(candidate.status || 'DRAFT');
+    setNotes(candidate.notes || '');
+    setLogoPreview(candidate.logo_url);
+    setActiveTab('create');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setSuccessMsg(`Candidate "${candidate.name}" loaded into editor for administrative review.`);
+    setTimeout(() => setSuccessMsg(null), 3500);
   };
 
   const handleTogglePublish = async (client) => {
@@ -307,130 +363,273 @@ const AdminClients = () => {
 
         {/* TAB 1: Clients List */}
         {activeTab === 'list' && (
-          <div className="bg-[#242424] border border-white/10 rounded-3xl p-6 shadow-2xl">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <FileCheck size={18} className="text-brand-gold" /> Registered Client Portfolio Entries
-              </h2>
-              <span className="text-xs text-white/40">
-                {clients.filter((c) => c.is_published).length} Published ·{' '}
-                {clients.filter((c) => !c.is_published).length} Drafts / Needs Review
-              </span>
+          <div className="space-y-8">
+            <div className="bg-[#242424] border border-white/10 rounded-3xl p-6 shadow-2xl">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
+                <div>
+                  <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                    <FileCheck size={18} className="text-brand-gold" /> Registered Client Portfolio Entries
+                  </h2>
+                  <p className="text-xs text-white/40 mt-1">
+                    Manage client verification, public logo usage signoff, and live publication.
+                  </p>
+                </div>
+
+                {/* Filter Pills */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => setStatusFilter('ALL')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                      statusFilter === 'ALL'
+                        ? 'bg-brand-gold text-black font-bold'
+                        : 'bg-white/5 text-white/60 hover:text-white border border-white/10'
+                    }`}
+                  >
+                    All ({clients.length})
+                  </button>
+                  <button
+                    onClick={() => setStatusFilter('PUBLISHED')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                      statusFilter === 'PUBLISHED'
+                        ? 'bg-blue-500 text-white font-bold'
+                        : 'bg-white/5 text-white/60 hover:text-white border border-white/10'
+                    }`}
+                  >
+                    Published ({clients.filter((c) => c.is_published).length})
+                  </button>
+                  <button
+                    onClick={() => setStatusFilter('DRAFT')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                      statusFilter === 'DRAFT'
+                        ? 'bg-white/20 text-white font-bold'
+                        : 'bg-white/5 text-white/60 hover:text-white border border-white/10'
+                    }`}
+                  >
+                    Drafts ({clients.filter((c) => !c.is_published && c.status !== 'NEEDS_REVIEW').length})
+                  </button>
+                  <button
+                    onClick={() => setStatusFilter('NEEDS_REVIEW')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                      statusFilter === 'NEEDS_REVIEW'
+                        ? 'bg-amber-500 text-black font-bold'
+                        : 'bg-white/5 text-white/60 hover:text-white border border-white/10'
+                    }`}
+                  >
+                    Needs Review ({clients.filter((c) => c.status === 'NEEDS_REVIEW').length})
+                  </button>
+                </div>
+              </div>
+
+              {loading ? (
+                <div className="py-16 text-center text-white/50 text-xs">Loading client records...</div>
+              ) : clients.length === 0 ? (
+                <div className="py-16 text-center text-white/50 text-xs">
+                  No clients registered yet. Click "+ Add New Client" to create the first record or import from discovered candidates below.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-white/10 text-white/40 uppercase tracking-wider text-[10px]">
+                        <th className="py-3 px-4">Order</th>
+                        <th className="py-3 px-4">Logo</th>
+                        <th className="py-3 px-4">Client Name</th>
+                        <th className="py-3 px-4">Work Year</th>
+                        <th className="py-3 px-4">Relationship</th>
+                        <th className="py-3 px-4">Logo Authorization</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {clients
+                        .filter((client) => {
+                          if (statusFilter === 'PUBLISHED') return client.is_published;
+                          if (statusFilter === 'DRAFT') return !client.is_published && client.status !== 'NEEDS_REVIEW';
+                          if (statusFilter === 'NEEDS_REVIEW') return client.status === 'NEEDS_REVIEW';
+                          return true;
+                        })
+                        .map((client) => (
+                          <tr key={client.id} className="hover:bg-white/5 transition-colors">
+                            <td className="py-3.5 px-4 font-mono font-bold text-white/70">
+                              #{client.display_order}
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <div className="w-12 h-10 rounded-xl bg-black/40 border border-white/10 p-1 flex items-center justify-center overflow-hidden">
+                                <img
+                                  src={client.logo_url}
+                                  alt={client.name}
+                                  className="max-h-8 max-w-full object-contain"
+                                  onError={(e) => {
+                                    e.target.onerror = null;
+                                    e.target.style.display = 'none';
+                                    e.target.parentElement.innerHTML = '<span class="text-[9px] text-white/30 text-center font-mono">No Logo</span>';
+                                  }}
+                                />
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className="font-bold text-white block">{client.name}</span>
+                              {client.notes && (
+                                <span className="text-[10px] text-white/40 truncate max-w-xs block">
+                                  {client.notes}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-4 font-mono text-white/80">{client.work_year}</td>
+                            <td className="py-3.5 px-4">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                Confirmed Client
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <button
+                                onClick={() => handleToggleAuthorizeLogo(client)}
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-semibold border transition-all ${
+                                  client.authorized_logo_use
+                                    ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-rose-500/15 hover:text-rose-300 hover:border-rose-500/30'
+                                    : 'bg-amber-500/15 text-amber-300 border-amber-500/30 hover:bg-emerald-500/15 hover:text-emerald-300 hover:border-emerald-500/30'
+                                }`}
+                                title={client.authorized_logo_use ? 'Click to revoke logo usage authorization' : 'Click to authorize public logo usage'}
+                              >
+                                {client.authorized_logo_use ? (
+                                  <>
+                                    <Check size={11} /> Authorized
+                                  </>
+                                ) : (
+                                  <>
+                                    <AlertTriangle size={11} /> Authorize Logo
+                                  </>
+                                )}
+                              </button>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              {client.is_published ? (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                                  Published
+                                </span>
+                              ) : client.status === 'NEEDS_REVIEW' ? (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                  Needs Review
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-white/60">
+                                  Draft
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-4 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => handleTogglePublish(client)}
+                                  className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-colors ${
+                                    client.is_published
+                                      ? 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/20'
+                                      : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20'
+                                  }`}
+                                >
+                                  {client.is_published ? 'Unpublish' : 'Publish'}
+                                </button>
+                                <button
+                                  onClick={() => handleStartEdit(client)}
+                                  className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10"
+                                  title="Edit Client"
+                                >
+                                  <Edit2 size={13} />
+                                </button>
+                                <button
+                                  onClick={() => setDeleteConfirmId(client.id)}
+                                  className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20"
+                                  title="Delete Client"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
 
-            {loading ? (
-              <div className="py-16 text-center text-white/50 text-xs">Loading client records...</div>
-            ) : clients.length === 0 ? (
-              <div className="py-16 text-center text-white/50 text-xs">
-                No clients registered yet. Click "+ Add New Client" to create the first record.
+            {/* Discovered Candidates Catalog (Review & Onboarding Pipeline) */}
+            <div className="bg-[#242424] border border-white/10 rounded-3xl p-6 shadow-2xl">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <Sparkles size={16} className="text-brand-gold" /> Discovered Candidates Catalog (Historical Audit Pipeline)
+                  </h3>
+                  <p className="text-xs text-white/40 mt-0.5">
+                    12 identified client relationships across Ras Ali Labs and historical Themaplin Inc Group engagements.
+                  </p>
+                </div>
+                <span className="text-xs text-brand-gold font-mono font-bold">
+                  {DISCOVERED_CLIENT_CANDIDATES.length} Total Candidates
+                </span>
               </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-white/10 text-white/40 uppercase tracking-wider text-[10px]">
-                      <th className="py-3 px-4">Order</th>
-                      <th className="py-3 px-4">Logo</th>
-                      <th className="py-3 px-4">Client Name</th>
-                      <th className="py-3 px-4">Work Year</th>
-                      <th className="py-3 px-4">Relationship</th>
-                      <th className="py-3 px-4">Authorization</th>
-                      <th className="py-3 px-4">Status</th>
-                      <th className="py-3 px-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {clients.map((client) => (
-                      <tr key={client.id} className="hover:bg-white/5 transition-colors">
-                        <td className="py-3.5 px-4 font-mono font-bold text-white/70">
-                          #{client.display_order}
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <div className="w-12 h-10 rounded-xl bg-black/40 border border-white/10 p-1 flex items-center justify-center">
-                            <img
-                              src={client.logo_url}
-                              alt={client.name}
-                              className="max-h-8 max-w-full object-contain"
-                              onError={(e) => {
-                                e.target.src = '/assets/images/logo.png';
-                              }}
-                            />
-                          </div>
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <span className="font-bold text-white block">{client.name}</span>
-                          {client.notes && (
-                            <span className="text-[10px] text-white/40 truncate max-w-xs block">
-                              {client.notes}
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3.5 px-4 font-mono text-white/80">{client.work_year}</td>
-                        <td className="py-3.5 px-4">
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                            Confirmed Client
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+                {DISCOVERED_CLIENT_CANDIDATES.map((candidate) => {
+                  const existing = clients.find(
+                    (c) => c.name.toLowerCase() === candidate.name.toLowerCase()
+                  );
+                  return (
+                    <div
+                      key={candidate.id}
+                      className="bg-black/30 border border-white/10 rounded-2xl p-4 flex flex-col justify-between space-y-3"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="w-12 h-10 rounded-xl bg-white/5 border border-white/10 p-1 flex items-center justify-center shrink-0">
+                          <img
+                            src={candidate.logo_url}
+                            alt={candidate.name}
+                            className="max-h-8 max-w-full object-contain"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              e.target.parentElement.innerHTML = '<span class="text-[8px] text-white/30 text-center font-mono">Logo</span>';
+                            }}
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-xs font-bold text-white truncate">{candidate.name}</h4>
+                          <span className="text-[10px] text-brand-gold font-mono block">
+                            {candidate.work_year}
                           </span>
-                        </td>
-                        <td className="py-3.5 px-4">
-                          {client.authorized_logo_use ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-semibold">
-                              <Check size={12} /> Authorized
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] text-amber-400 font-semibold">
-                              <AlertTriangle size={12} /> Pending Signoff
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3.5 px-4">
-                          {client.is_published ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                              Published
-                            </span>
-                          ) : client.status === 'NEEDS_REVIEW' ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                              Needs Review
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-white/60">
-                              Draft
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3.5 px-4 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={() => handleTogglePublish(client)}
-                              className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-colors ${
-                                client.is_published
-                                  ? 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/20'
-                                  : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20'
-                              }`}
-                            >
-                              {client.is_published ? 'Unpublish' : 'Publish'}
-                            </button>
-                            <button
-                              onClick={() => handleStartEdit(client)}
-                              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10"
-                              title="Edit Client"
-                            >
-                              <Edit2 size={13} />
-                            </button>
-                            <button
-                              onClick={() => setDeleteConfirmId(client.id)}
-                              className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20"
-                              title="Delete Client"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                          <p className="text-[10px] text-white/50 line-clamp-2 mt-1">
+                            {candidate.notes}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-white/5 flex items-center justify-between">
+                        {existing ? (
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                            existing.is_published
+                              ? 'bg-blue-500/20 text-blue-300'
+                              : 'bg-white/10 text-white/60'
+                          }`}>
+                            {existing.is_published ? '✓ Live on Site' : 'In Database (Unpublished)'}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300">
+                            Candidate in Catalog
+                          </span>
+                        )}
+
+                        <button
+                          onClick={() => handleImportCandidate(candidate)}
+                          className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[10px] font-bold transition-colors"
+                        >
+                          {existing ? 'Edit / Review' : 'Load into Editor'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            )}
+            </div>
           </div>
         )}
 
@@ -711,7 +910,9 @@ const AdminClients = () => {
                             alt={`${client.name} Official Logo`}
                             className="max-h-24 max-w-full object-contain filter grayscale group-hover:grayscale-0 transition-all duration-300"
                             onError={(e) => {
-                              e.target.src = '/assets/images/logo.png';
+                              e.target.onerror = null;
+                              e.target.style.display = 'none';
+                              e.target.parentElement.innerHTML = '<span class="text-[10px] text-white/30 text-center font-mono">Logo asset unavailable</span>';
                             }}
                           />
                         </div>

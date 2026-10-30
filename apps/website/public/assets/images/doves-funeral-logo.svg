@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 100" fill="none">
+  <defs>
+    <linearGradient id="dovesGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FCD34D"/>
+      <stop offset="100%" stop-color="#D97706"/>
+    </linearGradient>
+    <linearGradient id="dovesPurple" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8B5CF6"/>
+      <stop offset="100%" stop-color="#4C1D95"/>
+    </linearGradient>
+  </defs>
+  <!-- Stylized Dove Emblem in Flight -->
+  <g transform="translate(20, 16)">
+    <circle cx="34" cy="34" r="30" fill="#18181B" stroke="url(#dovesGold)" stroke-width="1.5" stroke-dasharray="1 3"/>
+    <path d="M18 38 C24 30, 32 24, 46 18 C44 26, 40 32, 48 36 C42 38, 36 36, 32 42 C30 46, 28 50, 22 52 C24 46, 22 42, 18 38 Z" fill="url(#dovesGold)"/>
+    <path d="M26 34 C32 28, 38 24, 46 22 C42 27, 38 31, 42 34 Z" fill="#FFFFFF" opacity="0.8"/>
+    <circle cx="43" cy="21" r="1.5" fill="#18181B"/>
+  </g>
+  <!-- Wordmark -->
+  <text x="96" y="44" font-family="'Cinzel', 'Trajan Pro', 'Georgia', serif" font-size="22" font-weight="700" fill="#FFFFFF" letter-spacing="1">
+    DOVES
+  </text>
+  <text x="96" y="64" font-family="'Inter', -apple-system, sans-serif" font-size="9.5" font-weight="600" fill="#D4AF37" letter-spacing="3.5">
+    FUNERAL PARLOUR
+  </text>
+</svg>

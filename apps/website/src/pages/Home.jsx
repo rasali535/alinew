@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import SEO from '../components/common/SEO';
 import { organizationSchema, localBusinessSchema, personSchema, makeFaqSchema } from '../lib/seoSchema';
 import HeroSection from '../components/sections/HeroSection';
+import PartnersSection from '../components/sections/PartnersSection';
 import {
   companyInfo,
   capabilityPillars,
@@ -40,7 +41,8 @@ const iconMap = {
   'Video': Video,
   'Code': Code,
   'Music': Music,
-  'Bot': Bot
+  'Bot': Bot,
+  'ShieldCheck': ShieldCheck
 };
 
 const Home = () => {
@@ -81,6 +83,7 @@ const Home = () => {
             <div className="flex flex-wrap gap-3 text-xs font-semibold">
               <Link to="/services/web-app-development" className="px-4 py-2 rounded-full bg-white/5 border border-white/10 hover:border-brand-gold/40">Web & Software Development Botswana</Link>
               <Link to="/services/ai-automation" className="px-4 py-2 rounded-full bg-white/5 border border-white/10 hover:border-brand-gold/40">AI Automation Botswana</Link>
+              <Link to="/services/cybersecurity" className="px-4 py-2 rounded-full bg-white/5 border border-white/10 hover:border-brand-gold/40">Cybersecurity Services Botswana</Link>
               <Link to="/services/film-video" className="px-4 py-2 rounded-full bg-white/5 border border-white/10 hover:border-brand-gold/40">Film & Video Production Botswana</Link>
               <Link to="/services/music-audio" className="px-4 py-2 rounded-full bg-white/5 border border-white/10 hover:border-brand-gold/40">Music & Audio Production Botswana</Link>
             </div>
@@ -96,14 +99,14 @@ const Home = () => {
               <Layers size={14} /> Multidisciplinary Capabilities
             </div>
             <h2 className="text-3xl md:text-5xl font-extrabold tracking-tight mb-4 text-white">
-              Creative Vision Meets Intelligent Engineering
+              Creative Vision, Intelligent Engineering & Digital Protection
             </h2>
             <p className="text-white/70 text-base md:text-lg leading-relaxed">
-              Ras Ali Labs unites four core disciplines under one roof to bring ambitious digital platforms, cinematic visuals, and custom audio to life.
+              Ras Ali Labs unites creative production, software engineering, AI automation, and cybersecurity defense under one roof to bring ambitious digital platforms and resilient operations to life.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {capabilityPillars.map((pillar) => {
               const Icon = iconMap[pillar.icon] || Code;
               return (
@@ -653,6 +656,9 @@ const Home = () => {
           </div>
         </div>
       </section>
+
+      {/* 6.5 TECHNOLOGY PARTNERS SECTION */}
+      <PartnersSection showPreviewToggle={true} />
 
       {/* 7. FINAL CALL TO ACTION */}
       <section className="py-24 px-6 lg:px-12 bg-gradient-to-r from-[#141414] via-[#1a1a1a] to-[#141414] text-white border-t border-white/10">

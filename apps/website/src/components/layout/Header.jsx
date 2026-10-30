@@ -92,10 +92,10 @@ const Header = () => {
                     ))}
                     <div className="mt-3 pt-3 border-t border-white/10 px-2">
                       <Link
-                        to="/services"
+                        to={link.href}
                         className="text-[11px] text-brand-gold hover:underline font-semibold flex items-center justify-between"
                       >
-                        <span>View All Capabilities</span>
+                        <span>{link.name === 'Services' ? 'View All Capabilities' : `Explore ${link.name}`}</span>
                         <ArrowRight size={12} />
                       </Link>
                     </div>

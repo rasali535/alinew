@@ -37,6 +37,8 @@ import FilmVideoService from './pages/FilmVideoService';
 import WebAppDevService from './pages/WebAppDevService';
 import MusicAudioService from './pages/MusicAudioService';
 import AIAutomationService from './pages/AIAutomationService';
+import CybersecurityService from './pages/CybersecurityService';
+import Partners from './pages/Partners';
 import Work from './pages/Work';
 import ProjectDetails from './pages/ProjectDetails';
 import Clients from './pages/Clients';
@@ -100,6 +102,8 @@ function App() {
                 <Route path="/services/web-app-development" element={<WebAppDevService />} />
                 <Route path="/services/music-audio" element={<MusicAudioService />} />
                 <Route path="/services/ai-automation" element={<AIAutomationService />} />
+                <Route path="/services/cybersecurity" element={<CybersecurityService />} />
+                <Route path="/partners" element={<Partners />} />
                 <Route path="/work" element={<Work />} />
                 <Route path="/work/:id" element={<ProjectDetails />} />
                 <Route path="/clients" element={<Clients />} />
