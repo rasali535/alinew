@@ -1802,6 +1802,104 @@ export class RetailDatabaseService {
     }));
   }
 
+  static async listShiftsWithCashups(workspaceId: string): Promise<{ shifts: any[]; reports: RetailCashupReport[] }> {
+    const supabase = getPrivilegedSupabase();
+
+    // 1. Fetch all cashier shifts in this workspace ordered by started_at DESC
+    const { data: shiftsData, error: shiftsErr } = await supabase
+      .from('retail_cashier_shifts')
+      .select('*')
+      .eq('workspace_id', workspaceId)
+      .order('started_at', { ascending: false });
+
+    // 2. Fetch all immutable cash-up reports in this workspace
+    const { data: reportsData, error: repErr } = await supabase
+      .from('retail_cashier_cashup_reports')
+      .select('*')
+      .eq('workspace_id', workspaceId)
+      .order('closed_at', { ascending: false });
+
+    const reports: RetailCashupReport[] = (reportsData || []).map((r: any) => ({
+      id: r.id,
+      organizationId: r.organization_id,
+      workspaceId: r.workspace_id,
+      shiftId: r.shift_id,
+      cashierUserId: r.cashier_user_id,
+      cashierName: r.cashier_name,
+      terminalId: r.terminal_id,
+      startedAt: r.started_at,
+      closedAt: r.closed_at,
+      openingFloat: Number(r.opening_float),
+      salesCount: Number(r.sales_count),
+      grossSales: Number(r.gross_sales),
+      discountTotal: Number(r.discount_total),
+      taxTotal: Number(r.tax_total),
+      netSales: Number(r.net_sales),
+      cashSales: Number(r.cash_sales),
+      cardSales: Number(r.card_sales),
+      transferSales: Number(r.transfer_sales),
+      otherSales: Number(r.other_sales),
+      cashRefunds: Number(r.cash_refunds),
+      noncashRefunds: Number(r.noncash_refunds),
+      refundCount: Number(r.refund_count),
+      returnsCount: Number(r.returns_count),
+      voidCount: Number(r.void_count),
+      voidTotal: Number(r.void_total),
+      paidIn: Number(r.paid_in),
+      paidOut: Number(r.paid_out),
+      expectedCash: Number(r.expected_cash),
+      closingCashActual: Number(r.closing_cash_actual),
+      variance: Number(r.variance),
+      currency: r.currency,
+      closedByUserId: r.closed_by_user_id,
+      managerApprovalUserId: r.manager_approval_user_id,
+      notes: r.notes,
+      createdAt: r.created_at,
+      // camelCase and alias mirrors for UI views
+      expectedDrawerCash: Number(r.expected_cash),
+      actualCountedCash: Number(r.closing_cash_actual),
+      cashVariance: Number(r.variance),
+      voidsTotal: Number(r.void_total),
+    }));
+
+    const reportsByShiftId = new Map<string, any>();
+    for (const rep of reports) {
+      if (rep.shiftId) {
+        reportsByShiftId.set(rep.shiftId, rep);
+      }
+    }
+
+    const shifts = (shiftsData || []).map((s: any) => {
+      const rep = reportsByShiftId.get(s.id) || null;
+      const isClosed = s.status === 'CLOSED';
+      const isMissingCashup = isClosed && !rep;
+      const reconciliationStatus = !isClosed ? 'ACTIVE' : (rep ? 'RECONCILED' : 'MISSING_CASHUP');
+
+      return {
+        id: s.id,
+        cashierId: s.cashier_user_id,
+        cashierName: s.cashier_name || 'Cashier',
+        terminalId: s.terminal_id || 'DEFAULT_POS_TERMINAL',
+        status: s.status,
+        reconciliationStatus,
+        isMissingCashup,
+        hasCashupReport: Boolean(rep),
+        openedAt: s.started_at,
+        startedAt: s.started_at,
+        closedAt: s.closed_at || undefined,
+        openingCashFloat: Number(s.opening_cash || 0),
+        closingCashActual: s.closing_cash_actual !== null && s.closing_cash_actual !== undefined ? Number(s.closing_cash_actual) : (rep?.closingCashActual),
+        expectedCash: s.expected_cash !== null && s.expected_cash !== undefined ? Number(s.expected_cash) : (rep?.expectedCash),
+        variance: s.variance !== null && s.variance !== undefined ? Number(s.variance) : (rep?.variance),
+        locationId: s.location_id || undefined,
+        notes: s.notes || rep?.notes || undefined,
+        report: rep || undefined,
+      };
+    });
+
+    return { shifts, reports };
+  }
+
   static async getCashupReport(workspaceId: string, reportIdOrShiftId: string): Promise<RetailCashupReport | null> {
     const supabase = getPrivilegedSupabase();
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reportIdOrShiftId);
